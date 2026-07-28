@@ -152,8 +152,14 @@ doctrine plus stubs. Built from a real, in-use personal deployment.
 ## Documentation
 
 - Docs site: <https://wombat164.github.io/vitai/> (built from `wiki/`)
-- Design: [ARCHITECTURE.md](ARCHITECTURE.md) - the three layers and what is
+- **Model spine: [docs/model.md](docs/model.md)** - eight core principles,
+  five artifact kinds, the full gap map. Read this first.
+- Design: [ARCHITECTURE.md](ARCHITECTURE.md) - the layers and what is
   deliberately not built
+- The design conversation: [docs/the-loop.md](docs/the-loop.md) (185+
+  question acceptance-test bank, gaps G1-G33),
+  [docs/cross-metric-inference.md](docs/cross-metric-inference.md),
+  [docs/plan-v3.md](docs/plan-v3.md) (the build plan)
 - Research: [docs/prior-art.md](docs/prior-art.md) - the survey behind the
   design
 - Brand: [assets/BRAND.md](assets/BRAND.md)

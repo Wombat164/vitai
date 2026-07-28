@@ -63,6 +63,11 @@ Principles, in priority order:
    addition to it. Conservation violations (sessions exceeding the day's
    burn, duplicate activities) are surfaced as tripwires, not silently
    "fixed".
+The eight principles, five artifact kinds, and the full gap map are
+consolidated in [docs/model.md](docs/model.md) - read that for the spine;
+this file is the narrative. The principles below (P1-P7) are the load-bearing
+ones stated in full.
+
 6. **Anchors audit estimates; trends are the measurement.** Quantities
    fall in three epistemic classes: ANCHORS (body mass, body
    measurements, labs - the body's own ground truth), MEASURED FLOWS

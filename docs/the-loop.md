@@ -108,7 +108,7 @@ for the v3 model: v3 is done when every question has a non-gap tag.
 36. What DEFINES the streak - raw 10k days, or floor-met weeks? - [G8: streak definitions live in vitai.toml, derived like verdicts]
 37. Does a planned rest day break the streak? - [G8: forgiveness rules - illness/injury/planned rest never break streaks; evidence says rigid chains punish correct rest]
 38. What is the longest streak ever? Current vs best? - [G8]
-39. Is the streak at risk tomorrow (calendar says travel)? - [G8 + G5 calendar context]
+39. Is the streak at risk tomorrow (calendar says travel)? - [G8 + G5 calendar context - NOTE: the calendar half depends on increment 6 (G5), not increment 4 where streaks ship; not fully answerable until then]
 40. What does the streak MEAN - is it correlated with the rate verdict actually improving? - [inference tier over G8 + verdicts]
 41. Should the athlete be told about the streak today (motivating) or not (pressure)? - [G7 preference + coach voice rules]
 42. Streak vocabulary: days? weeks? "clean weeks"? - [G8: weekly-first, matching the verdict cadence]
@@ -334,6 +334,28 @@ for the v3 model: v3 is done when every question has a non-gap tag.
 | G21 | **No forecasting layer** (operator doctrine, 2026-07-28) | HIGH | The engine describes past/present but cannot PROJECT: future anchors (weight, body measurements) and fitness from current metrics + planned inputs, via a curated registry of scientific models (thermodynamic + adaptive-TDEE weight; Banister/CTL-ATL-TSB, load-to-pace fitness) and their ensembles, with mandatory visual prediction intervals. Each new anchor backtests + reweights the models (calibration = anchor auditing forecast, G16 generalized); a model accurate-until-it-diverges signals a real regime change (plateau/stall), not model error. Predictions are the ESTIMATE class - deterministic formulas not LLM guesses, never feeding verdicts - and are effective-dated with model provenance (browse any past day to see which model was mapping your future). |
 | G22 | **No cross-metric inference layer** (operator examples + researched, 2026-07-28) | HIGH | Relating metrics (sleep->performance, weight->pace, HR->kcal, context->adherence) on one person's sparse autocorrelated data manufactures spurious insight unless disciplined. THREE trust tiers: deterministic physiology (encode, may state cause), hedged hypothesis ("for you, so far", never graduates to fact), structurally-excluded single-incident causal narration (banned). Mandatory statistical guards (detrend, effective-N, multiple-comparisons, a-priori lag, change-point, missingness, out-of-sample backtest). Causal-language firewall: no "causes" outside tier 1, enumerate co-factors never name one, n-of-1 ceiling, medical->clinician, never-moralise. Evidence base + full design: docs/cross-metric-inference.md. |
 | G23 | **No vendor-insight ingestion/adjudication** (operator doctrine, 2026-07-28) | MEDIUM | Other apps (Garmin VO2max, WHOOP recovery, MFP adaptive TDEE, Strava Relative Effort, Runna predictor) compute their own science-backed estimates. Ingest them as a distinct class - FOREIGN-MODEL ESTIMATES (principle 6, class 3), tagged derived+source+opaque, never observations/anchors - and use them to CORROBORATE / CHALLENGE / BACKFILL vitai's own derivations (ensemble members in forecasting). Same critical eye: black boxes with their own errors, audited by the anchors, arbitrated by the transparent SSoT, subject to conservation (a competing claim, never summed, never the auditing anchor). |
+
+### Consolidating gaps G24-G33 (whole-model redteam, 2026-07-28)
+
+Found by the four-lens whole-model review; each fills a symmetry hole in a
+core principle (see [model.md](model.md) Part 3 for the full mapping).
+
+| # | Gap | Severity | Principle it fills |
+|---|---|---|---|
+| G24 | **Source-reliability learning** - observation sources earn/lose precedence by backtest against anchors, not a static onboarding rank (anchor-audits-SOURCE). | HIGH | P1 |
+| G25 | **Schema-evolution robustness** - CODE-VERIFIED: additive nullable fields break validation of every pre-existing line; needs per-line schema generation + a "key postdates this line" validator rule + a shape-history-stability test. Blocks increment 1. | CRITICAL | P8 / artifact-1 |
+| G26 | **Ingestion/build integrity** - parse fault-tolerance (one bad byte must not abort the whole build); exact-duplicate detection; per-line identity for connector idempotency (Q127); cross-OS + hash-seed determinism; LF gitattributes. | HIGH | P1 (syntactic) |
+| G27 | **Cold-start & maturity** - minimum-N per derivation; a cold/warming/stable signal the deterministic engine surfaces (its own doubt); calendar-day not entry-count rolling windows. | HIGH | P3 |
+| G28 | **Safety escalation** - DETERMINISTIC severity->action (not LLM prose): cardiac/red-flag symptom class, absolute-danger thresholds, a RED-S composite, a fast path bypassing the weekly cadence, the written never-shame carve-out. | CRITICAL | P4 / P7 |
+| G29 | **Correction cascade & unified provenance** - `vitai explain <metric> <date>`; a correction that retracts/annotates already-surfaced milestones/streaks/inferences/backtests; resolution decisions as routine explanations. "Late truth cascades" as one named doctrine. | HIGH | P6 |
+| G30 | **Temporal foundations** - timezone/offset on date + start_time; an explicit dated day-boundary rule; DST arithmetic. Determinism is only accidental without it. | HIGH | P2 / P1 |
+| G31 | **Registry & config effective-dating** - registries get as-of + decay audit; streak definitions migrate out of mutable vitai.toml; thresholds get a correction marker; estimate-vs-estimate ties break on accuracy not home-team. | MEDIUM | P2 / P5 |
+| G32 | **Access scope & consent-as-data** - per-consumer redaction/ACL; a consent ledger as data; deletion cascade widened to all artifacts + host boundary; household/minor stance. | MEDIUM (HIGH hosted) | P5 / P8 |
+| G33 | **Reflexivity & the subtractive primitive** - coach-induced-change as a G22 confound class; per-metric suppression ("leave this alone"); capture-level observer effect; units storage-vs-display. | MEDIUM | P7 / P8 |
+
+Merges (not new gaps): G1 folds into G15; G2 becomes a projection of G17;
+G10 scope-widens into G32; the "late truth cascades" pattern unifies G16 +
+G21 + G29 as one doctrine. Full rationale in model.md Part 4.
 
 Redteam notes beyond schema: (a) every new field raises capture cost -
 the 3-minute budget is the design's immune system, so ALL context fields
