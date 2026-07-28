@@ -152,11 +152,23 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   milestones/streaks/inferences/backtests that already consumed the old value
   (G10 covered deletion, not correction); resolution-precedence decisions as a
   first-class routine explanation, not only a failure tripwire. HIGH.
-- **G30 Temporal foundations** (P2/P1). A timezone/offset on `date` and
-  `start_time`; an explicit day-boundary rule (home-tz vs device-tz at event)
-  as dated policy; DST 23h/25h arithmetic. Without it, determinism is only
-  accidental for any traveling athlete - and it feeds resolution, streaks,
-  baselines, as-of. HIGH, foundations (ride with G4's start_time).
+- **G30 Temporal foundations** (P2/P1). **Rolling windows are calendar-day,
+  not entry-count** (SHIPPED foundations F3: a "7d avg" means 7 real days -
+  the entry-count bug that silently mis-scoped every trend under irregular
+  logging is fixed). Day-boundary DOCTRINE (below); the timezone/offset FIELD
+  rides with G4's `start_time` in increment 2 (a date-only daily summary has
+  no timezone ambiguity - only an intraday timestamp does, so the field lands
+  where it has a consumer). DST 23h/25h arithmetic with it. HIGH.
+
+  **Day-boundary rule (doctrine, ready for increment 2):** an event's calendar
+  day is its LOCAL day at the moment it happened (device-local time at the
+  event), not the sync time or a fixed home zone - a workout finished 23:30 in
+  one timezone belongs to that day even if synced after midnight elsewhere.
+  Sleep spanning midnight is attributed to the wake day (matching device
+  convention). The rule is itself effective-dated (P2): a permanent
+  relocation changes the home zone from a date forward, and past days keep the
+  zone that applied then. Until `start_time` + offset land, dates are treated
+  as already-local (the current, now-explicit behavior).
 - **G31 Registry & config effective-dating** (P2/P5). Registries get `state
   (date)` for meaning + an ongoing decay/audit; streak definitions migrate out
   of mutable `vitai.toml` into a dated dataset (into increment 1, the migration

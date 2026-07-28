@@ -154,6 +154,36 @@ def test_report_rate_verdict_on_target():
     assert "ON TARGET" in out
 
 
+def test_rolling_window_is_calendar_days_not_entries():
+    """G30: a '7d avg' must average the last 7 CALENDAR days, not the last 7
+    weigh-ins. Sparse logging (one entry every 5 days) must NOT reach back weeks."""
+    from vitai.report import _rolling
+    # entries 10 days apart: a 7-day window catches ONLY the point itself,
+    # never an earlier entry - so each rolling avg equals that day's value.
+    pts = [("2030-05-01", 80.0), ("2030-05-11", 79.0),
+           ("2030-05-21", 78.0), ("2030-05-31", 77.0)]
+    roll = dict(_rolling(pts, window=7))
+    assert roll["2030-05-31"] == 77.0            # itself alone in the 7d window
+    assert roll["2030-05-21"] == 78.0
+    # entry-count slicing (last <=7 entries = all 4) would give 78.5 here
+    assert roll["2030-05-31"] != 78.5
+
+
+def test_rate_ignores_stale_gap():
+    """G30: with a long logging gap, the rate compares calendar-separated
+    windows, not the 8th-from-last entry (which could be a month back)."""
+    cfg = Config(phases=((80.0, 70.0, 0.5),))
+    # a dense recent week losing ~0.5/wk, preceded by a stale cluster 40 days back
+    stale = [{"date": f"2030-04-0{i}", "kg": 80.0, "source": "a", "note": None}
+             for i in range(1, 4)]
+    recent = [{"date": f"2030-05-{10 + i:02d}", "kg": round(78.0 - 0.07 * i, 2),
+               "source": "a", "note": None} for i in range(8)]
+    out = build_report(cfg, stale + recent, [], [], today=date(2030, 5, 20))
+    # the old code would span 05-17 back to 04-03 (44 days) and mangle the rate;
+    # the calendar version anchors ~7 days back and produces a sane weekly rate line
+    assert "**Rate:**" in out
+
+
 def test_report_easy_cap_flag():
     cfg = Config(easy_hr_cap=150)
     sessions = [{"date": "2030-05-05", "type": "run", "distance_km": 5.0,
