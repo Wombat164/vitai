@@ -231,6 +231,9 @@ for the v3 model: v3 is done when every question has a non-gap tag.
 129. If the same run reaches the record via two platforms (device sync AND a hub export), is it two runs? - no: fuzzy overlap-matching (same date, intersecting time, duration/distance within tolerance) collapses them to one physical activity, richer/higher-precedence source wins, the other becomes corroboration. [G15; depends on G4 start_time]
 130. Can the day's sessions burn more energy than the day burned? - physically no; if the data says so, that is a CONSERVATION TRIPWIRE (double-count or bad source), flagged never auto-fixed. [G15]
 131. Do two daily lines for one date double-count in averages and verdicts? - today YES if both survive resolution (the engine iterates all records) - held off only by connector politeness (skip-existing). Conservation must be engine-enforced, not policy-hoped. [G15, CRITICAL trigger]
+132. If the logged energy deficit implies -0.5 kg/week but the scale trend shows -0.2, which is true? - the ANCHOR (trend); the gap measures logging/model error, and the derived implied-TDEE (intake + trend x ~7700 kcal/kg) recalibrates the estimate. [G16: energy-balance audit derivation]
+133. Does a single-morning weight spike ever reach a verdict? - never: weight anchors as a tendency; verdicts consume rolling means only (SHIPPED - the rate verdict already averages weeks) - the doctrine is now named, not just implemented.
+134. Where do body-fat %, waist, and other body measurements live? - nowhere today. [G16: measurements.jsonl - sparse anchor-class dataset]
 
 ## 3. Redteam findings (the gaps, ranked)
 
@@ -251,6 +254,7 @@ for the v3 model: v3 is done when every question has a non-gap tag.
 | G13 | **Ambitions not structured** | LOW | Goals need something to point at ("why"). |
 | G14 | **Thresholds unversioned** (found by redteam) | HIGH | `vitai.toml` is mutable current-state; a threshold change silently recomputes ALL history on rebuild - deterministic in the letter, audit-destroying in spirit. Thresholds must become dated data. |
 | G15 | **No source reconciliation - conservation unenforced** (operator golden rule, 2026-07-28) | CRITICAL alongside G6 | Multiple sources will claim the same physical day/activity (live already: device + calorie app). The engine must resolve claims to ONE canonical value per quantity - per-quantity precedence, fuzzy activity overlap-matching, session-energy-as-attribution - and surface conservation violations as tripwires. Today two same-date lines would double-count in every average; only connector politeness prevents it. Observations = claims; derived = adjudicated truth. |
+| G16 | **Anchor class incomplete** (operator doctrine, 2026-07-28) | MEDIUM | Weight exists but body measurements (fat %, waist, circumferences) have no dataset, and the energy-balance audit (implied TDEE from intake + weight trend, anchor-recalibrates-estimates) has no derivation. Anchors are the top of the precedence ladder and the audit of the whole calorie ledger. |
 
 Redteam notes beyond schema: (a) every new field raises capture cost -
 the 3-minute budget is the design's immune system, so ALL context fields
@@ -306,6 +310,11 @@ New datasets (all append-only, supersedes-capable, validated):
   week against the threshold IN FORCE that week; `vitai.toml` remains the
   bootstrap and current-state view. Without this, editing a threshold
   rewrites history on rebuild.
+- **`measurements.jsonl`** [G16]: sparse anchor-class dataset - `date`,
+  `kind` (body_fat_pct | waist_cm | hip_cm | chest_cm | thigh_cm |
+  arm_cm | neck_cm | other), `value`, `source`, `note`. Anchors sit at
+  the top of the resolution precedence ladder; like weight they are
+  judged as TENDENCIES (sparse trend), never single points.
 
 Extended fields (nullable, additive):
 
@@ -354,6 +363,13 @@ New derivations (deterministic, in the read model):
 
 - **`baselines`** [G2]: per metric - median band, trend slopes (30/90/365d),
   weekday profiles, personal records, monthly rollups.
+- **`energy_audit`** [G16]: the anchor auditing the ledger - weekly
+  implied TDEE back-calculated from canonical kcal_in and the weight
+  TREND (~7700 kcal/kg), compared against device kcal_out and logged
+  intake. Persistent divergence = model/logging error signal; the anchor
+  recalibrates the estimates (MacroFactor-style), never the reverse.
+  Weight enters ONLY as the rolling trend - single weigh-ins (hydration,
+  glycogen, food transit) are noise by doctrine.
 - **`streaks`** [G8]: per streak definition from vitai.toml - current
   length, best, at-risk flag; forgiveness rules first-class (rest days,
   illness lines, medical restrictions never break streaks).

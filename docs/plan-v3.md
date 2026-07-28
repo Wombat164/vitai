@@ -87,6 +87,9 @@ founding deployment already has two sources claiming the same dates.
 - `sessions`: `source`, `start_time`, `elevation_m`, `setting`, `route`,
   `place` (supersedes free-text `location`), `with` (comma slugs),
   `context`, `planned`, `weather`.
+- `measurements.jsonl` (G16): sparse anchor-class dataset (body fat %,
+  circumferences) - additive, rides this schema pass; anchors top the
+  resolution precedence ladder.
 - Ingest skill: extracts the new fields when visible, never nags;
   validator messages stay actionable.
 - **Resolution layer (G15)**: field-wise per-quantity precedence merge of
@@ -136,6 +139,9 @@ The comparison engine and the flagship demo.
 - `streaks` derivation: definitions in config, weekly-first vocabulary,
   forgiveness computed from medical episodes + goal `rest_days`; current/
   best/at-risk.
+- `energy_audit` derivation (G16): weekly implied TDEE from canonical
+  intake + weight TREND; divergence vs device/logged estimates surfaced
+  as a calibration signal - the anchor audits the ledger.
 - Rollup + `vitai status` surface both; contract bump.
 - Tests: forgiveness (sick week keeps the streak - THE test of the
   increment), record detection, trend slopes on synthetic series,

@@ -63,6 +63,17 @@ Principles, in priority order:
    addition to it. Conservation violations (sessions exceeding the day's
    burn, duplicate activities) are surfaced as tripwires, not silently
    "fixed".
+6. **Anchors audit estimates; trends are the measurement.** Quantities
+   fall in three epistemic classes: ANCHORS (body mass, body
+   measurements, labs - the body's own ground truth), MEASURED FLOWS
+   (device HR, steps, durations), and MODELED ESTIMATES (calorie burn
+   models, food logging). When estimates and anchors disagree over time -
+   the logged deficit says one rate, the scale trend says another - the
+   anchor wins and the estimate is recalibrated (energy-balance
+   back-calculation, MacroFactor-style). And weight anchors as a
+   TENDENCY, never a point: single weigh-ins carry hydration, glycogen
+   and food-transit noise, so the rolling trend is the measurement and no
+   verdict ever consumes a single morning.
 
 ### The three data tiers
 
