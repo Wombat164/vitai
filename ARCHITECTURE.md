@@ -89,6 +89,20 @@ everything else, is schema-validated before a byte lands, and is projected
 into the read model for consumers - but no verdict, rate or tripwire ever
 reads it. Corrections flow through `supersedes` like any other line.
 
+### Temporal validity - the plan is a timeline, not a current state
+
+Goals, calorie targets, macros and planned sessions all change; the record
+treats each as an EFFECTIVE-DATED history, not a mutable current value. Any
+past day is judged against the policy that was in force THEN - the diary of
+a day three months ago shows that day's targets, and loosening a goal today
+never re-scores last month. All policy is dated (the thresholds fix,
+generalized); the engine offers as-of reconstruction (`state(date)`), and
+CHANGE itself is a metric - churn rate is a signal, and an unreasoned or
+suspiciously-timed edit (a target eased right after a miss) invites a coach
+question, surfaced never blocked. This is the anti-goalpost-moving property:
+the athlete owns the record and can change anything, but the change is an
+auditable dated event, not a silent rewrite of history.
+
 ### Goals are abstract and domain-agnostic
 
 A goal is not a metric with a number. It can live entirely in another app

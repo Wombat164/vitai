@@ -264,6 +264,15 @@ for the v3 model: v3 is done when every question has a non-gap tag.
 153. What about next month - and what if I make it or miss it? - `on_success`/`on_miss` model the meaning and the next-period move (escalate the target, hold, or reflect) - never punishment (voice rules); a missed monthly count informs next month, it does not shame. [G19]
 154. Is any of this fitness-specific? - no. A goal is a goal: the SAME model serves a language streak, a side-project cadence, a reading habit. This is the platform's goal engine; fitness is one domain of it. [G19 x the platform contract]
 
+### 2.18 Temporal validity - the plan is a timeline, not a current state
+
+155. Looking at a diary day 3 months ago, what goals/targets was I attaining THAT day - not today? - the record must reconstruct the state IN FORCE on that date (goal, calorie target, macros, planned sessions), which may differ greatly from today's. [G20: as-of reconstruction]
+156. Are calorie targets, macros, and the planned week mutable current-state or dated history? - today they are current-state (vitai.toml / plan.md prose), so editing them silently rewrites how every past day is judged - the same audit-destroying flaw as unversioned thresholds (G14), now generalized: ALL policy is effective-dated. [G20 generalizes G14]
+157. Is HOW OFTEN goals/targets change itself a metric? - yes: churn is a first-class derived signal (edits per goal, per period). Stable plans and thrash look different and mean different things. [G20: change-as-metric]
+158. What stops moving the goalposts to fake progress? - nothing blocks it (the athlete owns the record), but an unreasoned or suspiciously-timed change (target loosened right after a bad week, deadline pushed the day it would be missed) INVITES questioning - a coach prompt and an inference signal, never a silent accept. Every change should carry a reason (`set_by` + a why). [G20: anti-gaming, gamification-adjacent]
+159. If I loosen a goal, does my past progress re-score against the new easier target? - no: past weeks are judged against the target that was IN FORCE then; loosening today changes only today-forward. The audit chain shows the loosening as an event, dated. [G20 x G14]
+160. Can the lens/diary show the goal + targets banner for any historical day? - yes, from the as-of reconstruction - the diff between then and now is itself informative (and a stats-junkie view). [G20 x lens]
+
 ## 3. Redteam findings (the gaps, ranked)
 
 | # | Gap | Severity | Why it matters |
@@ -287,6 +296,7 @@ for the v3 model: v3 is done when every question has a non-gap tag.
 | G17 | **No shape semantics** (operator doctrine, 2026-07-28) | HIGH, generalizes G2 | Curves mean things: every metric needs its shape features (value, slope, acceleration, extrema, plateaus, variance) extracted uniformly at every timescale, and a SEMANTICS REGISTRY mapping (metric x timescale x shape) to meaning - curated, versioned, auditable. Verdicts/tripwires are the activated subset; the lens annotates charts from it; the inference tier extends it and graduates confirmed findings into it. Without the registry, interpretation lives in model vibes and chat history. |
 | G18 | **Goals are flat - no contribution model, no milestones** (operator doctrine, 2026-07-28) | CRITICAL, part of G6 | One event feeds many goals with DIFFERENT signs: a walk advances steps + calorie goals; an unplanned +2k run advances the calorie goal but NOT the running/health goal (unbudgeted ramp, injury risk) and may regress it. Goals need a CONTRIBUTION POLICY (which events count, monotonic vs guarded, the guardrail) so exceeding a target isn't blindly "progress". Milestones (thresholds crossed, derived) and achievements (recorded accomplishments) are first-class; the coach's per-goal verdict is what makes "congratulate the walk, question the run" possible. |
 | G19 | **Goals too concrete - no external/abstract, periodic, motivator-reinforced, interrogable goals** (operator doctrine, 2026-07-28) | HIGH, part of G6 | A goal may live in ANOTHER app (Strava Local Legend), be RECURRING (8 gym visits/month with rollover), and its motivator - not its metric - is what the coach should reinforce ("how's your Local Legend attempt going?"). Goals need: `external` metric + tracker ref, a first-class reinforced `motivator`, `period`+`on_period_end`, a `rationale` (why THIS number - it's a proxy), `on_success`/`on_miss` meaning, and a PROACTIVE motivator-anchored check-in mode. Domain-agnostic: same engine for a language streak or a side-project. |
+| G20 | **No temporal validity - the plan is treated as current-state, not a timeline** (operator doctrine, 2026-07-28) | CRITICAL, generalizes G14 | Goals, calorie targets, macros and planned sessions all change over time; the record must reconstruct the state IN FORCE on any past date (the diary shows THAT day's targets, not today's), never re-score history against a newer target. ALL policy becomes effective-dated (G14's thresholds fix generalized). Change itself is a metric (churn signal), and unreasoned/suspiciously-timed goal edits invite questioning (anti-goalpost-moving) - surfaced, never blocked. |
 
 Redteam notes beyond schema: (a) every new field raises capture cost -
 the 3-minute budget is the design's immune system, so ALL context fields
@@ -357,11 +367,15 @@ New datasets (all append-only, supersedes-capable, validated):
   "excused" iff it falls in an episode window of a restricting condition),
   `restricts` (what training it gates), `provider_type`
   (gp|physio|specialist - never provider identity by default), `note`.
-- **`thresholds.jsonl`** [G14]: `date` (effective-from), `key`
-  (steps_floor|easy_hr_cap|...), `value`, `note`. The engine judges each
-  week against the threshold IN FORCE that week; `vitai.toml` remains the
-  bootstrap and current-state view. Without this, editing a threshold
-  rewrites history on rebuild.
+- **`thresholds.jsonl`** [G14, G20]: `date` (effective-from), `key`
+  (steps_floor | easy_hr_cap | **calorie_target | protein_g | carbs_g |
+  fat_g** | ...), `value`, `set_by`, `reason`, `note`. Generalized from
+  thresholds to ALL effective-dated policy: the calorie target and macros
+  live here too (retired from mutable `vitai.toml`, which stays the
+  bootstrap/current view). The engine judges each week/day against the
+  value IN FORCE then; editing a value changes only today-forward.
+  Every change carries a `reason` (G20 anti-gaming). Planned-session
+  structure, when it becomes data, follows the same effective-dating.
 - **`measurements.jsonl`** [G16]: sparse anchor-class dataset - `date`,
   `kind` (body_fat_pct | waist_cm | hip_cm | chest_cm | thigh_cm |
   arm_cm | neck_cm | other), `value`, `source`, `note`. Anchors sit at
@@ -459,6 +473,16 @@ versioned in-repo - `semantics/` - neither data nor code):
   derived (halfway-to-target, first-time-under-a-race-time,
   N-week-streak-best). Feed the achievements record + the game mint;
   never fire on a guardrail-violating number.
+- **as-of reconstruction** [G20]: a deterministic function `state(date)` ->
+  the goals, thresholds, targets and macros IN FORCE on that date (latest
+  effective-dated record with `date <= D`, honoring supersedes). Every
+  historical derivation uses it; the lens diary banners a past day with
+  its OWN targets; the then-vs-now diff is a stats-junkie view.
+- **`plan_churn`** [G20]: change-as-metric - edits per goal/target per
+  period, time-to-first-edit after declaration, and a flag for
+  suspiciously-timed changes (a target loosened right after a missed week,
+  a deadline pushed as it would be breached). Feeds a coach questioning
+  prompt and an inference signal; surfaced, never blocking.
 
 Explicitly NOT added: precise GPS traces (stay in the source platform),
 food-item logs (the calorie app owns them; totals only), free-floating

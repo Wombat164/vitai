@@ -53,10 +53,12 @@ The visibility substrate everything else shows through.
 - NOT: screenshots, GIFs, hosted anything.
 - Cut-first: the README excerpt.
 
-## Increment 1 - goals are data + contribution model (v0.3.0; G6 + G14 + G18) [2 sessions]
+## Increment 1 - goals are data + contribution + temporal validity (v0.3.0; G6 + G14 + G18 + G19 + G20) [2-3 sessions]
 
 The core promise: "did today serve a goal, when was it set, when edited" -
-AND the truth that one event feeds many goals with different signs.
+one event feeds many goals with different signs, goals are rich and
+abstract, and the plan is a TIMELINE (every past day judged against the
+targets in force then, changes are auditable dated events).
 
 - `goals.jsonl` (contribution policy: monotonic vs guarded; G19 fields:
   `external` metric + `tracker`, reinforced `motivator`, `period` +
@@ -66,8 +68,11 @@ AND the truth that one event feeds many goals with different signs.
   per slug).
 - Engine: `contributions` derivation (per event x goal signed verdict);
   `milestones` derivation (thresholds crossed, only on in-policy progress);
-  verdicts gain goal linkage; weekly judgments use the threshold in force
-  that week; contract bump to 2.
+  verdicts gain goal linkage; **as-of reconstruction `state(date)`** so
+  every judgment (and the lens diary) uses the policy in force THEN;
+  calorie target + macros move into `thresholds.jsonl` (retired from
+  vitai.toml); `plan_churn` change-metric + suspiciously-timed-edit flag
+  (G20); contract bump to 2.
 - CLI: `vitai goals` - active goals with progress %, declared/last-edited
   dates, deadline pace, and each recent event's per-goal contribution.
 - Skills: onboard writes goals with contribution policies, motivators,
@@ -78,7 +83,11 @@ AND the truth that one event feeds many goals with different signs.
 - Tests: goal lifecycle; slug-head resolution; threshold history (G14
   regression); the contribution fan-out (one run: calorie-goal +,
   running-goal 0/- under the ramp guard); milestone fires on genuine
-  progress, NOT on over-target guarded volume; progress math; contract.
+  progress, NOT on over-target guarded volume; **as-of reconstruction (a
+  past day judged against then-targets is unchanged by editing today's;
+  `state(date)` returns the right in-force values); churn/suspicious-edit
+  flag fires on a right-after-a-miss loosening** (G20); progress math;
+  contract.
 - Demo: the demo athlete has a steps goal (monotonic) and a running goal
   (guarded); a big unplanned run shows the split verdict and no milestone.
 - NOT: multi-goal CONFLICT detection (inference's job), ambitions
