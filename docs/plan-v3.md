@@ -48,6 +48,11 @@ G24 source trust, G31-33) are slotted where they first become derivable.
      dataset never changes what a past line validates as.
 7. **Contract discipline**: any read-model shape change bumps
    `meta.contract` and gets a line in the wiki platform page - same PR.
+7b. **CLI + API parity (P9)**: every new capability lands as BOTH a CLI
+   command and a `vitai.api` method in the same increment - the CLI is a
+   harness over the API, never a separate path. Read exposure first; write/
+   manipulation API follows to reach CLI parity. A verb shipped CLI-only is
+   incomplete.
 8. **CI stays fast.** The matrix + hygiene gates run on every push (they
    do today); the demo job is the only addition. Heavier future suites
    (property fuzzing) go behind `workflow_dispatch`, not on every PR.

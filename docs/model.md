@@ -74,6 +74,18 @@ cross-metric inference. **Explicit carve-out the redteam demanded:** the
 safety-escalation tier (G28) is the ONE deliberate exception - a red-flag fires
 loud; that exception is written down, not an accident.
 
+**P9. CLI and API are one surface; expose (read) first, then write-parity.**
+Every capability ships as BOTH a CLI command and a library/API method - the
+CLI is a thin harness over the same `vitai.api` the platform consumes, never a
+separate code path. Read/query exposure comes first (a game/dashboard/agent
+can observe everything the CLI can); WRITE/manipulation API follows, reaching
+full parity with the CLI so a consumer can eventually do through the API
+everything the CLI does (append a correction, declare a goal, trigger a
+build), not just read. This is why `Vitai(root)` already mirrors
+`build/verdicts/status`, and why every new verb (`explain`, `goals`,
+correction) lands as CLI + API together. The CLI is the reference harness; the
+API is the contract. (Golden operator principle, 2026-07-28.)
+
 **P8. Capture-cost economy bounds schema growth; genericity + per-user atom.**
 The ~3-minute weekly budget is the immune system - nullable/additive fields,
 screenshot-inferable, at-most-one-question-a-week; the minimum day is one

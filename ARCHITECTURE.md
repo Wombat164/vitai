@@ -207,6 +207,17 @@ The skills' contract with the other layers:
   the formula estimate, a chosen rate of loss inside evidence-based bounds,
   a gated injury, an eating pattern to be handled without moralising).
 
+## 2a. CLI and API are one surface (expose first, write-parity later)
+
+The CLI is a thin harness over `vitai.api`, never a parallel code path: every
+capability is exposed as BOTH a command and a library method. Read/query
+exposure ships FIRST - a game, dashboard or agent can observe everything the
+CLI can - and WRITE/manipulation API follows to reach full CLI parity, so a
+consumer can eventually append a correction, declare a goal, or trigger a
+build through the API, not only read. `Vitai(root)` already mirrors
+`build/verdicts/status`; new verbs (`explain`, `goals`, correction) land as
+CLI + API together. The CLI is the reference harness; the API is the contract.
+
 ## 2b. The platform: build a game or dashboard on the engine
 
 vitai is consumable as a library, and the read model is a versioned
