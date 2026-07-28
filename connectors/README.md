@@ -35,9 +35,29 @@ No code connectors yet - by design. When the first one lands it will live
 here as `connectors/<vendor>/` with its own README stating which API it
 uses, what it fetches, and what it deliberately ignores.
 
-**First candidate (verified 2026-07-28): WHOOP.** Its developer API is
-OAuth-scoped to the member's own data (recovery, strain, sleep, workouts,
-body measurements, webhooks) and personal/dev apps need NO commercial
-approval below 10 members (100 req/min, 10k req/day) - a legitimate,
-low-friction personal-export path that maps cleanly onto `daily` and
-`sessions` appends.
+**Verified candidates (2026-07-28), all legitimate personal-use paths:**
+
+- **WHOOP**: developer API OAuth-scoped to the member's own data (recovery,
+  strain, sleep, workouts, webhooks); no approval below 10 members;
+  100 req/min, 10k req/day. Maps onto `daily` + `sessions`.
+- **Polar AccessLink v3**: personal client, no approval gate; daily
+  activity, sessions, sleep, nightly recharge. Gotchas a connector must
+  handle: transactional endpoints discard data on commit (persist before
+  committing), ~30-90 day history window (no deep backfill), resting HR
+  needs deriving.
+- **Strava v3 "Single Player Mode"**: personal app auths only its owner,
+  zero review; 100 read req/15min; webhooks. Gotchas: `calories` requires
+  the per-activity detail call; use `sport_type` (`type` deprecated); the
+  2026 API agreement bans AI-training uses and long re-serving caches -
+  personal single-athlete archiving sits in the personal-tracking
+  carve-out, which a connector README must state rather than ignore.
+- Apps without APIs reachable by proxy: several training-plan apps push
+  completed workouts INTO Strava and expose planned workouts as ICS
+  calendar feeds - prefer those official side-doors over scraping.
+
+**Adjacent, planned**: a `vitai-schedule` skill - calendar-aware session
+placement (free/busy conflict querying, real events with travel time,
+participant invites, hard respect for calendars declared read-only in the
+content repo's CLAUDE.md). Calendars are rails like Google Calendar API,
+Microsoft Graph, CalDAV and ICS; the personal binding stays in the content
+repo.
