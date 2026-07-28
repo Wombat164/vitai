@@ -67,7 +67,10 @@ Principles, in priority order:
    fall in three epistemic classes: ANCHORS (body mass, body
    measurements, labs - the body's own ground truth), MEASURED FLOWS
    (device HR, steps, durations), and MODELED ESTIMATES (calorie burn
-   models, food logging). When estimates and anchors disagree over time -
+   models, food logging - and VENDOR INSIGHTS: another app's VO2max,
+   recovery score or adaptive TDEE, which are foreign-model estimates
+   ingested as auditable second opinions, never as anchors or
+   observations). When estimates and anchors disagree over time -
    the logged deficit says one rate, the scale trend says another - the
    anchor wins and the estimate is recalibrated (energy-balance
    back-calculation, MacroFactor-style). And weight anchors as a

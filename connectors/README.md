@@ -56,6 +56,12 @@ vendor pair:
   never in either repo.
 - Prefer per-session/per-day summaries over raw telemetry: vitai stores
   observations, not sample streams.
+- **Vendor-derived insights** (VO2max, recovery/readiness scores, adaptive
+  TDEE, training load, race predictors) are NOT observations - ingest them
+  tagged `derived + source`, so the engine treats them as foreign-model
+  estimates (second opinions to corroborate/challenge/backfill), never as
+  raw truth and never as the anchor that audits estimates. See G23 in
+  docs/cross-metric-inference.md.
 
 ## Status
 

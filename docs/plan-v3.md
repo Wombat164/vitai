@@ -232,13 +232,43 @@ G6/increment 1, intake plan from the dated targets).
 - Cut-first: metabolic-adaptation and VO2max models (ship thermodynamic +
   adaptive-TDEE + Banister as the honest core); the accuracy panel.
 
+## Increment 8 - cross-metric inference + vendor insights (v0.10.0; G22, G23) [2-3 sessions]
+
+The engine relates metrics and ingests other apps' science - honestly.
+Last, because it stands on features (4), forecasting (7), and resolution (2).
+
+- Cross-metric correlation engine (G22): deterministic stats guards
+  (detrend, effective-N, multiple-comparisons budget/FDR, a-priori lags,
+  change-point segmentation, missingness policy) over metric pairs; the
+  three-tier trust taxonomy in code (tier-1 deterministic registry entries;
+  tier-2 hedged hypotheses; tier-3 single-incident narration structurally
+  excluded). Seed the evidence base from docs/cross-metric-inference.md.
+- Knowledge-extraction pipeline: `vitai infer` proposes patterns ->
+  out-of-sample temporal backtest -> registry graduation (still hedged for
+  confounded relationships).
+- Vendor-insight ingestion (G23): foreign-model estimates tagged
+  derived+source, wired as ensemble members (corroborate) / challenge
+  signals / hedged backfill; SSoT arbitrates; conservation-resolved.
+- Coach: the causal-language firewall (enumerate co-factors, no single-day
+  cause, "for you so far" ceiling, medical->clinician).
+- Tests: a pair that vanishes after detrending is discarded; effective-N
+  shrinks a naive p-value; the pattern budget caps nightly proposals; a
+  single-incident causal claim is structurally impossible to emit; a
+  vendor kcal is resolved as a competing claim, never summed; SSoT wins a
+  vendor disagreement while logging it.
+- NOT: any tier-2 pattern asserted as fact; medical inference; vendor
+  scores trusted over the resolved SSoT.
+- Cut-first: the adherence-context classifier (needs calendar enrichment,
+  G5); ship sleep/HR-kcal/weight-pace handling first.
+
 ## Increment ordering note
 
-Forecasting (7) is deliberately LAST of the engine increments: it stands
-on canonical resolution (2/G15), baselines + shape features (4/G2+G17),
-dated targets + planned inputs (1/G14+G20), and the anchor-audit pattern
-(G16). Do not pull it forward - a forecaster over unresolved,
-feature-less, current-state data forecasts fiction.
+Forecasting (7) is deliberately LAST of the CORE engine increments, and
+cross-metric/vendor inference (8) sits after it: both stand on canonical
+resolution (2/G15), baselines + shape features (4/G2+G17), dated targets +
+planned inputs (1/G14+G20), and the anchor-audit pattern (G16). Do not pull
+them forward - a forecaster or a correlation engine over unresolved,
+feature-less, current-state data produces fiction with a confidence score.
 
 ## The lens track (parallel repo: vitai-lens)
 

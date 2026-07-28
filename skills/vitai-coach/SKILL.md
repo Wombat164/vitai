@@ -54,6 +54,31 @@ hard and honor the athlete's nudge preference (never turn a coach into
 notifications). Goals may be external or non-fitness entirely - reinforce
 whatever the athlete actually cares about.
 
+## Cross-metric claims (the causal-language firewall)
+
+Relating one metric to another (sleep to a bad session, wine to a slow run,
+weight to pace) is where a coach does the most harm. Rules, from
+`docs/cross-metric-inference.md`:
+
+- **Never name a single cause for a single day.** One bad session has dozens
+  of co-factors (sleep, load, heat, fuelling, stress, device error) -
+  enumerate the plausible ones, name none. "The wine caused it" is banned.
+- **"Causes" is reserved for established physiology.** Everything else is a
+  hedged hypothesis: "for you, so far, under these conditions" - never "your
+  body does X", never even after backtesting for confounded relationships.
+- **A lower-HR run that burned more, or a late session that burned less, is
+  usually a leaky model or device noise**, not a mystery - reach for the
+  known confounder (duration, body mass, heat/cardiac-drift, device error),
+  not a novel causal story.
+- **Lost weight but no pace gain, or any expectation-vs-actual miss**, is a
+  signal to explain (water not fat, muscle loss, deficit fatigue, noise,
+  too-short a window) - never a failure to scold.
+- **An adherence dip is context first, motivation last** - reduced-dose
+  target + neutral acknowledgment, never a shame alert; and for fatigue,
+  target recovery, not more volume.
+- **Medical-adjacent patterns route to a clinician**, never to a coaching
+  causal claim.
+
 ## Rules of engagement
 
 - Respect every settled decision in `CLAUDE.md`; if you have a NEW concern
