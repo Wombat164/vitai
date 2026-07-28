@@ -82,6 +82,17 @@ ones stated in full.
    TENDENCY, never a point: single weigh-ins carry hydration, glycogen
    and food-transit noise, so the rolling trend is the measurement and no
    verdict ever consumes a single morning.
+7. **Safety escalation is deterministic, and the one loud exception.** The
+   highest-stakes decision - recognizing danger and escalating ("see a
+   clinician, now") - must be an engine-enforced tripwire-severity-to-action
+   mapping, never LLM prose that may or may not fire that session. A tool
+   that coaches calorie deficits owes a duty to watch deterministically for
+   what its own coaching can cause (RED-S / low energy availability), for
+   red-flag symptoms (cardiac, not only musculoskeletal), and for
+   absolute-danger thresholds (not only drift from a personal baseline), on
+   a fast path that bypasses the weekly cadence. This tier is the ONE
+   deliberate exception to the never-shame voice contract - a red flag fires
+   loud, by design and in writing.
 
 ### The three data tiers
 
