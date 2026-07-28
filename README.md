@@ -33,6 +33,32 @@ read in an afternoon, and the coaching comes from an **LLM loaded with skills
 and your full profile** - not a one-size-fits-all algorithm. Progress you can
 prove, in a record no vendor can take away.
 
+## See it
+
+A synthetic demo athlete lives in [`examples/demo/`](examples/demo/)
+(script-generated, CI-verified). `vitai build --root examples/demo` turns
+plain-text data into this rollup:
+
+```
+## Weight
+| Date | kg | 7d avg |
+| 2030-06-30 | 78.0 | 78.1 |
+
+**Rate:** +0.26 kg/week vs target 0.35 - **ON TARGET**
+> Judge on this line, never a single morning.
+
+## Tripwires
+- **Sleep 6.9h avg** - under the 7h floor
+- Steps 9,808/day avg - floor met
+```
+
+and `vitai verdicts --root examples/demo` emits the machine-readable contract a
+game or dashboard consumes:
+
+```json
+{"week": "2030-04-22", "metric": "weight_rate", "value": 0.36, "target": 0.35, "verdict": "on_target"}
+```
+
 ## The three layers
 
 ```

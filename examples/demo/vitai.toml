@@ -1,0 +1,10 @@
+# Demo athlete thresholds (synthetic).
+[targets]
+phases = [[80.0, 76.0, 0.35], [76.0, 74.0, 0.25]]
+
+[tripwires]
+easy_hr_cap = 152
+rhr_baseline = 51
+steps_floor = 9000
+sleep_floor_h = 7.0
+pain_gate = 3
