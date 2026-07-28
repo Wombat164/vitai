@@ -34,3 +34,22 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: pip install -e . pytest
       - run: pytest -q
+
+  demo:
+    # "Demo or it didn't happen": the committed demo data must match the
+    # generator (determinism) and must build into a rollup with real markers.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.13"
+      - run: pip install -e .
+      - run: python examples/generate_demo.py --check
+      - run: vitai validate --root examples/demo
+      - run: vitai build --root examples/demo
+      - name: Assert the rollup renders real content
+        run: |
+          grep -q "ON TARGET" examples/demo/derived/weekly.md
+          grep -q "Tripwires" examples/demo/derived/weekly.md
+          vitai verdicts --root examples/demo | grep -q '"verdict": "on_target"'
