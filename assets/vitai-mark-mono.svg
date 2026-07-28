@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>vitai mark - monochrome (inherits currentColor)</title>
+  <path d="M6 26 H16 L27 52 L40 8"
+        fill="none" stroke="currentColor" stroke-width="7"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="52" cy="9" r="5" fill="currentColor"/>
+</svg>

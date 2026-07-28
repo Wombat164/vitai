@@ -1,5 +1,7 @@
 # vitai
 
+<img src="assets/vitai-lockup.svg" alt="vitai" width="320">
+
 An LLM-native personal health, fitness and nutrition coach you own.
 
 Most fitness apps own your data, hide their logic, and give everyone the same

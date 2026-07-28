@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>vitai mark - v-pulse with data dot</title>
+  <defs>
+    <linearGradient id="vg" x1="24" y1="32" x2="42" y2="32" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0EA5A0"/>
+      <stop offset="1" stop-color="#84CC16"/>
+    </linearGradient>
+  </defs>
+  <path d="M6 26 H16 L27 52 L40 8"
+        fill="none" stroke="url(#vg)" stroke-width="7"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="52" cy="9" r="5" fill="#84CC16"/>
+</svg>

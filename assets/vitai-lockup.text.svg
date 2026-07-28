@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 88" width="200" height="88">
+  <title>vitai lockup - mark + wordmark</title>
+  <defs>
+    <linearGradient id="lg-mark" x1="32" y1="46" x2="50" y2="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0EA5A0"/>
+      <stop offset="1" stop-color="#84CC16"/>
+    </linearGradient>
+  </defs>
+  <path d="M14 40 H24 L35 66 L48 22"
+        fill="none" stroke="url(#lg-mark)" stroke-width="7"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="60" cy="23" r="5" fill="#84CC16"/>
+  <text x="92" y="58" font-family="Outfit, Inter, sans-serif" font-size="44"
+        font-weight="600" letter-spacing="1" fill="#0F172A">vit</text>
+  <text x="146.04" y="58" font-family="Outfit, Inter, sans-serif" font-size="44"
+        font-weight="600" letter-spacing="1" fill="#0EA5A0">a</text>
+  <text x="172.9" y="58" font-family="Outfit, Inter, sans-serif" font-size="44"
+        font-weight="600" letter-spacing="1" fill="#84CC16">i</text>
+</svg>
