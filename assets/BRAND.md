@@ -127,6 +127,17 @@ text.
 - **Greyscale**: the color mark degrades safely - teal (~luma 119) and lime
   (~162) stay distinct, so the gradient reads as a dark-to-light ramp
   (verified render: `vitai-mark-greyscale.png`).
+- **Unknown backgrounds - the halo**: `vitai-lockup.svg` carries a faint
+  light glow-outline behind the ink glyphs (a `<use>` of the `#vit-ink`
+  group: stroke `#F8FAF9` width 40 glyph-units, opacity 0.5, 1.2 blur,
+  painted underneath). Invisible on light backgrounds; on dark ones "vit"
+  reads as a fine ghost outline instead of vanishing. Where the background
+  IS known to be dark, prefer the true dark lockup. In markdown that can
+  theme-switch (GitHub README), use `<picture>` with
+  `prefers-color-scheme: dark` -> `vitai-lockup-dark.svg`.
+  NOTE: the halo is a post-outline addition - after re-outlining the text,
+  re-add the `<use>` + `#halo` filter block (see git history of
+  `vitai-lockup.svg`).
 - **Dark mode** (`vitai-lockup-dark.svg`, source `vitai-lockup-dark.text.svg`):
   ink swaps `#0F172A` -> `#F1F5F9`; teal/lime accents and the mark are
   unchanged (both hold on dark). Reference dark background `#0B1220`.

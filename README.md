@@ -1,6 +1,9 @@
 # vitai
 
-<img src="assets/vitai-lockup.svg" alt="vitai" width="320">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/vitai-lockup-dark.svg">
+  <img src="assets/vitai-lockup.svg" alt="vitai" width="320">
+</picture>
 
 **The AI health coach you own.** Your health, on the record.
 
