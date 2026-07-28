@@ -52,6 +52,17 @@ Principles, in priority order:
    the audit trail.
 4. **Derive, never store, anything computable.** Pace, rolling averages,
    weekly totals: computed on build, absent from data.
+5. **Conservation - the golden rule.** The record describes ONE body: a
+   calorie is eaten once and burned once, a step is taken once, a workout
+   happened once - no matter how many apps witnessed it. Observations are
+   therefore CLAIMS by sources; when sources overlap (a watch and a
+   calorie app both describing the same day, two platforms logging the
+   same run), the engine RESOLVES them to one canonical value per physical
+   quantity - by precedence and fuzzy overlap-matching, never by summing.
+   Session energy is an attribution WITHIN the day's total, not an
+   addition to it. Conservation violations (sessions exceeding the day's
+   burn, duplicate activities) are surfaced as tripwires, not silently
+   "fixed".
 
 ### The three data tiers
 

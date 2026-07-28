@@ -43,6 +43,12 @@ vendor pair:
 
 ## Hard rules for any connector
 
+- **Connectors write CLAIMS, never truth.** Tag every line with `source`
+  and let the engine's resolution layer adjudicate overlaps
+  (per-quantity precedence, fuzzy activity matching). A connector must
+  never pre-merge sources, re-add another platform's exercise calories,
+  or "helpfully" sum anything - a calorie is eaten once and burned once,
+  and enforcing that is the ENGINE's job.
 - Emits appends to `data/*.jsonl` only; never touches `derived/`, never
   edits a line, never invents a key.
 - Everything it writes passes `vitai validate` before commit.

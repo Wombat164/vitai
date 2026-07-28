@@ -227,6 +227,10 @@ for the v3 model: v3 is done when every question has a non-gap tag.
 125. What does the inference layer COST (tokens, latency, money) and is that visible? - [G9-adjacent: `vitai infer` should report tokens/duration; cadence is weekly by policy so cost is bounded]
 126. If a threshold (steps floor) changes today, what happens to LAST year's verdicts on rebuild? - without versioned thresholds they silently recompute against today's value - the audit-trail killer. [G14: thresholds as dated data]
 127. Can a connector REVISE its own earlier line (an intraday summary that finalizes overnight)? - found live with a real device sync: NO - `supersedes` keys on date+source, so a same-source revision names its own key and eliminates itself in resolution. Interim policy: connectors append completed days only. [G1 grows: per-line identity (a generation or line id) so same-source supersede chains resolve]
+128. If the watch says 2,443 kcal and the calorie app says 2,844 kcal for the same day, what does the record say? - ONE canonical kcal_out, chosen by per-quantity precedence (measured device > app assumption), with both claims retained as observations. [G15]
+129. If the same run reaches the record via two platforms (device sync AND a hub export), is it two runs? - no: fuzzy overlap-matching (same date, intersecting time, duration/distance within tolerance) collapses them to one physical activity, richer/higher-precedence source wins, the other becomes corroboration. [G15; depends on G4 start_time]
+130. Can the day's sessions burn more energy than the day burned? - physically no; if the data says so, that is a CONSERVATION TRIPWIRE (double-count or bad source), flagged never auto-fixed. [G15]
+131. Do two daily lines for one date double-count in averages and verdicts? - today YES if both survive resolution (the engine iterates all records) - held off only by connector politeness (skip-existing). Conservation must be engine-enforced, not policy-hoped. [G15, CRITICAL trigger]
 
 ## 3. Redteam findings (the gaps, ranked)
 
@@ -246,6 +250,7 @@ for the v3 model: v3 is done when every question has a non-gap tag.
 | G9 | **Game boundary undocumented** (ledger ownership, spoofing stance, quiet mode) | LOW | One doc page; the architecture already implies the answers. |
 | G13 | **Ambitions not structured** | LOW | Goals need something to point at ("why"). |
 | G14 | **Thresholds unversioned** (found by redteam) | HIGH | `vitai.toml` is mutable current-state; a threshold change silently recomputes ALL history on rebuild - deterministic in the letter, audit-destroying in spirit. Thresholds must become dated data. |
+| G15 | **No source reconciliation - conservation unenforced** (operator golden rule, 2026-07-28) | CRITICAL alongside G6 | Multiple sources will claim the same physical day/activity (live already: device + calorie app). The engine must resolve claims to ONE canonical value per quantity - per-quantity precedence, fuzzy activity overlap-matching, session-energy-as-attribution - and surface conservation violations as tripwires. Today two same-date lines would double-count in every average; only connector politeness prevents it. Observations = claims; derived = adjudicated truth. |
 
 Redteam notes beyond schema: (a) every new field raises capture cost -
 the 3-minute budget is the design's immune system, so ALL context fields
@@ -314,6 +319,36 @@ Extended fields (nullable, additive):
   (comma-delimited relationship slugs), `context`
   (commute|family|social|solo|club), `planned` (goal/plan ref), `weather`
   (coarse: dry|rain|hot|cold|wind - stored at ingest).
+
+The resolution layer [G15] (deterministic, runs at build time, BEFORE any
+derivation):
+
+- **Claims model**: every observation line carries `source`; multiple
+  same-date claims per dataset are expected and all retained. Resolution
+  produces ONE canonical record per (date, dataset) that everything
+  downstream (rollup, verdicts, baselines, streaks, the read model's
+  primary tables) consumes; raw claims are projected into companion
+  `*_claims` tables for the stats-junkie audience.
+- **Per-quantity precedence** (config, with sane defaults): each FIELD
+  resolves independently by source rank - e.g. `kcal_out`: hr-device >
+  calorie-app > manual; `kcal_in`: food-ledger > manual; `steps`:
+  wrist-device > phone; `weight`: scale > app-sync; `sleep_h`/`rhr`:
+  device only. A day's canonical row is thus a field-wise merge of the
+  best witness per quantity - never a sum of witnesses.
+- **Activity identity (fuzzy overlap-matching)**: two session claims are
+  the SAME physical activity when date matches and time intervals
+  intersect (needs `start_time`, G4), or - lacking times - when type
+  matches and duration ratio is within 0.8-1.25 and distance ratio within
+  0.9-1.1. The higher-precedence/richer claim becomes canonical; the other
+  is retained as corroboration and excluded from totals.
+- **Energy attribution, not addition**: a device's daily `kcal_out`
+  already CONTAINS its sessions' energy; session kcal are attributions
+  within the day. Cross-app "exercise calories" re-imported from another
+  platform are the same joules and never re-added.
+- **Conservation tripwires** (flag, never auto-fix): sum(session kcal) >
+  daily kcal_out + tolerance; duplicate-suspect sessions that failed the
+  fuzzy match narrowly; a date with contradicting high-precedence claims
+  (two devices disagreeing beyond tolerance).
 
 New derivations (deterministic, in the read model):
 

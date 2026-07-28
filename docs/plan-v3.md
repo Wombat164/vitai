@@ -74,9 +74,12 @@ The core promise: "did today serve a goal, when was it set, when edited."
   (increment 5), prescriptions-as-data.
 - Cut-first: `vitai goals` formatting niceties; deadline-pace projection.
 
-## Increment 2 - context + feel (v0.4.0; G1, G3, G4, G7) [1-2 sessions]
+## Increment 2 - provenance, context, feel + RESOLUTION (v0.4.0; G1, G3, G4, G7, G15) [2 sessions]
 
-The whole-life differentiation: one additive schema pass.
+The whole-life differentiation plus the conservation golden rule: a
+calorie is eaten once, burned once - multiple sources RESOLVE to one
+canonical truth, never sum. Promoted into this increment because the
+founding deployment already has two sources claiming the same dates.
 
 - `daily`: `source`, `mood`, `feel`, `coverage`; `pain` + `pain_site`
   generalization with `hip_pain` read-compat (old lines keep validating;
@@ -86,13 +89,24 @@ The whole-life differentiation: one additive schema pass.
   `context`, `planned`, `weather`.
 - Ingest skill: extracts the new fields when visible, never nags;
   validator messages stay actionable.
+- **Resolution layer (G15)**: field-wise per-quantity precedence merge of
+  same-date claims into one canonical row; fuzzy session
+  overlap-matching (time-intersect via `start_time`, else
+  type+duration/distance tolerance bands); energy-as-attribution rule;
+  conservation tripwires (sessions exceeding daily burn, near-miss
+  duplicates, device disagreement). Canonical rows feed everything
+  downstream; claims projected to `*_claims` tables. This also retires
+  the connector-politeness era (skip-existing) and unblocks the MFP
+  kcal_in merge in the founding deployment.
 - Tests: nullability of every new field, pain migration, mixed old/new
-  lines in one file.
+  lines in one file; resolution: two-source day merges field-wise, same
+  run via two platforms collapses to one, sessions-exceed-day fires the
+  tripwire, single-source behavior byte-identical to v0.3.0 (regression).
 - Demo: one richly-contextful demo day (partner walk, rain, known route,
-  good mood) flowing into the rollup.
+  good mood) AND a two-source day resolving cleanly in the rollup.
 - NOT: any new derivation over the new fields yet; no enrichment fetching.
-- Cut-first: `weather` + `route` (pure context); keep `mood`/`feel`
-  (the coach needs them most).
+- Cut-first: `weather` + `route` (pure context); keep `mood`/`feel` and
+  the resolution core (the golden rule is not cuttable).
 
 ## Increment 3 - medical layer (v0.5.0; G11) [1-2 sessions]
 
