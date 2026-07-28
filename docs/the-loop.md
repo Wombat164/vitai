@@ -243,6 +243,17 @@ for the v3 model: v3 is done when every question has a non-gap tag.
 138. Who interprets a shape x metric x timescale combination the registry does not cover? - the inference tier, prompted WITH the registry (extend, never reinvent); confirmed inferences graduate into the registry with evidence. [G17 x inference tier]
 139. What do cross-metric, lagged shapes mean (short sleep -> next-day easy-HR drift; alcohol -> RHR spike; ramp rate -> pain)? - engine computes lagged features deterministically; registry holds the canonical pairs; inference hunts the long tail. [G17 + G2]
 
+### 2.16 Goal contribution, milestones, achievements
+
+140. Does ONE event have ONE result? - no: it fans out to every active goal with a SEPARATE per-goal verdict. Walk +2k steps: steps-goal + and calorie-goal +. Run +2k unplanned: calorie-goal + but running-goal neutral/negative and health-goal negative (unbudgeted ramp). [G18: per-goal contribution model]
+141. Does exceeding a target always count as progress? - no. A calorie/steps goal is monotonic (more counts). A running or health goal has GUARDRAILS: volume beyond the plan is ramp-rate the athlete didn't budget - it does not advance the goal and may regress it (injury risk is the variable, not distance). [G18: contribution policy per goal]
+142. How does a goal know which events feed it, and with what sign? - each goal declares a CONTRIBUTION POLICY: which metrics/activities count, monotonic-or-guarded, and the guardrail (e.g. running goal: planned sessions and within ramp-rate count +; unplanned excess counts 0/-). [G18]
+143. When the run helped the calorie goal but hurt the running goal, what does the coach say? - the truth, per goal: "congratulated on the movement and the deficit; but that was unplanned volume - did you consider injury? it doesn't advance your running or health goal, only the calorie one." The injury-attribution doctrine (ramp rate, not weight) drives the caveat. [G18 x coach voice]
+144. What is a milestone vs an achievement? - a MILESTONE is a threshold crossed on the way to a goal (halfway to target weight; first sub-25:00 5k), DERIVED deterministically from data + goals. An ACHIEVEMENT is a recorded accomplishment worth keeping (completed a race, hit a streak best), which may be auto-derived or hand-logged. [G18: milestones derived, achievements recordable]
+145. When is a milestone celebrated vs noted vs held back? - per the athlete's nudge preference (Q83) and voice rules: celebrate genuine progress, never manufacture it, never celebrate a number that came from a guardrail violation. [G18 x G7]
+146. Are milestones/achievements the game's currency? - the game MINTS from verdicts + milestones (attainment, not volume); the ledger stays host-side (G9). vitai records the events; the economy is the consumer's. [G18 x G9]
+147. Does an abandoned goal keep its milestones? - yes - the record is history; a milestone reached under a since-abandoned goal still happened. [G18 x G6 lifecycle]
+
 ## 3. Redteam findings (the gaps, ranked)
 
 | # | Gap | Severity | Why it matters |
@@ -264,6 +275,7 @@ for the v3 model: v3 is done when every question has a non-gap tag.
 | G15 | **No source reconciliation - conservation unenforced** (operator golden rule, 2026-07-28) | CRITICAL alongside G6 | Multiple sources will claim the same physical day/activity (live already: device + calorie app). The engine must resolve claims to ONE canonical value per quantity - per-quantity precedence, fuzzy activity overlap-matching, session-energy-as-attribution - and surface conservation violations as tripwires. Today two same-date lines would double-count in every average; only connector politeness prevents it. Observations = claims; derived = adjudicated truth. |
 | G16 | **Anchor class incomplete** (operator doctrine, 2026-07-28) | MEDIUM | Weight exists but body measurements (fat %, waist, circumferences) have no dataset, and the energy-balance audit (implied TDEE from intake + weight trend, anchor-recalibrates-estimates) has no derivation. Anchors are the top of the precedence ladder and the audit of the whole calorie ledger. |
 | G17 | **No shape semantics** (operator doctrine, 2026-07-28) | HIGH, generalizes G2 | Curves mean things: every metric needs its shape features (value, slope, acceleration, extrema, plateaus, variance) extracted uniformly at every timescale, and a SEMANTICS REGISTRY mapping (metric x timescale x shape) to meaning - curated, versioned, auditable. Verdicts/tripwires are the activated subset; the lens annotates charts from it; the inference tier extends it and graduates confirmed findings into it. Without the registry, interpretation lives in model vibes and chat history. |
+| G18 | **Goals are flat - no contribution model, no milestones** (operator doctrine, 2026-07-28) | CRITICAL, part of G6 | One event feeds many goals with DIFFERENT signs: a walk advances steps + calorie goals; an unplanned +2k run advances the calorie goal but NOT the running/health goal (unbudgeted ramp, injury risk) and may regress it. Goals need a CONTRIBUTION POLICY (which events count, monotonic vs guarded, the guardrail) so exceeding a target isn't blindly "progress". Milestones (thresholds crossed, derived) and achievements (recorded accomplishments) are first-class; the coach's per-goal verdict is what makes "congratulate the walk, question the run" possible. |
 
 Redteam notes beyond schema: (a) every new field raises capture cost -
 the 3-minute budget is the design's immune system, so ALL context fields
@@ -294,15 +306,26 @@ Cross-dataset conventions settled by the redteam pass:
 
 New datasets (all append-only, supersedes-capable, validated):
 
-- **`goals.jsonl`** [G6]: `date` (declared), `slug`, `title`, `metric`
-  (weight_kg | steps | distance_km | race_time_s | manual), `target`,
-  `deadline`, `status` (active|paused|achieved|abandoned), `set_by`,
-  `motivation` (free text or ambition slug), `accountability`,
-  `rest_days` (weekday letters, feeds streak forgiveness), `note`.
-  Edits = supersedes within slug -> "when was it last edited" is the audit
-  chain. Verdicts gain goal linkage for the four computable metrics;
-  `manual` goals are explicitly human-judged - no auto-verdict, ever
-  (renamed from `custom` to say what it means).
+- **`goals.jsonl`** [G6, G18]: `date` (declared), `slug`, `title`,
+  `metric` (weight_kg | steps | distance_km | race_time_s | manual),
+  `target`, `deadline`, `status` (active|paused|achieved|abandoned),
+  `set_by`, `motivation` (free text or ambition slug), `accountability`,
+  `rest_days` (weekday letters, feeds streak forgiveness),
+  `contribution` (G18: how events feed this goal -
+  `monotonic` = more always counts, e.g. steps/calorie goals; or
+  `guarded:<rule>` = only planned/in-budget events count and unbudgeted
+  excess scores 0 or negative, e.g. a running goal guarded by ramp-rate
+  and plan-adherence), `note`. Edits = supersedes within slug ->
+  "when was it last edited" is the audit chain. Verdicts gain goal
+  linkage for the four computable metrics; `manual` goals are
+  human-judged - no auto-verdict, ever (renamed from `custom`).
+- **`achievements.jsonl`** [G18]: recorded accomplishments worth keeping -
+  `date`, `slug` (which goal, or null for standalone), `kind`
+  (milestone | achievement | pr), `title`, `metric`, `value`,
+  `source` (derived | manual), `note`. Milestones are usually auto-derived
+  (a threshold crossed); achievements may be hand-logged (finished a
+  race). Persist through goal abandonment - a thing that happened
+  happened.
 - **`journal.jsonl`** [G12, G13, part of G7]: `date`, `kind`
   (reflection|life_event|ambition|feedback), `text`, `tags`, `note`.
   Ambition entries give goals something to reference.
@@ -406,7 +429,16 @@ versioned in-repo - `semantics/` - neither data nor code):
   length, best, at-risk flag; forgiveness rules first-class (rest days,
   illness lines, medical restrictions never break streaks).
 - `verdicts` v2: gains `goal` column when goals.jsonl lands (contract bump
-  to `2` - additive tables are non-breaking, the column is the bump).
+  to `2`).
+- **`contributions`** [G18]: per (event, goal) the SIGNED verdict a
+  contribution policy produces - the deterministic fan-out that lets the
+  coach say "advanced your calorie goal, not your running goal" and lets a
+  milestone fire only on genuine, in-policy progress. The event->many-goals
+  matrix, computed at build.
+- **`milestones`** [G18]: thresholds crossed on the way to active goals,
+  derived (halfway-to-target, first-time-under-a-race-time,
+  N-week-streak-best). Feed the achievements record + the game mint;
+  never fire on a guardrail-violating number.
 
 Explicitly NOT added: precise GPS traces (stay in the source platform),
 food-item logs (the calorie app owns them; totals only), free-floating

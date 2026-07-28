@@ -53,26 +53,34 @@ The visibility substrate everything else shows through.
 - NOT: screenshots, GIFs, hosted anything.
 - Cut-first: the README excerpt.
 
-## Increment 1 - goals are data (v0.3.0; G6 + G14) [1-2 sessions]
+## Increment 1 - goals are data + contribution model (v0.3.0; G6 + G14 + G18) [2 sessions]
 
-The core promise: "did today serve a goal, when was it set, when edited."
+The core promise: "did today serve a goal, when was it set, when edited" -
+AND the truth that one event feeds many goals with different signs.
 
-- `goals.jsonl` + `thresholds.jsonl` schemas, validation, templates;
+- `goals.jsonl` (+ `contribution` policy: monotonic vs guarded),
+  `achievements.jsonl`, `thresholds.jsonl` schemas, validation, templates;
   slug-scoped supersedes resolution in the loader (one un-superseded head
   per slug).
-- Engine: verdicts gain goal linkage for computable metrics; weekly
-  judgments use the threshold IN FORCE that week; contract bump to 2.
+- Engine: `contributions` derivation (per event x goal signed verdict);
+  `milestones` derivation (thresholds crossed, only on in-policy progress);
+  verdicts gain goal linkage; weekly judgments use the threshold in force
+  that week; contract bump to 2.
 - CLI: `vitai goals` - active goals with progress %, declared/last-edited
-  dates (straight from the audit chain), deadline pace.
-- Skills: onboard + coach updated to write/read goals as data.
-- Tests: goal lifecycle (declare -> edit -> achieve; abandoned goals
-  reappear in history), slug-head resolution, threshold history (the G14
-  regression test), progress math, contract version.
-- Demo: the demo athlete's goal shows a mid-story edit and an on-pace
-  verdict trail.
-- NOT: multi-goal conflict detection (inference's job), ambitions
-  (increment 5), prescriptions-as-data.
-- Cut-first: `vitai goals` formatting niceties; deadline-pace projection.
+  dates, deadline pace, and each recent event's per-goal contribution.
+- Skills: onboard writes goals with contribution policies; coach judges
+  each event per goal (congratulate the walk, question the unbudgeted run)
+  and never celebrates a guardrail-violating milestone.
+- Tests: goal lifecycle; slug-head resolution; threshold history (G14
+  regression); the contribution fan-out (one run: calorie-goal +,
+  running-goal 0/- under the ramp guard); milestone fires on genuine
+  progress, NOT on over-target guarded volume; progress math; contract.
+- Demo: the demo athlete has a steps goal (monotonic) and a running goal
+  (guarded); a big unplanned run shows the split verdict and no milestone.
+- NOT: multi-goal CONFLICT detection (inference's job), ambitions
+  (increment 5), prescriptions-as-data, gamified rewards (host-side).
+- Cut-first: `achievements.jsonl` hand-logging UX; deadline-pace
+  projection. NOT cuttable: the contribution model - it is the point.
 
 ## Increment 2 - provenance, context, feel + RESOLUTION (v0.4.0; G1, G3, G4, G7, G15) [2 sessions]
 

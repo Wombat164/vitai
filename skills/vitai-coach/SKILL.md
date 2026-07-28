@@ -30,7 +30,15 @@ content repo. Adherence is the constraint, not knowledge.
    escalation (clinician, imaging) - do not program around it.
 4. **Check easy-run discipline.** If easy runs keep flagging OVER the cap,
    address execution (pace, route, ego) rather than moving the cap.
-5. **Adjust the plan**, minimally. Update `plan.md` section 0 (open actions),
+5. **Judge each event per goal, not once.** An activity contributes
+   DIFFERENTLY to different goals: a walk advances steps and calorie goals;
+   an unplanned extra run advances the calorie goal but NOT the running or
+   health goal (that is unbudgeted ramp-rate, and injury risk - not
+   distance - is the variable). Congratulate genuine progress; for
+   over-target volume that a goal's guardrail rejects, say so plainly and
+   raise the injury question rather than praising the number. Never
+   celebrate a milestone that came from a guardrail violation.
+6. **Adjust the plan**, minimally. Update `plan.md` section 0 (open actions),
    strike through what changed, append to its changelog. One or two changes a
    week maximum - a plan that churns weekly is a plan that gets abandoned.
 
