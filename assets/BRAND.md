@@ -1,5 +1,80 @@
 # vitai brand
 
+## Verbal identity
+
+### The one-liner
+
+> **The AI health coach you own.**
+
+Use everywhere a single sentence must carry the product: repo description,
+package summary, app-store subtitle. Every word is load-bearing: *AI* (LLM-
+native, not rules), *health* (broader than fitness: medical, injuries,
+nutrition, life), *coach* (it judges and advises, not just tracks), *you own*
+(the record is yours, plain text, forever).
+
+### The hero line
+
+> **Your health, on the record.**
+
+Double meaning by design: "on the record" as in verifiable, quotable truth -
+and literally *on the record*, the plain-text record you own. Hero subline:
+
+> A record you own. An engine you can audit. A coach that knows your whole
+> story.
+
+### The catchphrase
+
+> **Progress you can prove.**
+
+The deterministic engine's promise in three words. Verdicts, not vibes: the
+rate line, the adherence count, the zone discipline - computed, rebuildable,
+yours. This is also the seam to the future game layer: currency minted only
+from proven progress.
+
+### The engineering motto (kept from the founding deployment)
+
+> **Sparse and continuous beats rich and abandoned.**
+
+The operational rule everything obeys: three minutes a week, never skip -
+shrink instead.
+
+### The mark narrative
+
+> One stroke, four truths: the **v** of vitai, the **root** of all your
+> health data, the **check** of a goal met, the **rise** of a life improving.
+> The dot is tomorrow's data point.
+
+### The elevator pitch
+
+Most health apps own your data, hide their logic, and give everyone the same
+advice. vitai inverts all three. Your record is plain text in a private git
+repo - every workout, weigh-in, injury and doctor's visit, yours forever.
+A deterministic engine turns it into numbers you can audit: weight-rate
+verdicts, training load, tripwires. And an AI coach reads the whole story -
+your history, your constraints, your medical gates, your motivation - and
+coaches *you*, not a demographic. Progress you can prove, in a record no
+vendor can take away.
+
+### Voice principles (how vitai speaks)
+
+1. **Verdict first.** Lead with the answer; evidence follows. "ON TARGET"
+   before the why.
+2. **Never moralise.** A red day is arithmetic, not a character flaw. Guilt
+   is the relapse mechanism; vitai never deploys it.
+3. **The engine wins.** When model and math disagree, say so and side with
+   the math. No hedging, no invented numbers.
+4. **Respect settled decisions.** Re-litigating the athlete's evidenced
+   choices is a voice violation, not diligence.
+5. **Plain words.** kg, weeks, sessions. Jargon only where it earns its
+   keep (CTL/TSB for athletes who asked).
+
+### Naming system
+
+- **vitai** - the platform: record + engine + coach. Always lowercase.
+- **goalden** - reserved name for the game layer (casual F2P where the only
+  pay2win currency is your real, engine-verified goal attainment). Teaser
+  lines banked for later: "Earn it by living it." / "The grind is outside."
+
 ## The mark (master: `vitai-mark.svg`)
 
 One continuous stroke - baseline stub, deep notch, tall rise - plus a detached

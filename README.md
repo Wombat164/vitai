@@ -2,13 +2,14 @@
 
 <img src="assets/vitai-lockup.svg" alt="vitai" width="320">
 
-An LLM-native personal health, fitness and nutrition coach you own.
+**The AI health coach you own.** Your health, on the record.
 
 Most fitness apps own your data, hide their logic, and give everyone the same
 advice. vitai inverts all three: your record is plain text in a **private git
 repo you control**, the numbers come from a **deterministic engine** you can
 read in an afternoon, and the coaching comes from an **LLM loaded with skills
-and your full profile** - not a one-size-fits-all algorithm.
+and your full profile** - not a one-size-fits-all algorithm. Progress you can
+prove, in a record no vendor can take away.
 
 ## The three layers
 
