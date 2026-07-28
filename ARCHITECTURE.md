@@ -101,7 +101,13 @@ CHANGE itself is a metric - churn rate is a signal, and an unreasoned or
 suspiciously-timed edit (a target eased right after a miss) invites a coach
 question, surfaced never blocked. This is the anti-goalpost-moving property:
 the athlete owns the record and can change anything, but the change is an
-auditable dated event, not a silent rewrite of history.
+auditable dated event, not a silent rewrite of history. It applies to ALL
+metrics and goals - a performance target (a 5k pace goal) is effective-dated
+like a macro. And the framing follows: a past achievement is judged against
+its own standard and never diminished by present fitness - hitting 5:00/km
+two months ago stays a win even when the athlete runs 4:30 today; the
+improvement is the arc to celebrate, measured against who they were, not a
+shortfall against who they are now.
 
 ### Goals are abstract and domain-agnostic
 
