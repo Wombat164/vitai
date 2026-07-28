@@ -226,6 +226,7 @@ for the v3 model: v3 is done when every question has a non-gap tag.
 124. Does a shared session appear in BOTH records, and may it? - yes, each athlete's own line about their own body; nothing about the other's physiology [G10 policy]
 125. What does the inference layer COST (tokens, latency, money) and is that visible? - [G9-adjacent: `vitai infer` should report tokens/duration; cadence is weekly by policy so cost is bounded]
 126. If a threshold (steps floor) changes today, what happens to LAST year's verdicts on rebuild? - without versioned thresholds they silently recompute against today's value - the audit-trail killer. [G14: thresholds as dated data]
+127. Can a connector REVISE its own earlier line (an intraday summary that finalizes overnight)? - found live with a real device sync: NO - `supersedes` keys on date+source, so a same-source revision names its own key and eliminates itself in resolution. Interim policy: connectors append completed days only. [G1 grows: per-line identity (a generation or line id) so same-source supersede chains resolve]
 
 ## 3. Redteam findings (the gaps, ranked)
 
