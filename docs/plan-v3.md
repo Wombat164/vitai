@@ -130,12 +130,20 @@ Lands BEFORE streaks because forgiveness is computed from it.
 - Cut-first: lab/medication kinds (visit/injury/symptom/restriction
   carry the design).
 
-## Increment 4 - baselines + streaks (v0.6.0; G2, G8) [2 sessions]
+## Increment 4 - baselines, shape grammar + streaks (v0.6.0; G2, G8, G17) [2-3 sessions]
 
 The comparison engine and the flagship demo.
 
 - `baselines` derivation: per-metric median bands, 30/90/365d trends,
   weekday profiles, personal records, monthly rollups.
+- `features` derivation (G17): the uniform shape grammar over all
+  canonical metrics (slope, acceleration, extrema + prominence,
+  plateaus, variance, band position, registered lagged pairs) - one
+  extractor, every metric, every window.
+- `semantics/` registry seeded (G17): the initial curated entries
+  (weight/rhr/steps/easy-HR shapes per timescale) with verdict/tripwire
+  cross-references; coach + infer skills updated to consume it (quote,
+  extend, never reinvent).
 - `streaks` derivation: definitions in config, weekly-first vocabulary,
   forgiveness computed from medical episodes + goal `rest_days`; current/
   best/at-risk.

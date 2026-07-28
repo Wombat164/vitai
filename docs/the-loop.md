@@ -235,6 +235,14 @@ for the v3 model: v3 is done when every question has a non-gap tag.
 133. Does a single-morning weight spike ever reach a verdict? - never: weight anchors as a tendency; verdicts consume rolling means only (SHIPPED - the rate verdict already averages weeks) - the doctrine is now named, not just implemented.
 134. Where do body-fat %, waist, and other body measurements live? - nowhere today. [G16: measurements.jsonl - sparse anchor-class dataset]
 
+### 2.15 Shape semantics (curves mean things)
+
+135. For any metric, what are its value, rate of change, acceleration, extrema, plateaus and variance - at EVERY timescale (last reading, 7d, 30d, 90d, 365d)? - [G17: the uniform shape-feature grammar, one deterministic extractor for all metrics]
+136. What does a given shape MEAN for a given metric at a given timescale - is a plateau a stall, an adaptation, or rest working? Is a local minimum a milestone or dehydration? - meaning is metric- and timescale-specific and must be LOOKED UP, not vibed: [G17: the semantics registry - versioned, curated, auditable]
+137. Are tripwires and verdicts a separate mechanism from shape semantics? - no: they are the ACTIVATED subset of the registry (shapes wired to thresholds and actions); the registry is the superset the coach and lens draw explanations from. [G17]
+138. Who interprets a shape x metric x timescale combination the registry does not cover? - the inference tier, prompted WITH the registry (extend, never reinvent); confirmed inferences graduate into the registry with evidence. [G17 x inference tier]
+139. What do cross-metric, lagged shapes mean (short sleep -> next-day easy-HR drift; alcohol -> RHR spike; ramp rate -> pain)? - engine computes lagged features deterministically; registry holds the canonical pairs; inference hunts the long tail. [G17 + G2]
+
 ## 3. Redteam findings (the gaps, ranked)
 
 | # | Gap | Severity | Why it matters |
@@ -255,6 +263,7 @@ for the v3 model: v3 is done when every question has a non-gap tag.
 | G14 | **Thresholds unversioned** (found by redteam) | HIGH | `vitai.toml` is mutable current-state; a threshold change silently recomputes ALL history on rebuild - deterministic in the letter, audit-destroying in spirit. Thresholds must become dated data. |
 | G15 | **No source reconciliation - conservation unenforced** (operator golden rule, 2026-07-28) | CRITICAL alongside G6 | Multiple sources will claim the same physical day/activity (live already: device + calorie app). The engine must resolve claims to ONE canonical value per quantity - per-quantity precedence, fuzzy activity overlap-matching, session-energy-as-attribution - and surface conservation violations as tripwires. Today two same-date lines would double-count in every average; only connector politeness prevents it. Observations = claims; derived = adjudicated truth. |
 | G16 | **Anchor class incomplete** (operator doctrine, 2026-07-28) | MEDIUM | Weight exists but body measurements (fat %, waist, circumferences) have no dataset, and the energy-balance audit (implied TDEE from intake + weight trend, anchor-recalibrates-estimates) has no derivation. Anchors are the top of the precedence ladder and the audit of the whole calorie ledger. |
+| G17 | **No shape semantics** (operator doctrine, 2026-07-28) | HIGH, generalizes G2 | Curves mean things: every metric needs its shape features (value, slope, acceleration, extrema, plateaus, variance) extracted uniformly at every timescale, and a SEMANTICS REGISTRY mapping (metric x timescale x shape) to meaning - curated, versioned, auditable. Verdicts/tripwires are the activated subset; the lens annotates charts from it; the inference tier extends it and graduates confirmed findings into it. Without the registry, interpretation lives in model vibes and chat history. |
 
 Redteam notes beyond schema: (a) every new field raises capture cost -
 the 3-minute budget is the design's immune system, so ALL context fields
@@ -370,6 +379,29 @@ New derivations (deterministic, in the read model):
   recalibrates the estimates (MacroFactor-style), never the reverse.
   Weight enters ONLY as the rolling trend - single weigh-ins (hydration,
   glycogen, food transit) are noise by doctrine.
+- **`features`** [G17]: the uniform shape grammar, one extractor for ALL
+  canonical metrics: last value + freshness, delta and slope per window
+  (7/30/90/365d), acceleration (slope-of-slope), local extrema with
+  prominence + time-since, plateau spans, variance/stability, position
+  vs baseline band, lagged cross-features for registered pairs. Pure
+  arithmetic, rebuildable, projected into the read model for the lens.
+
+The semantics registry [G17] (a new artifact class: curated knowledge,
+versioned in-repo - `semantics/` - neither data nor code):
+
+- One entry per (metric, timescale, shape): meaning, confidence basis
+  (evidence/citation or "operator-settled"), and coaching stance (act /
+  watch / ignore / celebrate). Examples: weight 1d max = noise by
+  doctrine; weight 90d local min = milestone; rhr 7d slope +5 = fatigue
+  tripwire; rhr 90d slope down = aerobic adaptation; weight 21d plateau
+  inside a logged deficit = energy-audit trigger, not a stall verdict;
+  steps weekday cycle = structure, excluded from trend alarms.
+- Verdicts and tripwires REFERENCE registry entries (they are its
+  activated subset); the lens pulls chart annotations from it; the coach
+  quotes it instead of improvising; `vitai infer` receives it in the
+  prompt and proposes ADDITIONS (kind=pattern with evidence), which
+  graduate into the registry by human merge - the same
+  claims-adjudicated-into-truth shape as everything else in the system.
 - **`streaks`** [G8]: per streak definition from vitai.toml - current
   length, best, at-risk flag; forgiveness rules first-class (rest days,
   illness lines, medical restrictions never break streaks).

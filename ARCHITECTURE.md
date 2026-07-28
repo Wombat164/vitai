@@ -89,6 +89,23 @@ everything else, is schema-validated before a byte lands, and is projected
 into the read model for consumers - but no verdict, rate or tripwire ever
 reads it. Corrections flow through `supersedes` like any other line.
 
+### Semantics (curated knowledge - the layer between numbers and coaching)
+
+A curve is not yet a meaning. Between the deterministic derivations and the
+LLM sits a **semantics registry** (`semantics/`, versioned in-repo, neither
+data nor code): the engine extracts a uniform SHAPE GRAMMAR for every metric
+at every timescale (value, slope, acceleration, extrema with prominence,
+plateaus, variance, band position, lagged cross-features), and the registry
+maps each (metric x timescale x shape) to a MEANING, an evidence basis, and
+a coaching stance. Meaning is metric-specific: a 90-day weight minimum is a
+milestone, a one-day maximum is water; a rising 7-day RHR is fatigue, a
+falling 90-day RHR is fitness. Verdicts and tripwires are the ACTIVATED
+subset of this registry; the dashboard annotates charts from it; the coach
+quotes it instead of improvising; and `vitai infer` extends it - confirmed
+inferences graduate INTO the registry by human merge, the same
+claims-into-truth pattern as the data layer. This keeps interpretation
+auditable and versioned instead of trapped in model vibes.
+
 ### Intelligence (LLM + skills)
 
 The layer the athlete actually talks to. Skills are Claude Code compatible
