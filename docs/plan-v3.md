@@ -152,6 +152,20 @@ The comparison engine and the flagship demo.
 - Explicitly the first thing to POSTPONE if real-world usage (dogfood or
   early adopters) surfaces better-informed priorities by then.
 
+## The lens track (parallel repo: vitai-lens)
+
+The stats frontend lives in its own repo
+([vitai-lens](https://github.com/Wombat164/vitai-lens)) and follows the
+same increment discipline with its own numbering (L0 shipped: sql.js deck
+with weight/weekly/heatmap/verdict views over the demo athlete; L1
+drilldowns + filters; L2 cross-correlation explorer; L3 baselines/streaks/
+inference panels; L4 goal views). Boundary rule: EXPLORATORY analytics
+(correlation mining, ad-hoc slicing) belong in the lens; CANONICAL
+derivations (verdicts, baselines, streaks) belong in the engine - if a
+lens feature starts being treated as truth, it graduates into the engine
+with tests. Lens increments consume engine releases, never pre-release
+schemas; a contract bump is the synchronization point.
+
 ## Cadence and review
 
 - Each increment: branch -> PR (template honesty section filled) -> CI

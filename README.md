@@ -115,6 +115,12 @@ users runs one store per user and aggregates verdicts in its own database -
 the per-user record stays the atom, by design (see
 [ARCHITECTURE.md](ARCHITECTURE.md), "The platform").
 
+The reference consumer is
+**[vitai-lens](https://github.com/Wombat164/vitai-lens)** - a local-first
+stats dashboard (trends, heatmaps, weekly loads, verdict strips) that reads
+`health.db` entirely in the browser. It exists in a separate repo on
+purpose: it consumes the same contract any third party would.
+
 A model can also write back: `vitai infer` (opt-in via `[inference]` in
 `vitai.toml`, backends: your Claude CLI or any OpenAI-compatible endpoint
 such as Ollama) reads the rollup and recent data, and appends
