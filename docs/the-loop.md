@@ -373,6 +373,9 @@ key-value context bags (every field earns its place or stays in `note`).
 
 ## 7. Build order (resequenced by redteam: forgiveness before streaks)
 
+> Execution detail - increments, tests, demo artifacts, timeboxes and
+> rabbit-hole escape hatches - lives in [plan-v3.md](plan-v3.md).
+
 1. **goals.jsonl + verdict-goal linkage + thresholds.jsonl** (G6, G14) -
    unlocks a third of the question bank, the game's mint semantics, and
    stops threshold edits from rewriting history.
