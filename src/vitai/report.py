@@ -108,8 +108,9 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
         steps = [d["steps"] for d in daily if d.get("steps")][-7:]
         if steps:
             avg = mean(steps)
-            alerts.append(f"Steps {avg:,.0f}/day avg - "
-                          f"{'floor met' if avg >= cfg.steps_floor else f'below the {cfg.steps_floor:,} floor'}")
+            met = avg >= cfg.steps_floor
+            verdict = "floor met" if met else f"below the {cfg.steps_floor:,} floor"
+            alerts.append(f"Steps {avg:,.0f}/day avg - {verdict}")
     L += [f"- {a}" for a in alerts] or ["- Nothing firing."]
 
     L += ["", "## Coverage", "",
