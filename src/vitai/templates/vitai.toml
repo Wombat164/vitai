@@ -12,3 +12,16 @@
 # steps_floor = 10000    # 7-day average daily-steps floor
 # sleep_floor_h = 7.0    # 7-day average sleep floor
 # pain_gate = 3          # pain score (0-10) above which the gate fires
+
+# [inference]            # OPT-IN intelligence layer for `vitai infer`:
+                         # a model reads the record and appends validated
+                         # knowledge to data/inferences.jsonl. Never feeds
+                         # the deterministic number path.
+# backend = "claude-cli"           # uses your authenticated Claude Code CLI
+# model = ""                       # optional model override
+# --- or any OpenAI-compatible endpoint (Ollama, llama.cpp, LiteLLM): ---
+# backend = "openai-compatible"
+# base_url = "http://localhost:11434"
+# model = "qwen3:8b"
+# api_key_env = ""                 # env var NAME holding the key, if any
+# max_items = 5

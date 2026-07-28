@@ -5,6 +5,30 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-28
+
+### Added
+- **Platform surface**: `vitai.api.Vitai(root)` library class (typed reads,
+  `verdicts()`, `rollup()`, `build()`); the read model is now a versioned
+  contract (`meta.contract`) with a new `verdicts` table (week, metric,
+  value, target, verdict) - the deterministic weekly goal-attainment rows a
+  game economy or dashboard consumes. `vitai verdicts` emits them as JSONL.
+- **Third data tier - inferred knowledge**: `data/inferences.jsonl`
+  (kind/statement/confidence/model/evidence, schema-validated, append-only,
+  supersedes-capable), projected into the read model, never read by the
+  number path.
+- **`vitai infer`** (opt-in via `[inference]` in vitai.toml): pluggable
+  model backends - `claude-cli` (your authenticated Claude Code CLI) and
+  `openai-compatible` (Ollama, llama.cpp, LiteLLM, hosted) - with strict
+  parse-and-validate (invalid lines rejected, never repaired) and
+  `--dry-run`.
+- ARCHITECTURE: "The platform" section - single-user store as the atom,
+  multi-user as horizontal per-user stores (scaling, GDPR blast radius,
+  aggregate-verdicts-not-records rationale).
+
+### Changed
+- `vitai build` now also projects verdicts into the read model.
+
 ## [0.1.0] - 2026-07-28
 
 ### Added

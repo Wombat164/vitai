@@ -53,6 +53,20 @@ Principles, in priority order:
 4. **Derive, never store, anything computable.** Pace, rolling averages,
    weekly totals: computed on build, absent from data.
 
+### The three data tiers
+
+| Tier | Lives in | Written by | Rebuildable? | Feeds the number path? |
+|---|---|---|---|---|
+| **Observed** | `data/weight,daily,sessions.jsonl` | human / ingest | no - it IS the truth | yes |
+| **Derived** | `derived/` (SQLite + rollup + verdicts) | the engine | always, from observed | is the number path |
+| **Inferred** | `data/inferences.jsonl` | a model (`vitai infer`) | no - model calls are neither free nor deterministic | NEVER |
+
+Inferred knowledge is a first-class dataset precisely because it is neither:
+it carries provenance (model, evidence, confidence), is append-only like
+everything else, is schema-validated before a byte lands, and is projected
+into the read model for consumers - but no verdict, rate or tripwire ever
+reads it. Corrections flow through `supersedes` like any other line.
+
 ### Intelligence (LLM + skills)
 
 The layer the athlete actually talks to. Skills are Claude Code compatible
@@ -71,6 +85,58 @@ The skills' contract with the other layers:
   them (the founding deployment's examples: a max HR that is genuinely above
   the formula estimate, a chosen rate of loss inside evidence-based bounds,
   a gated injury, an eating pattern to be handled without moralising).
+
+## 2b. The platform: build a game or dashboard on the engine
+
+vitai is consumable as a library, and the read model is a versioned
+contract. A third party (a game, a dashboard, a coach portal) builds on
+three surfaces:
+
+1. **`vitai.api.Vitai(root)`** - typed reads over one user's store:
+   `datasets()`, `verdicts()`, `rollup()`, `build()`, `status_line()`.
+2. **The read model** (`derived/health.db`) - one table per dataset plus
+   `verdicts` (week, metric, value, target, verdict) and `meta`
+   (`contract` version, bumped on any shape change). The `verdicts` table
+   is the game-economy interface: deterministic weekly goal-attainment
+   rows, exactly the signal a "your real goals are the premium currency"
+   economy should mint from.
+3. **`vitai verdicts`** - the same rows as JSONL on stdout, for non-Python
+   consumers.
+
+### Single-user or multi-user?
+
+**The per-user store stays the atom. Multi-user is horizontal, not a
+schema.** A game backend serving thousands of players holds one content
+store per user (a directory; the record plus its derived SQLite) and
+instantiates the engine per user:
+
+```python
+coach = Vitai(f"/data/users/{user_id}")
+coach.build()
+economy_input = coach.verdicts()
+```
+
+Why not one big multi-user database:
+
+- **Scaling**: per-user stores are embarrassingly parallel - no shared
+  write state, no contention, no migrations across tenants. SQLite-per-
+  tenant at thousands of users is a proven, boring pattern; a host that
+  outgrows local disk shards by user id, which is trivial when users never
+  join.
+- **Privacy blast radius**: thousands of users' health records in one
+  database is a breach jackpot and a GDPR liability magnet. Per-user
+  stores make deletion `rm -rf` and export `tar` - per user, provably.
+- **The queries games actually need are per-user.** A leaderboard or
+  economy aggregates VERDICTS (five small rows per user-week), not raw
+  health records. That aggregation belongs in the HOST's own database,
+  fed from `verdicts()` - vitai never grows cross-user joins.
+- **The ownership story survives**: any player can take their directory
+  and leave. That is the product's founding promise, and a multi-user
+  schema would quietly break it.
+
+A hosted deployment that wants central storage still can - sync the
+per-user stores wherever you like - but the engine's contract stays
+single-user, and that is deliberate.
 
 ## 3. Ingestion doctrine (the long-term direction)
 

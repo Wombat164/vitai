@@ -20,9 +20,16 @@ KEYS: dict[str, list[str]] = {
               "protein_g", "sleep_h", "rhr", "hip_pain", "alcohol", "note"],
     "sessions": ["date", "type", "distance_km", "duration_s", "avg_hr", "max_hr",
                  "cadence", "kcal", "location", "rpe", "note"],
+    # Third data tier: MODEL-INFERRED knowledge. Append-only like everything
+    # else, but carries provenance (model, evidence, confidence) because it is
+    # neither ground truth (observed) nor rebuildable (derived). The engine
+    # projects it; it never feeds the deterministic number path.
+    "inferences": ["date", "kind", "statement", "confidence", "model",
+                   "evidence", "note"],
 }
 
 SESSION_TYPES = {"run", "gym_a", "gym_b", "walk", "test", "other"}
+INFERENCE_KINDS = {"pattern", "risk", "recommendation", "observation", "question"}
 
 # key -> allowed python types when not null (bool checked before int: bool is int)
 _NUMERIC = (int, float)
@@ -31,6 +38,7 @@ _TYPES: dict[str, tuple[type, ...]] = {
     "kcal_out": (int,), "kcal_in": (int,), "protein_g": _NUMERIC, "sleep_h": _NUMERIC,
     "rhr": (int,), "hip_pain": (int,), "duration_s": (int,), "avg_hr": (int,),
     "max_hr": (int,), "cadence": (int,), "kcal": _NUMERIC, "rpe": (int,),
+    "confidence": _NUMERIC,
 }
 
 # extra keys that are always legal (the supersedes mechanic)
@@ -71,4 +79,14 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
     if dataset == "daily" and (p := rec.get("hip_pain")) is not None:
         if isinstance(p, int) and not isinstance(p, bool) and not 0 <= p <= 10:
             problems.append(f"'hip_pain' is a 0-10 scale, got {p!r}")
+    if dataset == "inferences":
+        if rec.get("kind") not in INFERENCE_KINDS:
+            problems.append(f"'kind' must be one of {sorted(INFERENCE_KINDS)}, "
+                            f"got {rec.get('kind')!r}")
+        if (c := rec.get("confidence")) is not None:
+            if isinstance(c, bool) or not isinstance(c, _NUMERIC) or not 0 <= c <= 1:
+                problems.append(f"'confidence' is 0-1 or null, got {c!r}")
+        for k in ("statement", "model"):
+            if not isinstance(rec.get(k), str) or not rec.get(k):
+                problems.append(f"'{k}' must be a non-empty string")
     return problems

@@ -183,3 +183,140 @@ def test_validate_fails_on_bad_line(tmp_path):
           [{"date": "2030-05-01", "kg": "heavy", "source": "app", "note": None}])
     with pytest.raises(SystemExit):
         main(["validate", "--root", str(root)])
+
+
+# ---- inferences schema (third data tier) ------------------------------------
+
+def _inf(**over):
+    rec = {"date": "2030-05-01", "kind": "pattern", "statement": "x correlates y",
+           "confidence": 0.7, "model": "test-model", "evidence": "2030-04/daily",
+           "note": None}
+    rec.update(over)
+    return rec
+
+
+def test_inference_record_valid():
+    assert validate_record("inferences", _inf()) == []
+
+
+def test_inference_record_rejects_bad_kind_and_confidence():
+    problems = validate_record("inferences", _inf(kind="prophecy", confidence=3))
+    assert any("'kind'" in p for p in problems)
+    assert any("'confidence'" in p for p in problems)
+
+
+def test_inference_record_requires_statement_and_model():
+    problems = validate_record("inferences", _inf(statement="", model=None))
+    assert any("'statement'" in p for p in problems)
+    assert any("'model'" in p for p in problems)
+
+
+# ---- verdicts (the platform contract) ---------------------------------------
+
+def test_verdicts_weight_rate_on_target():
+    from vitai.verdicts import compute_verdicts
+    cfg = Config(phases=((80.0, 70.0, 0.7),))
+    # week 1 mean 78.0, week 2 mean 77.3 -> rate 0.7 => on_target
+    weight = ([{"date": f"2030-05-0{i}", "kg": 78.0, "source": "a", "note": None}
+               for i in range(1, 6)] +
+              [{"date": f"2030-05-0{i}", "kg": 77.3, "source": "a", "note": None}
+               for i in range(8, 10)])
+    rows = compute_verdicts(cfg, weight, [], [], today=TODAY)
+    rate_rows = [r for r in rows if r["metric"] == "weight_rate" and r["verdict"] != "no_data"]
+    assert rate_rows and rate_rows[-1]["verdict"] == "on_target"
+    assert rate_rows[-1]["target"] == 0.7
+
+
+def test_verdicts_easy_hr_and_steps():
+    from vitai.verdicts import compute_verdicts
+    cfg = Config(easy_hr_cap=150, steps_floor=10000)
+    sessions = [{"date": "2030-05-06", "type": "run", "distance_km": 5.0,
+                 "duration_s": 1800, "avg_hr": 160, "max_hr": None, "cadence": None,
+                 "kcal": None, "location": None, "rpe": None, "note": None}]
+    daily = [{"date": "2030-05-06", "steps": 12000, "distance_km": None,
+              "active_min": None, "kcal_out": None, "kcal_in": None,
+              "protein_g": None, "sleep_h": None, "rhr": None, "hip_pain": None,
+              "alcohol": None, "note": None}]
+    rows = compute_verdicts(cfg, [], daily, sessions, today=TODAY)
+    by_metric = {r["metric"]: r for r in rows}
+    assert by_metric["easy_hr"]["verdict"] == "behind"
+    assert by_metric["steps"]["verdict"] == "on_target"
+
+
+def test_verdicts_deterministic():
+    from vitai.verdicts import compute_verdicts
+    cfg = Config(phases=((80.0, 70.0, 0.7),), steps_floor=8000)
+    weight = _weights([78.0, 77.9, 77.8])
+    assert (compute_verdicts(cfg, weight, [], [], today=TODAY)
+            == compute_verdicts(cfg, weight, [], [], today=TODAY))
+
+
+# ---- library API + verdicts table in the read model -------------------------
+
+def test_api_build_projects_verdicts_and_contract(tmp_path):
+    import sqlite3
+
+    from vitai.api import Vitai
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    (root / "vitai.toml").write_text(
+        "[targets]\nphases = [[80.0, 70.0, 0.7]]\n[tripwires]\nsteps_floor = 8000\n",
+        encoding="utf-8")
+    write(root / "data" / "weight.jsonl",
+          [{"date": "2030-05-01", "kg": 78.0, "source": "a", "note": None},
+           {"date": "2030-05-08", "kg": 77.3, "source": "a", "note": None}])
+    write(root / "data" / "inferences.jsonl", [_inf()])
+    v = Vitai(root)
+    db = v.build()
+    con = sqlite3.connect(db)
+    tables = {r[0] for r in con.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'")}
+    assert {"weight", "daily", "sessions", "inferences", "verdicts", "meta"} <= tables
+    assert con.execute("SELECT COUNT(*) FROM inferences").fetchone()[0] == 1
+    assert con.execute("SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "1"
+    con.close()
+    assert v.status_line().startswith("77.3 kg")
+    assert isinstance(v.verdicts(), list)
+
+
+def test_api_rejects_non_repo(tmp_path):
+    from vitai.api import Vitai
+    with pytest.raises(FileNotFoundError):
+        Vitai(tmp_path / "nowhere")
+
+
+# ---- inference runner (fake backend, no network) ----------------------------
+
+def test_run_inference_validates_and_rejects(tmp_path):
+    from datetime import date as _date
+
+    from vitai.inference import parse_inferences, run_inference
+
+    class FakeBackend:
+        name = "fake"
+
+        def complete(self, prompt):
+            assert "WEEKLY ROLLUP" in prompt
+            good = json.dumps(_inf(model="fake"))
+            bad = json.dumps({"date": "2030-05-01", "kind": "prophecy",
+                              "statement": "doom", "confidence": 9,
+                              "model": "fake", "evidence": None, "note": None})
+            return good + "\nnot json at all\n" + bad
+
+    valid, errors = run_inference(tmp_path, FakeBackend(), "rollup text", [], [],
+                                  [], _date(2030, 5, 1))
+    assert len(valid) == 1 and valid[0]["kind"] == "pattern"
+    assert len(errors) == 1  # bad record; the non-JSON prose line is skipped silently
+
+    # defaults fill date/model/note
+    v2, _ = parse_inferences(
+        '{"kind":"question","statement":"why","confidence":null,"evidence":null}',
+        "2030-05-02", "fake")
+    assert v2 and v2[0]["date"] == "2030-05-02" and v2[0]["model"] == "fake"
+
+
+def test_infer_cli_requires_optin(tmp_path):
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    with pytest.raises(SystemExit, match="opt-in"):
+        main(["infer", "--root", str(root)])

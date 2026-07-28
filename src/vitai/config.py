@@ -24,6 +24,16 @@ class Config:
     pain_gate: int | None = None         # pain score (0-10) above which the gate fires
 
 
+def load_inference_config(root: Path) -> dict:
+    """The raw [inference] table from vitai.toml (empty dict if absent).
+    Kept separate from Config: inference is the opt-in intelligence layer,
+    not an engine threshold."""
+    path = root / "vitai.toml"
+    if not path.exists():
+        return {}
+    return tomllib.loads(path.read_text(encoding="utf-8")).get("inference", {})
+
+
 def load_config(root: Path) -> Config:
     path = root / "vitai.toml"
     if not path.exists():

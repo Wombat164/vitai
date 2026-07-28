@@ -105,6 +105,23 @@ Install by pointing your agent harness at `skills/` (Claude Code: copy or
 symlink into `~/.claude/skills/`). Each skill assumes the content repo layout
 that `vitai init` produces.
 
+## Build on vitai
+
+The engine is a platform surface: `vitai.api.Vitai(root)` gives typed reads
+over one user's store, `derived/health.db` is a versioned contract (tables
+per dataset + `verdicts` + `meta`), and `vitai verdicts` emits weekly
+goal-attainment rows as JSONL. A game or dashboard hosting thousands of
+users runs one store per user and aggregates verdicts in its own database -
+the per-user record stays the atom, by design (see
+[ARCHITECTURE.md](ARCHITECTURE.md), "The platform").
+
+A model can also write back: `vitai infer` (opt-in via `[inference]` in
+`vitai.toml`, backends: your Claude CLI or any OpenAI-compatible endpoint
+such as Ollama) reads the rollup and recent data, and appends
+schema-validated knowledge to `data/inferences.jsonl` - the third data
+tier: append-only, provenance-carrying, and never part of the deterministic
+number path.
+
 ## Connectors
 
 Deliberately thin, see [`connectors/README.md`](connectors/README.md). The

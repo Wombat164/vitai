@@ -27,6 +27,24 @@ editing lines.
 
 One line: latest weight, 7-day average and rate, firing-tripwire count.
 
+## vitai verdicts
+
+Weekly goal-attainment rows as JSONL on stdout - one object per
+(week, metric) with `value`, `target` and a closed verdict vocabulary
+(`on_target | ahead | behind | no_data`). The same rows live in the read
+model's `verdicts` table. This is the contract a game economy or dashboard
+consumes; see [[explanation/platform|the platform page]].
+
+## vitai infer (opt-in)
+
+Runs the intelligence layer through a pluggable model backend (your Claude
+CLI, or any OpenAI-compatible endpoint like Ollama), configured in the
+`[inference]` section of `vitai.toml`. The model reads the rollup and
+recent data and emits candidate knowledge; every line is schema-validated
+and invalid lines are REJECTED (never repaired) before anything is appended
+to `data/inferences.jsonl`. `--dry-run` prints without appending. Inferred
+knowledge never feeds the deterministic number path.
+
 ## The rollup (`derived/weekly.md`)
 
 - **Weight**: last 14 points with 7-day rolling average, plus a rate line -

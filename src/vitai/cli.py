@@ -6,18 +6,19 @@ Run from (or point --root at) a content repo produced by `vitai init`.
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from importlib import resources
 from pathlib import Path
 from statistics import mean
 
 from . import __version__
-from .config import load_config
-from .db import build_db
+from .api import Vitai
+from .config import load_inference_config
+from .inference import append_inferences, backend_from_config, run_inference
 from .jsonl import DataError, load, read_lines
-from .report import build_report
 from .schema import KEYS, validate_record
 
 DATASETS = list(KEYS)
@@ -58,7 +59,6 @@ def _load_all(root: Path) -> dict[str, list[dict]]:
 
 def cmd_build(args: argparse.Namespace) -> None:
     root = _root(args)
-    cfg = load_config(root)
     data = _load_all(root)
     warned = 0
     for name in DATASETS:
@@ -66,15 +66,47 @@ def cmd_build(args: argparse.Namespace) -> None:
             for p in validate_record(name, rec):
                 print(f"warning: {name}.jsonl {rec.get('date')}: {p}", file=sys.stderr)
                 warned += 1
-    derived = root / "derived"
-    db = build_db(derived, data)
-    (derived / "weekly.md").write_text(
-        build_report(cfg, data["weight"], data["daily"], data["sessions"]),
-        encoding="utf-8", newline="\n",
-    )
+    db = Vitai(root).build()
     counts = " - ".join(f"{name}: {len(data[name])}" for name in DATASETS)
-    print(f"Built {db.name} and weekly.md ({counts})"
+    print(f"Built {db.name} (incl. verdicts) and weekly.md ({counts})"
           + (f"; {warned} schema warning(s), run `vitai validate`" if warned else ""))
+
+
+def cmd_verdicts(args: argparse.Namespace) -> None:
+    """Weekly goal-attainment rows as JSONL - the game/dashboard contract."""
+    root = _root(args)
+    for row in Vitai(root).verdicts():
+        print(json.dumps(row))
+
+
+def cmd_infer(args: argparse.Namespace) -> None:
+    """Opt-in intelligence layer: a model reads the record, validated new
+    knowledge is appended to data/inferences.jsonl. Never touches numbers."""
+    root = _root(args)
+    inf_cfg = load_inference_config(root)
+    if not inf_cfg:
+        sys.exit("no [inference] section in vitai.toml - inference is opt-in; "
+                 "see the template for claude-cli / openai-compatible examples")
+    backend = backend_from_config(inf_cfg)
+    v = Vitai(root)
+    data = v.datasets()
+    valid, errors = run_inference(
+        root, backend, v.rollup(), data["daily"], data["sessions"],
+        data["inferences"], date.today(),
+        max_items=int(inf_cfg.get("max_items", 5)))
+    for e in errors:
+        print(f"rejected: {e}", file=sys.stderr)
+    if not valid:
+        sys.exit("no valid inferences produced" + (f" ({len(errors)} rejected)" if errors else ""))
+    for rec in valid:
+        print(json.dumps(rec))
+    if args.dry_run:
+        print(f"(dry run: {len(valid)} inference(s) NOT appended)", file=sys.stderr)
+        return
+    n = append_inferences(root, valid)
+    v.build()
+    print(f"appended {n} inference(s) to data/inferences.jsonl and rebuilt derived/",
+          file=sys.stderr)
 
 
 def cmd_validate(args: argparse.Namespace) -> None:
@@ -132,12 +164,17 @@ def main(argv: list[str] | None = None) -> None:
     p.set_defaults(fn=cmd_init)
 
     for name, fn, help_ in [
-        ("build", cmd_build, "data/*.jsonl -> derived/ (SQLite + weekly rollup)"),
+        ("build", cmd_build, "data/*.jsonl -> derived/ (SQLite incl. verdicts + weekly rollup)"),
         ("validate", cmd_validate, "schema-check every data line"),
         ("status", cmd_status, "one-line state: latest weight, rate, tripwires"),
+        ("verdicts", cmd_verdicts, "weekly goal-attainment rows as JSONL (the platform contract)"),
+        ("infer", cmd_infer, "opt-in: model reads the record, appends validated inferences"),
     ]:
         p = sub.add_parser(name, help=help_)
         p.add_argument("--root", default=".", help="content repo root (default: cwd)")
+        if name == "infer":
+            p.add_argument("--dry-run", action="store_true",
+                           help="print validated inferences without appending")
         p.set_defaults(fn=fn)
 
     args = ap.parse_args(argv)
