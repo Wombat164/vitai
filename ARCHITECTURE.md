@@ -89,6 +89,21 @@ everything else, is schema-validated before a byte lands, and is projected
 into the read model for consumers - but no verdict, rate or tripwire ever
 reads it. Corrections flow through `supersedes` like any other line.
 
+### Goals are abstract and domain-agnostic
+
+A goal is not a metric with a number. It can live entirely in another app
+(a Strava Local Legend, a language streak), be recurring (8 gym visits a
+month, with rollover), and its MOTIVATOR - the intrinsic why - is what the
+coach reinforces, not its metric ("how's your Local Legend attempt going?"
+beats "fitness tonight?"). Goals hold a rationale (the target is usually a
+proxy for a deeper aim, and is interrogable, not sacred), a period and
+period-end behavior, and a meaning for success/miss (reflection and
+escalation, never punishment). One event contributes to many goals with
+DIFFERENT signs (a walk advances steps and calories; an unbudgeted run
+advances calories but not the running goal). The same goal engine serves
+any domain - fitness is one instance of it, which is why goals, milestones
+and achievements are core platform concepts, not health-specific ones.
+
 ### Semantics (curated knowledge - the layer between numbers and coaching)
 
 A curve is not yet a meaning. Between the deterministic derivations and the

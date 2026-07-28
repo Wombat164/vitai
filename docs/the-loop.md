@@ -254,6 +254,16 @@ for the v3 model: v3 is done when every question has a non-gap tag.
 146. Are milestones/achievements the game's currency? - the game MINTS from verdicts + milestones (attainment, not volume); the ledger stays host-side (G9). vitai records the events; the economy is the consumer's. [G18 x G9]
 147. Does an abandoned goal keep its milestones? - yes - the record is history; a milestone reached under a since-abandoned goal still happened. [G18 x G6 lifecycle]
 
+### 2.17 Abstract, external, periodic, interrogable goals
+
+148. Can a goal live entirely in ANOTHER app (Strava Local Legend, a segment crown, a Duolingo streak)? - yes: `metric: external` with a `tracker` reference. vitai cannot auto-verdict it, but it models, tracks (manual/achievement check-ins), reinforces and QUERIES it. [G19: external goals]
+149. What does the coach anchor its reinforcement on - the metric or the WHY? - the motivator. "How's your Local Legend attempt going, trying again tonight?" beats "fitness tonight?" because it names the intrinsic driver. The motivator is a first-class, reinforced field, not a note. [G19]
+150. Should the app proactively ask about a goal at login/opportune moments? - yes, a distinct PROACTIVE motivator-anchored check-in mode (separate from the weekly review): surfaces the live goal, its progress, and a specific next-step nudge ("6th of 8 gym visits - up for it tonight?"). Rationed and preference-gated (Q83). [G19: proactive check-in coaching mode]
+151. Is a goal a one-shot or a recurring container? - either: `period` (none|weekly|monthly|...) makes it recurring with a per-period target and a running count; `on_period_end` defines rollover (reset|carry|escalate). "8 gym visits this month" is a monthly container tracked toward 8. [G19: periodic goals]
+152. WHY 8 gym visits - why is the count itself important? - the target is usually a PROXY for a deeper aim (8 visits ~ a consistency habit); `rationale` holds the why-this-number so the coach can interrogate and adjust the scaffold rather than treat the number as sacred. [G19: goal rationale/proxy-awareness]
+153. What about next month - and what if I make it or miss it? - `on_success`/`on_miss` model the meaning and the next-period move (escalate the target, hold, or reflect) - never punishment (voice rules); a missed monthly count informs next month, it does not shame. [G19]
+154. Is any of this fitness-specific? - no. A goal is a goal: the SAME model serves a language streak, a side-project cadence, a reading habit. This is the platform's goal engine; fitness is one domain of it. [G19 x the platform contract]
+
 ## 3. Redteam findings (the gaps, ranked)
 
 | # | Gap | Severity | Why it matters |
@@ -276,6 +286,7 @@ for the v3 model: v3 is done when every question has a non-gap tag.
 | G16 | **Anchor class incomplete** (operator doctrine, 2026-07-28) | MEDIUM | Weight exists but body measurements (fat %, waist, circumferences) have no dataset, and the energy-balance audit (implied TDEE from intake + weight trend, anchor-recalibrates-estimates) has no derivation. Anchors are the top of the precedence ladder and the audit of the whole calorie ledger. |
 | G17 | **No shape semantics** (operator doctrine, 2026-07-28) | HIGH, generalizes G2 | Curves mean things: every metric needs its shape features (value, slope, acceleration, extrema, plateaus, variance) extracted uniformly at every timescale, and a SEMANTICS REGISTRY mapping (metric x timescale x shape) to meaning - curated, versioned, auditable. Verdicts/tripwires are the activated subset; the lens annotates charts from it; the inference tier extends it and graduates confirmed findings into it. Without the registry, interpretation lives in model vibes and chat history. |
 | G18 | **Goals are flat - no contribution model, no milestones** (operator doctrine, 2026-07-28) | CRITICAL, part of G6 | One event feeds many goals with DIFFERENT signs: a walk advances steps + calorie goals; an unplanned +2k run advances the calorie goal but NOT the running/health goal (unbudgeted ramp, injury risk) and may regress it. Goals need a CONTRIBUTION POLICY (which events count, monotonic vs guarded, the guardrail) so exceeding a target isn't blindly "progress". Milestones (thresholds crossed, derived) and achievements (recorded accomplishments) are first-class; the coach's per-goal verdict is what makes "congratulate the walk, question the run" possible. |
+| G19 | **Goals too concrete - no external/abstract, periodic, motivator-reinforced, interrogable goals** (operator doctrine, 2026-07-28) | HIGH, part of G6 | A goal may live in ANOTHER app (Strava Local Legend), be RECURRING (8 gym visits/month with rollover), and its motivator - not its metric - is what the coach should reinforce ("how's your Local Legend attempt going?"). Goals need: `external` metric + tracker ref, a first-class reinforced `motivator`, `period`+`on_period_end`, a `rationale` (why THIS number - it's a proxy), `on_success`/`on_miss` meaning, and a PROACTIVE motivator-anchored check-in mode. Domain-agnostic: same engine for a language streak or a side-project. |
 
 Redteam notes beyond schema: (a) every new field raises capture cost -
 the 3-minute budget is the design's immune system, so ALL context fields
@@ -306,19 +317,28 @@ Cross-dataset conventions settled by the redteam pass:
 
 New datasets (all append-only, supersedes-capable, validated):
 
-- **`goals.jsonl`** [G6, G18]: `date` (declared), `slug`, `title`,
-  `metric` (weight_kg | steps | distance_km | race_time_s | manual),
+- **`goals.jsonl`** [G6, G18, G19]: `date` (declared), `slug`, `title`,
+  `metric` (weight_kg | steps | distance_km | race_time_s | gym_visits |
+  manual | **external**), `tracker` (G19: for `external` goals, where it
+  lives - e.g. `strava:local-legend:<segment>`, `duolingo:streak`;
+  vitai can't auto-verdict it, tracks via manual/achievement check-ins),
   `target`, `deadline`, `status` (active|paused|achieved|abandoned),
-  `set_by`, `motivation` (free text or ambition slug), `accountability`,
-  `rest_days` (weekday letters, feeds streak forgiveness),
-  `contribution` (G18: how events feed this goal -
-  `monotonic` = more always counts, e.g. steps/calorie goals; or
-  `guarded:<rule>` = only planned/in-budget events count and unbudgeted
-  excess scores 0 or negative, e.g. a running goal guarded by ramp-rate
-  and plan-adherence), `note`. Edits = supersedes within slug ->
-  "when was it last edited" is the audit chain. Verdicts gain goal
-  linkage for the four computable metrics; `manual` goals are
-  human-judged - no auto-verdict, ever (renamed from `custom`).
+  `set_by`, `motivator` (G19: the reinforced WHY - the coach anchors its
+  reinforcement here, not on the metric; may reference an ambition slug),
+  `accountability`, `rest_days`,
+  `contribution` (G18: `monotonic` | `guarded:<rule>`),
+  `period` (G19: none|weekly|monthly|... - recurring container with a
+  per-period target and running count),
+  `on_period_end` (G19: reset|carry|escalate),
+  `rationale` (G19: why THIS target - it is usually a proxy for a deeper
+  aim, e.g. gym_visits=8 ~ a consistency habit; lets the coach interrogate
+  the number instead of treating it as sacred),
+  `on_success` / `on_miss` (G19: what the outcome MEANS and the
+  next-period move - reflection/escalation, never punishment), `note`.
+  Edits = supersedes within slug. Verdicts gain goal linkage for
+  computable metrics; `manual` = human-judged, `external` = lives in
+  another app (both no auto-verdict). Domain-agnostic by design (G19): the
+  same shape serves a language streak or a side-project cadence.
 - **`achievements.jsonl`** [G18]: recorded accomplishments worth keeping -
   `date`, `slug` (which goal, or null for standalone), `kind`
   (milestone | achievement | pr), `title`, `metric`, `value`,

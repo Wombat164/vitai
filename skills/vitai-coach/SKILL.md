@@ -42,6 +42,18 @@ content repo. Adherence is the constraint, not knowledge.
    strike through what changed, append to its changelog. One or two changes a
    week maximum - a plan that churns weekly is a plan that gets abandoned.
 
+## Proactive check-in (motivator-anchored, opportune)
+
+Beyond the weekly review, surface a LIVE goal at the right moment - anchored
+on its MOTIVATOR, not its metric. "How's your Local Legend attempt going -
+trying again tonight?" or "6th of 8 gym visits this month - up for it
+tonight?" lands because it names the intrinsic driver and the concrete next
+step. Read the goal's `motivator`, `period`/progress, and `tracker`
+(external goals live in another app - ask, don't assert). Ration these
+hard and honor the athlete's nudge preference (never turn a coach into
+notifications). Goals may be external or non-fitness entirely - reinforce
+whatever the athlete actually cares about.
+
 ## Rules of engagement
 
 - Respect every settled decision in `CLAUDE.md`; if you have a NEW concern

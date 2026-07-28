@@ -58,7 +58,9 @@ The visibility substrate everything else shows through.
 The core promise: "did today serve a goal, when was it set, when edited" -
 AND the truth that one event feeds many goals with different signs.
 
-- `goals.jsonl` (+ `contribution` policy: monotonic vs guarded),
+- `goals.jsonl` (contribution policy: monotonic vs guarded; G19 fields:
+  `external` metric + `tracker`, reinforced `motivator`, `period` +
+  `on_period_end`, `rationale`, `on_success`/`on_miss`),
   `achievements.jsonl`, `thresholds.jsonl` schemas, validation, templates;
   slug-scoped supersedes resolution in the loader (one un-superseded head
   per slug).
@@ -68,9 +70,11 @@ AND the truth that one event feeds many goals with different signs.
   that week; contract bump to 2.
 - CLI: `vitai goals` - active goals with progress %, declared/last-edited
   dates, deadline pace, and each recent event's per-goal contribution.
-- Skills: onboard writes goals with contribution policies; coach judges
-  each event per goal (congratulate the walk, question the unbudgeted run)
-  and never celebrates a guardrail-violating milestone.
+- Skills: onboard writes goals with contribution policies, motivators,
+  periods and rationale (incl. external/non-fitness goals); coach judges
+  each event per goal, never celebrates a guardrail-violating milestone,
+  and gains the proactive motivator-anchored check-in ("6th of 8 gym
+  visits - tonight?"; "Local Legend attempt - trying again?").
 - Tests: goal lifecycle; slug-head resolution; threshold history (G14
   regression); the contribution fan-out (one run: calorie-goal +,
   running-goal 0/- under the ramp guard); milestone fires on genuine
