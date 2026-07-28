@@ -18,7 +18,7 @@ from . import __version__
 from .api import Vitai
 from .config import load_inference_config
 from .inference import append_inferences, backend_from_config, run_inference
-from .jsonl import DataError, load, read_lines
+from .jsonl import load_report, read_lines
 from .schema import KEYS, validate_record
 
 DATASETS = list(KEYS)
@@ -41,6 +41,12 @@ def cmd_init(args: argparse.Namespace) -> None:
     for entry in tpl.iterdir():
         with resources.as_file(entry) as src:
             shutil.copy(src, target / entry.name)
+    # G26: pin LF on the append-only JSONL so a Windows<->Linux repo does not
+    # bury the supersedes audit trail under CRLF phantom diffs. Written here
+    # rather than shipped as a template dotfile (packaging globs skip dotfiles).
+    (target / ".gitattributes").write_text(
+        "* text=auto\n*.jsonl text eol=lf\n*.md text eol=lf\n",
+        encoding="utf-8", newline="\n")
     (target / "data").mkdir(exist_ok=True)
     for name in DATASETS:
         (target / "data" / f"{name}.jsonl").touch()
@@ -50,16 +56,23 @@ def cmd_init(args: argparse.Namespace) -> None:
           "then append data lines and run `vitai build`.")
 
 
-def _load_all(root: Path) -> dict[str, list[dict]]:
-    try:
-        return {name: load(root / "data", name) for name in DATASETS}
-    except DataError as e:
-        sys.exit(f"data error: {e}")
+def _load_all(root: Path) -> tuple[dict[str, list[dict]], list[str]]:
+    """Load every dataset, quarantining malformed lines (G26). Returns the
+    records plus the list of parse errors that were skipped, so the build
+    proceeds from the good rows instead of one bad byte aborting everything."""
+    data, quarantined = {}, []
+    for name in DATASETS:
+        recs, errors = load_report(root / "data", name)
+        data[name] = recs
+        quarantined += errors
+    return data, quarantined
 
 
 def cmd_build(args: argparse.Namespace) -> None:
     root = _root(args)
-    data = _load_all(root)
+    data, quarantined = _load_all(root)
+    for q in quarantined:
+        print(f"quarantined (malformed, skipped): {q}", file=sys.stderr)
     warned = 0
     for name in DATASETS:
         for rec in data[name]:
@@ -68,8 +81,12 @@ def cmd_build(args: argparse.Namespace) -> None:
                 warned += 1
     db = Vitai(root).build()
     counts = " - ".join(f"{name}: {len(data[name])}" for name in DATASETS)
-    print(f"Built {db.name} (incl. verdicts) and weekly.md ({counts})"
-          + (f"; {warned} schema warning(s), run `vitai validate`" if warned else ""))
+    tail = ""
+    if quarantined:
+        tail += f"; {len(quarantined)} malformed line(s) quarantined"
+    if warned:
+        tail += f"; {warned} schema warning(s), run `vitai validate`"
+    print(f"Built {db.name} (incl. verdicts) and weekly.md ({counts}){tail}")
 
 
 def cmd_verdicts(args: argparse.Namespace) -> None:
@@ -114,12 +131,10 @@ def cmd_validate(args: argparse.Namespace) -> None:
     problems = 0
     for name in DATASETS:
         path = root / "data" / f"{name}.jsonl"
-        try:
-            rows = read_lines(path)
-        except DataError as e:
-            print(f"ERROR: {e}")
+        rows, parse_errors = read_lines(path)
+        for e in parse_errors:  # G26: report EVERY malformed line, not just the first
+            print(f"MALFORMED: {e}")
             problems += 1
-            continue
         for n, rec in rows:
             for p in validate_record(name, rec):
                 print(f"{name}.jsonl line {n}: {p}")
@@ -132,7 +147,7 @@ def cmd_validate(args: argparse.Namespace) -> None:
 
 def cmd_status(args: argparse.Namespace) -> None:
     root = _root(args)
-    data = _load_all(root)
+    data, _ = _load_all(root)
     pts = sorted((w["date"], w["kg"]) for w in data["weight"] if w.get("kg") is not None)
     if not pts:
         print("no weight data yet - weight.jsonl alone still carries the primary goal")

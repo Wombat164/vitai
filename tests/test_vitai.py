@@ -8,7 +8,7 @@ import pytest
 
 from vitai.cli import main
 from vitai.config import Config, load_config, phase_rate_for
-from vitai.jsonl import DataError, load, read_lines
+from vitai.jsonl import load, load_report, read_lines
 from vitai.report import build_report
 from vitai.schema import validate_record
 
@@ -41,9 +41,23 @@ def test_comment_and_blank_lines_skipped(tmp_path):
 
 
 def test_malformed_line_reports_position(tmp_path):
+    # G26: read_lines quarantines the bad line and reports it, never raises.
     (tmp_path / "weight.jsonl").write_text('{"date": broken\n', encoding="utf-8")
-    with pytest.raises(DataError, match="line 1"):
-        read_lines(tmp_path / "weight.jsonl")
+    rows, errors = read_lines(tmp_path / "weight.jsonl")
+    assert rows == []
+    assert len(errors) == 1 and "line 1" in errors[0]
+
+
+def test_one_bad_line_does_not_abort_the_rest(tmp_path):
+    # G26: one bad byte must not silence the whole build - good rows survive.
+    (tmp_path / "weight.jsonl").write_text(
+        json.dumps({"date": "2030-05-01", "kg": 80.0, "source": "a", "note": None})
+        + "\n{ this is not json\n"
+        + json.dumps({"date": "2030-05-02", "kg": 79.9, "source": "a", "note": None})
+        + "\n", encoding="utf-8")
+    records, errors = load_report(tmp_path, "weight")
+    assert [r["kg"] for r in records] == [80.0, 79.9]  # both good rows kept
+    assert len(errors) == 1  # the bad line quarantined, reported
 
 
 def test_missing_file_is_empty(tmp_path):
@@ -73,6 +87,37 @@ def test_validate_supersedes_key_is_legal():
     rec = {"date": "2030-05-01", "kg": 80.0, "source": "app", "note": None,
            "supersedes": "2030-04-30/app"}
     assert validate_record("weight", rec) == []
+
+
+# ---- schema generations (G25) - the shape-history-stability regression ------
+
+def test_additive_field_does_not_invalidate_old_lines(monkeypatch):
+    """THE bug the whole-model redteam found: adding a nullable field in a
+    later generation must NOT make every pre-existing line fail validation."""
+    import vitai.schema as sch
+    # Simulate increment 2 adding a gen-2 `mood` key to `daily`.
+    monkeypatch.setitem(sch.KEYS, "daily", sch.KEYS["daily"] + ["mood"])
+    monkeypatch.setattr(sch, "KEY_GENERATION", {"daily": {"mood": 2}})
+
+    old_line = {"date": "2030-05-01", "steps": 8000, "distance_km": None,
+                "active_min": None, "kcal_out": None, "kcal_in": None,
+                "protein_g": None, "sleep_h": None, "rhr": None, "hip_pain": None,
+                "alcohol": None, "note": None}  # gen 1, no `mood`
+    assert validate_record("daily", old_line) == []  # NOT "missing key 'mood'"
+
+    new_line = {**old_line, "mood": 7, "_gen": 2}    # gen-2 line carries it
+    assert validate_record("daily", new_line) == []
+
+    # A gen-2 line that OMITS the gen-2 key IS flagged (the rule still bites
+    # for keys that existed at the line's own generation).
+    missing = {**old_line, "_gen": 2}
+    assert any("mood" in p for p in validate_record("daily", missing))
+
+
+def test_gen_marker_must_be_positive_int():
+    rec = {"date": "2030-05-01", "kg": 80.0, "source": "app", "note": None,
+           "_gen": "two"}
+    assert any("_gen" in p for p in validate_record("weight", rec))
 
 
 # ---- config ------------------------------------------------------------------

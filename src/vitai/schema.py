@@ -31,6 +31,32 @@ KEYS: dict[str, list[str]] = {
 SESSION_TYPES = {"run", "gym_a", "gym_b", "walk", "test", "other"}
 INFERENCE_KINDS = {"pattern", "risk", "recommendation", "observation", "question"}
 
+# --- schema generations (G25) ------------------------------------------------
+# A key is REQUIRED on a line only if the key's introduction generation is <=
+# the line's own generation (its `_gen` field, default 1). This lets an additive
+# nullable field land in a later increment WITHOUT invalidating every line
+# written before the field existed - the code-verified time bomb the whole-model
+# redteam found. Founding keys are generation 1 (implicit). When a field is
+# added in a future increment, register its generation here and bump
+# CURRENT_GENERATION for that dataset; new writes stamp `_gen = current`.
+KEY_GENERATION: dict[str, dict[str, int]] = {
+    # dataset -> {key: generation it was introduced}. Keys absent here are gen 1.
+    # e.g. increment 2 will add:  "daily": {"mood": 2, "feel": 2, "coverage": 2}
+}
+CURRENT_GENERATION: dict[str, int] = {name: 1 for name in KEYS}
+
+
+def key_generation(dataset: str, key: str) -> int:
+    """Generation a key was introduced in (1 = founding)."""
+    return KEY_GENERATION.get(dataset, {}).get(key, 1)
+
+
+def line_generation(rec: dict) -> int:
+    """A line's own schema generation - its `_gen` field, default 1 (legacy
+    lines predate the marker and are held only to the founding schema)."""
+    g = rec.get("_gen", 1)
+    return g if isinstance(g, int) and not isinstance(g, bool) and g >= 1 else 1
+
 # key -> allowed python types when not null (bool checked before int: bool is int)
 _NUMERIC = (int, float)
 _TYPES: dict[str, tuple[type, ...]] = {
@@ -41,8 +67,8 @@ _TYPES: dict[str, tuple[type, ...]] = {
     "confidence": _NUMERIC,
 }
 
-# extra keys that are always legal (the supersedes mechanic)
-META_KEYS = {"supersedes"}
+# extra keys that are always legal (the supersedes mechanic + schema generation)
+META_KEYS = {"supersedes", "_gen"}
 
 
 def _bad_date(v: object) -> bool:
@@ -59,8 +85,13 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
     """Problems with one record; empty list means valid."""
     problems: list[str] = []
     keys = KEYS[dataset]
+    line_gen = line_generation(rec)
+    if "_gen" in rec and line_generation(rec) != rec["_gen"]:
+        problems.append(f"'_gen' must be a positive integer, got {rec['_gen']!r}")
     for k in keys:
-        if k not in rec:
+        # A key is required only if it existed at this line's generation; a
+        # newer key legitimately absent from an older line is NOT missing.
+        if k not in rec and key_generation(dataset, k) <= line_gen:
             problems.append(f"missing key '{k}' (use null for unknown, never omit)")
     for k in rec:
         if k not in keys and k not in META_KEYS:
