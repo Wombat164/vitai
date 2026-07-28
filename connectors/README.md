@@ -19,6 +19,28 @@ their way in only after a record has proven durable.
    contract. Respect the vendor's terms; the athlete is exporting their own
    data.
 
+## Cross-app adjustment semantics (document them or double-count)
+
+Verified against a live wearable + calorie-app pairing: platforms do not
+just export numbers, they ADJUST each other, and a connector that ignores
+those semantics ingests fiction. The recurring mechanics to document per
+vendor pair:
+
+- **Projection vs actual**: device platforms report an extrapolated
+  full-day burn intraday; it converges only at day end. Connectors ingest
+  COMPLETED days (this is also why the reference Polar connector skips the
+  current day).
+- **Adjustment formula + clamps**: calorie apps compute
+  `adjustment = device burn - own baseline assumption`, often with
+  negative values clamped off. The adjusted intake target is DERIVED, not
+  observed - the record stores measured intake and measured burn, never a
+  vendor's adjustment arithmetic.
+- **Exercise pass-through**: watch-recorded sessions typically flow into
+  the calorie app as explicit exercise entries reconciled against the
+  daily total. Ingesting both the session AND an exercise-inflated daily
+  figure double-counts; take the device's daily total as the single
+  kcal-out truth and sessions as their own records.
+
 ## Hard rules for any connector
 
 - Emits appends to `data/*.jsonl` only; never touches `derived/`, never
