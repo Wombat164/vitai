@@ -16,11 +16,31 @@ from .config import Config, phase_rate_for
 
 
 def _rolling(points: list[tuple[str, float]], window: int = 7) -> list[tuple[str, float | None]]:
+    """Trailing mean over a CALENDAR-DAY window (G30/G27): each point averages
+    values dated within the last `window` days, NOT the last `window` list
+    entries. With irregular logging a "7d avg" must mean 7 real days, not 7
+    weigh-ins that might span three weeks - otherwise every "the trend, not a
+    single point" number is silently mis-scoped."""
     out = []
-    for i, (d, _) in enumerate(points):
-        vals = [v for _, v in points[max(0, i - window + 1):i + 1] if v is not None]
-        out.append((d, mean(vals) if vals else None))
+    dated = [(datetime.fromisoformat(d).date(), v) for d, v in points]
+    for d_iso, _ in points:
+        d = datetime.fromisoformat(d_iso).date()
+        lo = d - timedelta(days=window - 1)
+        vals = [v for dd, v in dated if lo <= dd <= d and v is not None]
+        out.append((d_iso, mean(vals) if vals else None))
     return out
+
+
+def _avg_on_or_before(roll: dict[str, float | None], iso: str, target_day: date) -> float | None:
+    """The rolling average as of the latest point on/before target_day - so the
+    rate compares two calendar-separated windows, not two Nth-from-last entries."""
+    best = None
+    for d_iso, v in roll.items():
+        d = datetime.fromisoformat(d_iso).date()
+        if d <= target_day and v is not None:
+            if best is None or d > best[0]:
+                best = (d, v)
+    return best[1] if best else None
 
 
 def _week_key(d: str) -> str:
@@ -42,11 +62,21 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
         for d, kg in pts[-14:]:
             r = roll.get(d)
             L.append(f"| {d} | {kg:.1f} | {r:.1f} |" if r else f"| {d} | {kg:.1f} | - |")
-        if len(pts) >= 8:
-            (d0, _), (d1, _) = pts[-8], pts[-1]
-            v0, v1 = roll[d0], roll[d1]
-            days = (datetime.fromisoformat(d1) - datetime.fromisoformat(d0)).days
-            if v0 and v1 and days:
+        # Rate over a CALENDAR week (G30): compare the rolling avg now against
+        # the rolling avg ~7 days ago, not the 8th-from-last entry (which under
+        # irregular logging could be a month back).
+        last_day = datetime.fromisoformat(pts[-1][0]).date()
+        week_ago = last_day - timedelta(days=7)
+        v1 = roll[pts[-1][0]]
+        v0 = _avg_on_or_before(roll, pts[-1][0], week_ago)
+        if v0 is not None and v1 is not None:
+            # actual calendar days between the two anchor points (>=1)
+            anchor0 = max((datetime.fromisoformat(d).date()
+                           for d, v in roll.items()
+                           if datetime.fromisoformat(d).date() <= week_ago and v is not None),
+                          default=None)
+            days = (last_day - anchor0).days if anchor0 else 0
+            if days:
                 rate = (v0 - v1) / days * 7
                 target = phase_rate_for(cfg, v1)
                 if target is not None:

@@ -5,6 +5,28 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-07-28
+
+Foundations F3 - temporal foundations (G30).
+
+### Fixed
+- **Rolling windows are calendar-day, not entry-count.** A "7d avg" now
+  averages values within the last 7 CALENDAR days, and the weight-rate line
+  compares two calendar-separated windows - not the last N list entries.
+  Under irregular logging the old behavior silently mis-scoped every "the
+  trend, not a single point" number (a "7d avg" could span three weeks).
+  Regression tests included.
+
+### Added / doctrine
+- The **day-boundary rule** is now written doctrine (event's local day at the
+  moment it happened; effective-dated for relocations). The timezone/offset
+  FIELD is deferred to increment 2, where `start_time` gives it a consumer -
+  a date-only daily summary has no timezone ambiguity.
+
+## [0.2.2] - 2026-07-28
+
+Foundations F0 - in-repo demo athlete + CI demo job (see PR #4).
+
 ## [0.2.1] - 2026-07-28
 
 Foundations F1+F2 from the restructured v3 plan - the robustness the feature
