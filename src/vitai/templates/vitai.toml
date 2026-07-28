@@ -1,0 +1,14 @@
+# vitai thresholds - YOUR numbers, not the tool's.
+# Every entry is optional: an absent threshold disables its verdict/tripwire.
+
+[targets]
+# Rate-of-loss phases: [from_kg, to_kg, kg_per_week], evaluated in order.
+# Standard guidance is 0.5-1.0% of bodyweight per week; taper as you get lighter.
+# phases = [[80.0, 76.0, 0.70], [76.0, 73.0, 0.50]]
+
+[tripwires]
+# easy_hr_cap = 150      # avg HR cap for easy runs (Z2 discipline flag)
+# rhr_baseline = 52      # resting HR baseline; alert at baseline + 5
+# steps_floor = 10000    # 7-day average daily-steps floor
+# sleep_floor_h = 7.0    # 7-day average sleep floor
+# pain_gate = 3          # pain score (0-10) above which the gate fires
