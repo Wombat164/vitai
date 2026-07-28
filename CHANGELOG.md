@@ -5,6 +5,27 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-28
+
+Foundations F1+F2 from the restructured v3 plan - the robustness the feature
+increments depend on, shipped before them.
+
+### Fixed
+- **Schema-evolution robustness (G25)** - the code-verified critical bug: an
+  additive nullable field no longer invalidates lines written before it
+  existed. Per-line schema generation (`_gen`, default 1); a key is required
+  only if its introduction generation is <= the line's generation. Shape-
+  history-stability regression test included.
+- **Ingestion/build integrity (G26)** - one malformed line no longer aborts
+  the whole build. `read_lines` returns (good rows, errors) and never raises
+  on a bad line; `build` quarantines and reports, proceeding from the good
+  rows; `validate` reports every malformed line, not just the first. `vitai
+  init` writes a `.gitattributes` pinning LF on the append-only JSONL.
+
+### Added
+- `jsonl.load_report` (records + quarantined-parse errors); `schema`
+  generation helpers (`key_generation`, `line_generation`).
+
 ## [0.2.0] - 2026-07-28
 
 ### Added
