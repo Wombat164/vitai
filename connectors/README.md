@@ -34,3 +34,10 @@ their way in only after a record has proven durable.
 No code connectors yet - by design. When the first one lands it will live
 here as `connectors/<vendor>/` with its own README stating which API it
 uses, what it fetches, and what it deliberately ignores.
+
+**First candidate (verified 2026-07-28): WHOOP.** Its developer API is
+OAuth-scoped to the member's own data (recovery, strain, sleep, workouts,
+body measurements, webhooks) and personal/dev apps need NO commercial
+approval below 10 members (100 req/min, 10k req/day) - a legitimate,
+low-friction personal-export path that maps cleanly onto `daily` and
+`sessions` appends.

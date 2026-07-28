@@ -14,7 +14,7 @@ game-coupled). Every neighbor holds at most two of those:
 
 | Closest neighbors | Has | Lacks |
 |---|---|---|
-| **OpenHealth** (GitHub, AGPL) | LLM chat over unified clinical + wearable + lifestyle data, self-hosted, local models via Ollama | Web-app-with-database (Prisma), not a plain-text record; no deterministic progress engine; no skills architecture |
+| **OpenHealth** (GitHub, AGPL, 3.9k stars) | LLM chat over unified clinical + wearable + lifestyle data, self-hosted, local models via Ollama; a named "Unified Health Data Format" pipeline stage | The format is never publicly spec'd (internal implementation, not an interchange standard); no deterministic progress engine, no skills layer, no goal verdicts (fetch-confirmed absence); momentum unclear - no push since Jan 2026 |
 | **ai-fitness-coach** (Rich627, GitHub) | Claude-native, local, user-owned; workouts/nutrition/sleep/weight | SQLite not plain text; no engine/intelligence split; no medical layer; hobby-scale |
 | **Google PH-LLM / Personal Health Agent** (research) | Strongest technical validation of LLM coaching: fine-tuned Gemini over wearable timeseries + biomarkers, beat human-expert exam averages (fitness 88% vs 71%) | Explicitly not a product; Google-hosted, closed, the opposite of user-owned |
 | **Fasten Health** (GitHub) | Self-hosted personal FHIR record aggregator (conditions, labs, meds, immunizations) | Zero fitness side, zero LLM; import-only (no live provider sync); complementary, not competing |
@@ -117,17 +117,41 @@ See the fun layer in [model-v2.md](model-v2.md) for the design response.
   gamification points earned predicted % weight loss supports the causal
   direction.
 
+## Verified follow-up (2026-07-28 deep-fetch pass)
+
+Four previously-provisional ratings were re-fetched and settled:
+
+- **GPTCoach** (CHI 2025, Stanford HCI, arxiv 2405.06061): inspiration-only
+  CONFIRMED. Motivational-interviewing onboarding chatbot over 3 months of
+  study-provided wearable data; 16-participant exploratory lab study; no
+  data format, storage or ownership model defined.
+- **AskEVA** (Tambool LLC, askeva.ai): adjacent, refined - cloud-hosted AI
+  health-conversation + medication journaling for chronic-illness patients;
+  data ownership is a LEGAL export right (privacy-policy data portability),
+  not an architectural one. Alive per company signals; app-store recency
+  unverifiable.
+- **Mindsera**: adjacent - general AI journaling / mental wellness, not
+  health-specific; encrypted-cloud with export right and a no-training
+  pledge; freemium (exact price soft across sources).
+- **WHOOP developer API: resolved as a GREEN LIGHT for a future connector.**
+  OAuth 2.0 scoped to the member's own data (recovery, strain, sleep,
+  workouts, body measurements + webhooks); personal/dev use needs NO
+  approval below 10 members; 100 req/min, 10k req/day. A user pulling their
+  own WHOOP data into their content repo is legitimate and low-friction.
+- **OpenHealth**: closest-OSS-analog rating stands, now evidence-backed (see
+  table): the differentiation (no deterministic engine, no skills, no
+  verdicts; unspecced internal data format) is a confirmed absence, and the
+  repo has been quiet since 2026-01-06.
+
 ## Confidence caveats (kept deliberately)
 
 - Widely-quoted gamification stats (62%->89% adherence, 213% competition
   lift, 340% engagement) trace to vendor marketing (Sahha, StriveCloud, the
   latter's source page dead) - directional at best, never design-load-bearing.
-- GPTCoach (CHI 2025), AskEVA, Mindsera and WHOOP's developer API were
-  cited but never deep-fetched; their closeness ratings are provisional.
 - PH-LLM specifics beyond exam headlines are secondhand (Nature Medicine
   paywall).
 - TSB interpretation bands conflict across vendors (see above) - resolved
   in our design by making bands configuration.
 - The uniqueness verdict is an absence-of-evidence claim over a bounded
-  sweep (~40 sources, GitHub/PyPI/npm/store searches) - strong for
+  sweep (~45 sources, GitHub/PyPI/npm/store searches) - strong for
   mainstream, weaker for the long tail of self-hosted quantified-self tools.
