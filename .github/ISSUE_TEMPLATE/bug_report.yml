@@ -1,0 +1,49 @@
+name: Bug report
+description: Something behaves wrongly in the engine, CLI, templates or skills
+labels: [bug]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - engine (build/validate/status)
+        - CLI / init
+        - schemas
+        - templates
+        - skills
+        - docs
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Actual behavior, error output if any.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: >
+        Smallest content-repo state + command that shows it. Use SYNTHETIC
+        data lines only - never paste your real record.
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: "OS, Python version, vitai version (vitai --version)"
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirmations
+      options:
+        - label: I ran the test suite (`pytest -q`) and this is not a local setup issue
+        - label: This report contains no personal health data (synthetic values only)
+          required: true

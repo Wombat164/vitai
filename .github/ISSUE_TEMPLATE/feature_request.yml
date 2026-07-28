@@ -1,0 +1,44 @@
+name: Feature request
+description: Propose an improvement to vitai
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem or gap
+      description: What can't you do, or what costs too much effort today?
+    validations:
+      required: true
+  - type: textarea
+    id: shape
+    attributes:
+      label: Proposed shape
+      description: >
+        How it could work. Note which layer it touches - content format,
+        deterministic engine, or skills - they have different bars
+        (see CONTRIBUTING.md).
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - engine / progress model
+        - schemas / data model
+        - skills / coaching
+        - templates / onboarding
+        - connectors / ingestion
+        - docs
+        - other
+    validations:
+      required: true
+  - type: checkboxes
+    id: fit
+    attributes:
+      label: Design fit
+      options:
+        - label: This keeps the engine deterministic (no LLM in the number path) and adds no runtime dependency, or argues explicitly why not
+          required: true
+        - label: This request contains no personal health data
+          required: true

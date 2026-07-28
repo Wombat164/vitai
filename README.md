@@ -1,11 +1,30 @@
-# vitai
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/vitai-lockup-dark.svg">
+    <img src="assets/vitai-lockup.svg" alt="vitai" width="320">
+  </picture>
+</p>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/vitai-lockup-dark.svg">
-  <img src="assets/vitai-lockup.svg" alt="vitai" width="320">
-</picture>
+<p align="center"><b>The AI health coach you own.</b> Your health, on the record.</p>
 
-**The AI health coach you own.** Your health, on the record.
+<p align="center">
+  <a href="https://github.com/Wombat164/vitai/actions/workflows/ci.yml"><img src="https://github.com/Wombat164/vitai/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/Wombat164/vitai/releases/latest"><img src="https://img.shields.io/github/v/release/Wombat164/vitai?color=0EA5A0" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Wombat164/vitai?color=84CC16" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/python-3.11%2B-7C8899" alt="Python 3.11+">
+  <a href="SECURITY.md"><img src="https://img.shields.io/badge/read-SECURITY.md-FFB000" alt="read SECURITY.md"></a>
+</p>
+
+<p align="center">
+  <a href="#quickstart">Quickstart</a> &middot;
+  <a href="#the-three-layers">How it works</a> &middot;
+  <a href="#the-data-model">Data model</a> &middot;
+  <a href="#skills">Skills</a> &middot;
+  <a href="https://wombat164.github.io/vitai/">Docs site</a> &middot;
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
+
+---
 
 Most fitness apps own your data, hide their logic, and give everyone the same
 advice. vitai inverts all three: your record is plain text in a **private git
@@ -99,6 +118,30 @@ proven durable.
 
 Early scaffold (July 2026). The engine and skills work; connectors are
 doctrine plus stubs. Built from a real, in-use personal deployment.
+
+> [!NOTE]
+> vitai is not a medical device and provides no medical advice. It is a
+> record, an arithmetic engine, and coaching heuristics; decisions about
+> injury, medication or symptoms belong with a clinician. See
+> [SECURITY.md](SECURITY.md) for the full threat model and data-privacy
+> notes.
+
+## Documentation
+
+- Docs site: <https://wombat164.github.io/vitai/> (built from `wiki/`)
+- Design: [ARCHITECTURE.md](ARCHITECTURE.md) - the three layers and what is
+  deliberately not built
+- Research: [docs/prior-art.md](docs/prior-art.md) - the survey behind the
+  design
+- Brand: [assets/BRAND.md](assets/BRAND.md)
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). The short version: tests land with
+the change, no personal data ever (CI-gated), the engine stays
+deterministic, and PRs scope themselves honestly. Security reports go
+privately via [Security Advisories](https://github.com/Wombat164/vitai/security/advisories/new),
+never public issues.
 
 ## License
 

@@ -1,0 +1,80 @@
+name: deploy-wiki
+
+# Builds the docs site from wiki/ (Quartz v4, framework fetched at a pinned
+# commit - NOT vendored) and deploys to GitHub Pages.
+#
+# GitHub Pages is enabled for this repo with build_type=workflow, so the
+# push trigger is live. If replicating this in a fresh repo, enable Pages
+# FIRST (Settings -> Pages -> Source: GitHub Actions) or start with
+# workflow_dispatch only - a push trigger without Pages leaves a permanently
+# failing deploy job.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["wiki/**", ".github/workflows/deploy-wiki.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout this repo (config + content)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          fetch-depth: 0  # full history so CreatedModifiedDate can use git dates
+
+      - name: Fetch Quartz v4 framework (pinned commit)
+        run: |
+          set -euo pipefail
+          # Pinned to the v4 branch HEAD at 2026-04-20 for reproducible builds. Bump deliberately.
+          QUARTZ_SHA=d25a6eabf96751ffca56f8a8139272def7a65041  # v4 @ 2026-04-20
+          git init .quartz-build
+          git -C .quartz-build remote add origin https://github.com/jackyzha0/quartz.git
+          git -C .quartz-build fetch --depth 1 origin "$QUARTZ_SHA"
+          git -C .quartz-build checkout "$QUARTZ_SHA"
+
+      - name: Overlay our config + content into Quartz
+        run: |
+          cp wiki/quartz.config.ts .quartz-build/quartz.config.ts
+          cp wiki/quartz.layout.ts .quartz-build/quartz.layout.ts
+          rm -rf .quartz-build/content
+          cp -r wiki/content .quartz-build/content
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        working-directory: .quartz-build
+        run: npm ci
+
+      - name: Build Quartz
+        working-directory: .quartz-build
+        run: npx quartz build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0
+        with:
+          path: .quartz-build/public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128  # v5.0.0
