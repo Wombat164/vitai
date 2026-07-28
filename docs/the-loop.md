@@ -276,6 +276,18 @@ for the v3 model: v3 is done when every question has a non-gap tag.
 162. Two months ago I aimed for 5:00/km and hit it; now I run 4:30 - does browsing back feel like a shortfall? - NO. A past day is judged against the standard IN FORCE then, so hitting 5:00 reads as the win it was. Present fitness never retro-diminishes past achievement. [G20 x voice: framing rule]
 163. What IS the 5:00 -> 4:30 improvement, then? - the ARC, the good news: a positive trajectory shape (G17) the coach celebrates. Progress is measured against who you WERE, and the distance travelled is the story - not a gap against who you are now. [G20 x G17 x voice]
 
+### 2.19 Forecasting - projecting anchors and fitness forward
+
+164. Where will my weight/body-fat/5k-time be in 4/8/12 weeks IF I hold this plan? - a forecast derivation runs SCIENTIFIC models over planned inputs (planned activities + intake plan) from current anchors + fitness indicators (HR, load, pace) and projects the trajectory. [G21: forecasting layer]
+165. Which models, and can it use several or blend them? - a curated MODEL REGISTRY (like the semantics registry): weight via thermodynamic (~7700 kcal/kg), adaptive-TDEE (MacroFactor-style), metabolic-adaptation; fitness via Banister impulse-response (CTL/ATL/TSB), load-to-pace, VO2max trend. The engine runs enabled models AND an ensemble (accuracy-weighted). [G21: model registry + ensembles]
+166. Does a forecast ever pretend to be certain? - never: every projection carries a PREDICTION INTERVAL that widens with horizon, visually rendered as a band/fan - a point prediction without a margin is forbidden. Forecasts are the ESTIMATE class (principle 6), clearly marked, never anchors/observations, and NEVER feed verdicts (verdicts judge actuals). [G21]
+167. When the next real anchor lands, what happens? - it SCORES every model's past prediction for that date; rolling accuracy reweights the ensemble and sets each model's interval width (continuous backtesting - the anchor auditing the forecast, G16 generalized). [G21: calibration loop]
+168. If reality departs from a model that was accurate until now, is the MODEL wrong or is something REAL happening? - the interesting case: a model that backtested well then diverges signals a real-world regime change (a plateau, an adaptation stall, illness, a life event) - NOT model error. "The prediction was correct up until now" is itself the plateau signal; distinguish model-error (inaccurate all along) from regime-change (accurate, then broke) and flag the latter as an event. [G21 x G16 x G17]
+169. Is the forecast an LLM guess? - NO. Models are formulas in the deterministic number path; the LLM explains a divergence and may PROPOSE a candidate model, which is backtested and only trusted if it earns accuracy - the same claims-into-truth graduation as the semantics registry. [G21, no-LLM-in-numbers]
+170. For any past day, which model was projecting my future, and what did it say? - `forecast(date)`: as-of provenance (G20) - browse back to see which model(s) were mapping your next days/weeks/months from that date, their bands, and whether reality landed inside them. [G21 x G20]
+171. Do forecasts consume raw multi-source data or the canonical truth? - the resolved canonical values (conservation, G15); a forecast built on double-counted calories forecasts fiction. [G21 x G15]
+172. What does the lens show? - fan-chart forecast bands over the actual trajectory, per-model and ensemble; a backtest-accuracy panel (which model has been right, stats-junkie gold); the as-of "what was predicted for today, 8 weeks ago" overlay. [G21 x lens]
+
 ## 3. Redteam findings (the gaps, ranked)
 
 | # | Gap | Severity | Why it matters |
@@ -300,6 +312,7 @@ for the v3 model: v3 is done when every question has a non-gap tag.
 | G18 | **Goals are flat - no contribution model, no milestones** (operator doctrine, 2026-07-28) | CRITICAL, part of G6 | One event feeds many goals with DIFFERENT signs: a walk advances steps + calorie goals; an unplanned +2k run advances the calorie goal but NOT the running/health goal (unbudgeted ramp, injury risk) and may regress it. Goals need a CONTRIBUTION POLICY (which events count, monotonic vs guarded, the guardrail) so exceeding a target isn't blindly "progress". Milestones (thresholds crossed, derived) and achievements (recorded accomplishments) are first-class; the coach's per-goal verdict is what makes "congratulate the walk, question the run" possible. |
 | G19 | **Goals too concrete - no external/abstract, periodic, motivator-reinforced, interrogable goals** (operator doctrine, 2026-07-28) | HIGH, part of G6 | A goal may live in ANOTHER app (Strava Local Legend), be RECURRING (8 gym visits/month with rollover), and its motivator - not its metric - is what the coach should reinforce ("how's your Local Legend attempt going?"). Goals need: `external` metric + tracker ref, a first-class reinforced `motivator`, `period`+`on_period_end`, a `rationale` (why THIS number - it's a proxy), `on_success`/`on_miss` meaning, and a PROACTIVE motivator-anchored check-in mode. Domain-agnostic: same engine for a language streak or a side-project. |
 | G20 | **No temporal validity - the plan is treated as current-state, not a timeline** (operator doctrine, 2026-07-28) | CRITICAL, generalizes G14 | ALL goals, targets and metrics change - performance (5k pace, distances, HR zones) as much as calorie/macro config; the record must reconstruct the state IN FORCE on any past date (the diary shows THAT day's targets), never re-score history against a newer target. ALL policy effective-dated (G14 generalized). Change is a metric (churn), unreasoned/suspiciously-timed edits invite questioning (anti-goalpost-moving, surfaced never blocked). FRAMING RULE: a past achievement is judged against its own standard and never retro-diminished by present fitness - hitting 5:00/km then was a win; running 4:30 now is the ARC, celebrated as trajectory, not a shortfall. |
+| G21 | **No forecasting layer** (operator doctrine, 2026-07-28) | HIGH | The engine describes past/present but cannot PROJECT: future anchors (weight, body measurements) and fitness from current metrics + planned inputs, via a curated registry of scientific models (thermodynamic + adaptive-TDEE weight; Banister/CTL-ATL-TSB, load-to-pace fitness) and their ensembles, with mandatory visual prediction intervals. Each new anchor backtests + reweights the models (calibration = anchor auditing forecast, G16 generalized); a model accurate-until-it-diverges signals a real regime change (plateau/stall), not model error. Predictions are the ESTIMATE class - deterministic formulas not LLM guesses, never feeding verdicts - and are effective-dated with model provenance (browse any past day to see which model was mapping your future). |
 
 Redteam notes beyond schema: (a) every new field raises capture cost -
 the 3-minute budget is the design's immune system, so ALL context fields
@@ -486,6 +499,32 @@ versioned in-repo - `semantics/` - neither data nor code):
   suspiciously-timed changes (a target loosened right after a missed week,
   a deadline pushed as it would be breached). Feeds a coach questioning
   prompt and an inference signal; surfaced, never blocking.
+
+The forecasting layer [G21] (deterministic; uses the model registry, scored
+continuously; predictions are estimates, never anchors and never fed to
+verdicts):
+
+- **model registry** (`models/`, curated + versioned like `semantics/`):
+  one entry per (target, model) - inputs, formula, parameters, provenance.
+  Weight: thermodynamic (~7700 kcal/kg), adaptive-TDEE, metabolic-
+  adaptation. Fitness: Banister impulse-response (CTL/ATL/TSB),
+  load-to-pace, VO2max trend. Each is a scientific formula, not a guess.
+- **`forecasts`** derivation: for each forecastable target, run enabled
+  models + an accuracy-weighted ensemble over the PLANNED inputs (planned
+  sessions, intake plan) from the current canonical anchors and fitness
+  features -> a dated trajectory with a PREDICTION INTERVAL that widens
+  with horizon. Model provenance stamped on every projection.
+- **`backtest`** derivation: each landed anchor scores every model's prior
+  prediction for that date; rolling error reweights the ensemble and sets
+  interval widths. This is the anchor auditing the forecast (G16
+  generalized from one energy model to many).
+- **divergence detection**: separate model-error (inaccurate throughout)
+  from REGIME-CHANGE (backtested well, then broke) - the latter is a real
+  event (plateau/adaptation-stall/illness/life), flagged via the shape
+  registry (G17), never silently re-fit away.
+- **`forecast(date)` as-of provenance** (G20): which model(s) projected
+  forward from any past date, their bands, and whether reality landed
+  inside - browsable in the diary and lens.
 
 Explicitly NOT added: precise GPS traces (stay in the source platform),
 food-item logs (the calorie app owns them; totals only), free-floating

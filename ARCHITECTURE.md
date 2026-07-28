@@ -141,6 +141,34 @@ inferences graduate INTO the registry by human merge, the same
 claims-into-truth pattern as the data layer. This keeps interpretation
 auditable and versioned instead of trapped in model vibes.
 
+### Forecasting - projecting the anchors forward, honestly
+
+The engine also PROJECTS: future anchors (weight, body measurements) and
+fitness from current metrics plus planned inputs (planned activities, intake
+plan), via a curated MODEL REGISTRY of scientific formulas - thermodynamic
+and adaptive-TDEE for weight, Banister/CTL-ATL-TSB and load-to-pace for
+fitness - run individually and as an accuracy-weighted ensemble. Discipline
+that keeps it trustworthy:
+
+- **Every forecast carries a prediction interval** that widens with horizon,
+  always rendered visually - a point prediction with no error band is
+  forbidden.
+- **Forecasts are the estimate class** (principle 6): clearly marked, never
+  confused with anchors or observations, and NEVER fed to verdicts (verdicts
+  judge actuals only).
+- **Deterministic, not an LLM guess**: the models are formulas in the number
+  path. The LLM explains a divergence or proposes a candidate model, which
+  is backtested and trusted only if it earns accuracy - the same
+  claims-into-truth graduation as the semantics registry.
+- **The anchor audits the forecast** (principle 6 again): each landed anchor
+  scores every model's past prediction and reweights the ensemble.
+  A model that backtested well and then diverges signals a real REGIME
+  CHANGE - a plateau, an adaptation stall - not model error; "the prediction
+  was right until now" IS the plateau signal.
+- **Model provenance is effective-dated** (temporal validity): browse any
+  past day to see which model was mapping your future and whether reality
+  landed in its band.
+
 ### Intelligence (LLM + skills)
 
 The layer the athlete actually talks to. Skills are Claude Code compatible

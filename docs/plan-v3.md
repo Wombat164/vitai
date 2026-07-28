@@ -201,6 +201,45 @@ The comparison engine and the flagship demo.
 - Explicitly the first thing to POSTPONE if real-world usage (dogfood or
   early adopters) surfaces better-informed priorities by then.
 
+## Increment 7 - forecasting (v0.9.0; G21) [2-3 sessions]
+
+The engine projects, not just describes. Depends on baselines + the shape
+grammar (increment 4) and planned-inputs as data (planned sessions from
+G6/increment 1, intake plan from the dated targets).
+
+- `models/` registry seeded: weight (thermodynamic ~7700 kcal/kg,
+  adaptive-TDEE, metabolic-adaptation), fitness (Banister CTL/ATL/TSB,
+  load-to-pace) - each a documented scientific formula with parameters.
+- `forecasts` derivation: enabled models + accuracy-weighted ensemble over
+  planned inputs -> dated trajectories with prediction intervals (widening
+  with horizon), model-provenanced.
+- `backtest` derivation: each landed anchor scores prior predictions,
+  reweights the ensemble, sets interval widths; divergence detection
+  separates model-error from regime-change (plateau) and flags the latter
+  via the shape registry.
+- `forecast(date)` as-of provenance; coach uses forecasts for "if you hold
+  this plan, here's where you land (+/- band)" and explains divergences.
+- Lens track L-forecast: fan-chart bands over the actual trajectory,
+  per-model backtest-accuracy panel, "predicted-for-today-8-weeks-ago"
+  overlay.
+- Tests: interval widens with horizon; a landed anchor reweights the
+  ensemble; a synthetic plateau (model accurate then flat) fires
+  regime-change NOT model-error; forecasts never appear in any verdict
+  row; deterministic (same inputs -> same forecast); as-of provenance
+  correct.
+- NOT: LLM-generated forecasts (formulas only); the LLM only explains and
+  proposes-for-backtest.
+- Cut-first: metabolic-adaptation and VO2max models (ship thermodynamic +
+  adaptive-TDEE + Banister as the honest core); the accuracy panel.
+
+## Increment ordering note
+
+Forecasting (7) is deliberately LAST of the engine increments: it stands
+on canonical resolution (2/G15), baselines + shape features (4/G2+G17),
+dated targets + planned inputs (1/G14+G20), and the anchor-audit pattern
+(G16). Do not pull it forward - a forecaster over unresolved,
+feature-less, current-state data forecasts fiction.
+
 ## The lens track (parallel repo: vitai-lens)
 
 The stats frontend lives in its own repo
