@@ -1,5 +1,14 @@
 # vitai thresholds - YOUR numbers, not the tool's.
 # Every entry is optional: an absent threshold disables its verdict/tripwire.
+#
+# These are STARTING values. Once you change a threshold, record the change in
+# data/thresholds.jsonl instead of editing it here: a dated line keeps the old
+# number in force for the weeks it governed, so last month's verdicts stay as
+# they were judged. Editing this file re-scores nothing that already has a
+# dated line, but a threshold that lives ONLY here has no history to protect
+# it. Calorie and macro targets have no home here at all - they belong in
+# thresholds.jsonl (kcal_target, protein_g_target), because they move often
+# enough that an undated one would quietly rewrite the past.
 
 [targets]
 # Rate-of-loss phases: [from_kg, to_kg, kg_per_week], evaluated in order.

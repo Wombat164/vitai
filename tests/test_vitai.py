@@ -346,9 +346,11 @@ def test_api_build_projects_verdicts_and_contract(tmp_path):
     con = sqlite3.connect(db)
     tables = {r[0] for r in con.execute(
         "SELECT name FROM sqlite_master WHERE type='table'")}
-    assert {"weight", "daily", "sessions", "inferences", "verdicts", "meta"} <= tables
+    assert {"weight", "daily", "sessions", "inferences", "verdicts", "meta",
+            "goals", "thresholds", "achievements", "contributions",
+            "milestones", "plan_churn", "goal_progress"} <= tables
     assert con.execute("SELECT COUNT(*) FROM inferences").fetchone()[0] == 1
-    assert con.execute("SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "1"
+    assert con.execute("SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "2"
     con.close()
     assert v.status_line().startswith("77.3 kg")
     assert isinstance(v.verdicts(), list)

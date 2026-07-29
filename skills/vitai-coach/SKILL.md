@@ -15,6 +15,9 @@ content repo. Adherence is the constraint, not knowledge.
    `data/`, run `vitai build` first.
 2. The engine's numbers are authoritative. Never recompute a rolling average,
    rate, or weekly total by hand. `vitai status` gives the one-line state.
+3. Run `vitai goals` for where each goal stands, what recent events did to
+   it, and any policy edit the engine flagged as worth a question. The
+   per-goal verdicts are computed - read them, do not form your own.
 
 ## The check-in flow
 
@@ -38,7 +41,17 @@ content repo. Adherence is the constraint, not knowledge.
    over-target volume that a goal's guardrail rejects, say so plainly and
    raise the injury question rather than praising the number. Never
    celebrate a milestone that came from a guardrail violation.
-6. **Adjust the plan**, minimally. Update `plan.md` section 0 (open actions),
+   The engine has already done this judging: the `contributions` table gives
+   each event's effect on each goal (`advances | partial | unbudgeted |
+   neutral | regresses`), and `milestones` only ever counts in-policy
+   progress - so a milestone you see IS safe to celebrate.
+6. **Ask about a flagged edit, once, without accusing.** If `plan_churn`
+   marks a loosening as suspicious, raise it as a question ("you dropped the
+   steps floor a few days after the travel week - was that the plan, or the
+   week talking?"). If the athlete recorded a reason, lead with it and take
+   it at face value. Never re-litigate an edit they have already explained,
+   and never imply cheating - they own the record.
+7. **Adjust the plan**, minimally. Update `plan.md` section 0 (open actions),
    strike through what changed, append to its changelog. One or two changes a
    week maximum - a plan that churns weekly is a plan that gets abandoned.
 

@@ -34,10 +34,55 @@ KEYS: dict[str, list[str]] = {
     # projects it; it never feeds the deterministic number path.
     "inferences": ["date", "kind", "statement", "confidence", "model",
                    "evidence", "note"],
+    # --- policy datasets (increment 1) --------------------------------------
+    # These are DATED POLICY, not observations: what the athlete was aiming at,
+    # and when. A goal is edited by appending a new line with the same `slug`
+    # (see IDENTITY_KEY); the chain of lines IS the edit history, so "when was
+    # this set / last changed / loosened" is queryable instead of lost (G6).
+    # `date` is the declaration/edit date - the day the policy takes effect.
+    #
+    # `metric` names a `daily`/`sessions` column, or the literal "external" for
+    # a goal another app owns (a segment crown, a language streak) - vitai
+    # models, tracks and reinforces it via `tracker` but never auto-verdicts it
+    # (G19). `policy` is the contribution rule (G18): "monotonic" means more
+    # always counts; "guarded" means volume beyond `guard_pct` above the recent
+    # baseline is unbudgeted ramp - it does NOT advance the goal.
+    #
+    # `dataset` + `session_type` SCOPE which events feed the goal. They matter
+    # because one metric name can mean two things: `distance_km` is walking on
+    # a `daily` line and running on a `sessions` line, so an unscoped running
+    # goal would quietly count the athlete's commute. Null means "any".
+    "goals": ["date", "slug", "title", "metric", "dataset", "session_type",
+              "tracker", "target", "policy", "guard_pct", "period",
+              "on_period_end", "deadline", "status", "motivator", "rationale",
+              "on_success", "on_miss", "accountability", "set_by", "reason",
+              "note"],
+    # G14/G20: every threshold is effective-dated, so editing one today can
+    # never silently re-score a past week. `change_kind` separates a genuine
+    # policy CHANGE from a CORRECTION of a mis-entered number (G31) - only the
+    # former is churn, and only the former can be suspiciously timed.
+    "thresholds": ["date", "key", "value", "change_kind", "set_by", "reason",
+                   "note"],
+    # A recorded accomplishment worth keeping. Distinct from a MILESTONE, which
+    # the engine derives; `source` carries authorship (G31) so a hand-logged
+    # race finish is never confused with an engine-derived crossing.
+    "achievements": ["date", "title", "goal", "source", "note"],
 }
 
 SESSION_TYPES = {"run", "gym_a", "gym_b", "walk", "test", "other"}
 INFERENCE_KINDS = {"pattern", "risk", "recommendation", "observation", "question"}
+
+# Datasets whose lines are keyed by a stable identity rather than date/source:
+# a supersedes chain runs per slug, and the LAST line for a slug is its head.
+IDENTITY_KEY: dict[str, str] = {"goals": "slug", "thresholds": "key"}
+
+GOAL_POLICIES = {"monotonic", "guarded"}
+GOAL_STATUSES = {"active", "paused", "achieved", "abandoned"}
+GOAL_PERIODS = {"none", "weekly", "monthly", "quarterly", "yearly"}
+ON_PERIOD_END = {"reset", "carry", "escalate"}
+CHANGE_KINDS = {"change", "correction"}
+AUTHORS = {"athlete", "coach", "onboard", "derived"}
+EXTERNAL_METRIC = "external"
 
 # --- schema generations (G25) ------------------------------------------------
 # A key is REQUIRED on a line only if the key's introduction generation is <=
@@ -78,6 +123,7 @@ _TYPES: dict[str, tuple[type, ...]] = {
     "confidence": _NUMERIC,
     "body_fat_pct": _NUMERIC, "kg_lo": _NUMERIC, "kg_hi": _NUMERIC,
     "body_fat_lo": _NUMERIC, "body_fat_hi": _NUMERIC,
+    "target": _NUMERIC, "guard_pct": _NUMERIC, "value": _NUMERIC,
 }
 
 # extra keys that are always legal (the supersedes mechanic + schema generation)
@@ -145,4 +191,72 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
         for k in ("statement", "model"):
             if not isinstance(rec.get(k), str) or not rec.get(k):
                 problems.append(f"'{k}' must be a non-empty string")
+    problems += _validate_policy(dataset, rec)
+    return problems
+
+
+def _enum(rec: dict, key: str, allowed: set[str], *,
+          optional: bool = False) -> list[str]:
+    """One closed-vocabulary check. `optional` lets the key be null."""
+    v = rec.get(key)
+    if v is None and optional:
+        return []
+    if v not in allowed:
+        return [f"'{key}' must be one of {sorted(allowed)}, got {v!r}"]
+    return []
+
+
+def _validate_policy(dataset: str, rec: dict) -> list[str]:
+    """Rules for the dated-policy datasets (goals/thresholds/achievements).
+
+    Kept separate from the observation rules because policy lines answer a
+    different question - not "what happened" but "what were we aiming at, and
+    who decided that when" - and the identity/authorship fields are what make
+    the edit history auditable.
+    """
+    problems: list[str] = []
+    if dataset == "goals":
+        for k in ("slug", "title"):
+            if not isinstance(rec.get(k), str) or not rec.get(k):
+                problems.append(f"'{k}' must be a non-empty string")
+        problems += _enum(rec, "policy", GOAL_POLICIES)
+        problems += _enum(rec, "status", GOAL_STATUSES)
+        problems += _enum(rec, "period", GOAL_PERIODS)
+        problems += _enum(rec, "on_period_end", ON_PERIOD_END, optional=True)
+        problems += _enum(rec, "set_by", AUTHORS, optional=True)
+        if not isinstance(rec.get("metric"), str) or not rec.get("metric"):
+            problems.append("'metric' must be a non-empty string "
+                            f"(a dataset column or {EXTERNAL_METRIC!r})")
+        if (ds := rec.get("dataset")) is not None and ds not in ("daily", "sessions"):
+            problems.append(f"'dataset' scopes to 'daily' or 'sessions', got {ds!r}")
+        if (st := rec.get("session_type")) is not None and st not in SESSION_TYPES:
+            problems.append(f"'session_type' must be one of {sorted(SESSION_TYPES)}, "
+                            f"got {st!r}")
+        # An external goal is tracked elsewhere, so it needs a pointer and
+        # cannot carry an engine target; an internal goal needs a target to
+        # verdict against. Guard percentage only means something when guarded.
+        if rec.get("metric") == EXTERNAL_METRIC:
+            if not isinstance(rec.get("tracker"), str) or not rec.get("tracker"):
+                problems.append("an external goal needs 'tracker' (where it lives)")
+        elif rec.get("target") is None and rec.get("status") == "active":
+            problems.append("an active non-external goal needs a numeric 'target'")
+        if rec.get("policy") == "guarded" and rec.get("guard_pct") is None:
+            problems.append("a guarded goal needs 'guard_pct' (the ramp headroom)")
+        if (g := rec.get("guard_pct")) is not None and not isinstance(g, bool):
+            if isinstance(g, _NUMERIC) and g < 0:
+                problems.append(f"'guard_pct' is a non-negative ratio, got {g!r}")
+        if (dl := rec.get("deadline")) is not None and _bad_date(dl):
+            problems.append(f"bad deadline {dl!r} (ISO-8601 YYYY-MM-DD)")
+    if dataset == "thresholds":
+        if not isinstance(rec.get("key"), str) or not rec.get("key"):
+            problems.append("'key' must be a non-empty string")
+        problems += _enum(rec, "change_kind", CHANGE_KINDS)
+        problems += _enum(rec, "set_by", AUTHORS, optional=True)
+        if rec.get("value") is None:
+            problems.append("'value' is required (null retires nothing - "
+                            "append a new line to change a threshold)")
+    if dataset == "achievements":
+        if not isinstance(rec.get("title"), str) or not rec.get("title"):
+            problems.append("'title' must be a non-empty string")
+        problems += _enum(rec, "source", AUTHORS)
     return problems

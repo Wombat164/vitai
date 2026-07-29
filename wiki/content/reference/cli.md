@@ -32,8 +32,29 @@ One line: latest weight, 7-day average and rate, firing-tripwire count.
 Weekly goal-attainment rows as JSONL on stdout - one object per
 (week, metric) with `value`, `target` and a closed verdict vocabulary
 (`on_target | ahead | behind | no_data`). The same rows live in the read
-model's `verdicts` table. This is the contract a game economy or dashboard
-consumes; see [[explanation/platform|the platform page]].
+model's `verdicts` table. Each row also carries the `goal` it serves. This is
+the contract a game economy or dashboard consumes; see
+[[explanation/platform|the platform page]].
+
+## vitai goals
+
+Where each active goal stands: counted progress against target, percentage,
+the dates it was declared and last moved, its motivator, and the recent
+per-goal contributions behind the number.
+
+    vitai goals                      # active goals, last 10 contributions
+    vitai goals --recent 0           # progress only
+    vitai goals --on 2030-05-01      # as the goals stood on that date
+    vitai goals --json               # one JSON object per goal, for scripts
+
+Progress is COUNTED progress. For a `guarded` goal that means volume beyond
+its ramp guard is reported separately as unbudgeted rather than folded in -
+the number reflects what was banked, not what was logged.
+
+A closing section lists policy edits worth a question: a target or threshold
+loosened within a week of a week that metric was missed, shown with whatever
+reason the athlete recorded. It is a prompt for the coach, not a judgment -
+nothing is blocked, and an explained deload is meant to read as one.
 
 ## vitai infer (opt-in)
 

@@ -101,8 +101,8 @@ lines, `vitai build`, commit. The rule the whole design serves:
 
 ## The data model
 
-Three health-domain datasets, one JSON object per line, keys never omitted
-(`null` for unknown), units in the key name:
+One JSON object per line, keys never omitted (`null` for unknown), units in
+the key name. Three datasets record what happened:
 
 | File | One line per | Example keys |
 |---|---|---|
@@ -110,13 +110,38 @@ Three health-domain datasets, one JSON object per line, keys never omitted
 | `data/daily.jsonl` | day | `steps`, `kcal_in`, `kcal_out`, `sleep_h`, `rhr`, `hip_pain` |
 | `data/sessions.jsonl` | training session | `type`, `distance_km`, `duration_s`, `avg_hr`, `rpe` |
 
+...and three record what you were aiming at, dated:
+
+| File | One line per | Example keys |
+|---|---|---|
+| `data/goals.jsonl` | goal declaration or edit | `slug`, `metric`, `target`, `policy`, `motivator` |
+| `data/thresholds.jsonl` | threshold change | `key`, `value`, `change_kind`, `reason` |
+| `data/achievements.jsonl` | recorded accomplishment | `title`, `goal`, `source` |
+
 Corrections are appended with `"supersedes":"<date>/<source>"` - a wrong line
 is never edited. The audit chain is the point: how a number changed is often
-more informative than the number.
+more informative than the number. Goals and thresholds supersede by slug
+(`"<slug>@<date>"`), and appending a same-slug line WITHOUT `supersedes` is an
+edit rather than a correction: both lines stay, and the pair is the history.
+
+Because policy is dated, every past day is judged against the targets that
+were in force *then*. Loosening a goal today cannot turn last month's misses
+into hits on the next rebuild. The engine derives how often policy moves
+(`plan_churn`) and flags a loosening timed right after a miss - a prompt to
+explain, never an accusation.
 
 Targets and tripwires (rate-of-loss phases, easy-run HR cap, resting-HR
-baseline, steps floor, pain gate) live in the content repo's `vitai.toml`, not
-in code - the engine is the same for everyone, the thresholds are yours.
+baseline, steps floor, pain gate) start in the content repo's `vitai.toml`,
+not in code - the engine is the same for everyone, the thresholds are yours.
+Once you change one, record it in `thresholds.jsonl` so the old value keeps
+governing the weeks it governed.
+
+### Schema migrations
+
+| Contract | Version | Change | What an existing repo must do |
+|---|---|---|---|
+| 1 | 0.2.0 | Founding tables + `verdicts`, `meta` | - |
+| 2 | 0.3.0 | Adds `goals`, `thresholds`, `achievements` datasets; `contributions`, `milestones`, `plan_churn`, `goal_progress` derivations; a `goal` column on `verdicts`; `dataset`/`session_type` scope fields on goals | Nothing required - `vitai build` creates the new files and tables, and a repo with no goals simply has empty ones. To adopt: append goal lines, and move any threshold you have since changed out of `vitai.toml` into `thresholds.jsonl` |
 
 ## Skills
 

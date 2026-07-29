@@ -7,6 +7,14 @@ A fictional athlete, ~12 weeks: a weight cut on an on-target rate, Tue/Thu runs
 with an easy-HR story, weekend gym sessions, daily steps/sleep/rhr, two
 inferences. Writes only current-schema (generation-1) fields.
 
+Increment 1 adds the goal story the contribution model exists to show:
+- a MONOTONIC steps goal, where every step counts;
+- a GUARDED running goal, where volume beyond a 10% weekly ramp does not;
+- one big unplanned long run near the end, which advances the steps goal,
+  is refused by the running goal, and mints no milestone;
+- a goal edit and a threshold change, so the record has an audit trail to
+  reconstruct - including one loosening timed right after a missed week.
+
     python examples/generate_demo.py          # (re)write examples/demo/
     python examples/generate_demo.py --check  # fail if committed data drifts
 
@@ -26,6 +34,9 @@ HERE = Path(__file__).resolve().parent
 DEMO = HERE / "demo"
 END = date(2030, 6, 30)
 DAYS = 84
+# Day offsets of the travel week (the ISO week beginning 2030-05-27), which the
+# athlete misses and then responds to by lowering the floor on 2030-06-06.
+TRAVEL_WEEK = (49, 55)
 
 TOML = (
     "# Demo athlete thresholds (synthetic).\n"
@@ -61,6 +72,11 @@ def _build(target: Path) -> None:
             weight.append({"date": d, "kg": round(kg + rng.gauss(0, 0.25), 1),
                            "source": "scale", "note": None})
         steps = int(rng.gauss(11500 if dow < 5 else 8300, 2100))
+        if TRAVEL_WEEK[0] <= i <= TRAVEL_WEEK[1]:
+            # A travel week: the steps floor is missed outright. This is the
+            # week the athlete reacts to by lowering the floor a few days
+            # later - the sequence the suspicious-edit flag exists to catch.
+            steps = int(rng.gauss(5600, 900))
         daily.append({"date": d, "steps": max(2500, steps),
                       "distance_km": round(max(2.5, steps) * 0.00075, 1),
                       "active_min": int(max(60, rng.gauss(300, 70))),
@@ -100,15 +116,110 @@ def _build(target: Path) -> None:
          "confidence": 0.85, "model": "demo-model",
          "evidence": "daily.steps by weekday, full range", "note": None},
     ]
-    (target / "data" / "weight.jsonl").write_text(_jsonl(weight), encoding="utf-8", newline="\n")
-    (target / "data" / "daily.jsonl").write_text(_jsonl(daily), encoding="utf-8", newline="\n")
-    (target / "data" / "sessions.jsonl").write_text(_jsonl(sessions), encoding="utf-8", newline="\n")
-    (target / "data" / "inferences.jsonl").write_text(_jsonl(inferences), encoding="utf-8", newline="\n")
+    # The unplanned long run: a Saturday late in the block, after that week's
+    # Tue/Thu runs have already spent the ramp budget. This is the event the
+    # split verdict is built to explain.
+    big_run_day = END - timedelta(days=7)
+    sessions.append({"date": big_run_day.isoformat(), "type": "run",
+                     "distance_km": 21.1,
+                     "duration_s": int(21.1 * 402), "avg_hr": 158,
+                     "max_hr": None, "cadence": 166, "kcal": int(21.1 * 61),
+                     "location": None, "rpe": 8,
+                     "note": "unplanned - joined a group long run"})
+    sessions.sort(key=lambda s: (s["date"], s["type"]))
+
+    goals, thresholds, achievements = _policy(start)
+
+    for name, rows in (("weight", weight), ("daily", daily),
+                       ("sessions", sessions), ("inferences", inferences),
+                       ("goals", goals), ("thresholds", thresholds),
+                       ("achievements", achievements)):
+        (target / "data" / f"{name}.jsonl").write_text(
+            _jsonl(rows), encoding="utf-8", newline="\n")
+
+
+def _goal(date: str, slug: str, title: str, metric: str, target, policy: str,
+          **kw) -> dict:
+    """A goals.jsonl line with every key present (null for unknown)."""
+    rec = {"date": date, "slug": slug, "title": title, "metric": metric,
+           "dataset": None, "session_type": None, "tracker": None,
+           "target": target, "policy": policy, "guard_pct": None,
+           "period": "weekly", "on_period_end": "reset", "deadline": None,
+           "status": "active", "motivator": None, "rationale": None,
+           "on_success": None, "on_miss": None, "accountability": None,
+           "set_by": "onboard", "reason": None, "note": None}
+    rec.update(kw)
+    return rec
+
+
+def _policy(start: date) -> tuple[list[dict], list[dict], list[dict]]:
+    """The demo's dated policy: goals, threshold changes, one achievement."""
+    d0 = start.isoformat()
+    goals = [
+        _goal(d0, "steps", "Walk 70k steps a week", "steps", 70000,
+              "monotonic", dataset="daily",
+              motivator="Keep the desk job from winning",
+              rationale="10k a day, averaged - a floor that survives a bad day",
+              on_success="hold", on_miss="reflect"),
+        _goal(d0, "running", "Build to 30 km a week, injury-free", "distance_km",
+              30, "guarded", guard_pct=0.1, dataset="sessions",
+              session_type="run", deadline="2030-08-31",
+              motivator="Finish the autumn half without limping",
+              rationale="10% weekly ramp is the ceiling my hip tolerated last time",
+              on_success="escalate", on_miss="hold"),
+        # A goal that lives in another app entirely: vitai tracks and asks
+        # about it, but never invents a verdict for it (G19).
+        _goal((start + timedelta(days=21)).isoformat(), "segment",
+              "Take back the riverside segment", "external", None, "monotonic",
+              tracker="a public segment leaderboard", period="none",
+              on_period_end=None,
+              motivator="Losing it to a neighbour stung more than expected"),
+        # The steps goal is raised once, mid-block, and explained.
+        _goal((start + timedelta(days=42)).isoformat(), "steps",
+              "Walk 77k steps a week", "steps", 77000, "monotonic",
+              dataset="daily", set_by="athlete",
+              reason="the 70k weeks stopped feeling like effort",
+              motivator="Keep the desk job from winning",
+              rationale="10k a day, averaged - a floor that survives a bad day",
+              on_success="hold", on_miss="reflect"),
+    ]
+    thresholds = [
+        {"date": d0, "key": "steps_floor", "value": 9000,
+         "change_kind": "change", "set_by": "onboard",
+         "reason": "starting floor from the onboarding interview", "note": None},
+        {"date": d0, "key": "kcal_target", "value": 2150,
+         "change_kind": "change", "set_by": "onboard",
+         "reason": "deficit sized for the phase-1 rate", "note": None},
+        {"date": d0, "key": "protein_g_target", "value": 145,
+         "change_kind": "change", "set_by": "onboard",
+         "reason": "1.8 g/kg at target weight", "note": None},
+        # A deliberate loosening, three days after a missed steps week. The
+        # engine flags the TIMING; the stated reason is what makes it readable
+        # as a deload rather than a retreat.
+        {"date": (start + timedelta(days=59)).isoformat(), "key": "steps_floor",
+         "value": 8000, "change_kind": "change", "set_by": "athlete",
+         "reason": "travel week, protecting the run block instead", "note": None},
+    ]
+    achievements = [
+        {"date": (start + timedelta(days=77)).isoformat(),
+         "title": "First 21 km in one run", "goal": "running",
+         "source": "athlete",
+         "note": "unplanned, and the hip held - but it was not budgeted"},
+    ]
+    return goals, thresholds, achievements
 
 
 def _read_all(root: Path) -> dict[str, str]:
+    """The generated INPUTS only.
+
+    Deliberately skips derived/: it is gitignored and holds a binary SQLite
+    file, so a local `vitai build` before `--check` would otherwise blow up on
+    a UTF-8 decode rather than reporting drift.
+    """
     return {p.name: p.read_text(encoding="utf-8")
-            for p in sorted(root.rglob("*")) if p.is_file()}
+            for p in sorted(root.rglob("*"))
+            if p.is_file() and "derived" not in p.parts
+            and p.suffix in (".jsonl", ".toml")}
 
 
 def main() -> int:

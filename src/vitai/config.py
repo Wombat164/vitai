@@ -8,7 +8,7 @@ everyone; the numbers are the athlete's.
 from __future__ import annotations
 
 import tomllib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 
@@ -52,6 +52,38 @@ def load_config(root: Path) -> Config:
         sleep_floor_h=trip.get("sleep_floor_h"),
         pain_gate=trip.get("pain_gate"),
     )
+
+
+# Threshold names that `thresholds.jsonl` can carry, and the type each takes.
+# A dated threshold OVERRIDES the vitai.toml value: the toml is the starting
+# point an athlete is handed, the dataset is the history they accumulate.
+# `kcal_target` and `protein_g_target` live only in the dataset - they were
+# never in Config, because a target you edit weekly must be dated (G20).
+THRESHOLD_TYPES: dict[str, type] = {
+    "easy_hr_cap": int,
+    "rhr_baseline": int,
+    "steps_floor": int,
+    "sleep_floor_h": float,
+    "pain_gate": int,
+}
+
+
+def overlay(cfg: Config, thresholds: dict[str, float]) -> Config:
+    """`cfg` with any dated thresholds applied on top.
+
+    Used with `policy.state(d).thresholds` so a week is judged against the
+    numbers in force THEN, not the ones in vitai.toml today - the G14 fix.
+    """
+    if not thresholds:
+        return cfg
+    values = {}
+    for key, caster in THRESHOLD_TYPES.items():
+        if (v := thresholds.get(key)) is not None:
+            try:
+                values[key] = caster(v)
+            except (TypeError, ValueError):
+                continue
+    return replace(cfg, **values) if values else cfg
 
 
 def phase_rate_for(cfg: Config, kg: float) -> float | None:
