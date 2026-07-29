@@ -5,6 +5,48 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+Body sites become a curated vocabulary (follow-up to increment 2).
+
+### Added
+- **`semantics/body_sites.toml`** - the first curated registry (P5): neither
+  data nor code, versioned in-repo, human-mergeable, with its evidence in its
+  own comments. About 25 musculoskeletal sites in a two-level
+  `region -> site` hierarchy, each with aliases.
+- **`pain_side`** (`left | right | bilateral | null`), post-coordinating
+  laterality rather than baking it into the site name. This is the HL7 FHIR
+  (`BodyStructure.includedStructure.structure` + `.laterality`) and openEHR
+  (`CLUSTER.anatomical_location`) pattern - two standards that made the same
+  call independently. It also stops the vocabulary doubling.
+- **`vitai.anatomy`**: `resolve()` maps what an athlete actually types onto
+  the canonical slug ("IT band" and "itb" -> `knee`, "lumbar" -> `lower_back`),
+  plus `region_of()`, `is_paired()`, `describe()` and a verified-only
+  `osiics_of()`.
+- **`docs/prior-art-anatomy.md`** - the sweep behind all of the above, with
+  adopt/adapt/avoid calls.
+
+### Changed
+- **`pain_site` is now a closed vocabulary** instead of free text, so "knee",
+  "Knee", "left knee" and "patella" stop being four unrelated places. Unknown
+  sites are rejected with the vocabulary listed; aliases are accepted and
+  normalised to the canonical slug at read time.
+- A **paired** site with a pain score now requires a side - "my knee hurts"
+  does not tell a coach which knee to stop loading - and a **midline** site
+  refuses one, because claiming a side there is false precision.
+- Legacy `hip_pain` lines still map forward to `pain` at site `hip` and are
+  deliberately given **no** side: the old field never recorded which hip, and
+  inventing one would manufacture a fact.
+
+### Deliberately not done
+- No clinical ontology is vendored. SNOMED CT cannot be redistributed by
+  non-Affiliates; UBERON is multi-species and runs to tens of thousands of
+  classes. OSIICS (the IOC's sports system, free with acknowledgement) is
+  mapped instead - but only the region letters verified from a primary source
+  are recorded, and the rest are left blank rather than guessed.
+- Pain remains one score at one site per day. Multiple simultaneous sites and
+  pain quality (sharp/dull/burning) are not modelled.
+
+## [Unreleased] - increment 2
+
 Increment 2 - provenance, context, feel + RESOLUTION (G1, G3, G4, G7, G15,
 G29). Read-model contract bumped to **3**.
 

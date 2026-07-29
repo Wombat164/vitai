@@ -112,6 +112,9 @@ def _build(target: Path) -> None:
             # is additive, and the old lines never had to be rewritten.
             row.update({"_gen": 2, "source": "watch", "pain": pain,
                         "pain_site": "hip" if pain else None,
+                        # `hip` is a paired structure, so the side is required
+                        # for the entry to be actionable: which hip.
+                        "pain_side": "right" if pain else None,
                         "mood": max(1, min(10, int(rng.gauss(7, 1.5)))),
                         "feel": rng.choice(["fun", "neutral", "neutral", "chore"]),
                         "coverage": "full"})
@@ -200,7 +203,8 @@ def _build(target: Path) -> None:
                  "protein_g": 152, "sleep_h": None, "rhr": None,
                  "alcohol": None, "note": "logged in the calorie app",
                  "_gen": 2, "source": "app", "mood": None, "feel": None,
-                 "coverage": "manual", "pain": None, "pain_site": None}
+                 "coverage": "manual", "pain": None, "pain_site": None,
+                 "pain_side": None}
     daily.append(app_claim)
     daily.sort(key=lambda r: (r["date"], r.get("source") or ""))
     sessions.sort(key=lambda s: (s["date"], s["type"], s.get("source") or ""))
