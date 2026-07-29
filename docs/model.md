@@ -116,7 +116,7 @@ these; nothing else exists.
    safety/privacy-critical: consent ledger, access-scope, suppression prefs -
    NOT markdown pages (the redteam's "prose still hiding where data is needed").
 
-## Part 3 - The consolidating gaps (G24-G52)
+## Part 3 - The consolidating gaps (G24-G54)
 
 Each folds several redteam findings and fills a symmetry hole in a principle.
 
@@ -513,6 +513,51 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   clear) is the real schedulable slot. A blocked asset is a REASON the coach can
   state ("the crosstrainer is taken till 19:45 - want the 20:00 slot, or the
   bodyweight version now?"), never a silent omission. MEDIUM.
+
+- **G53 Kit, attire, access credentials & carry-load** (P8/G48/G52). The
+  logistics layer that silently invalidates otherwise-perfect plans. A planned
+  activity carries REQUIREMENTS, and the athlete carries STATE:
+  - *Kit requirements* per activity x place: a gym session needs a towel and a
+    bag to carry it; a run needs running clothes; finishing anywhere that is not
+    home needs shower kit, a drying towel, fresh underwear. What is needed
+    depends on what the PLACE already affords (G48): a gym with showers and towel
+    hire changes the packing list entirely.
+  - *Access credentials are HARD GATES*, not conveniences: the phone that shows
+    the entry QR, a badge, a members card, a booking confirmation. Missing it
+    means the session cannot happen at all - the planner must treat it as a
+    feasibility precondition, at the same level as "is the gym open".
+  - *Attire state*: the athlete IS in some attire (running kit, civilian, work
+    clothes), and changing requires being somewhere with the right kit. Driving
+    to the office in civilian clothing forecloses a run there unless it was
+    packed.
+  - *CARRY LOAD CONSTRAINS LOCOMOTION MODE* - the sharp one. Carried mass and
+    bulk restrict which modes are available for the NEXT leg: 10 kg of shopping
+    means walking, not running; a loaded backpack makes a run possible but slower
+    and less pleasant; hands-full rules out some modes entirely. Carry state is a
+    first-class planning variable, not a detail.
+  - *PREPARATION LEAD TIME (pack-ahead)*: kit must be surfaced at the LAST MOMENT
+    THE ATHLETE CAN STILL ACT - before leaving home this morning for a session
+    this evening - never on arrival, when the information is useless. A
+    pre-departure checklist is a rare nudge that EARNS its interrupt (G39/P8):
+    high value, time-critical, and cheap to act on.
+  MEDIUM.
+- **G54 Trip chaining & leg-state propagation** (extends G44/G51). A journey is
+  a SEQUENCE OF LEGS, and each leg MUTATES the state the next leg depends on -
+  so legs cannot be validated independently. Shopping on the way home from the
+  gym adds carry-load, which downgrades the last leg from run to walk (G53); a
+  session leaves the athlete sweaty, which gates what comes next without a
+  shower; a one-way route consumes the outbound transport. The planner validates
+  the WHOLE CHAIN and reports where it breaks, rather than proposing a pretty
+  first leg that strands the athlete.
+  **Transport legs may need SECURING, not merely choosing.** A one-way route
+  ("run home from a town along the coast") requires an outbound leg that actually
+  exists and is arranged: a bus with a real timetable, a taxi/rideshare that must
+  be booked, a lift from a family member - which is a dependency on ANOTHER
+  PERSON (G51) and needs their agreement before the plan is real. An unsecured
+  transport leg makes the plan a proposal, not a schedule, and the coach must say
+  so ("the Cadzand start needs a lift or the bus at 08:40 - want me to lay out
+  the options?"). Autonomous booking is never done on the athlete's behalf.
+  MEDIUM.
 
 ## The frame: a guardrailed world model (belief-state, not a learned net)
 

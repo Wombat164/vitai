@@ -420,10 +420,26 @@ enrichment (increment 6); G46 couples to context assembly (increment 9).
   planner intersects (my free window) x (asset free) x (care duty clear). Tests:
   a contended crosstrainer yields the alternative + a stated reason, never a
   silent drop; an unavailable car invalidates a drive-to-trailhead journey (G44).
-- NOT: autonomous booking of transit/anything; any live lookup without a granted
-  source; any coarse-coord leak past the enrichment boundary (G32); any inferred
-  age, relationship or dependent detail (G49/G51 - stated or absent); any
-  third-party health/metric/location storage (G51 hard line).
+- **G53 kit, attire, access & carry-load:** per-activity x place kit
+  requirements (modulated by what the place affords, G48); access credentials as
+  hard feasibility preconditions; attire state; **carry-load constrains
+  locomotion mode**; and pack-ahead LEAD TIME - kit surfaces before the athlete
+  leaves, never on arrival. Tests: a missing credential marks a session
+  infeasible (not merely "remember your phone"); a 10 kg carry rules out the run
+  mode on the next leg; a place with showers shortens the packing list; the
+  checklist fires pre-departure, not post.
+- **G54 trip chaining & leg-state propagation:** a journey is a leg sequence
+  where each leg mutates the next leg's preconditions; validate the CHAIN and
+  report where it breaks. Transport legs carry a SECURED/unsecured state (bus
+  timetable, booking, a lift agreed by a person, G51); unsecured = a proposal,
+  not a schedule, and the coach says so. Tests: gym->shop->home downgrades the
+  final leg to walk and explains why; an unsecured outbound leg blocks a one-way
+  route from being scheduled.
+- NOT: autonomous booking of transit/anything (G54 - options are laid out, the
+  athlete books); any live lookup without a granted source; any coarse-coord leak
+  past the enrichment boundary (G32); any inferred age, relationship or dependent
+  detail (G49/G51 - stated or absent); any third-party health/metric/location
+  storage (G51 hard line).
 
 ## Increment 7 - forecasting (v0.9.0; G21) [2-3 sessions]
 

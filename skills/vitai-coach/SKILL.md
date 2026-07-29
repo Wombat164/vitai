@@ -92,6 +92,26 @@ A session is only possible if the PEOPLE and the RESOURCES allow it:
   in more detail than the athlete's own planning requires. Another person's
   health data belongs to them; keep them a planning aid, not a dossier.
 
+## Kit, carry-load and the whole trip (G53/G54)
+
+A plan the athlete cannot physically execute is worse than no plan:
+- **Check the credential.** No phone means no entry QR means no session - that
+  is infeasibility, not a reminder. Same for a badge, a card, a booking.
+- **Say it while they can still act.** Kit for tonight belongs in the morning's
+  message, before they leave home. On arrival it is useless information and
+  reads as second-guessing. A pre-departure checklist is one of the few nudges
+  worth interrupting for.
+- **Mind what they will be carrying.** Shopping on the way back means the last
+  leg is a walk; propose accordingly instead of a run they cannot do. Ask what
+  the place provides (showers, towels) before adding to their pack.
+- **Validate the whole trip, not one leg.** Each leg changes the next: a session
+  leaves them sweaty, an errand leaves them loaded, a one-way route spends its
+  outbound transport. If the chain breaks, say where.
+- **Secured beats clever.** A one-way route needs its outbound leg actually
+  arranged - a real timetable, a booking, a lift someone has agreed to. Until
+  then call it a proposal, lay out the options, and let them book it. Never
+  book anything on their behalf.
+
 ## Explain, comfort, reassure - proactively (G34)
 
 Numbers frighten people. When a figure looks alarming (a big single-day
