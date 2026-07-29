@@ -47,9 +47,19 @@ jobs:
       - run: pip install -e .
       - run: python examples/generate_demo.py --check
       - run: vitai validate --root examples/demo
-      - run: vitai build --root examples/demo
+      # Built as of the synthetic athlete's last day so the date-sensitive
+      # sections (gates, escalations) render what the demo is meant to show.
+      - run: vitai build --root examples/demo --on 2030-06-30
       - name: Assert the rollup renders real content
         run: |
           grep -q "ON TARGET" examples/demo/derived/weekly.md
           grep -q "Tripwires" examples/demo/derived/weekly.md
           vitai verdicts --root examples/demo | grep -q '"verdict": "on_target"'
+      - name: Assert the safety layer renders a live gate and a closed episode
+        run: |
+          grep -q "## Gates" examples/demo/derived/weekly.md
+          grep -q "impact blocked" examples/demo/derived/weekly.md
+          vitai safety --root examples/demo --on 2030-06-30 | grep -q "blocks impact"
+          # the calf episode is resolved and must NOT gate at the end of the block
+          test "$(vitai safety --root examples/demo --on 2030-06-30 \
+            | grep -c 'calf')" = "0"

@@ -49,8 +49,12 @@ def _week_key(d: str) -> str:
 
 
 def build_report(cfg: Config, weight: list[dict], daily: list[dict],
-                 sessions: list[dict], today: date | None = None) -> str:
+                 sessions: list[dict], today: date | None = None,
+                 gates: list[dict] | None = None,
+                 escalations: list[dict] | None = None) -> str:
     today = today or date.today()
+    gates = gates or []
+    escalations = escalations or []
     L = ["# Weekly rollup", "",
          f"Generated {today.isoformat()} - derived, do not edit.",
          "", "## Weight", ""]
@@ -126,9 +130,16 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                 alerts.append(f"**Resting HR {recent:.0f}** - more than 5 over "
                               f"baseline {cfg.rhr_baseline}")
     if cfg.pain_gate is not None:
-        pains = [d["hip_pain"] for d in daily if d.get("hip_pain") is not None][-7:]
-        if pains and max(pains) > cfg.pain_gate:
-            alerts.append(f"**Hip pain {max(pains)}/10** - gate fired: no loaded hip work")
+        # Reads `pain` after the gen-2 generalization, falling back to the
+        # retired `hip_pain` so an older record still trips its own gate.
+        scored = [(d.get("pain") if d.get("pain") is not None else d.get("hip_pain"),
+                   d.get("pain_site") or "hip")
+                  for d in daily
+                  if d.get("pain") is not None or d.get("hip_pain") is not None][-7:]
+        if scored and max(p for p, _ in scored) > cfg.pain_gate:
+            worst, site = max(scored, key=lambda s: s[0])
+            alerts.append(f"**Pain {worst}/10 at {site}** - gate fired: "
+                          "no loaded work at that site")
     if cfg.sleep_floor_h is not None:
         sleeps = [d["sleep_h"] for d in daily if d.get("sleep_h")][-7:]
         if sleeps and mean(sleeps) < cfg.sleep_floor_h:
@@ -142,6 +153,24 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
             verdict = "floor met" if met else f"below the {cfg.steps_floor:,} floor"
             alerts.append(f"Steps {avg:,.0f}/day avg - {verdict}")
     L += [f"- {a}" for a in alerts] or ["- Nothing firing."]
+
+    # Gates outrank tripwires and sit above them in the reader's eye for a
+    # reason: a tripwire is something to discuss, a gate is something that is
+    # already decided. The coach may explain one; it may not talk one away.
+    L += ["", "## Gates", ""]
+    if gates:
+        for g in gates:
+            L.append(f"- **{g['restricts']} blocked** - {g['reason']}")
+        L += ["", "> A gate clears when the record says the episode resolved, "
+                  "not by argument."]
+    else:
+        L.append("- Nothing gated.")
+
+    if escalations:
+        L += ["", "## Safety", ""]
+        for e in escalations:
+            L.append(f"- **{e['level'].upper()}** {e['date']} - {e['detail']}")
+        L += ["", "> " + escalations[0]["action"]]
 
     L += ["", "## Coverage", "",
           f"- weight: {len(weight)} - daily: {len(daily)} - sessions: {len(sessions)}",

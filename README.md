@@ -119,6 +119,7 @@ the key name. Three datasets record what happened:
 | `data/achievements.jsonl` | recorded accomplishment | `title`, `goal`, `source` |
 | `data/measurements.jsonl` | anchor read off the scale | `kind`, `value`, `source` |
 | `data/context.jsonl` | situational mode change | `mode`, `facilities`, `place` |
+| `data/medical.jsonl` | step in one condition's lifecycle | `slug`, `kind`, `severity`, `status`, `restricts` |
 
 Corrections are appended with `"supersedes":"<date>/<source>"` - a wrong line
 is never edited. The audit chain is the point: how a number changed is often
@@ -137,6 +138,33 @@ baseline, steps floor, pain gate) start in the content repo's `vitai.toml`,
 not in code - the engine is the same for everyone, the thresholds are yours.
 Once you change one, record it in `thresholds.jsonl` so the old value keeps
 governing the weeks it governed.
+
+### Safety is a branch, not a sentence
+
+One decision in this system is not a coaching input: whether to stop and see
+a clinician. It used to live as prose in a skill file, which meant a coach
+optimising for adherence could reason around it, soften it, or simply not
+reach it. Prose can be argued with; a branch cannot.
+
+So the rules are code, the escalation messages are constants, and no part of
+either is generated. The engine has triggers that depend on nothing a model
+judged - a body site that is never assumed musculoskeletal, thresholds
+outside physiological range, and a composite over numbers you already log -
+and it also honours a red flag a skill raises. The asymmetry is deliberate: a
+model can only ever **add** an escalation, never remove one.
+
+An open medical episode that restricts an activity is a **gate**: a
+deterministic fact about a date. A coach may explain a gate. It cannot clear
+one, defer one, or suggest a substitution around one. Gates clear when the
+record says the episode resolved.
+
+Anything urgent surfaces the moment the record is rebuilt rather than waiting
+for the weekly rollup, and `vitai safety` exits non-zero while it stands.
+
+None of it is diagnosis. Every escalation routes to a human, and the
+thresholds are deliberately conservative screening bounds - the resting-heart-
+rate floor sits below a trained athlete's genuinely low rate, because a safety
+layer that cries wolf at normal physiology teaches people to ignore it.
 
 ### Where it hurts
 

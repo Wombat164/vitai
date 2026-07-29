@@ -74,6 +74,25 @@ when my app says 2,844" should always have an answer, and the answer is
 per-quantity precedence: the watch measured the burn, the app modelled it,
 and the record holds one of them rather than their sum.
 
+## vitai safety
+
+Active escalations and gates. **Exits 2 while anything urgent stands**, so a
+script, a cron job or a game backend can ask "is this athlete safe to train
+today" without parsing prose.
+
+    vitai safety                     # today
+    vitai safety --on 2030-06-30     # as of a date
+    vitai safety --all               # every escalation in the record
+    vitai safety --json
+
+Nothing in the output is generated. The escalation text is fixed in
+`safety.py` and the same string appears wherever it surfaces - CLI, rollup,
+read model. A coach may explain it and may not rewrite it.
+
+Anything urgent dated today also prints at `vitai build` time, on stderr,
+before any coaching output exists to bury it. That is the fast path: the
+weekly cadence is right for coaching and wrong for danger.
+
 ## vitai context
 
 The situational mode in force on a date - what was going on around the

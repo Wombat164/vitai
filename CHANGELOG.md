@@ -5,6 +5,73 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+Increment 3 - medical layer + SAFETY ESCALATION (G11 + G28). Read-model
+contract bumped to **4**.
+
+### Added
+- **`medical.jsonl`** (G11): one condition's whole lifecycle under a `slug` -
+  onset, visit, restriction, resolution. Carries `severity` that the ENGINE
+  reads, `restricts` (which activity classes are gated), `resolved_date`
+  (which closes the episode window streak-forgiveness will be computed from),
+  and a coarse `provider_type` - which KIND of clinician, never which one.
+- **Deterministic severity-to-action (G28)** in `safety.py`. This was the last
+  decision outside the P4 firewall: "see a clinician" lived as prose in a
+  skill file, where a coach optimising for adherence could reason around it,
+  soften it, or never reach it. It is now a branch, and the escalation
+  messages are module constants - what an athlete reads in an emergency is
+  exactly what was reviewed and tested, not something a model assembled.
+  - a symptom CLASS beyond musculoskeletal: pain recorded at `chest` routes
+    to a clinician from EITHER dataset, because `chest` is a legitimate
+    musculoskeletal site and that is exactly the trap - a coach handed it
+    alongside a hip will happily suggest a substitution;
+  - ABSOLUTE-danger thresholds judged with no reference to baseline (resting
+    heart rate outside 30-120, self-reported pain at 9+). The existing rhr
+    tripwire is relative, which is the right tool for fatigue and the wrong
+    one for danger: a baseline that drifted upward over months never trips;
+  - a **RED-S / low-energy-availability composite** over deficit + rate of
+    loss + training load - the syndrome that a tool which coaches deficits
+    can itself cause, which is why the engine watches for it rather than the
+    athlete;
+  - an explicit `severity: red_flag` path, honoured whoever wrote it.
+- **Gates as data.** An open episode that restricts an activity class, or
+  pain over the configured gate, produces a gate row carrying its own
+  escalation text. `Vitai.gated("run")` is a deterministic fact about a date.
+- **The fast path.** The weekly cadence is right for coaching and wrong for
+  danger. Anything urgent dated today prints at `vitai build` time on stderr,
+  before any coaching output exists to bury it, and `vitai safety` exits **2**
+  while something urgent stands so a script can ask "safe to train today?"
+  without parsing prose.
+- **`vitai safety`** plus `Vitai.safety()`, `.urgent()`, `.gates()`,
+  `.gated()`, `.episodes()` and `.safety_banner()` (P9 parity).
+- **`vitai build --on DATE`** to evaluate gates, escalations and the rollup as
+  of a date - which is also what lets the demo render its own live gate.
+- The weekly rollup gains a **Gates** section, below tripwires: a tripwire is
+  something to discuss, a gate is already decided.
+- The **never-shame carve-out is now written down** in the coach skill, with
+  its boundaries: it licenses urgency and plainness, never blame; it applies
+  only to the gate/escalation tier; the words are the engine's.
+
+### Changed
+- `meta.contract` is **4**, adding `medical`, `gates` and `escalations`. A
+  consumer that renders training suggestions MUST read `gates` or it will
+  propose activity the record has blocked.
+- The rollup's pain tripwire reads `pain`/`pain_site` (falling back to the
+  retired `hip_pain`) and names the site rather than assuming the hip.
+- The CI demo job builds as of the synthetic athlete's last day and asserts
+  a live gate renders and a resolved episode does not.
+
+### Deliberately not done
+- No diagnosis, ever. Every escalation routes to a human clinician and the
+  banner says so.
+- Out of scope per the plan: FHIR import, document attachments, medication
+  interactions.
+- Thresholds are conservative SCREENING bounds, not clinical criteria. The
+  resting-heart-rate floor sits below a trained endurance athlete's genuinely
+  low rate on purpose - a safety layer that cries wolf at normal athlete
+  physiology teaches people to ignore it.
+
+---
+
 Body sites become a curated vocabulary (follow-up to increment 2).
 
 ### Added

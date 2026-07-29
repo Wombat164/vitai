@@ -22,6 +22,7 @@ from .api import Vitai
 from .config import load_inference_config
 from .inference import append_inferences, backend_from_config, run_inference
 from .jsonl import load_report, read_lines
+from .safety import banner
 from .schema import KEYS, validate_record
 
 DATASETS = list(KEYS)
@@ -82,7 +83,9 @@ def cmd_build(args: argparse.Namespace) -> None:
             for p in validate_record(name, rec):
                 print(f"warning: {name}.jsonl {rec.get('date')}: {p}", file=sys.stderr)
                 warned += 1
-    db = Vitai(root).build()
+    v = Vitai(root)
+    on = date.fromisoformat(args.on) if getattr(args, "on", None) else None
+    db = v.build(today=on)
     counts = " - ".join(f"{name}: {len(data[name])}" for name in DATASETS)
     tail = ""
     if quarantined:
@@ -90,6 +93,20 @@ def cmd_build(args: argparse.Namespace) -> None:
     if warned:
         tail += f"; {warned} schema warning(s), run `vitai validate`"
     print(f"Built {db.name} (incl. verdicts) and weekly.md ({counts}){tail}")
+
+    # THE FAST PATH (G28). The weekly rollup is the right cadence for coaching
+    # and the wrong one for danger: something logged on a Tuesday cannot wait
+    # until Sunday to be read. Anything urgent dated today prints here, on
+    # stderr, the moment the record is rebuilt - before any coaching output
+    # exists to bury it.
+    if urgent := v.urgent(on):
+        print(banner(urgent), file=sys.stderr)
+    gates = v.gates(on)
+    if gates:
+        blocked = sorted({c for g in gates
+                          for c in str(g["restricts"]).split()})
+        print(f"GATED today: {', '.join(blocked)} "
+              f"({len(gates)} gate(s)) - see `vitai safety`", file=sys.stderr)
 
 
 def cmd_verdicts(args: argparse.Namespace) -> None:
@@ -202,6 +219,40 @@ def cmd_resolve(args: argparse.Namespace) -> None:
             print(f"  {r['date']} {r['kind']} {r['claim_id']}{arrow}: {r['reason']}")
 
 
+def cmd_safety(args: argparse.Namespace) -> None:
+    """The escalation surface. Exits 2 while anything urgent stands.
+
+    A non-zero exit is deliberate: it makes "is this athlete safe to train
+    today" answerable by a script, a cron job or a game backend without
+    parsing prose. Nothing here is generated - the text is fixed in
+    `safety.py` and the same string appears wherever it surfaces.
+    """
+    root = _root(args)
+    v = Vitai(root)
+    on = date.fromisoformat(args.on) if args.on else date.today()
+    rows = v.safety(on) if args.all else v.urgent(on)
+    if args.json:
+        for row in rows:
+            print(json.dumps(row))
+    elif rows:
+        print(banner(rows), end="")
+    else:
+        print("no active safety escalations")
+
+    gates = v.gates(on)
+    if gates and not args.json:
+        print("gates in force:")
+        for g in gates:
+            print(f"  [{g['severity'] or 'unset'}] {g['slug']}: blocks "
+                  f"{g['restricts']} - {g['reason']}")
+    elif gates:
+        for g in gates:
+            print(json.dumps({"kind": "gate", **g}))
+
+    if any(r["level"] in ("emergency", "urgent") for r in rows):
+        raise SystemExit(2)
+
+
 def cmd_context(args: argparse.Namespace) -> None:
     """The situational mode in force on a date."""
     root = _root(args)
@@ -312,6 +363,7 @@ def main(argv: list[str] | None = None) -> None:
         ("verdicts", cmd_verdicts, "weekly goal-attainment rows as JSONL (the platform contract)"),
         ("goals", cmd_goals, "active goals: progress, dates, contributions, flagged edits"),
         ("resolve", cmd_resolve, "which source won each contested field, and why"),
+        ("safety", cmd_safety, "active escalations and gates (exits 2 if urgent)"),
         ("context", cmd_context, "the situational mode in force on a date"),
         ("infer", cmd_infer, "opt-in: model reads the record, appends validated inferences"),
     ]:
@@ -320,6 +372,10 @@ def main(argv: list[str] | None = None) -> None:
         if name == "infer":
             p.add_argument("--dry-run", action="store_true",
                            help="print validated inferences without appending")
+        if name == "build":
+            p.add_argument("--on", metavar="YYYY-MM-DD",
+                           help="evaluate gates, escalations and the rollup as "
+                                "of this date (default: today)")
         if name == "goals":
             p.add_argument("--json", action="store_true",
                            help="emit goal rows as JSONL instead of prose")
@@ -337,6 +393,14 @@ def main(argv: list[str] | None = None) -> None:
                            help="emit the context line as JSON")
             p.add_argument("--on", metavar="YYYY-MM-DD",
                            help="the date to reconstruct (default: today)")
+        if name == "safety":
+            p.add_argument("--json", action="store_true",
+                           help="emit escalations and gates as JSONL")
+            p.add_argument("--on", metavar="YYYY-MM-DD",
+                           help="the date to evaluate (default: today)")
+            p.add_argument("--all", action="store_true",
+                           help="every escalation in the record, not just "
+                                "the ones needing attention now")
         p.set_defaults(fn=fn)
 
     args = ap.parse_args(argv)

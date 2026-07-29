@@ -94,6 +94,19 @@ KEYS: dict[str, list[str]] = {
     # single point. `body_fat_pct` measured BY the scale already rides the
     # `weight` line (gen-2, G36/G37); this dataset is for the other instruments.
     "measurements": ["date", "kind", "value", "source", "note"],
+    # --- increment 3: the medical layer (G11) ------------------------------
+    # One condition's whole lifecycle shares a `slug`: onset, the visit, the
+    # restriction, the resolution. Appending a line advances the episode; the
+    # latest line dated on or before a day IS the state on that day, so
+    # "was I gated last Tuesday" is answerable without re-reading prose.
+    #
+    # `severity` is read by the ENGINE, not only the coach - it is the input to
+    # the deterministic severity-to-action mapping in safety.py. `restricts`
+    # names the activity classes an episode gates. `provider_type` is coarse on
+    # purpose: which KIND of clinician, never which clinician.
+    "medical": ["date", "slug", "kind", "title", "body_site", "severity",
+                "status", "resolved_date", "restricts", "provider_type",
+                "source", "note"],
     # Dated situational mode (G34): what was going on around the athlete. The
     # engine uses it to explain missingness rather than flag it - an absent
     # weigh-in in a week with no scale is not a lapse - and the coach uses it
@@ -119,7 +132,25 @@ CONTEXT_MODES = {"normal", "vacation", "work", "conference", "weekend",
 
 # Datasets whose lines are keyed by a stable identity rather than date/source:
 # a supersedes chain runs per slug, and the LAST line for a slug is its head.
-IDENTITY_KEY: dict[str, str] = {"goals": "slug", "thresholds": "key"}
+IDENTITY_KEY: dict[str, str] = {"goals": "slug", "thresholds": "key",
+                                "medical": "slug"}
+
+# --- the medical layer (increment 3) -----------------------------------------
+MEDICAL_KINDS = {"visit", "injury", "symptom", "lab", "medication", "restriction"}
+MEDICAL_STATUSES = {"active", "monitoring", "resolved"}
+PROVIDER_TYPES = {"gp", "physio", "specialist", "other"}
+
+# The severity ladder the ENGINE reads. `red_flag` is not a stronger adjective
+# than `severe` - it is a different kind of thing: a claim that this needs a
+# clinician now, which fires a hardcoded escalation rather than a coaching
+# adjustment. The engine has its own independent red-flag triggers too (see
+# safety.py), so an LLM can only ever ADD an escalation, never remove one.
+SEVERITIES = {"none", "mild", "moderate", "severe", "red_flag"}
+
+# Activity classes an episode can gate. Closed, so a gate is machine-checkable
+# against a session rather than a sentence someone has to interpret.
+ACTIVITY_CLASSES = {"run", "walk", "gym", "impact", "upper_body", "lower_body",
+                    "all"}
 
 GOAL_POLICIES = {"monotonic", "guarded"}
 GOAL_STATUSES = {"active", "paused", "achieved", "abandoned"}
@@ -305,6 +336,8 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
                 problems.append(f"'body_fat_pct' is a 0-100 percentage, got {v!r}")
     if dataset == "context":
         problems += _enum(rec, "mode", CONTEXT_MODES)
+    if dataset == "medical":
+        problems += _validate_medical(rec)
     if dataset == "inferences":
         if rec.get("kind") not in INFERENCE_KINDS:
             problems.append(f"'kind' must be one of {sorted(INFERENCE_KINDS)}, "
@@ -328,6 +361,60 @@ def _enum(rec: dict, key: str, allowed: set[str], *,
     if v not in allowed:
         return [f"'{key}' must be one of {sorted(allowed)}, got {v!r}"]
     return []
+
+
+def _validate_medical(rec: dict) -> list[str]:
+    """One line of a medical episode.
+
+    Stricter than the observation datasets, deliberately: this is the input to
+    a safety decision, so a malformed line must fail loudly at `vitai validate`
+    rather than silently produce no gate. A missing gate is the failure mode
+    that matters here - the athlete trains on an injury nobody flagged.
+    """
+    from .anatomy import is_site, known_sites
+
+    problems: list[str] = []
+    for key in ("slug", "title"):
+        if not isinstance(rec.get(key), str) or not rec.get(key):
+            problems.append(f"'{key}' must be a non-empty string")
+    problems += _enum(rec, "kind", MEDICAL_KINDS)
+    problems += _enum(rec, "status", MEDICAL_STATUSES)
+    problems += _enum(rec, "severity", SEVERITIES)
+    problems += _enum(rec, "provider_type", PROVIDER_TYPES, optional=True)
+
+    if (site := rec.get("body_site")) is not None and not is_site(site):
+        problems.append(f"unknown 'body_site' {site!r} - use one of "
+                        f"{', '.join(known_sites())} (semantics/body_sites.toml)")
+    if (rd := rec.get("resolved_date")) is not None:
+        if _bad_date(rd):
+            problems.append(f"bad resolved_date {rd!r} (ISO-8601 YYYY-MM-DD)")
+        elif isinstance(rec.get("date"), str) and not _bad_date(rec["date"]) \
+                and rd < rec["date"]:
+            problems.append(f"resolved_date {rd} precedes onset {rec['date']}")
+    # A resolved episode without a closing date leaves the window open forever,
+    # which quietly breaks forgiveness maths downstream (a day is excused iff it
+    # falls inside an episode window).
+    if rec.get("status") == "resolved" and not rec.get("resolved_date"):
+        problems.append("a resolved episode needs a 'resolved_date' "
+                        "(it closes the episode window)")
+    if rec.get("status") != "resolved" and rec.get("resolved_date"):
+        problems.append("'resolved_date' set but status is not 'resolved'")
+
+    for cls in _restriction_classes(rec):
+        if cls not in ACTIVITY_CLASSES:
+            problems.append(f"unknown activity class {cls!r} in 'restricts' - "
+                            f"use one of {sorted(ACTIVITY_CLASSES)}")
+    return problems
+
+
+def _restriction_classes(rec: dict) -> list[str]:
+    """Activity classes named by a `restricts` field (comma or space separated)."""
+    raw = rec.get("restricts")
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        return [str(x).strip() for x in raw if str(x).strip()]
+    return [p.strip() for p in str(raw).replace(",", " ").split() if p.strip()]
 
 
 def _validate_pain_location(rec: dict) -> list[str]:
