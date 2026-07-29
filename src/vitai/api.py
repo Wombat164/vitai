@@ -25,8 +25,9 @@ from .config import Config, load_config
 from .contributions import compute_contributions, goal_progress
 from .db import build_db
 from .jsonl import load
-from .policy import State, plan_churn, state
+from .policy import State, context_on, plan_churn, state
 from .report import build_report
+from .resolution import live_inferences, resolve, retractions
 from .schema import KEYS
 from .verdicts import compute_verdicts
 
@@ -50,16 +51,59 @@ class Vitai:
         return load(self.root / "data", name)
 
     def datasets(self) -> dict[str, list[dict]]:
+        """Raw claims, exactly as recorded. See `canonical()` for adjudicated."""
         return {name: self.dataset(name) for name in KEYS}
 
+    def resolution(self) -> dict:
+        """Run the resolution layer: canonical rows plus the audit trail.
+
+        Everything the engine judges on comes from here, not from
+        `datasets()` - a verdict computed over unresolved claims would double
+        count every day the athlete happens to own two devices.
+        """
+        cfg = self.config
+        return resolve(self.datasets(), precedence=cfg.precedence,
+                       source_order=cfg.source_order)
+
+    def canonical(self, name: str | None = None):
+        """Adjudicated rows: one canonical record per quantity per date."""
+        resolved = self.resolution()["canonical"]
+        if name is None:
+            return resolved
+        if name not in KEYS:
+            raise KeyError(f"unknown dataset {name!r}; one of {sorted(KEYS)}")
+        return resolved[name]
+
+    def explanations(self) -> list[dict]:
+        """Which source won a contested field, and why (G29).
+
+        Routine output, not an error channel: the athlete should be able to
+        ask "why does the record say 2,443" and get an answer every time, not
+        only when something went wrong.
+        """
+        return self.resolution()["explanations"]
+
+    def conservation(self) -> list[dict]:
+        """Conservation tripwires: flagged, never auto-fixed."""
+        return self.resolution()["tripwires"]
+
+    def retractions(self) -> list[dict]:
+        """What stopped being true, and what fell with it (JTMS cascade)."""
+        return retractions(self.datasets())
+
+    def context(self, on: date | str | None = None) -> dict | None:
+        """The situational mode in force on a date (G34)."""
+        return context_on(self.dataset("context"),
+                          on or date.today())
+
     def verdicts(self, today: date | None = None) -> list[dict]:
-        d = self.datasets()
+        d = self.canonical()
         return compute_verdicts(self.config, d["weight"], d["daily"],
                                 d["sessions"], today=today,
                                 goals=d["goals"], thresholds=d["thresholds"])
 
     def rollup(self, today: date | None = None) -> str:
-        d = self.datasets()
+        d = self.canonical()
         return build_report(self.config, d["weight"], d["daily"],
                             d["sessions"], today=today)
 
@@ -96,8 +140,9 @@ class Vitai:
         d = self.datasets()
         return plan_churn(d["goals"], d["thresholds"], self.verdicts(today=today))
 
-    def _derivations(self, today: date | None = None) -> dict[str, list[dict]]:
-        d = self.datasets()
+    def _derivations(self, resolved: dict,
+                     today: date | None = None) -> dict[str, list[dict]]:
+        d = resolved["canonical"]
         contributions, milestones = compute_contributions(
             d["goals"], d["thresholds"], d["daily"], d["sessions"])
         verdicts = compute_verdicts(self.config, d["weight"], d["daily"],
@@ -111,12 +156,26 @@ class Vitai:
             "plan_churn": plan_churn(d["goals"], d["thresholds"], verdicts),
             "goal_progress": goal_progress(d["goals"], d["thresholds"],
                                            d["daily"], d["sessions"], on),
+            "claims": resolved["claims"],
+            "resolution": resolved["explanations"],
+            "justifications": resolved["justifications"],
+            "conservation": resolved["tripwires"],
+            "retractions": retractions(self.datasets()),
         }
 
     def build(self, today: date | None = None) -> Path:
-        """Rebuild derived/: SQLite read model (incl. verdicts) + weekly.md."""
-        d = self.datasets()
-        derivations = self._derivations(today=today)
+        """Rebuild derived/: SQLite read model (incl. verdicts) + weekly.md.
+
+        Resolution runs FIRST and once: the primary tables carry canonical
+        rows, so a consumer reading `daily` gets adjudicated truth without
+        having to know the resolution rules.
+        """
+        resolved = self.resolution()
+        d = dict(resolved["canonical"])
+        # An inference whose justification was retracted stops being presented
+        # as current knowledge, though the line itself remains in the file.
+        d["inferences"] = live_inferences(self.datasets())
+        derivations = self._derivations(resolved, today=today)
         derived = self.root / "derived"
         db = build_db(derived, d, verdicts=derivations["verdicts"],
                       derivations=derivations)

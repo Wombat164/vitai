@@ -56,6 +56,34 @@ loosened within a week of a week that metric was missed, shown with whatever
 reason the athlete recorded. It is a prompt for the coach, not a judgment -
 nothing is blocked, and an explained deload is meant to read as one.
 
+## vitai resolve
+
+Where the record's numbers came from when more than one source claimed the
+same thing.
+
+    vitai resolve                    # every contested field, with the reason
+    vitai resolve --date 2030-06-09  # just that day
+    vitai resolve --json             # JSONL, for scripts
+
+Three sections, in order: the contested fields (which source won, over what,
+and why - marked `!` where the sources actually disagreed rather than merely
+overlapped), the conservation tripwires, and anything retracted.
+
+This is routine output, not an error report. "Why does the record say 2,443
+when my app says 2,844" should always have an answer, and the answer is
+per-quantity precedence: the watch measured the burn, the app modelled it,
+and the record holds one of them rather than their sum.
+
+## vitai context
+
+The situational mode in force on a date - what was going on around the
+athlete, which is what lets the engine tell a missing weigh-in apart from a
+skipped one.
+
+    vitai context                    # today
+    vitai context --on 2030-06-01    # as it stood then
+    vitai context --json
+
 ## vitai infer (opt-in)
 
 Runs the intelligence layer through a pluggable model backend (your Claude

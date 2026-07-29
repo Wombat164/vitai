@@ -11,7 +11,7 @@ session types - not to enforce ceremony.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 # dataset -> ordered keys (column order for the SQLite read model)
 KEYS: dict[str, list[str]] = {
@@ -24,16 +24,32 @@ KEYS: dict[str, list[str]] = {
     # it. All gen-2 (see KEY_GENERATION); gen-1 weight lines predate them.
     "weight": ["date", "kg", "source", "note", "body_fat_pct",
                "kg_lo", "kg_hi", "body_fat_lo", "body_fat_hi"],
+    # `hip_pain` is RETIRED at generation 2 in favour of `pain` + `pain_site`:
+    # the hip was this record's founding injury, but a record that can only
+    # describe one joint cannot describe a second one. Old lines keep it and
+    # keep validating; the engine reads them as pain at site "hip" (see
+    # `canonical_daily`). New lines write `pain`/`pain_site` instead.
     "daily": ["date", "steps", "distance_km", "active_min", "kcal_out", "kcal_in",
-              "protein_g", "sleep_h", "rhr", "hip_pain", "alcohol", "note"],
+              "protein_g", "sleep_h", "rhr", "hip_pain", "alcohol", "note",
+              "source", "mood", "feel", "coverage", "pain", "pain_site"],
+    # `location` is RETIRED at generation 2, split into `place` (coarse, and
+    # deliberately coarse - "home"/"work"/a travel slug, never an address) and
+    # `route` (a personal slug the athlete names). Free text could not be
+    # grouped, compared, or safely shared.
     "sessions": ["date", "type", "distance_km", "duration_s", "avg_hr", "max_hr",
-                 "cadence", "kcal", "location", "rpe", "note"],
+                 "cadence", "kcal", "location", "rpe", "note",
+                 "source", "start_time", "elevation_m", "setting", "route",
+                 "place", "with", "context", "planned", "weather"],
     # Third data tier: MODEL-INFERRED knowledge. Append-only like everything
     # else, but carries provenance (model, evidence, confidence) because it is
     # neither ground truth (observed) nor rebuildable (derived). The engine
     # projects it; it never feeds the deterministic number path.
+    # `depends_on` (gen 2) is the JTMS justification link: the claim ids this
+    # inference rests on. Retracting one of those claims retracts the
+    # inference with it, rather than leaving a stale belief behind whose
+    # evidence quietly no longer exists.
     "inferences": ["date", "kind", "statement", "confidence", "model",
-                   "evidence", "note"],
+                   "evidence", "note", "depends_on"],
     # --- policy datasets (increment 1) --------------------------------------
     # These are DATED POLICY, not observations: what the athlete was aiming at,
     # and when. A goal is edited by appending a new line with the same `slug`
@@ -67,10 +83,35 @@ KEYS: dict[str, list[str]] = {
     # the engine derives; `source` carries authorship (G31) so a hand-logged
     # race finish is never confused with an engine-derived crossing.
     "achievements": ["date", "title", "goal", "source", "note"],
+    # --- increment 2 -------------------------------------------------------
+    # Sparse ANCHOR-class reads that do not come off the scale: a tape measure,
+    # a DEXA scan, an InBody. Anchors top the resolution precedence ladder and,
+    # like weight, are read as TENDENCIES over a sparse trend - never as a
+    # single point. `body_fat_pct` measured BY the scale already rides the
+    # `weight` line (gen-2, G36/G37); this dataset is for the other instruments.
+    "measurements": ["date", "kind", "value", "source", "note"],
+    # Dated situational mode (G34): what was going on around the athlete. The
+    # engine uses it to explain missingness rather than flag it - an absent
+    # weigh-in in a week with no scale is not a lapse - and the coach uses it
+    # to constrain what it asks for. Effective-dated like all policy (P2).
+    "context": ["date", "mode", "facilities", "place", "source", "note"],
 }
 
 SESSION_TYPES = {"run", "gym_a", "gym_b", "walk", "test", "other"}
 INFERENCE_KINDS = {"pattern", "risk", "recommendation", "observation", "question"}
+
+# Generation-2 vocabularies. All are COARSE on purpose: a closed, small set is
+# groupable and comparable, and (for `place` and `weather`) carries far less
+# about the athlete than the free text it replaces.
+FEELS = {"fun", "neutral", "chore"}
+COVERAGES = {"full", "partial", "manual"}
+SETTINGS = {"outdoor", "indoor", "treadmill", "home"}
+SESSION_CONTEXTS = {"commute", "family", "social", "solo", "club"}
+WEATHERS = {"dry", "rain", "hot", "cold", "wind"}
+MEASUREMENT_KINDS = {"body_fat_pct", "waist_cm", "hip_cm", "chest_cm",
+                     "thigh_cm", "arm_cm", "neck_cm", "other"}
+CONTEXT_MODES = {"normal", "vacation", "work", "conference", "weekend",
+                 "social", "deadline", "heatwave", "travel", "illness"}
 
 # Datasets whose lines are keyed by a stable identity rather than date/source:
 # a supersedes chain runs per slug, and the LAST line for a slug is its head.
@@ -94,17 +135,40 @@ EXTERNAL_METRIC = "external"
 # CURRENT_GENERATION for that dataset; new writes stamp `_gen = current`.
 KEY_GENERATION: dict[str, dict[str, int]] = {
     # dataset -> {key: generation it was introduced}. Keys absent here are gen 1.
-    # e.g. increment 2 will add:  "daily": {"mood": 2, "feel": 2, "coverage": 2}
     "weight": {"body_fat_pct": 2, "kg_lo": 2, "kg_hi": 2,
                "body_fat_lo": 2, "body_fat_hi": 2},
+    "daily": {"source": 2, "mood": 2, "feel": 2, "coverage": 2,
+              "pain": 2, "pain_site": 2},
+    "sessions": {"source": 2, "start_time": 2, "elevation_m": 2, "setting": 2,
+                 "route": 2, "place": 2, "with": 2, "context": 2,
+                 "planned": 2, "weather": 2},
+    "inferences": {"depends_on": 2},
 }
+
+# The mirror of KEY_GENERATION: the generation at which a key stopped being
+# required. A retired key stays LEGAL forever (an old line that carries it is
+# not wrong, and must keep validating), but a line written at or after the
+# retirement generation is not expected to carry it. Without this, replacing
+# `hip_pain` with `pain` would force every new line to keep writing the field
+# it replaced - a schema that can only ever grow.
+KEY_RETIREMENT: dict[str, dict[str, int]] = {
+    "daily": {"hip_pain": 2},
+    "sessions": {"location": 2},
+}
+
 CURRENT_GENERATION: dict[str, int] = {name: 1 for name in KEYS}
-CURRENT_GENERATION["weight"] = 2
+for _ds in ("weight", "daily", "sessions", "inferences"):
+    CURRENT_GENERATION[_ds] = 2
 
 
 def key_generation(dataset: str, key: str) -> int:
     """Generation a key was introduced in (1 = founding)."""
     return KEY_GENERATION.get(dataset, {}).get(key, 1)
+
+
+def key_retirement(dataset: str, key: str) -> int | None:
+    """Generation a key stopped being required, or None if it is still current."""
+    return KEY_RETIREMENT.get(dataset, {}).get(key)
 
 
 def line_generation(rec: dict) -> int:
@@ -124,6 +188,7 @@ _TYPES: dict[str, tuple[type, ...]] = {
     "body_fat_pct": _NUMERIC, "kg_lo": _NUMERIC, "kg_hi": _NUMERIC,
     "body_fat_lo": _NUMERIC, "body_fat_hi": _NUMERIC,
     "target": _NUMERIC, "guard_pct": _NUMERIC, "value": _NUMERIC,
+    "mood": (int,), "pain": (int,), "elevation_m": _NUMERIC,
 }
 
 # extra keys that are always legal (the supersedes mechanic + schema generation)
@@ -140,6 +205,22 @@ def _bad_date(v: object) -> bool:
         return True
 
 
+def _bad_time(v: object) -> bool:
+    """An ISO-8601 timestamp, offset optional but strongly preferred.
+
+    The offset is what makes two platforms' claims about the same run
+    comparable across a timezone change (F3's day-boundary rule), so the
+    resolution layer's time-intersect match needs it.
+    """
+    if not isinstance(v, str):
+        return True
+    try:
+        datetime.fromisoformat(v)
+        return False
+    except ValueError:
+        return True
+
+
 def validate_record(dataset: str, rec: dict) -> list[str]:
     """Problems with one record; empty list means valid."""
     problems: list[str] = []
@@ -148,9 +229,14 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
     if "_gen" in rec and line_generation(rec) != rec["_gen"]:
         problems.append(f"'_gen' must be a positive integer, got {rec['_gen']!r}")
     for k in keys:
-        # A key is required only if it existed at this line's generation; a
-        # newer key legitimately absent from an older line is NOT missing.
-        if k not in rec and key_generation(dataset, k) <= line_gen:
+        # A key is required only if it existed at this line's generation AND
+        # had not yet been retired by it. A newer key legitimately absent from
+        # an older line is NOT missing, and neither is a retired key absent
+        # from a newer one.
+        if k in rec or key_generation(dataset, k) > line_gen:
+            continue
+        retired = key_retirement(dataset, k)
+        if retired is None or line_gen < retired:
             problems.append(f"missing key '{k}' (use null for unknown, never omit)")
     for k in rec:
         if k not in keys and k not in META_KEYS:
@@ -178,9 +264,42 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
             problems.append(f"'alcohol' should be true/false/null, got {a!r}")
     if dataset == "sessions" and rec.get("type") not in SESSION_TYPES:
         problems.append(f"'type' must be one of {sorted(SESSION_TYPES)}, got {rec.get('type')!r}")
-    if dataset == "daily" and (p := rec.get("hip_pain")) is not None:
-        if isinstance(p, int) and not isinstance(p, bool) and not 0 <= p <= 10:
-            problems.append(f"'hip_pain' is a 0-10 scale, got {p!r}")
+    if dataset == "daily":
+        for k in ("hip_pain", "pain", "mood"):
+            if (p := rec.get(k)) is not None and isinstance(p, int) \
+                    and not isinstance(p, bool) and not 0 <= p <= 10:
+                problems.append(f"'{k}' is a 0-10 scale, got {p!r}")
+        problems += _enum(rec, "feel", FEELS, optional=True)
+        problems += _enum(rec, "coverage", COVERAGES, optional=True)
+        # A site without a score says nothing, and a NON-ZERO score without a
+        # site is the ambiguity `pain_site` exists to remove. Zero needs no
+        # body part: "nothing hurt today" is a complete statement, and it is
+        # deliberately distinct from null, which means nobody looked.
+        if (p := rec.get("pain")) is not None and p and not rec.get("pain_site"):
+            problems.append("'pain' needs a 'pain_site' (which body part)")
+        if rec.get("pain_site") and rec.get("pain") is None \
+                and rec.get("hip_pain") is None:
+            problems.append("'pain_site' without a 'pain' score says nothing")
+    if dataset == "sessions":
+        problems += _enum(rec, "setting", SETTINGS, optional=True)
+        problems += _enum(rec, "context", SESSION_CONTEXTS, optional=True)
+        problems += _enum(rec, "weather", WEATHERS, optional=True)
+        if (st := rec.get("start_time")) is not None and _bad_time(st):
+            problems.append(f"bad start_time {st!r} (ISO-8601, e.g. "
+                            "'2030-05-01T07:12:00+02:00')")
+        if (p := rec.get("planned")) is not None and not isinstance(p, str):
+            problems.append(f"'planned' is a goal/plan slug or null, got {p!r}")
+    if dataset == "measurements":
+        problems += _enum(rec, "kind", MEASUREMENT_KINDS)
+        if rec.get("value") is None:
+            problems.append("'value' is required (a measurement with no "
+                            "number is not a measurement)")
+        if rec.get("kind") == "body_fat_pct" and (v := rec.get("value")) is not None:
+            if isinstance(v, _NUMERIC) and not isinstance(v, bool) \
+                    and not 0 < v < 100:
+                problems.append(f"'body_fat_pct' is a 0-100 percentage, got {v!r}")
+    if dataset == "context":
+        problems += _enum(rec, "mode", CONTEXT_MODES)
     if dataset == "inferences":
         if rec.get("kind") not in INFERENCE_KINDS:
             problems.append(f"'kind' must be one of {sorted(INFERENCE_KINDS)}, "

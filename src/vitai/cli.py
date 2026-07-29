@@ -157,6 +157,72 @@ def cmd_goals(args: argparse.Namespace) -> None:
                   f"{e['before']:g} -> {e['after']:g} after a miss ({why})")
 
 
+def cmd_resolve(args: argparse.Namespace) -> None:
+    """Show the adjudication: which source won each contested field, and why.
+
+    Deliberately a ROUTINE command rather than an error report (G29). The
+    athlete should always be able to ask why the record says what it says.
+    """
+    root = _root(args)
+    res = Vitai(root).resolution()
+    expl = res["explanations"]
+    trips = res["tripwires"]
+    rets = Vitai(root).retractions()
+    if args.date:
+        expl = [e for e in expl if e["date"] == args.date]
+        trips = [t for t in trips if t["date"] == args.date]
+        rets = [r for r in rets if r["date"] == args.date]
+    if args.json:
+        for row in expl:
+            print(json.dumps({"kind": "resolution", **row}))
+        for row in trips:
+            print(json.dumps({"kind": "conservation", **row}))
+        for row in rets:
+            print(json.dumps({"kind": "retraction", **row}))
+        return
+
+    if not expl:
+        print("nothing contested - every quantity had a single witness")
+    else:
+        print(f"resolved {len(expl)} contested field(s):")
+        for e in expl:
+            mark = "!" if e.get("disagreed") else " "
+            print(f" {mark} {e['date']} {e['dataset']}.{e['field']}: "
+                  f"{e['chosen_source']}={e['chosen_value']} "
+                  f"over {e['over_source']}={e['over_value']}")
+            print(f"     {e['reason']}")
+    if trips:
+        print("\nconservation tripwires (flagged, never auto-fixed):")
+        for t in trips:
+            print(f"  {t['date']} [{t['severity']}] {t['kind']}: {t['detail']}")
+    if rets:
+        print("\nretracted:")
+        for r in rets:
+            arrow = f" (cascaded from {r['cascaded_from']})" if r["cascaded_from"] else ""
+            print(f"  {r['date']} {r['kind']} {r['claim_id']}{arrow}: {r['reason']}")
+
+
+def cmd_context(args: argparse.Namespace) -> None:
+    """The situational mode in force on a date."""
+    root = _root(args)
+    on = args.on or date.today().isoformat()
+    current = Vitai(root).context(on)
+    if current is None:
+        print(f"no context recorded on or before {on}")
+        return
+    if args.json:
+        print(json.dumps(current))
+        return
+    bits = [f"{on}: mode={current.get('mode')}"]
+    for key in ("place", "facilities"):
+        if current.get(key):
+            bits.append(f"{key}={current[key]}")
+    print(" - ".join(bits) + (f"\n  since {current.get('date')}"
+                              if current.get("date") != on else ""))
+    if current.get("note"):
+        print(f"  {current['note']}")
+
+
 def cmd_infer(args: argparse.Namespace) -> None:
     """Opt-in intelligence layer: a model reads the record, validated new
     knowledge is appended to data/inferences.jsonl. Never touches numbers."""
@@ -245,6 +311,8 @@ def main(argv: list[str] | None = None) -> None:
         ("status", cmd_status, "one-line state: latest weight, rate, tripwires"),
         ("verdicts", cmd_verdicts, "weekly goal-attainment rows as JSONL (the platform contract)"),
         ("goals", cmd_goals, "active goals: progress, dates, contributions, flagged edits"),
+        ("resolve", cmd_resolve, "which source won each contested field, and why"),
+        ("context", cmd_context, "the situational mode in force on a date"),
         ("infer", cmd_infer, "opt-in: model reads the record, appends validated inferences"),
     ]:
         p = sub.add_parser(name, help=help_)
@@ -259,6 +327,16 @@ def main(argv: list[str] | None = None) -> None:
                            help="reconstruct goals as they stood on this date")
             p.add_argument("--recent", type=int, default=10, metavar="N",
                            help="show the last N per-goal contributions (0 = none)")
+        if name == "resolve":
+            p.add_argument("--json", action="store_true",
+                           help="emit resolution rows as JSONL")
+            p.add_argument("--date", metavar="YYYY-MM-DD",
+                           help="only this date")
+        if name == "context":
+            p.add_argument("--json", action="store_true",
+                           help="emit the context line as JSON")
+            p.add_argument("--on", metavar="YYYY-MM-DD",
+                           help="the date to reconstruct (default: today)")
         p.set_defaults(fn=fn)
 
     args = ap.parse_args(argv)

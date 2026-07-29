@@ -117,6 +117,8 @@ the key name. Three datasets record what happened:
 | `data/goals.jsonl` | goal declaration or edit | `slug`, `metric`, `target`, `policy`, `motivator` |
 | `data/thresholds.jsonl` | threshold change | `key`, `value`, `change_kind`, `reason` |
 | `data/achievements.jsonl` | recorded accomplishment | `title`, `goal`, `source` |
+| `data/measurements.jsonl` | anchor read off the scale | `kind`, `value`, `source` |
+| `data/context.jsonl` | situational mode change | `mode`, `facilities`, `place` |
 
 Corrections are appended with `"supersedes":"<date>/<source>"` - a wrong line
 is never edited. The audit chain is the point: how a number changed is often
@@ -136,12 +138,31 @@ not in code - the engine is the same for everyone, the thresholds are yours.
 Once you change one, record it in `thresholds.jsonl` so the old value keeps
 governing the weeks it governed.
 
+### One truth per quantity
+
+Two sources will eventually describe the same day, and a calorie is burned
+once. The engine resolves competing claims into ONE canonical value per
+quantity - field by field, by source precedence - and never sums them. The
+watch can win `kcal_out` while the food ledger wins `kcal_in`, on the same
+day. One run logged on two platforms is matched by overlapping timestamps
+and collapses to one run.
+
+Raw claims are all retained, and `vitai resolve` explains every contested
+field: which source won and why. Physically impossible arithmetic (sessions
+burning more than the day did) is flagged as a conservation tripwire and
+never quietly fixed - the contradiction is the useful part.
+
+Each canonical value carries a justification, so a correction cascades:
+retract the observation and anything that stood on it retracts too, rather
+than lingering as a belief whose evidence no longer exists.
+
 ### Schema migrations
 
 | Contract | Version | Change | What an existing repo must do |
 |---|---|---|---|
 | 1 | 0.2.0 | Founding tables + `verdicts`, `meta` | - |
-| 2 | 0.3.0 | Adds `goals`, `thresholds`, `achievements` datasets; `contributions`, `milestones`, `plan_churn`, `goal_progress` derivations; a `goal` column on `verdicts`; `dataset`/`session_type` scope fields on goals | Nothing required - `vitai build` creates the new files and tables, and a repo with no goals simply has empty ones. To adopt: append goal lines, and move any threshold you have since changed out of `vitai.toml` into `thresholds.jsonl` |
+| 2 | unreleased | Adds `goals`, `thresholds`, `achievements` datasets; `contributions`, `milestones`, `plan_churn`, `goal_progress` derivations; a `goal` column on `verdicts`; `dataset`/`session_type` scope fields on goals | Nothing required - `vitai build` creates the new files and tables, and a repo with no goals simply has empty ones. To adopt: append goal lines, and move any threshold you have since changed out of `vitai.toml` into `thresholds.jsonl` |
+| 3 | unreleased | Adds `measurements` + `context` datasets, generation-2 provenance/context fields on `daily` and `sessions`, and the resolution layer: primary tables now hold CANONICAL rows, with `claims`, `resolution`, `justifications`, `conservation` and `retractions` alongside | Nothing required. `hip_pain` is retired, not removed: old lines keep validating and are read as `pain` at site `hip`, and the same applies to `sessions.location` -> `place`/`route`. A single-source repo resolves to exactly what it built before. To adopt: start writing `source` on new lines, and add `[resolution.precedence]` to `vitai.toml` when a second source appears |
 
 ## Skills
 

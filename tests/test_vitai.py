@@ -91,27 +91,43 @@ def test_validate_supersedes_key_is_legal():
 
 # ---- schema generations (G25) - the shape-history-stability regression ------
 
-def test_additive_field_does_not_invalidate_old_lines(monkeypatch):
+def test_additive_field_does_not_invalidate_old_lines():
     """THE bug the whole-model redteam found: adding a nullable field in a
-    later generation must NOT make every pre-existing line fail validation."""
-    import vitai.schema as sch
-    # Simulate increment 2 adding a gen-2 `mood` key to `daily`.
-    monkeypatch.setitem(sch.KEYS, "daily", sch.KEYS["daily"] + ["mood"])
-    monkeypatch.setattr(sch, "KEY_GENERATION", {"daily": {"mood": 2}})
+    later generation must NOT make every pre-existing line fail validation.
 
+    Increment 2 made this real rather than simulated - `mood` and the rest of
+    the gen-2 daily fields are now in the live schema, so this asserts against
+    it directly.
+    """
     old_line = {"date": "2030-05-01", "steps": 8000, "distance_km": None,
                 "active_min": None, "kcal_out": None, "kcal_in": None,
                 "protein_g": None, "sleep_h": None, "rhr": None, "hip_pain": None,
-                "alcohol": None, "note": None}  # gen 1, no `mood`
+                "alcohol": None, "note": None}  # gen 1, no gen-2 keys at all
     assert validate_record("daily", old_line) == []  # NOT "missing key 'mood'"
 
-    new_line = {**old_line, "mood": 7, "_gen": 2}    # gen-2 line carries it
+    new_line = {**old_line, "_gen": 2, "source": None, "mood": 7, "feel": None,
+                "coverage": None, "pain": None, "pain_site": None}
+    del new_line["hip_pain"]  # retired at gen 2; a new line need not carry it
     assert validate_record("daily", new_line) == []
 
-    # A gen-2 line that OMITS the gen-2 key IS flagged (the rule still bites
-    # for keys that existed at the line's own generation).
+    # A gen-2 line that OMITS a gen-2 key IS flagged (the rule still bites for
+    # keys that existed at the line's own generation).
     missing = {**old_line, "_gen": 2}
     assert any("mood" in p for p in validate_record("daily", missing))
+
+
+def test_retired_key_stays_legal_but_stops_being_required():
+    """`hip_pain` was replaced by `pain`+`pain_site`, not deleted: a line that
+    still carries it is history, not an error."""
+    gen1 = {"date": "2030-05-01", "steps": 8000, "distance_km": None,
+            "active_min": None, "kcal_out": None, "kcal_in": None,
+            "protein_g": None, "sleep_h": None, "rhr": None, "hip_pain": 2,
+            "alcohol": None, "note": None}
+    assert validate_record("daily", gen1) == []
+    # ...and a gen-2 line may still carry it without complaint.
+    gen2 = {**gen1, "_gen": 2, "source": None, "mood": None, "feel": None,
+            "coverage": None, "pain": None, "pain_site": None}
+    assert validate_record("daily", gen2) == []
 
 
 def test_gen_marker_must_be_positive_int():
@@ -348,9 +364,11 @@ def test_api_build_projects_verdicts_and_contract(tmp_path):
         "SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"weight", "daily", "sessions", "inferences", "verdicts", "meta",
             "goals", "thresholds", "achievements", "contributions",
-            "milestones", "plan_churn", "goal_progress"} <= tables
+            "milestones", "plan_churn", "goal_progress",
+            "measurements", "context", "claims", "resolution",
+            "justifications", "conservation", "retractions"} <= tables
     assert con.execute("SELECT COUNT(*) FROM inferences").fetchone()[0] == 1
-    assert con.execute("SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "2"
+    assert con.execute("SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "3"
     con.close()
     assert v.status_line().startswith("77.3 kg")
     assert isinstance(v.verdicts(), list)

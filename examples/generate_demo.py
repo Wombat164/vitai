@@ -37,6 +37,10 @@ DAYS = 84
 # Day offsets of the travel week (the ISO week beginning 2030-05-27), which the
 # athlete misses and then responds to by lowering the floor on 2030-06-06.
 TRAVEL_WEEK = (49, 55)
+# Day offset from which the athlete's lines carry generation-2 provenance and
+# context fields. Before it they are founding-shape lines - deliberately, so
+# the committed demo proves both shapes coexist in one file.
+GEN2_FROM = 42
 
 TOML = (
     "# Demo athlete thresholds (synthetic).\n"
@@ -47,7 +51,17 @@ TOML = (
     "rhr_baseline = 51\n"
     "steps_floor = 9000\n"
     "sleep_floor_h = 7.0\n"
-    "pain_gate = 3\n"
+    "pain_gate = 3\n\n"
+    "# Which source wins which quantity when two of them describe one day.\n"
+    "# The watch measures burn; the calorie app only models it. The app owns\n"
+    "# intake, which the watch never sees at all.\n"
+    "[resolution]\n"
+    'source_order = ["scale", "watch", "app"]\n\n'
+    "[resolution.precedence]\n"
+    'kcal_out = ["watch", "app"]\n'
+    'kcal_in = ["app"]\n'
+    'protein_g = ["app"]\n'
+    'steps = ["watch", "app"]\n'
 )
 
 
@@ -67,8 +81,13 @@ def _build(target: Path) -> None:
     for i in range(DAYS):
         d = (start + timedelta(days=i)).isoformat()
         dow = (start + timedelta(days=i)).weekday()
+        gen2 = i >= GEN2_FROM
         kg -= 0.05 * (0.7 + 0.6 * rng.random())            # ~0.24-0.45 kg/wk
-        if rng.random() < 0.8:
+        # No scale during the travel week - the weigh-ins are genuinely absent,
+        # and context.jsonl says why. An engine that flagged that as a lapse
+        # would be punishing the athlete for being away from their bathroom.
+        weighed = rng.random() < 0.8 and not TRAVEL_WEEK[0] <= i <= TRAVEL_WEEK[1]
+        if weighed:
             weight.append({"date": d, "kg": round(kg + rng.gauss(0, 0.25), 1),
                            "source": "scale", "note": None})
         steps = int(rng.gauss(11500 if dow < 5 else 8300, 2100))
@@ -77,32 +96,62 @@ def _build(target: Path) -> None:
             # week the athlete reacts to by lowering the floor a few days
             # later - the sequence the suspicious-edit flag exists to catch.
             steps = int(rng.gauss(5600, 900))
-        daily.append({"date": d, "steps": max(2500, steps),
-                      "distance_km": round(max(2.5, steps) * 0.00075, 1),
-                      "active_min": int(max(60, rng.gauss(300, 70))),
-                      "kcal_out": int(rng.gauss(2850, 220)),
-                      "kcal_in": int(rng.gauss(2150, 260)),
-                      "protein_g": int(rng.gauss(145, 25)),
-                      "sleep_h": round(max(4.5, rng.gauss(7.3, 0.7)), 1),
-                      "rhr": int(rng.gauss(51, 2.2)),
-                      "hip_pain": rng.choice([0] * 10 + [1, 1, 2]),
-                      "alcohol": rng.random() < 0.12, "note": None})
+        row = {"date": d, "steps": max(2500, steps),
+               "distance_km": round(max(2.5, steps) * 0.00075, 1),
+               "active_min": int(max(60, rng.gauss(300, 70))),
+               "kcal_out": int(rng.gauss(2850, 220)),
+               "kcal_in": int(rng.gauss(2150, 260)),
+               "protein_g": int(rng.gauss(145, 25)),
+               "sleep_h": round(max(4.5, rng.gauss(7.3, 0.7)), 1),
+               "rhr": int(rng.gauss(51, 2.2)),
+               "alcohol": rng.random() < 0.12, "note": None}
+        pain = rng.choice([0] * 10 + [1, 1, 2])
+        if gen2:
+            # The athlete's tracker gained provenance mid-block. Both shapes
+            # live in one file from here on, which is the point: the migration
+            # is additive, and the old lines never had to be rewritten.
+            row.update({"_gen": 2, "source": "watch", "pain": pain,
+                        "pain_site": "hip" if pain else None,
+                        "mood": max(1, min(10, int(rng.gauss(7, 1.5)))),
+                        "feel": rng.choice(["fun", "neutral", "neutral", "chore"]),
+                        "coverage": "full"})
+        else:
+            row["hip_pain"] = pain
+        daily.append(row)
         if dow in (1, 3):                                   # Tue/Thu runs
             hard = rng.random() < 0.3
             km = round(max(3.0, rng.gauss(6.5 if not hard else 5.0, 1.0)), 2)
-            sessions.append({"date": d, "type": "run", "distance_km": km,
-                             "duration_s": int(km * rng.gauss(390, 25)),
-                             "avg_hr": int(rng.gauss(166 if hard else 147, 5)),
-                             "max_hr": None, "cadence": int(rng.gauss(168, 4)),
-                             "kcal": int(km * 61), "location": None,
-                             "rpe": 7 if hard else 4, "note": None})
+            run = {"date": d, "type": "run", "distance_km": km,
+                   "duration_s": int(km * rng.gauss(390, 25)),
+                   "avg_hr": int(rng.gauss(166 if hard else 147, 5)),
+                   "max_hr": None, "cadence": int(rng.gauss(168, 4)),
+                   "kcal": int(km * 61), "rpe": 7 if hard else 4, "note": None}
+            if gen2:
+                run.update({"_gen": 2, "source": "watch",
+                            "start_time": f"{d}T18:10:00+02:00",
+                            "elevation_m": round(max(0.0, rng.gauss(35, 15)), 1),
+                            "setting": "outdoor", "route": "canal-loop",
+                            "place": "home", "with": None, "context": "solo",
+                            "planned": "running",
+                            "weather": rng.choice(["dry", "dry", "rain", "wind"])})
+            else:
+                run["location"] = None
+            sessions.append(run)
         if dow in (5, 6) and rng.random() < 0.8:            # weekend gym
-            sessions.append({"date": d, "type": rng.choice(["gym_a", "gym_b"]),
-                             "distance_km": None,
-                             "duration_s": int(rng.gauss(3300, 400)),
-                             "avg_hr": None, "max_hr": None, "cadence": None,
-                             "kcal": None, "location": None,
-                             "rpe": rng.choice([5, 6]), "note": None})
+            gym = {"date": d, "type": rng.choice(["gym_a", "gym_b"]),
+                   "distance_km": None,
+                   "duration_s": int(rng.gauss(3300, 400)),
+                   "avg_hr": None, "max_hr": None, "cadence": None,
+                   "kcal": None, "rpe": rng.choice([5, 6]), "note": None}
+            if gen2:
+                gym.update({"_gen": 2, "source": "watch",
+                            "start_time": f"{d}T10:30:00+02:00",
+                            "elevation_m": None, "setting": "indoor",
+                            "route": None, "place": "home", "with": None,
+                            "context": "solo", "planned": None, "weather": None})
+            else:
+                gym["location"] = None
+            sessions.append(gym)
     inferences = [
         {"date": (END - timedelta(days=9)).isoformat(), "kind": "pattern",
          "statement": "Easy-run heart rate drifts over the cap in weeks where "
@@ -126,14 +175,44 @@ def _build(target: Path) -> None:
                      "max_hr": None, "cadence": 166, "kcal": int(21.1 * 61),
                      "location": None, "rpe": 8,
                      "note": "unplanned - joined a group long run"})
-    sessions.sort(key=lambda s: (s["date"], s["type"]))
+    # A richly-contextful day: a rainy Sunday walk with a partner on a route
+    # the athlete has a name for. None of it is a number, and all of it is
+    # what makes the day legible six months later.
+    context_day = (END - timedelta(days=14)).isoformat()
+    sessions.append({
+        "date": context_day, "type": "walk", "distance_km": 6.4,
+        "duration_s": 4920, "avg_hr": 104, "max_hr": None, "cadence": None,
+        "kcal": 290, "rpe": 2, "note": None, "_gen": 2, "source": "watch",
+        "start_time": f"{context_day}T14:05:00+02:00", "elevation_m": 18.0,
+        "setting": "outdoor", "route": "canal-loop", "place": "home",
+        "with": "partner", "context": "family", "planned": None,
+        "weather": "rain"})
+    for row in daily:
+        if row["date"] == context_day:
+            row.update({"mood": 9, "feel": "fun", "coverage": "full"})
+
+    # A two-source day: the calorie app disagrees with the watch about burn,
+    # and owns intake the watch never sees. Field-wise precedence takes the
+    # best witness per quantity - it does not add 2,443 to 2,844.
+    two_source_day = (END - timedelta(days=21)).isoformat()
+    app_claim = {"date": two_source_day, "steps": None, "distance_km": None,
+                 "active_min": None, "kcal_out": 2844, "kcal_in": 2210,
+                 "protein_g": 152, "sleep_h": None, "rhr": None,
+                 "alcohol": None, "note": "logged in the calorie app",
+                 "_gen": 2, "source": "app", "mood": None, "feel": None,
+                 "coverage": "manual", "pain": None, "pain_site": None}
+    daily.append(app_claim)
+    daily.sort(key=lambda r: (r["date"], r.get("source") or ""))
+    sessions.sort(key=lambda s: (s["date"], s["type"], s.get("source") or ""))
 
     goals, thresholds, achievements = _policy(start)
+    context, measurements = _situational(start, END)
 
     for name, rows in (("weight", weight), ("daily", daily),
                        ("sessions", sessions), ("inferences", inferences),
                        ("goals", goals), ("thresholds", thresholds),
-                       ("achievements", achievements)):
+                       ("achievements", achievements), ("context", context),
+                       ("measurements", measurements)):
         (target / "data" / f"{name}.jsonl").write_text(
             _jsonl(rows), encoding="utf-8", newline="\n")
 
@@ -207,6 +286,35 @@ def _policy(start: date) -> tuple[list[dict], list[dict], list[dict]]:
          "note": "unplanned, and the hip held - but it was not budgeted"},
     ]
     return goals, thresholds, achievements
+
+
+def _situational(start: date, end: date) -> tuple[list[dict], list[dict]]:
+    """Context timeline (G34) + the sparse anchor reads (G16)."""
+    context = [
+        {"date": start.isoformat(), "mode": "normal",
+         "facilities": "scale gym routes", "place": "home",
+         "source": "onboard", "note": "baseline setup"},
+        # The travel week, declared. This is what turns a missing weigh-in
+        # from a lapse into a circumstance the engine can account for.
+        {"date": (start + timedelta(days=49)).isoformat(), "mode": "travel",
+         "facilities": "routes", "place": "away", "source": "athlete",
+         "note": "work trip - no scale, no gym, hotel treadmill only"},
+        {"date": (start + timedelta(days=56)).isoformat(), "mode": "normal",
+         "facilities": "scale gym routes", "place": "home",
+         "source": "athlete", "note": "home again"},
+    ]
+    measurements = [
+        {"date": start.isoformat(), "kind": "waist_cm", "value": 92.0,
+         "source": "tape", "note": "morning, unfasted"},
+        {"date": (start + timedelta(days=42)).isoformat(), "kind": "waist_cm",
+         "value": 89.5, "source": "tape", "note": None},
+        {"date": end.isoformat(), "kind": "waist_cm", "value": 88.0,
+         "source": "tape", "note": None},
+        # An anchor-class read the scale cannot produce.
+        {"date": (start + timedelta(days=42)).isoformat(), "kind": "body_fat_pct",
+         "value": 22.4, "source": "dexa", "note": "clinic scan"},
+    ]
+    return context, measurements
 
 
 def _read_all(root: Path) -> dict[str, str]:
