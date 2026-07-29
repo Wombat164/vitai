@@ -237,12 +237,22 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
     Tier-2 proxy read (progressive overload in the strength log + protein adequacy
     + circumference/photo trend -> "likely recomposition, not confirmed", low
     confidence, never a kg-of-muscle number).
-  - *Personal kcal-per-kg is calibrated, not textbook.* The naive 7,700 assumes
-    100% fat; worked from a real cut's fat/lean split the effective figure came to
-    ~6,000-6,500 kcal per scale-kg for a well-run cut. A naive
-    cumulative-deficit-vs-scale-weight arithmetic can report a wildly higher number
-    (a five-figure kcal/kg) - nonsense the model must reject, because a holiday
-    plateau corrupts scale weight while the deficit keeps booking. HIGH.
+  - *Personal kcal-per-kg is calibrated, not textbook - and the DENOMINATOR must
+    be named.* Two different ratios get conflated and must not be: (a)
+    physiological tissue-energy per SCALE-kg (~6,000-6,500 for a well-run cut,
+    since a scale-kg is a fat+lean+water blend, each cheaper than pure fat); and
+    (b) TRACKED-deficit per FAT-kg, which routinely lands well above the 7,700
+    textbook (5-figure numbers appear). Ratio (b) is NOT a physiology finding -
+    a kg of fat is ~7,700 kcal, full stop. Its excess over 7,700 measures
+    TRACKING OPTIMISM: logged expenditure too high (generous TDEE/RMR-by-mode,
+    no metabolic-adaptation discount) plus logged intake too low (universal
+    food under-logging). The excess IS the calibration: tracked-deficit x
+    (7700 / observed-kcal-per-fat-kg) recovers the real deficit (a ~0.7x
+    correction is typical), and this is exactly what the adaptive-TDEE +
+    anchor-audits-source loop (increment 7 / G24) learns from history rather
+    than making the athlete find by hand. A naive
+    cumulative-deficit-vs-scale-weight number is separately nonsense when a
+    holiday plateau corrupts scale weight while the deficit keeps booking. HIGH.
 - **G37 Measurement-uncertainty intervals on observations** (P3/P1). An observed
   reading carries an instrument band (`kg_lo`/`kg_hi`, `body_fat_lo`/`body_fat_hi`)
   distinct from a forecast error band; a wide band (bioimpedance, a jittery scale)
