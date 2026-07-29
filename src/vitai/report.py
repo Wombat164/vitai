@@ -83,17 +83,42 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
             if days:
                 rate = (v0 - v1) / days * 7
                 target = phase_rate_for(cfg, v1)
+                # G69: never render a bare signed quantity whose plain reading
+                # inverts its meaning. This line showed `+1.10 kg/week` to an
+                # athlete who had LOST 1.5 kg, because positive means losing
+                # here. For a scale-anxious under-eater that misreading is
+                # actively dangerous, so the direction is stated in words and
+                # the sign is a detail rather than the message.
+                direction = ("losing" if rate > 0 else
+                             "gaining" if rate < 0 else "holding")
+                magnitude = f"{abs(rate):.2f} kg/week"
+                phrase = (f"{direction} {magnitude}" if rate
+                          else "holding steady")
                 if target is not None:
                     verdict = ("ON TARGET" if abs(rate - target) <= 0.25
                                else "FAST - raise intake" if rate > target
                                else "SLOW - check logging")
-                    L += ["", f"**Rate:** {rate:+.2f} kg/week vs target {target:.2f} - "
-                              f"**{verdict}**",
+                    L += ["", f"**Rate:** {phrase} (target: losing "
+                              f"{target:.2f} kg/week) - **{verdict}**",
                           "", "> Judge on this line, never a single morning."]
                 else:
-                    L += ["", f"**Rate:** {rate:+.2f} kg/week (no phase targets configured)"]
+                    L += ["", f"**Rate:** {phrase} (no phase targets configured)"]
     else:
-        L.append("_No weight data._")
+        L.append("_No weight data - and that is a valid way to use this._")
+
+    # G64: an athlete whose only real data is a phone step count had fourteen
+    # days of it render precisely nowhere. What someone actually logs is what
+    # the rollup should be about.
+    step_days = [(d["date"], d["steps"]) for d in daily
+                 if d.get("steps") is not None]
+    if step_days:
+        recent = step_days[-14:]
+        avg = mean(s for _, s in recent)
+        best = max(recent, key=lambda p: p[1])
+        L += ["", "## Steps", "",
+              f"- {avg:,.0f}/day average over the last {len(recent)} logged days",
+              f"- best day {best[1]:,} on {best[0]}",
+              f"- {len(step_days)} days logged in total"]
 
     L += ["", "## Training by week", ""]
     by_week: dict[str, dict] = defaultdict(lambda: {"km": 0.0, "runs": 0, "gym": 0, "hr": []})

@@ -60,7 +60,8 @@ def _goal_for(goals_in_force: tuple[dict, ...], metric: str) -> str | None:
 def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
                      sessions: list[dict], today: date | None = None,
                      goals: list[dict] | None = None,
-                     thresholds: list[dict] | None = None) -> list[dict]:
+                     thresholds: list[dict] | None = None,
+                     medical: list[dict] | None = None) -> list[dict]:
     """Deterministic weekly verdict rows across all configured metrics."""
     rows: list[dict] = []
     weeks = _weeks_covered(weight, daily, sessions)
@@ -157,9 +158,110 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
                                  ON if avg <= eff.rhr_baseline + 5 else BEHIND,
                                  _goal_for(active, "rhr")))
 
+    # Safety floors that need no configuration (G68). Every rule above is
+    # opt-in: it produces nothing until the athlete sets a threshold. That is
+    # right for coaching preferences and wrong for danger, and it meant an
+    # athlete who had configured nothing - the state every new user is in -
+    # got `tripwires: none` while eating 1200 kcal a day and losing a kilo a
+    # week. These rows fire from defaults, like the absolute RHR band.
+    rows += _default_floor_rows(weight, daily, sessions, medical or [])
+
+    # G72: when a declared medication makes rapid loss the EXPECTED outcome,
+    # the rate verdict is meaningless and actively harmful - it tells someone
+    # for whom the treatment is working that she is failing a target nobody
+    # set for her. Drop the row rather than dress it up; the nutrition floors
+    # and the lean-mass composite carry the real risk on this pathway.
+    if _drops_rate_verdict(medical or [], weeks):
+        rows = [r for r in rows if r["metric"] != "weight_rate"]
+
     # G33, last: a suppressed metric is still RECORDED, just not scored. The
     # data keeps accumulating for the day the athlete wants it back; what
     # stops is the judging.
     if cfg.suppressed_metrics:
         rows = [r for r in rows if r["metric"] not in cfg.suppressed_metrics]
+    rows.sort(key=lambda r: (r["week"], r["metric"]))
     return rows
+
+
+def _drops_rate_verdict(medical: list[dict], weeks: list[str]) -> bool:
+    """Is rapid loss the declared, expected outcome of a treatment?
+
+    Deliberately narrow: only a medication or state line that SAYS so does
+    this, and it removes one verdict rather than quietening the safety layer.
+    Every absolute floor still fires.
+    """
+    from .safety import _expectations, _as_date
+
+    if not weeks:
+        return False
+    last = _as_date(weeks[-1])
+    return last is not None and "rapid_loss" in _expectations(medical, last)
+
+
+def _default_floor_rows(weight: list[dict], daily: list[dict],
+                        sessions: list[dict], medical: list[dict]) -> list[dict]:
+    """Verdict rows for the absolute nutrition floors and energy availability.
+
+    These live in `verdicts` as well as in the escalation surface because a
+    verdict is what a dashboard, a game and the weekly rollup already read. A
+    safety finding that only exists in a channel nobody renders is a safety
+    finding nobody sees.
+    """
+    from .safety import (
+        EA_LOW_THRESHOLD, INTAKE_FLOOR_KCAL, PROTEIN_FLOOR_G_PER_KG,
+        RED_S_WINDOW_DAYS, _expectations, _latest_weight, _window,
+        energy_availability,
+    )
+
+    window, _, end = _window(daily, RED_S_WINDOW_DAYS)
+    if not window:
+        return []
+    wk = _week_key(end.isoformat())
+    out: list[dict] = []
+
+    floor = INTAKE_FLOOR_KCAL
+    if "elevated_requirement" in _expectations(medical, end):
+        floor += 500.0
+    intakes = [float(r["kcal_in"]) for r in window if r.get("kcal_in") is not None]
+    if len(intakes) >= 7:
+        mean_intake = sum(intakes) / len(intakes)
+        out.append(_row(wk, "intake_floor", mean_intake, floor,
+                        BEHIND if mean_intake <= floor else ON))
+
+    kg = _latest_weight(weight, end)
+    proteins = [float(r["protein_g"]) for r in window
+                if r.get("protein_g") is not None]
+    if kg and len(proteins) >= 7:
+        per_kg = (sum(proteins) / len(proteins)) / kg
+        out.append(_row(wk, "protein_floor", per_kg, PROTEIN_FLOOR_G_PER_KG,
+                        BEHIND if per_kg < PROTEIN_FLOOR_G_PER_KG else ON))
+
+    ea, _terms = energy_availability(daily, weight, sessions)
+    if ea is not None:
+        out.append(_row(wk, "energy_availability", ea, EA_LOW_THRESHOLD,
+                        BEHIND if ea < EA_LOW_THRESHOLD else ON))
+    out += _symptom_rows(weight, daily, sessions, medical)
+    return out
+
+
+# Red-flag symptom classes, and the verdict metric each is counted under. A
+# recurrent symptom is the most important thing about an athlete's week, so it
+# belongs in the row set a dashboard already renders - not only in an
+# escalation channel a consumer has to know to ask for.
+SYMPTOM_METRICS = {"cardiac": "symptom_chest_pain", "syncope": "symptom_syncope"}
+
+
+def _symptom_rows(weight: list[dict], daily: list[dict], sessions: list[dict],
+                  medical: list[dict]) -> list[dict]:
+    """One row per (week, symptom class): how many were reported, against zero."""
+    from .safety import escalations
+
+    counts: dict[tuple[str, str], int] = {}
+    for row in escalations(medical, daily, weight, sessions,
+                           include_red_s=False):
+        metric = SYMPTOM_METRICS.get(str(row.get("trigger")))
+        if metric and row.get("date"):
+            key = (_week_key(str(row["date"])), metric)
+            counts[key] = counts.get(key, 0) + 1
+    return [_row(wk, metric, float(n), 0.0, BEHIND)
+            for (wk, metric), n in sorted(counts.items())]

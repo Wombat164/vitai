@@ -338,7 +338,13 @@ def cmd_status(args: argparse.Namespace) -> None:
         days = (datetime.fromisoformat(pts[-1][0]) - datetime.fromisoformat(pts[-8][0])).days
         if days:
             rate = (mean(prev) - mean(vals)) / days * 7
-            line += f" - 7d avg {mean(vals):.1f}, rate {rate:+.2f} kg/week"
+            # G69, same rule as the rollup: a bare signed rate reads backwards
+            # to anyone who has not memorised that positive means losing.
+            direction = ("losing" if rate > 0 else
+                         "gaining" if rate < 0 else "holding")
+            trend = (f"{direction} {abs(rate):.2f} kg/week" if rate
+                     else "holding steady")
+            line += f" - 7d avg {mean(vals):.1f}, {trend}"
     weekly = root / "derived" / "weekly.md"
     if weekly.exists():
         firing = [ln[2:] for ln in weekly.read_text(encoding="utf-8").splitlines()
