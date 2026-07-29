@@ -57,6 +57,77 @@ G24 source trust, G31-33) are slotted where they first become derivable.
    do today); the demo job is the only addition. Heavier future suites
    (property fuzzing) go behind `workflow_dispatch`, not on every PR.
 
+## Standing practice: persona validation and guardrail enforcement
+
+Adopted 2026-07-29 after the first persona validation found eleven design gaps
+in conversation and four more by running the engine - including two CRITICAL
+safety failures that two full document redteams had missed. Reviewing the model
+against itself does not find these. Only a person the model was not built for
+finds them.
+
+**This is not a one-off exercise. It is a standing gate.**
+
+### The loop
+
+1. **Construct personas the model was NOT built for.** Deliberately span the axes
+   the author does not occupy: shift work, life-stage physiology, severe
+   obesity, elite performance, chronic disease, medication effects, disability,
+   no-device, non-weight goals, low numeracy, hostile-to-apps.
+2. **Roleplay a real coaching conversation.** The persona knows nothing about
+   the model. Where the coach has to INVENT something the model does not
+   contain, that is a finding - a sharper signal than any self-review.
+3. **Have the persona generate the data their life actually produces** - not the
+   data the model wishes for. Ragged, partial, recalled, missing.
+4. **Run the real engine on it** (`validate` / `build` / `status`). Record what
+   it says, and more importantly what it FAILS to say.
+5. **Every finding becomes a gap, and every SAFETY finding becomes a test.**
+
+### Enforcement: safety findings become permanent fixtures
+
+A safety gap that is only written down will regress. Each safety-critical
+finding is frozen as a **persona fixture** under `tests/fixtures/personas/` with
+an assertion about what the engine MUST produce:
+
+| Fixture | Must produce |
+|---|---|
+| nursing mother, ~1200 kcal, rapid loss | a fired tripwire, WITHOUT configuration (G68) |
+| exertional chest-pain episodes in notes | an escalation, not silence (G59) |
+| impossible goal (2 kg/week) | a challenge at declaration, not faithful tracking (G58) |
+| deviceless athlete, 14 days of steps only | a useful status line, not "no weight data" (G64) |
+| athlete who refused a weight goal | no weight framing anywhere in status/rollup (G62) |
+
+These tests are written to FAIL first (the features do not exist yet) and are
+marked as expected-failure with the gap they wait on. As each increment lands,
+its fixtures flip to passing, and they then guard that behaviour forever. A
+change that re-mutes a tripwire breaks the build.
+
+**The rule this enforces: safety behaviour is proven by a fixture, never by a
+paragraph.**
+
+### Guardrail invariants, checked every increment
+
+Independent of features, these must hold and are asserted in CI:
+
+- **Defaults protect.** An athlete who has configured NOTHING is still covered
+  by absolute-danger rules (G68). Configuration may tighten; never create.
+- **The firewall holds.** No LLM output reaches a number, a severity, or a
+  verdict. The escalation text for a red flag is hardcoded.
+- **No silent mutation of history.** Editing a current threshold or goal never
+  changes a past verdict (the G14/G20 regression).
+- **Direction is stated in words.** No bare signed quantity whose plain reading
+  inverts its meaning (G69).
+- **Absence is explained, never blamed.** Missing data under a declared context
+  is expected, not a compliance flag (G34/P7).
+- **The record degrades gracefully.** Every derivation states its maturity
+  (cold/warming/stable) rather than presenting thin data confidently (G27).
+
+### Cadence
+
+Run a persona sweep after every second increment, and ALWAYS before a release
+that touches the safety layer, goals, or the coach skill. Retire a persona only
+when its findings are all shipped and fixtured; otherwise it stays in the suite.
+Write-ups accumulate in [validation-personas.md](validation-personas.md).
+
 ## FOUNDATIONS (before any v3 feature)
 
 Invisible robustness the feature increments depend on. Ships as its own
@@ -234,9 +305,57 @@ DETERMINISTIC tripwire, not LLM prose.
   on a deep-deficit + high-load synthetic; the fast path surfaces same-day.
 - NOT: FHIR import, document attachments, medication interactions,
   diagnosis (route to clinician).
+- **G68 SAFETY FIRES FROM DEFAULTS (added 2026-07-29 by persona validation -
+  now the increment's most important requirement).** The engine was run on a
+  synthetic nursing mother eating ~1200 kcal, losing ~1 kg/week, with a
+  near-syncope, and reported `tripwires: none` - because rate verdicts need
+  configured phase targets and tripwires need configured thresholds, and she had
+  configured nothing. **The safety apparatus is inert by default.** Absolute-
+  danger rules must fire with ZERO configuration: an impossible rate of loss, an
+  intake below a physiological floor, a red-flag symptom class. Configuration
+  may TIGHTEN the net; it must never be what creates it. A fixture test asserts
+  an unconfigured dangerous athlete fires.
+- **G59 red-flag capture from PROSE (added by validation).** Five exertional
+  chest-pain episodes with increasing duration produced silence because they
+  lived in free-text notes. The escalation path must therefore start at INGEST:
+  the LLM recognises and classifies symptom language into a structured claim,
+  the engine maps severity->action with hardcoded text. Ships with the medical
+  layer or the layer is decorative. Includes the resolution-scope rule: a prior
+  negative workup never suppresses a NEW or CHANGED symptom.
+- **G57 physiological states** (breastfeeding/pregnancy/postpartum/illness) as a
+  first-class state that alters energy requirements and safety bounds - a
+  different axis from G34 situational context. Rides this increment because it
+  is a contraindication mechanism, not a convenience.
+- **G58 goal safety+feasibility at declaration**: rate bounds, life-stage
+  contraindication, deadline sanity -> a NEGOTIATION, never silent compliance.
 - Cut-first: lab/medication kinds; the RED-S composite (ship the red-flag
   branch + absolute thresholds + fast path first). NOT cuttable: the
-  deterministic severity->action mapping - that is the point of G28.
+  deterministic severity->action mapping, and G68 defaults-protect - those are
+  the point of the increment.
+
+## Increment 3b - structural fit: schema holes the validation exposed (G70, G71, G69, G62) [1-2 sessions]
+
+Small, high-leverage, and blocking for anyone who is not an endurance athlete
+with a weight goal. Pulled forward because increment 4's baselines and streaks
+would otherwise be built on top of the same holes.
+
+- **G70 resistance training.** `sessions` has no set, rep or load anywhere -
+  every field is an endurance field, so a strength goal cannot be recorded at
+  all. Add a sets/reps/load structure, a `gym` value for `setting` (the enum is
+  home|indoor|outdoor|treadmill today), and the progressive-overload derivation
+  it unlocks - which the G36 Tier-2 recomposition proxy already depends on.
+- **G62 goal kinds.** `quantity | skill | maintenance`, plus proxy/leading
+  indicators for skill goals (hang time, tempo, assistance load) so a target=1
+  binary goal shows movement long before it flips.
+- **G69 labelled directions.** No bare signed quantity anywhere in rendered
+  output; state the direction in words. A rate of loss must never render as
+  `+1.10 kg/week` for an athlete who lost weight.
+- **G71 quantities not booleans.** `alcohol` gains units; `sleep_h` gains
+  fragmentation (wakings) and timing, because for a broken-sleep parent and a
+  night-shift worker the scalar destroys the entire signal.
+- Tests: a strength session round-trips with load; a skill goal reports proxy
+  movement with the goal still at zero; no rendered string contains a bare
+  signed rate; the deviceless-athlete fixture gets a useful status line.
 
 ## Increment 4 - baselines, shape grammar + streaks (v0.6.0; G2, G8, G17) [2-3 sessions]
 

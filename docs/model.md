@@ -116,7 +116,7 @@ these; nothing else exists.
    safety/privacy-critical: consent ledger, access-scope, suppression prefs -
    NOT markdown pages (the redteam's "prose still hiding where data is needed").
 
-## Part 3 - The consolidating gaps (G24-G56)
+## Part 3 - The consolidating gaps (G24-G84)
 
 Each folds several redteam findings and fills a symmetry hole in a principle.
 
@@ -612,6 +612,285 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
     metric is weekly consistency; holding back now is what makes the easy pace
     fall later). A substitution sold as a downgrade gets refused; sold as the
     same outcome at a lower price, it gets taken. HIGH.
+
+- **G57 Life-stage & physiological states (contraindications, not context)**
+  (P3/G28/G34). CRITICAL, found in persona validation. Breastfeeding adds ~500
+  kcal/day of demand and makes an aggressive deficit CONTRAINDICATED; pregnancy,
+  postpartum, adolescent growth, menopause, acute illness and injury recovery
+  likewise change what the numbers MEAN and what is SAFE. `context.jsonl` (G34)
+  models situational mode (vacation, heatwave) - a different axis entirely. A
+  physiological state alters energy requirements, safe rate bounds, and which
+  interventions are permitted at all. Without it the engine will cheerfully help
+  an athlete run a dangerous deficit. See [validation-personas.md](validation-personas.md) F3. CRITICAL.
+- **G58 Goal safety & feasibility validation at declaration** (P1/G6/G28).
+  CRITICAL. A goal is currently stored as data and tracked faithfully however
+  unsafe it is - the engine would report an athlete BEHIND against "12 kg in 6
+  weeks" week after week while they ate less to catch up. Declaration needs a
+  gate: physiological rate bounds, life-stage contraindications (G57), deadline
+  sanity. The output is a NEGOTIATION ("here is what 6 weeks can actually
+  deliver") - never silent compliance, never a bare rejection. Validation F4.
+- **G59 Red-flag capture from PROSE + resolution scope** (P4/G28/G43). CRITICAL,
+  and the highest-value finding of the persona validation. Red flags arrive as
+  downplayed asides in conversation, never as data: "the odd twinge now and
+  again but it's nothing" (which turned out to be EXERTIONAL chest pain), "is
+  that why I nearly blacked out". The person does not believe it is data,
+  often precisely because they are frightened. G28 reads severity from a
+  structured entry or a threshold breach and would have seen NOTHING in either
+  case. Resolution preserving P4: **the LLM recognises and CLASSIFIES symptom
+  language into a structured claim (the G43 capture path); the deterministic
+  engine maps severity to action and emits hardcoded escalation text.** LLM
+  extracts, engine decides - neither half suffices alone. Corollary: **a prior
+  negative workup must not suppress a NEW or CHANGED symptom** - episode
+  resolution carries a scope and an expiry, and re-fires regardless of status.
+  Validation F1, F2.
+- **G60 The cadence unit is not the calendar week** (P2/G30). HIGH. Verdicts,
+  rollup, streaks and goal periods all bucket by Monday-anchored calendar week.
+  For a rotating-shift worker that unit is fiction ("my week never looks the
+  same twice"). Needs a configurable cadence: calendar week | rolling N days |
+  a user-defined cycle (a shift block). Affects nurses, police, fire, logistics,
+  hospitality, military - a large population, not an edge case. Validation F5.
+- **G61 The subjective day anchor** (P2/G30). HIGH. G30 fixed timezone and DST
+  but kept a midnight-anchored day. A night worker sleeps 09:30-15:00 and works
+  19:30-08:00, so every shift straddles midnight and "last night's sleep" lands
+  in a calendar afternoon. The day boundary must follow the person's SLEEP
+  (wake-to-wake), not the clock; naive midnight bucketing silently splits every
+  night shift in two. Validation F6.
+- **G62 Goal kinds + proxy indicators** (G6/G18/P8). HIGH. "One unassisted
+  pull-up" is target=1 with a progress series of 0,0,0,...,1: monotonic-vs-
+  guarded is meaningless and 25/50/75/100% milestones generate nothing. Needs a
+  goal `kind`: **quantity** (accumulate) | **skill** (binary, achieve) |
+  **maintenance** (hold). Skill goals additionally need **proxy / leading
+  indicators** carrying the visible progress the goal cannot (hang time,
+  lowering tempo, assistance load) - the proxies are what the athlete watches,
+  the goal is what eventually pops. Generalises past fitness (an exam, a
+  certification), which is P8's genericity claim actually tested. Validation F7.
+- **G63 Re-entry contract & sanctioned pause** (P7/G8). HIGH - plausibly the
+  highest-ROI behaviour in the product. The dominant adherence failure is not
+  training, it is RE-ENTRY: "I miss two sessions, feel like I've fallen off,
+  three weeks pass, I feel stupid going back like I'm starting from nothing, so
+  I don't." Needs (a) a re-entry contract - resume at the SAME load, the coach
+  never asks where you have been, a lapse is structurally not a broken streak;
+  and (b) a **sanctioned pause** as a declarable state with a named
+  minimum-viable dose, because **the absence of shame is not the presence of
+  permission** - an athlete who is not explicitly told "stopping is fine" will
+  invent the guilt anyway. Falling off is unplanned and carries guilt;
+  downshifting is planned and does not. A pause also needs a gentle
+  pre-authorised integrity check (the athlete's own request: don't let me use
+  the exam as a shield for everything). Validation F8, F9.
+- **G64 Low-data / deviceless mode + plain language** (P8/P3). HIGH. Two of
+  three personas had no wearable and no intention of getting one; one tracks
+  nothing at all and distrusts apps. The resolution layer, `kcal_out`, HR caps,
+  RHR baselines and rate verdicts all assume device data. P8's "minimum viable
+  day is one number" has never been tested. Needs an explicit mode where the
+  record is qualitative (did it happen, how did it feel) and the coach stays
+  useful with zero instrumentation - plus plain-language translation of the
+  athlete's own clinical numbers (an HbA1c carried for two years without ever
+  being explained). Validation F10, F16.
+- **G65 Goal contention & deliberate deprioritisation** (G18/G6). MEDIUM. G18
+  fans one event out to many goals, but nothing models goals COMPETING for one
+  finite budget of time, energy and attention - a certification exam eating the
+  same days off that training needs, and mattering more. "This goal outranks
+  that one until November" must be a declarable state that changes what the
+  coach asks for. Validation F12.
+- **G66 Occupational & incidental activity** (P1/G22). MEDIUM. "I reckon I do
+  miles a day but I've never measured owt" - eight hours a day on his feet is
+  almost certainly the largest energy term in his life and is entirely
+  unmodelled. The engine assumes activity arrives as sessions plus device steps;
+  for manual workers occupational load dominates both, and ignoring it makes
+  every energy number wrong. Validation F13.
+- **G67 Off-limits domains & deferred levers** (P7/G33). MEDIUM. G33 suppresses
+  a METRIC; this is an entire intervention DOMAIN declared untouchable ("that's
+  a battle I've already lost, don't even suggest it" - a partner's cooking), and
+  separately a lever the athlete acknowledges and PARKS ("I don't see that as
+  the problem"). Correct behaviour differs: an off-limits domain is respected
+  silently and worked around; a deferred lever is named honestly ONCE without
+  moralising, then left alone and revisited much later. Nagging either loses the
+  athlete. Validation F14.
+
+- **G68 Safety must not be opt-in; defaults fire unconfigured** (P4/G28).
+  CRITICAL, found by RUNNING the engine. A nursing mother eating ~1200 kcal,
+  losing ~1 kg/week, protein 40-58 g, with a near-syncope, produced
+  `tripwires: none` - because the rate verdict needs configured phase targets
+  and tripwires need configured thresholds, and she is a new user who has
+  configured nothing. **The entire safety apparatus is inert by default**, which
+  is backwards for the population most at risk: new, motivated, uninformed, and
+  already doing something dangerous. Absolute-danger rules (impossible rate of
+  loss, intake below a floor, a red-flag symptom) must fire from DEFAULTS.
+  Configuration may TIGHTEN the net; it must never be the thing that creates it.
+  See [validation-personas.md](validation-personas.md) E1.
+- **G69 Signed quantities must be labelled, not bare** (P7/G34). HIGH. The
+  rollup rendered `**Rate:** +1.10 kg/week` for an athlete who had LOST 1.5 kg -
+  the convention is `(older - newer)`, so positive means losing, but the plain
+  reading of "+1.10 kg/week" is gaining. For a scale-anxious athlete already
+  under-eating, that misreading is the single input most likely to make her cut
+  further. Every signed quantity states its direction in WORDS ("losing 1.10
+  kg/week"), never a bare sign the reader must know a convention to decode.
+  Validation E3.
+- **G70 Resistance training is unmodelled** (P8/artifact-1). HIGH. `sessions`
+  carries `distance_km`, `duration_s`, `avg_hr`, `cadence`, `elevation_m`,
+  `route`, `weather` - every field is an ENDURANCE field. **There is nowhere to
+  record a set, a rep or a load anywhere in the schema**, so a gym session can
+  only be stored as a duration plus a note. This blocks: any strength goal
+  (an athlete whose entire objective was a pull-up), progressive-overload as a
+  signal, and the Tier-2 recomposition proxy G36 explicitly depends on. A large
+  hole for a project claiming domain-genericity. Needs a sets/reps/load
+  structure and a `setting` value for `gym` (the enum today is home | indoor |
+  outdoor | treadmill). Validation E5.
+- **G71 Quantities recorded as booleans and scalars** (P1/P3). MEDIUM.
+  `alcohol` is a BOOLEAN: five pints on a Friday and one can with dinner both
+  store as `true`, hiding ~1,400 kcal across a weekend that is plausibly the
+  athlete's largest dietary lever. `sleep_h` is a SCALAR: "2-4 hours broken
+  across three wakings" and "5.5 daytime hours behind blackout blinds" both
+  reduce to a number, and fragmentation plus timing are the entire story for
+  both athletes. Where a quantity or a structure exists, store it. Validation E6.
+
+- **G72 Medication as a first-class modifier** (P3/G57/G28). CRITICAL, sweep 2.
+  A GLP-1 agonist (semaglutide) changes the meaning of nearly every number:
+  appetite suppression produces INVOLUNTARY sub-800 kcal days that are not
+  restriction and not non-compliance; rapid loss is EXPECTED, so a naive
+  rate tripwire fires wrongly; and the real risk is lean-mass loss from rapid
+  loss plus inadequate protein plus no resistance training. Beta blockers
+  invalidate HR caps and zones; steroids alter weight and glucose; insulin and
+  sulfonylureas create hypoglycaemia risk around exercise; SSRIs, diuretics and
+  statins all matter. **Voluntary and involuntary under-eating need opposite
+  interventions**, and no field distinguishes them. See
+  [validation-personas.md](validation-personas.md) sweep 2.
+- **G73 A CLINICAL HOLD tier above "flag"** (P4/P7/G28). CRITICAL, sweep 2. The
+  RED-S persona showed a severity that no existing tier expresses: recurrent
+  bone stress injury + amenorrhea + energy availability far below the clinical
+  threshold is not a tripwire to surface alongside the week's rate line. The
+  correct system behaviour is a **hold**: suspend algorithmic load progression,
+  BLOCK the coach from issuing training advice on the case at all, and surface a
+  mandatory clinical referral. G28 as written escalates a message; this
+  escalates by DISABLING the product's own advice. A system that logs
+  "tripwire: nutrition" here is still under-detecting.
+- **G74 The athlete's benign self-explanation is not evidence** (P1/P3/G59).
+  HIGH, and the sharpest cross-cutting finding of sweep 2 - it appeared in FOUR
+  of eight personas. Each supplied an innocent cause for a concerning sign:
+  "it's the reflux" (exertional chest pain), "that's just what happens when you
+  train hard" (five months of amenorrhea), "my legs aren't used to carrying the
+  lighter me" (weakness on stairs during rapid loss on a GLP-1 - i.e. probable
+  sarcopenia), "I stood up too fast" (near-syncope while under-eating). The
+  athlete's causal attribution is a CLAIM like any other (P1) and must never
+  suppress the pattern it explains away. The engine reads the sign; the
+  explanation is recorded, not deferred to.
+- **G75 Subjective and objective measures are different quantities** (P1/P3).
+  MEDIUM. A device reported 6.1 h of sleep and the athlete reported "felt like
+  5", every night, systematically. These are not competing claims to resolve
+  (G15) - both are true, and the DIVERGENCE is itself the signal (in
+  perimenopause, fragmented sleep with normal duration is the presentation).
+  Resolution must not collapse a perceived measure into a measured one.
+- **G76 Logging bias is not the same as logging coverage** (P1/G26). MEDIUM.
+  "I log breakfast and lunch because those are the meals that already look
+  fine" - her logged 1580-1710 kcal days are systematically biased low, not
+  merely incomplete. `coverage: partial` records that something is missing; it
+  cannot record that what is PRESENT is unrepresentative. A biased sample read
+  as a complete one produces confidently wrong energy arithmetic.
+- **G77 Capacity-limited progression** (G6/G62). MEDIUM. For an athlete with
+  knee osteoarthritis the limiter is PAIN, not fitness: 15 minutes of walking is
+  a hard ceiling that no ramp rule can progress through, and the goal (a 5 km
+  walk) must be approached by changing the constraint - load, surface, footwear,
+  strength work, clinical input - rather than by adding volume. The model's
+  progression logic assumes the limiter is conditioning.
+
+- **G78 Athlete-defined metrics: the schema is a developer's ontology**
+  (P8/P5/artifact-1). CRITICAL, and the largest finding of the whole validation
+  programme. Sweeps 1-2 only ever asked for metrics the DEVELOPER chose - steps,
+  sleep, calories, heart rate - so they could only find gaps in what was already
+  imagined. Sweep 3 asked eight athletes what THEY wanted counted. **Almost
+  nothing they named fits the schema**, and several are things they have counted
+  privately for years: nights without the 3am vending machine; whether the stairs
+  happened without stopping ("12 of 14"); belt holes measured against a kept
+  wedding-day belt; times saying yes instead of "you go on, I'll wait here";
+  meals eaten sitting down rather than over the sink; magpies on the path before
+  7am. A fixed schema cannot serve this. The athlete must be able to DECLARE a
+  metric - name, kind, unit, scale, cadence - and have the engine count, streak,
+  trend and celebrate it as a first-class citizen, without a developer.
+- **G79 Metric KINDS beyond measurement** (extends G78/G62). The invented
+  metrics are almost never measurements. They are: **counters** (times I said
+  yes); **days-since with reset** (days since a bad night - "reset to zero, like
+  a superstition"; weeks since a session felt easy); **reset-on-fail streaks**
+  (nights without the vending machine, "resets the second a Twix happens");
+  **fractions of a named obstacle** ("12 of 14 stairs"); **pass/fail against a
+  fixed personal landmark** (the staircase whose bannister he built);
+  **occupational capacity** (fares in a row before needing a sit); **affective
+  quality** (did it feel EASY - explicitly "not RPE; RPE tells you how hard,
+  this is whether it felt light"); and **deliberate-omission counts** (sessions
+  skipped guilt-free with no makeup session - counting NOT training as the
+  achievement).
+  **Crucially, magnitude is often EXCLUDED on purpose**: "a day where I did five
+  useless minutes counts the same as the full session, because the
+  not-showing-up is the actual enemy", and "whether we did it - not the
+  distance, not the calories". Quantifying these would destroy what they measure.
+- **G80 Relational metrics: the achievement is shared** (P8/G51). SIX of eight
+  athletes named a metric whose subject is a RELATIONSHIP, unprompted: did we sit
+  down together of an evening; did we talk with no phones; days since we had a
+  proper meal rather than crossing in the kitchen; whether we walked together
+  ("not the distance - whether we did it"); whether the kids came and watched -
+  **and WHICH one, because (in his words) the two of them watching are two
+  different things to him**. The engine is single-athlete throughout. These are not the
+  athlete's metrics with a person attached; the dyad is the subject.
+- **G81 Per-metric privacy, and the refusal to capture** (extends G32/G33).
+  Several metrics were disclosed WITH an explicit privacy condition: "I'd want it
+  private, not something that shows up on a screen anyone else sees" (a chest
+  feeling after eating late); "I would never say this to my old coach" (the
+  magpies); "I'd never admit to him that I know the score" (a private
+  head-to-head ledger with a friend); a countdown that "sounds like I'm wishing
+  time away with my own kid". Needs per-metric visibility - including HIDDEN FROM
+  THE COACH. And the harder case: a quantity the athlete keeps, will not record,
+  and does not want recorded - a running count of bad shifts, "some of it isn't
+  for tracking". **The model must be able to know a thing exists and deliberately
+  not hold it.** A capture system that treats every disclosed quantity as
+  capturable is a system people stop talking to.
+- **G82 The unaccounted period** (P1/P2/G34). EIGHT of eight, independently and
+  unprompted, described a stretch of months that resists any form - and in every
+  case it is where the actual story lives. "A gap where I wasn't really present
+  for my own life." "Nothing changed, I just quit paying attention, on purpose,
+  because checking meant admitting it was going wrong again." "Frightened and
+  frozen and ashamed all at once and none of those turn into a walk."
+  Three consequences the model must absorb:
+  - **A gap is data, not missing data.** The absence has a shape and a duration
+    and is often the most informative region of the record.
+  - **The recorded reason may be a self-protective fiction.** One athlete's log
+    attributes a months-long drop to an Achilles injury; the real cause was his
+    father's stroke, and he "let the Achilles take the blame because it was
+    easier than saying the actual thing". A stated reason is a claim (P1), and
+    the engine must not treat it as ground truth.
+  - **The most valuable period may contain no data at all.** An athlete's ten
+    weeks off after a fracture - eating ad-lib, cross-training only - is the
+    natural experiment that shows her physiology recovering, and it is "a hole in
+    the spreadsheet... it just closes over in the log like it didn't happen".
+  And the boundary: an athlete may decline to explain a gap. "I wouldn't want
+  there to be [a box], some of it isn't for tracking." Never demand a reason.
+- **G83 What they would be sad to lose is never a number** (P7/G6). Asked what
+  they would want to look back on in five years, NOT ONE of eight named a metric,
+  a target or a weight. They named an identity or a relationship: "that I still
+  had a me outside the ward"; "who was standing at the finish line, not the time
+  on the clock"; "walking her down that aisle without her having to slow her pace
+  for me"; "if I've kept the weight off but I'm still the mum who says 'you go
+  on', I'd count that as having lost, whatever the scale says"; "I'd rather
+  remember running with him in the pram and him laughing at the wind than
+  remember hitting 62". The goal model is target-based all the way down. It needs
+  a layer ABOVE targets - the thing the targets are FOR - so progress is judged
+  against what the athlete actually values, and a target met while the thing it
+  served was lost registers as the failure it is.
+- **G84 Conflict shapes the model cannot express** (extends G56/G65). Every
+  athlete named a genuine trade, and three have shapes the substitution
+  machinery (G56) does not cover:
+  - **Cost-before-benefit, and that trough is where people quit.** "Cutting the
+    wine costs me before it pays me anything back, and that gap is exactly where
+    I've quit before." An intervention with a delayed payoff needs its trough
+    modelled and defended, not just its endpoint promised.
+  - **Negative return on effort.** Pushing the walking flares the knee, which
+    costs two days of school runs - so MORE effort yields LESS total activity.
+    Ramp logic assumes monotonic returns.
+  - **The intervention destroys the mechanism.** "Eating more deliberately means
+    it stops feeling like the drug is doing it for me, and if I have to TRY, it
+    will go the way of every other diet." The physiologically correct change
+    undermines the psychological property that made it work at all.
+  Plus the honest refusal: two hours of pints a week are "the only two hours I'm
+  not being useful to somebody... I'm not sure I want it squared." A conflict may
+  be correctly left unresolved.
 
 ## The frame: a guardrailed world model (belief-state, not a learned net)
 
