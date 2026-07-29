@@ -116,7 +116,7 @@ these; nothing else exists.
    safety/privacy-critical: consent ledger, access-scope, suppression prefs -
    NOT markdown pages (the redteam's "prose still hiding where data is needed").
 
-## Part 3 - The consolidating gaps (G24-G56)
+## Part 3 - The consolidating gaps (G24-G67)
 
 Each folds several redteam findings and fills a symmetry hole in a principle.
 
@@ -612,6 +612,100 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
     metric is weekly consistency; holding back now is what makes the easy pace
     fall later). A substitution sold as a downgrade gets refused; sold as the
     same outcome at a lower price, it gets taken. HIGH.
+
+- **G57 Life-stage & physiological states (contraindications, not context)**
+  (P3/G28/G34). CRITICAL, found in persona validation. Breastfeeding adds ~500
+  kcal/day of demand and makes an aggressive deficit CONTRAINDICATED; pregnancy,
+  postpartum, adolescent growth, menopause, acute illness and injury recovery
+  likewise change what the numbers MEAN and what is SAFE. `context.jsonl` (G34)
+  models situational mode (vacation, heatwave) - a different axis entirely. A
+  physiological state alters energy requirements, safe rate bounds, and which
+  interventions are permitted at all. Without it the engine will cheerfully help
+  an athlete run a dangerous deficit. See [validation-personas.md](validation-personas.md) F3. CRITICAL.
+- **G58 Goal safety & feasibility validation at declaration** (P1/G6/G28).
+  CRITICAL. A goal is currently stored as data and tracked faithfully however
+  unsafe it is - the engine would report an athlete BEHIND against "12 kg in 6
+  weeks" week after week while they ate less to catch up. Declaration needs a
+  gate: physiological rate bounds, life-stage contraindications (G57), deadline
+  sanity. The output is a NEGOTIATION ("here is what 6 weeks can actually
+  deliver") - never silent compliance, never a bare rejection. Validation F4.
+- **G59 Red-flag capture from PROSE + resolution scope** (P4/G28/G43). CRITICAL,
+  and the highest-value finding of the persona validation. Red flags arrive as
+  downplayed asides in conversation, never as data: "the odd twinge now and
+  again but it's nothing" (which turned out to be EXERTIONAL chest pain), "is
+  that why I nearly blacked out". The person does not believe it is data,
+  often precisely because they are frightened. G28 reads severity from a
+  structured entry or a threshold breach and would have seen NOTHING in either
+  case. Resolution preserving P4: **the LLM recognises and CLASSIFIES symptom
+  language into a structured claim (the G43 capture path); the deterministic
+  engine maps severity to action and emits hardcoded escalation text.** LLM
+  extracts, engine decides - neither half suffices alone. Corollary: **a prior
+  negative workup must not suppress a NEW or CHANGED symptom** - episode
+  resolution carries a scope and an expiry, and re-fires regardless of status.
+  Validation F1, F2.
+- **G60 The cadence unit is not the calendar week** (P2/G30). HIGH. Verdicts,
+  rollup, streaks and goal periods all bucket by Monday-anchored calendar week.
+  For a rotating-shift worker that unit is fiction ("my week never looks the
+  same twice"). Needs a configurable cadence: calendar week | rolling N days |
+  a user-defined cycle (a shift block). Affects nurses, police, fire, logistics,
+  hospitality, military - a large population, not an edge case. Validation F5.
+- **G61 The subjective day anchor** (P2/G30). HIGH. G30 fixed timezone and DST
+  but kept a midnight-anchored day. A night worker sleeps 09:30-15:00 and works
+  19:30-08:00, so every shift straddles midnight and "last night's sleep" lands
+  in a calendar afternoon. The day boundary must follow the person's SLEEP
+  (wake-to-wake), not the clock; naive midnight bucketing silently splits every
+  night shift in two. Validation F6.
+- **G62 Goal kinds + proxy indicators** (G6/G18/P8). HIGH. "One unassisted
+  pull-up" is target=1 with a progress series of 0,0,0,...,1: monotonic-vs-
+  guarded is meaningless and 25/50/75/100% milestones generate nothing. Needs a
+  goal `kind`: **quantity** (accumulate) | **skill** (binary, achieve) |
+  **maintenance** (hold). Skill goals additionally need **proxy / leading
+  indicators** carrying the visible progress the goal cannot (hang time,
+  lowering tempo, assistance load) - the proxies are what the athlete watches,
+  the goal is what eventually pops. Generalises past fitness (an exam, a
+  certification), which is P8's genericity claim actually tested. Validation F7.
+- **G63 Re-entry contract & sanctioned pause** (P7/G8). HIGH - plausibly the
+  highest-ROI behaviour in the product. The dominant adherence failure is not
+  training, it is RE-ENTRY: "I miss two sessions, feel like I've fallen off,
+  three weeks pass, I feel stupid going back like I'm starting from nothing, so
+  I don't." Needs (a) a re-entry contract - resume at the SAME load, the coach
+  never asks where you have been, a lapse is structurally not a broken streak;
+  and (b) a **sanctioned pause** as a declarable state with a named
+  minimum-viable dose, because **the absence of shame is not the presence of
+  permission** - an athlete who is not explicitly told "stopping is fine" will
+  invent the guilt anyway. Falling off is unplanned and carries guilt;
+  downshifting is planned and does not. A pause also needs a gentle
+  pre-authorised integrity check (the athlete's own request: don't let me use
+  the exam as a shield for everything). Validation F8, F9.
+- **G64 Low-data / deviceless mode + plain language** (P8/P3). HIGH. Two of
+  three personas had no wearable and no intention of getting one; one tracks
+  nothing at all and distrusts apps. The resolution layer, `kcal_out`, HR caps,
+  RHR baselines and rate verdicts all assume device data. P8's "minimum viable
+  day is one number" has never been tested. Needs an explicit mode where the
+  record is qualitative (did it happen, how did it feel) and the coach stays
+  useful with zero instrumentation - plus plain-language translation of the
+  athlete's own clinical numbers (an HbA1c carried for two years without ever
+  being explained). Validation F10, F16.
+- **G65 Goal contention & deliberate deprioritisation** (G18/G6). MEDIUM. G18
+  fans one event out to many goals, but nothing models goals COMPETING for one
+  finite budget of time, energy and attention - a certification exam eating the
+  same days off that training needs, and mattering more. "This goal outranks
+  that one until November" must be a declarable state that changes what the
+  coach asks for. Validation F12.
+- **G66 Occupational & incidental activity** (P1/G22). MEDIUM. "I reckon I do
+  miles a day but I've never measured owt" - eight hours a day on his feet is
+  almost certainly the largest energy term in his life and is entirely
+  unmodelled. The engine assumes activity arrives as sessions plus device steps;
+  for manual workers occupational load dominates both, and ignoring it makes
+  every energy number wrong. Validation F13.
+- **G67 Off-limits domains & deferred levers** (P7/G33). MEDIUM. G33 suppresses
+  a METRIC; this is an entire intervention DOMAIN declared untouchable ("that's
+  a battle I've already lost, don't even suggest it" - a partner's cooking), and
+  separately a lever the athlete acknowledges and PARKS ("I don't see that as
+  the problem"). Correct behaviour differs: an off-limits domain is respected
+  silently and worked around; a deferred lever is named honestly ONCE without
+  moralising, then left alone and revisited much later. Nagging either loses the
+  athlete. Validation F14.
 
 ## The frame: a guardrailed world model (belief-state, not a learned net)
 
