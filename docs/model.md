@@ -116,7 +116,7 @@ these; nothing else exists.
    safety/privacy-critical: consent ledger, access-scope, suppression prefs -
    NOT markdown pages (the redteam's "prose still hiding where data is needed").
 
-## Part 3 - The consolidating gaps (G24-G38)
+## Part 3 - The consolidating gaps (G24-G40)
 
 Each folds several redteam findings and fills a symmetry hole in a principle.
 
@@ -301,6 +301,60 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   weight plateau while a deficit is still booked = the cut paused. The engine
   flags the low-trust window and PROPOSES a mode; the athlete confirms. Inference,
   never a silent overwrite (P1). MEDIUM.
+- **G39 Event -> tiered question loop (the ask/infer/answer engine)** (P3/P7/P8).
+  Grounded in prior art (see [prior-art-world-model.md](prior-art-world-model.md)
+  s4). One event (a walk) posts to a **blackboard**; independent knowledge sources
+  (GPS parser, weight-log, calendar, weather) opportunistically fill a **slot
+  schema** (who/what/where/purchase/mood/...), each slot carrying a **fill-source
+  tag** - `auto-filled | inferred-hedge | must-ask | skipped` - which IS the
+  answerability tiering ("some claims automatically answerable, some only the
+  athlete can answer"). What to ASK: rank unfilled slots by
+  `info-gain x downstream-coaching-value / capture-cost` (active learning /
+  Horvitz mixed-initiative) and keep only the top 1-2. WHEN to ask: a JITAI
+  decision point under a hard EMA-style budget, mandatory skip/defer, **no
+  same-day re-ask** - the operational form of "never nag" (P8's 3-minute budget).
+  A skipped slot is data too (an answered-absence, not a hole). Auto-derivable
+  facts are stated; inferences are hedged; only the genuinely user-only slots
+  (with-a-kid, bought-something, why-you-stopped) are ever surfaced as a
+  question. HIGH.
+- **G40 Semantic-trajectory layer (GPS -> narrative, deterministic-first)**
+  (P4/P1/G35). The concrete build of G35 tiers 1-2, grounded in the semantic-
+  trajectory field (prior-art s5). The atomic unit is a **STOP** (stayed > R
+  metres for > T seconds) or a **MOVE** (transit), detected by a CB-SMoT-style
+  deterministic pass (speed/radius/time) - cheap, explainable, per-user tunable,
+  no ML; POSMIT-style stop-*probability* is a later confidence layer for noisy
+  urban GPX. Mode by speed band (walk<7 / run 7-15 / bike 15-25 / car>25 km/h)
+  before any classifier. Enrichment is two-stage: segment into stops, THEN a
+  POI-category->activity lookup + time-of-day prior, with the LLM only as a
+  fallback disambiguator for the ambiguous residual. **Privacy is a pipeline
+  property**: on-device reverse-geocode against a locally cached POI tile so no
+  raw coordinate crosses a network boundary; if a cloud lookup is unavoidable,
+  coarsen to a 100-300 m cell (geo-indistinguishability) first - the concrete
+  form of G35 tier-3's opt-in/on-boundary rule. NB the live walk analysis already
+  ran the crude version and its best find was an ABSENCE - the untracked 8-min gap
+  between two point-to-point walks was the real stop; gaps are first-class events.
+  MEDIUM.
+
+## The frame: a guardrailed world model (belief-state, not a learned net)
+
+vitai is a **world model of a person** in the cognitive-science sense - a
+structured internal *state plus transition rules* the coach reasons over - and
+NOT in the ML sense (a learned latent-dynamics net a la Dreamer/JEPA). It is a
+symbolic **belief-state digital twin**: the `Know You Before You Speak` split
+maps 1:1 - semantic-memory = facts + provenance tiers, user-state = goals +
+context, world-model = the effective-dated derivation/update rules - and, as
+that work notes, the athlete's true state is never directly observed, only held
+as a justified belief (which is exactly what P3's tiers are). The "guardrail" is
+the P4 firewall plus provenance: claims behave as **JTMS/ATMS-style nodes**
+(`value, tier, justification, effective_date`) so revoking a justification
+cascade-retracts everything derived from it (this unifies P1, P3 and the G29
+correction cascade under one named model). Any future learned forecasting is a
+separate, lowest-tier **prediction layer** that reads symbolic state and writes
+back tagged with its own tier - it never upgrades or overwrites a fact (P3:
+confidence never launders upward). What no ML world model or mechanistic digital
+twin in the survey keeps, and vitai does, is that every value is inspectable,
+effective-dated, and firewalled. Full sweep + citations:
+[prior-art-world-model.md](prior-art-world-model.md).
 
 ## Part 4 - Consolidations (merges, not new gaps)
 

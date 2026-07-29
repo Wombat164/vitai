@@ -190,6 +190,13 @@ founding deployment already has two sources claiming the same dates.
   merge. **Resolution-precedence decisions are exposed as routine
   explanations (G29)** - which day/source won and why - not only as a
   failure tripwire.
+- **Claims as JTMS/ATMS-style nodes (prior-art grounding for P1/P3/G29):** each
+  resolved value carries a justification (`{tier, source refs / derivation
+  chain, effective_date}`); revoking a justification (a correction, a retracted
+  observation) cascade-retracts everything derived or inferred from it - the
+  named model (Doyle 1979 / de Kleer 1986) behind "late truth cascades". Borrow
+  the labeled-assumption-set + cascade-invalidate rule only; do NOT build a full
+  ATMS engine. Confidence is a property of tier+source, never LLM-assigned.
 - Tests: nullability of every new field, pain migration, mixed old/new
   lines in one file; resolution: two-source day merges field-wise, same
   run via two platforms collapses to one, sessions-exceed-day fires the
@@ -322,6 +329,21 @@ The comparison engine and the flagship demo.
   layer only, goal+preference anchored, on-boundary/local routing over OSM,
   strict opt-in (home-area map data is the most sensitive geodata). Tiers 1-2
   ship first; tier 3 is its own opt-in sub-increment.
+- **G40 semantic-trajectory layer (grounded in the prior-art sweep):** the
+  deterministic-first build of tiers 1-2 - STOP/MOVE segmentation (CB-SMoT:
+  speed<X for >Y s within R m), speed-band mode classification, two-stage POI
+  enrichment (deterministic lookup + time prior; LLM only for the ambiguous
+  residual). Privacy as a PIPELINE property: on-device reverse-geocode against a
+  cached POI tile, coarsen to 100-300 m (geo-indistinguishability) before any
+  cloud hop. Absences (an untracked gap between two point-to-point walks = the
+  real stop) are first-class events. See [prior-art-world-model.md](prior-art-world-model.md) s5.
+- **G39 event -> tiered question loop (the ask/infer/answer engine):** an event
+  posts to a blackboard; knowledge sources fill a slot schema, each slot tagged
+  `auto-filled / inferred-hedge / must-ask / skipped`. Unfilled slots ranked by
+  info-gain x coaching-value / capture-cost; asked at a JITAI decision point
+  under an EMA budget, no same-day re-ask. This is where geodata interpretation
+  (G40) turns into the coach WONDERING the right things and asking only the
+  user-only ones (with-a-kid, bought-something). Prior-art s4.
 - **Ingest tooling (content-repo side, not the public engine):** a
   `strava_pull.py` (Strava API - non-destructive, rich latlng/time/elevation
   streams; the durable geodata source since it aggregates Polar); FIX the
@@ -378,6 +400,13 @@ G6/increment 1, intake plan from the dated targets).
   correct.
 - NOT: LLM-generated forecasts (formulas only); the LLM only explains and
   proposes-for-backtest.
+- **Prediction-tier guardrail (world-model frame):** should a learned predictor
+  ever enter (trend/risk scoring beyond the documented formulas), it is a
+  separate, clearly-labeled, lowest-provenance-tier layer that READS symbolic
+  state and writes its output back tagged with its own tier - it never upgrades
+  or overwrites a fact (P3: confidence never launders upward). This is what lets
+  vitai borrow Dreamer/JEPA-style forecasting VALUE without adopting an opaque
+  learned latent as state. See [prior-art-world-model.md](prior-art-world-model.md) s1.
 - Cut-first: metabolic-adaptation and VO2max models (ship thermodynamic +
   adaptive-TDEE + Banister as the honest core); the accuracy panel.
 
