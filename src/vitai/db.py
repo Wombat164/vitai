@@ -37,7 +37,7 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               # `mood`/`pain` and the two resolution VALUES stay numeric-
               # affinity on purpose - a claim's value may be a number, and
               # TEXT affinity would stringify it for every consumer.
-              "feel", "coverage", "pain_site", "start_time", "setting",
+              "feel", "coverage", "pain_site", "pain_side", "start_time", "setting",
               "route", "place", "with", "context", "planned", "weather",
               "facilities", "mode", "depends_on",
               "claim_id", "merged_into", "retracted_by", "cascaded_from",

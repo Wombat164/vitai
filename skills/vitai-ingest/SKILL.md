@@ -55,8 +55,20 @@ does not - the weekly budget is three minutes, and a field the athlete has to
 be interrogated for costs more than it returns:
 
 - `daily`: `mood` (0-10), `feel` (fun|neutral|chore), `coverage`
-  (full|partial|manual), and `pain` + `pain_site`. Write `pain`/`pain_site`
-  on new lines rather than the retired `hip_pain`; a pain of 0 needs no site.
+  (full|partial|manual), and `pain` + `pain_site` + `pain_side`. Write these
+  rather than the retired `hip_pain`; a pain of 0 needs no site.
+
+  `pain_site` is a CLOSED vocabulary (`semantics/body_sites.toml`). Map the
+  athlete's own words onto it - "IT band", "itb" and "kneecap" all resolve to
+  `knee`; "lumbar" and "low back" to `lower_back` - and never invent a site.
+  If their words genuinely do not fit, ask, then propose an alias upstream;
+  do not write free text that will fail validation.
+
+  Sides are SEPARATE (`left | right | bilateral`), never part of the site
+  name. A paired structure (knee, shoulder, hip, achilles) needs one, because
+  "my knee hurts" does not say which knee. Midline sites (lower back, chest,
+  neck) take none. If the athlete says a paired site without a side, that is
+  worth the one question - it changes what a coach does.
 - `sessions`: `start_time` (with its UTC offset - this is what lets one run
   logged on two platforms be recognized as one run), `elevation_m`,
   `setting`, `route`, `place`, `with`, `context`, `planned`, `weather`.

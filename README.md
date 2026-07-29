@@ -138,6 +138,22 @@ not in code - the engine is the same for everyone, the thresholds are yours.
 Once you change one, record it in `thresholds.jsonl` so the old value keeps
 governing the weeks it governed.
 
+### Where it hurts
+
+`pain_site` is a closed vocabulary rather than free text, so "knee", "Knee",
+"IT band" and "patella" are one countable place rather than four unrelated
+ones. Sides are a separate field (`pain_side`), following HL7 FHIR and
+openEHR - both post-coordinate laterality rather than folding it into the
+site name. A paired structure needs a side to be actionable; a midline one
+refuses it.
+
+The vocabulary lives in `semantics/body_sites.toml` - a curated registry:
+neither data nor code, versioned in-repo, with its evidence in its own
+comments. Granularity follows the Michigan Body Map, a validated self-report
+instrument, trimmed to the musculoskeletal sites a training record can act
+on. No clinical ontology is vendored; see
+[docs/prior-art-anatomy.md](docs/prior-art-anatomy.md) for why.
+
 ### One truth per quantity
 
 Two sources will eventually describe the same day, and a calorie is burned
@@ -233,7 +249,10 @@ doctrine plus stubs. Built from a real, in-use personal deployment.
   [docs/cross-metric-inference.md](docs/cross-metric-inference.md),
   [docs/plan-v3.md](docs/plan-v3.md) (the build plan)
 - Research: [docs/prior-art.md](docs/prior-art.md) - the survey behind the
-  design
+  design; [docs/prior-art-world-model.md](docs/prior-art-world-model.md) -
+  vitai as a guardrailed world model;
+  [docs/prior-art-anatomy.md](docs/prior-art-anatomy.md) - naming the place
+  that hurts
 - Brand: [assets/BRAND.md](assets/BRAND.md)
 
 ## Contributing

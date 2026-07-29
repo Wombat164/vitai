@@ -106,7 +106,8 @@ def test_additive_field_does_not_invalidate_old_lines():
     assert validate_record("daily", old_line) == []  # NOT "missing key 'mood'"
 
     new_line = {**old_line, "_gen": 2, "source": None, "mood": 7, "feel": None,
-                "coverage": None, "pain": None, "pain_site": None}
+                "coverage": None, "pain": None, "pain_site": None,
+                "pain_side": None}
     del new_line["hip_pain"]  # retired at gen 2; a new line need not carry it
     assert validate_record("daily", new_line) == []
 
@@ -126,7 +127,8 @@ def test_retired_key_stays_legal_but_stops_being_required():
     assert validate_record("daily", gen1) == []
     # ...and a gen-2 line may still carry it without complaint.
     gen2 = {**gen1, "_gen": 2, "source": None, "mood": None, "feel": None,
-            "coverage": None, "pain": None, "pain_site": None}
+            "coverage": None, "pain": None, "pain_site": None,
+            "pain_side": None}
     assert validate_record("daily", gen2) == []
 
 

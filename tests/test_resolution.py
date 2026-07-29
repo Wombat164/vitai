@@ -31,7 +31,7 @@ def daily(date, source=None, gen=2, **kw):
            "kcal_out": None, "kcal_in": None, "protein_g": None, "sleep_h": None,
            "rhr": None, "alcohol": None, "note": None,
            "source": source, "mood": None, "feel": None, "coverage": None,
-           "pain": None, "pain_site": None, "_gen": gen}
+           "pain": None, "pain_site": None, "pain_side": None, "_gen": gen}
     rec.update(kw)
     return rec
 
@@ -113,8 +113,9 @@ def test_pain_and_site_travel_together():
     assert validate_record("daily", daily("2030-05-01", pain=0)) == []
     assert any("says nothing" in p for p in validate_record(
         "daily", daily("2030-05-01", pain_site="knee")))
+    # A paired site needs its side too - see test_anatomy.py for that rule.
     assert validate_record("daily", daily(
-        "2030-05-01", pain=4, pain_site="knee")) == []
+        "2030-05-01", pain=4, pain_site="knee", pain_side="left")) == []
 
 
 # ---- the hip_pain migration --------------------------------------------------
@@ -143,7 +144,8 @@ def test_pain_gate_still_fires_off_legacy_lines():
 def test_mixed_old_and_new_lines_in_one_file(tmp_path):
     write(tmp_path / "daily.jsonl", [
         legacy_daily("2030-05-01", steps=9000, hip_pain=2),
-        daily("2030-05-02", steps=9500, pain=2, pain_site="knee"),
+        daily("2030-05-02", steps=9500, pain=2, pain_site="knee",
+              pain_side="left"),
     ])
     from vitai.jsonl import load
     recs = load(tmp_path, "daily")

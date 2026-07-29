@@ -29,9 +29,13 @@ KEYS: dict[str, list[str]] = {
     # describe one joint cannot describe a second one. Old lines keep it and
     # keep validating; the engine reads them as pain at site "hip" (see
     # `canonical_daily`). New lines write `pain`/`pain_site` instead.
+    # `pain_site` is a closed vocabulary (semantics/body_sites.toml) and
+    # `pain_side` post-coordinates laterality rather than baking it into the
+    # site name - the HL7 FHIR / openEHR pattern. See anatomy.py.
     "daily": ["date", "steps", "distance_km", "active_min", "kcal_out", "kcal_in",
               "protein_g", "sleep_h", "rhr", "hip_pain", "alcohol", "note",
-              "source", "mood", "feel", "coverage", "pain", "pain_site"],
+              "source", "mood", "feel", "coverage", "pain", "pain_site",
+              "pain_side"],
     # `location` is RETIRED at generation 2, split into `place` (coarse, and
     # deliberately coarse - "home"/"work"/a travel slug, never an address) and
     # `route` (a personal slug the athlete names). Free text could not be
@@ -138,7 +142,7 @@ KEY_GENERATION: dict[str, dict[str, int]] = {
     "weight": {"body_fat_pct": 2, "kg_lo": 2, "kg_hi": 2,
                "body_fat_lo": 2, "body_fat_hi": 2},
     "daily": {"source": 2, "mood": 2, "feel": 2, "coverage": 2,
-              "pain": 2, "pain_site": 2},
+              "pain": 2, "pain_site": 2, "pain_side": 2},
     "sessions": {"source": 2, "start_time": 2, "elevation_m": 2, "setting": 2,
                  "route": 2, "place": 2, "with": 2, "context": 2,
                  "planned": 2, "weather": 2},
@@ -280,6 +284,7 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
         if rec.get("pain_site") and rec.get("pain") is None \
                 and rec.get("hip_pain") is None:
             problems.append("'pain_site' without a 'pain' score says nothing")
+        problems += _validate_pain_location(rec)
     if dataset == "sessions":
         problems += _enum(rec, "setting", SETTINGS, optional=True)
         problems += _enum(rec, "context", SESSION_CONTEXTS, optional=True)
@@ -323,6 +328,48 @@ def _enum(rec: dict, key: str, allowed: set[str], *,
     if v not in allowed:
         return [f"'{key}' must be one of {sorted(allowed)}, got {v!r}"]
     return []
+
+
+def _validate_pain_location(rec: dict) -> list[str]:
+    """`pain_site` against the curated registry, `pain_side` against anatomy.
+
+    Imported lazily so `schema` stays importable without touching the
+    filesystem - validation is the only thing that needs the registry, and a
+    schema module that reads a file on import is a schema module that fails
+    in odd places.
+    """
+    from .anatomy import SIDES, describe, is_paired, is_site, known_sites, resolve
+
+    problems: list[str] = []
+    site = rec.get("pain_site")
+    side = rec.get("pain_side")
+
+    if site and not is_site(site):
+        problems.append(
+            f"unknown 'pain_site' {site!r} - use one of {', '.join(known_sites())} "
+            "(or an alias the registry knows; add one in semantics/body_sites.toml "
+            "rather than inventing a site here)")
+        return problems
+
+    if side is not None and side not in SIDES:
+        problems.append(f"'pain_side' must be one of {sorted(SIDES)} or null, "
+                        f"got {side!r}")
+    if side is not None and not site:
+        problems.append("'pain_side' without a 'pain_site' says nothing")
+
+    if site and rec.get("pain"):
+        # A paired structure without a side is not actionable: "my knee hurts"
+        # does not tell a coach which knee to stop loading. Midline sites take
+        # no side at all, and claiming one would be a false precision.
+        if is_paired(site) and side is None:
+            problems.append(
+                f"'{resolve(site)}' exists on both sides - set 'pain_side' to "
+                "left, right or bilateral")
+        if not is_paired(site) and side is not None:
+            problems.append(
+                f"'{resolve(site)}' is a midline site ({describe(site)}) and "
+                "takes no 'pain_side'")
+    return problems
 
 
 def _validate_policy(dataset: str, rec: dict) -> list[str]:

@@ -1,0 +1,214 @@
+# Body sites - a curated registry (P5), not code and not data.
+#
+# `pain_site` was free text, which meant "knee", "Knee", "left knee" and
+# "patella" were four different places and none of them could be counted. This
+# file is the closed vocabulary that fixes that, and the aliases that let an
+# athlete keep typing what they already type.
+#
+# WHY IT LOOKS LIKE THIS - the prior art (docs/prior-art-anatomy.md):
+#
+# - Laterality is POST-COORDINATED: sides live in `pain_side`, never in the
+#   site name. HL7 FHIR (`BodyStructure.includedStructure.structure` +
+#   `.laterality`) and openEHR (`CLUSTER.anatomical_location`, where body-site
+#   name is the only mandated element and laterality is a separate qualifier)
+#   made this choice independently. It also stops the vocabulary doubling.
+# - Granularity follows the Michigan Body Map, a VALIDATED self-report
+#   instrument (35 regions; the revision added front/back views because
+#   left-right errors were the common failure). Trimmed here to the
+#   musculoskeletal sites a training record can act on.
+# - `paired` marks structures that exist on both sides and therefore need a
+#   side to be actionable. "My knee hurts" is not a usable sentence for a
+#   coach. Midline sites take no side at all.
+# - `osiics` maps to the IOC's sports-injury coding system, but ONLY where the
+#   letter is verified from a primary source. Blank means unverified, not
+#   absent - see the note at the bottom. Guessing a code that later turns out
+#   wrong is worse than shipping no code.
+#
+# Deliberately NOT an ontology import. SNOMED CT cannot be redistributed by
+# non-Affiliates; UBERON is multi-species and runs to tens of thousands of
+# classes; FMA likewise. A record whose weekly cost must stay under three
+# minutes needs about thirty options, not forty thousand.
+
+version = 1
+
+[regions]
+head_neck = "Head and neck"
+trunk = "Trunk"
+upper_limb = "Upper limb"
+lower_limb = "Lower limb"
+
+# --- head and neck ------------------------------------------------------------
+
+[sites.head]
+region = "head_neck"
+label = "Head"
+paired = false
+osiics = "H"
+aliases = ["headache", "skull"]
+
+[sites.jaw]
+region = "head_neck"
+label = "Jaw"
+paired = true
+aliases = ["tmj", "temporomandibular"]
+
+[sites.neck]
+region = "head_neck"
+label = "Neck"
+paired = false
+osiics = "N"
+aliases = ["cervical", "cervical spine"]
+
+# --- trunk --------------------------------------------------------------------
+
+[sites.chest]
+region = "trunk"
+label = "Chest"
+paired = false
+osiics = "C"
+aliases = ["sternum", "ribs", "rib"]
+
+[sites.abdomen]
+region = "trunk"
+label = "Abdomen"
+paired = false
+aliases = ["stomach", "belly", "core"]
+
+[sites.upper_back]
+region = "trunk"
+label = "Upper back"
+paired = false
+aliases = ["thoracic", "thoracic spine", "mid back", "between the shoulder blades"]
+
+[sites.lower_back]
+region = "trunk"
+label = "Lower back"
+paired = false
+osiics = "L"
+aliases = ["lumbar", "lumbar spine", "low back", "lower-back"]
+
+[sites.pelvis]
+region = "trunk"
+label = "Pelvis"
+paired = false
+aliases = ["sacrum", "si joint", "sacroiliac", "tailbone", "coccyx"]
+
+# --- upper limb ---------------------------------------------------------------
+
+[sites.shoulder]
+region = "upper_limb"
+label = "Shoulder"
+paired = true
+osiics = "S"
+aliases = ["shoulder girdle", "rotator cuff", "deltoid", "ac joint"]
+
+[sites.upper_arm]
+region = "upper_limb"
+label = "Upper arm"
+paired = true
+osiics = "U"
+aliases = ["bicep", "biceps", "tricep", "triceps"]
+
+[sites.elbow]
+region = "upper_limb"
+label = "Elbow"
+paired = true
+osiics = "E"
+aliases = ["tennis elbow", "golfers elbow", "olecranon"]
+
+[sites.forearm]
+region = "upper_limb"
+label = "Forearm"
+paired = true
+aliases = ["lower arm"]
+
+[sites.wrist]
+region = "upper_limb"
+label = "Wrist"
+paired = true
+aliases = ["carpal"]
+
+[sites.hand]
+region = "upper_limb"
+label = "Hand"
+paired = true
+aliases = ["finger", "fingers", "thumb", "knuckle"]
+
+# --- lower limb ---------------------------------------------------------------
+
+[sites.hip]
+region = "lower_limb"
+label = "Hip"
+paired = true
+aliases = ["buttock", "glute", "glutes", "trochanter", "hip flexor"]
+
+[sites.groin]
+region = "lower_limb"
+label = "Groin"
+paired = true
+aliases = ["adductor", "adductors", "inguinal"]
+
+[sites.thigh]
+region = "lower_limb"
+label = "Thigh (front)"
+paired = true
+aliases = ["quad", "quads", "quadriceps", "upper leg"]
+
+[sites.hamstring]
+region = "lower_limb"
+label = "Hamstring"
+paired = true
+aliases = ["hamstrings", "back of thigh", "posterior thigh"]
+
+[sites.knee]
+region = "lower_limb"
+label = "Knee"
+paired = true
+aliases = ["patella", "kneecap", "meniscus", "itb", "it band"]
+
+[sites.calf]
+region = "lower_limb"
+label = "Calf"
+paired = true
+aliases = ["gastroc", "gastrocnemius", "soleus"]
+
+[sites.shin]
+region = "lower_limb"
+label = "Shin"
+paired = true
+aliases = ["tibia", "shin splints", "anterior tibial"]
+
+[sites.achilles]
+region = "lower_limb"
+label = "Achilles"
+paired = true
+aliases = ["achilles tendon", "heel cord"]
+
+[sites.ankle]
+region = "lower_limb"
+label = "Ankle"
+paired = true
+aliases = ["malleolus"]
+
+[sites.heel]
+region = "lower_limb"
+label = "Heel"
+paired = true
+aliases = ["plantar", "plantar fascia", "plantar fasciitis", "calcaneus"]
+
+[sites.foot]
+region = "lower_limb"
+label = "Foot"
+paired = true
+aliases = ["toe", "toes", "midfoot", "forefoot", "arch", "metatarsal"]
+
+# --- provenance ---------------------------------------------------------------
+#
+# OSIICS letters recorded above are only those verified from a primary source:
+# H (head), N (neck), S (shoulder), U (upper arm), E (elbow), C (chest) and
+# L (lumbar - the buttock code B was merged into it in 2019). The remaining
+# sites are deliberately left blank rather than guessed; completing them needs
+# the official OSIICS code table, which is free to use with acknowledgement.
+#
+# OSIICS is one of two systems adopted by the IOC at the 2019 Lausanne
+# consensus. Acknowledge it in anything that consumes these codes.

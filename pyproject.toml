@@ -32,7 +32,7 @@ vitai = "vitai.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-vitai = ["templates/*", "templates/**/*"]
+vitai = ["templates/*", "templates/**/*", "semantics/*.toml"]
 
 [tool.ruff]
 line-length = 100

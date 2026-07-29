@@ -366,17 +366,29 @@ def resolve(datasets: dict[str, list[dict]],
 
 
 def canonical_daily(rec: dict) -> dict:
-    """Read a daily row with the retired `hip_pain` mapped forward.
+    """Read a daily row with the retired `hip_pain` mapped forward and the
+    site normalised to its registry slug.
 
     Old lines said `hip_pain: 3`; the generalized shape says `pain: 3` at
     `pain_site: "hip"`. Rather than rewrite history - which the append-only
     rule forbids outright - the engine reads the old field as what it always
     meant. A line that carries BOTH keeps its explicit `pain`, because a line
     written under the new shape knows better than this mapping does.
+
+    Legacy lines get no `pain_side`, and none is invented: the old field never
+    recorded which hip, and guessing a side would manufacture a fact.
     """
-    if rec.get("pain") is not None or rec.get("hip_pain") is None:
-        return rec
-    return {**rec, "pain": rec["hip_pain"], "pain_site": rec.get("pain_site") or "hip"}
+    from .anatomy import resolve
+
+    out = rec
+    if out.get("pain") is None and out.get("hip_pain") is not None:
+        out = {**out, "pain": out["hip_pain"],
+               "pain_site": out.get("pain_site") or "hip"}
+    # Normalise whatever spelling was written onto the canonical slug, so
+    # "IT band" and "itb" group with "knee" downstream.
+    if (site := out.get("pain_site")) and (slug := resolve(site)) and slug != site:
+        out = {**out, "pain_site": slug}
+    return out
 
 
 def _ref_to_claim_id(dataset: str, ref: str) -> str | None:
