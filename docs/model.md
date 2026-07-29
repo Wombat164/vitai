@@ -116,7 +116,7 @@ these; nothing else exists.
    safety/privacy-critical: consent ledger, access-scope, suppression prefs -
    NOT markdown pages (the redteam's "prose still hiding where data is needed").
 
-## Part 3 - The consolidating gaps (G24-G54)
+## Part 3 - The consolidating gaps (G24-G55)
 
 Each folds several redteam findings and fills a symmetry hole in a principle.
 
@@ -558,6 +558,30 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   so ("the Cadzand start needs a lift or the bus at 08:40 - want me to lay out
   the options?"). Autonomous booking is never done on the athlete's behalf.
   MEDIUM.
+
+- **G55 Owned gear inventory & consumable lifecycle** (extends G53/G48/G52).
+  G53 covers what is CARRIED for a session; this covers what is OWNED, and it
+  behaves differently in three ways:
+  - *Gear GATES activities.* No racket, no tennis; no stick, no hockey. The
+    planner may only propose sports the athlete is equipped for, and acquiring
+    gear is a signal in itself - a new stick or racket often means a new sport
+    entering the plan, which the coach should notice and ask about rather than
+    ignore (a goal may be forming).
+  - *Consumables have a LIFECYCLE, and it is deterministically trackable.*
+    Running shoes are the canonical case: they carry accumulated mileage and a
+    replacement threshold (commonly ~600-800 km, brand and model dependent). The
+    engine can sum run distance per shoe pair since purchase and flag
+    replacement - a genuine derived metric, in the number path, not a guess.
+    Worn-out shoes are an injury-risk factor, so this is a safety-adjacent
+    signal, not a shopping reminder. HR-strap batteries, worn kit and expiring
+    memberships are the same shape.
+  - *Gear has a LOCATION and may not be duplicated.* Shoes at the home address
+    are not shoes at the holiday flat; a watch left on the charger at home is
+    unavailable. Gear location joins the place inventory (G48) and the carry/kit
+    check (G53), and a single-instance item is contended like any shared asset
+    (G52) when a household member has it.
+  Condition/availability (dead battery, kit in the wash, shoes soaked from
+  yesterday's rain) gates use as hard as absence does. MEDIUM.
 
 ## The frame: a guardrailed world model (belief-state, not a learned net)
 
