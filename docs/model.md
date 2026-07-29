@@ -116,7 +116,7 @@ these; nothing else exists.
    safety/privacy-critical: consent ledger, access-scope, suppression prefs -
    NOT markdown pages (the redteam's "prose still hiding where data is needed").
 
-## Part 3 - The consolidating gaps (G24-G77)
+## Part 3 - The consolidating gaps (G24-G84)
 
 Each folds several redteam findings and fills a symmetry hole in a principle.
 
@@ -792,6 +792,105 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   walk) must be approached by changing the constraint - load, surface, footwear,
   strength work, clinical input - rather than by adding volume. The model's
   progression logic assumes the limiter is conditioning.
+
+- **G78 Athlete-defined metrics: the schema is a developer's ontology**
+  (P8/P5/artifact-1). CRITICAL, and the largest finding of the whole validation
+  programme. Sweeps 1-2 only ever asked for metrics the DEVELOPER chose - steps,
+  sleep, calories, heart rate - so they could only find gaps in what was already
+  imagined. Sweep 3 asked eight athletes what THEY wanted counted. **Almost
+  nothing they named fits the schema**, and several are things they have counted
+  privately for years: nights without the 3am vending machine; whether the stairs
+  happened without stopping ("12 of 14"); belt holes measured against a kept
+  wedding-day belt; times saying yes instead of "you go on, I'll wait here";
+  meals eaten sitting down rather than over the sink; magpies on the path before
+  7am. A fixed schema cannot serve this. The athlete must be able to DECLARE a
+  metric - name, kind, unit, scale, cadence - and have the engine count, streak,
+  trend and celebrate it as a first-class citizen, without a developer.
+- **G79 Metric KINDS beyond measurement** (extends G78/G62). The invented
+  metrics are almost never measurements. They are: **counters** (times I said
+  yes); **days-since with reset** (days since a bad night - "reset to zero, like
+  a superstition"; weeks since a session felt easy); **reset-on-fail streaks**
+  (nights without the vending machine, "resets the second a Twix happens");
+  **fractions of a named obstacle** ("12 of 14 stairs"); **pass/fail against a
+  fixed personal landmark** (the staircase whose bannister he built);
+  **occupational capacity** (fares in a row before needing a sit); **affective
+  quality** (did it feel EASY - explicitly "not RPE; RPE tells you how hard,
+  this is whether it felt light"); and **deliberate-omission counts** (sessions
+  skipped guilt-free with no makeup session - counting NOT training as the
+  achievement).
+  **Crucially, magnitude is often EXCLUDED on purpose**: "a day where I did five
+  useless minutes counts the same as the full session, because the
+  not-showing-up is the actual enemy", and "whether we did it - not the
+  distance, not the calories". Quantifying these would destroy what they measure.
+- **G80 Relational metrics: the achievement is shared** (P8/G51). SIX of eight
+  athletes named a metric whose subject is a RELATIONSHIP, unprompted: did we sit
+  down together of an evening; did we talk with no phones; days since we had a
+  proper meal rather than crossing in the kitchen; whether we walked together
+  ("not the distance - whether we did it"); whether the kids came and watched -
+  **and WHICH one, because (in his words) the two of them watching are two
+  different things to him**. The engine is single-athlete throughout. These are not the
+  athlete's metrics with a person attached; the dyad is the subject.
+- **G81 Per-metric privacy, and the refusal to capture** (extends G32/G33).
+  Several metrics were disclosed WITH an explicit privacy condition: "I'd want it
+  private, not something that shows up on a screen anyone else sees" (a chest
+  feeling after eating late); "I would never say this to my old coach" (the
+  magpies); "I'd never admit to him that I know the score" (a private
+  head-to-head ledger with a friend); a countdown that "sounds like I'm wishing
+  time away with my own kid". Needs per-metric visibility - including HIDDEN FROM
+  THE COACH. And the harder case: a quantity the athlete keeps, will not record,
+  and does not want recorded - a running count of bad shifts, "some of it isn't
+  for tracking". **The model must be able to know a thing exists and deliberately
+  not hold it.** A capture system that treats every disclosed quantity as
+  capturable is a system people stop talking to.
+- **G82 The unaccounted period** (P1/P2/G34). EIGHT of eight, independently and
+  unprompted, described a stretch of months that resists any form - and in every
+  case it is where the actual story lives. "A gap where I wasn't really present
+  for my own life." "Nothing changed, I just quit paying attention, on purpose,
+  because checking meant admitting it was going wrong again." "Frightened and
+  frozen and ashamed all at once and none of those turn into a walk."
+  Three consequences the model must absorb:
+  - **A gap is data, not missing data.** The absence has a shape and a duration
+    and is often the most informative region of the record.
+  - **The recorded reason may be a self-protective fiction.** One athlete's log
+    attributes a months-long drop to an Achilles injury; the real cause was his
+    father's stroke, and he "let the Achilles take the blame because it was
+    easier than saying the actual thing". A stated reason is a claim (P1), and
+    the engine must not treat it as ground truth.
+  - **The most valuable period may contain no data at all.** An athlete's ten
+    weeks off after a fracture - eating ad-lib, cross-training only - is the
+    natural experiment that shows her physiology recovering, and it is "a hole in
+    the spreadsheet... it just closes over in the log like it didn't happen".
+  And the boundary: an athlete may decline to explain a gap. "I wouldn't want
+  there to be [a box], some of it isn't for tracking." Never demand a reason.
+- **G83 What they would be sad to lose is never a number** (P7/G6). Asked what
+  they would want to look back on in five years, NOT ONE of eight named a metric,
+  a target or a weight. They named an identity or a relationship: "that I still
+  had a me outside the ward"; "who was standing at the finish line, not the time
+  on the clock"; "walking her down that aisle without her having to slow her pace
+  for me"; "if I've kept the weight off but I'm still the mum who says 'you go
+  on', I'd count that as having lost, whatever the scale says"; "I'd rather
+  remember running with him in the pram and him laughing at the wind than
+  remember hitting 62". The goal model is target-based all the way down. It needs
+  a layer ABOVE targets - the thing the targets are FOR - so progress is judged
+  against what the athlete actually values, and a target met while the thing it
+  served was lost registers as the failure it is.
+- **G84 Conflict shapes the model cannot express** (extends G56/G65). Every
+  athlete named a genuine trade, and three have shapes the substitution
+  machinery (G56) does not cover:
+  - **Cost-before-benefit, and that trough is where people quit.** "Cutting the
+    wine costs me before it pays me anything back, and that gap is exactly where
+    I've quit before." An intervention with a delayed payoff needs its trough
+    modelled and defended, not just its endpoint promised.
+  - **Negative return on effort.** Pushing the walking flares the knee, which
+    costs two days of school runs - so MORE effort yields LESS total activity.
+    Ramp logic assumes monotonic returns.
+  - **The intervention destroys the mechanism.** "Eating more deliberately means
+    it stops feeling like the drug is doing it for me, and if I have to TRY, it
+    will go the way of every other diet." The physiologically correct change
+    undermines the psychological property that made it work at all.
+  Plus the honest refusal: two hours of pints a week are "the only two hours I'm
+  not being useful to somebody... I'm not sure I want it squared." A conflict may
+  be correctly left unresolved.
 
 ## The frame: a guardrailed world model (belief-state, not a learned net)
 
