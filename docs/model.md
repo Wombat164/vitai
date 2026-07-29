@@ -116,7 +116,7 @@ these; nothing else exists.
    safety/privacy-critical: consent ledger, access-scope, suppression prefs -
    NOT markdown pages (the redteam's "prose still hiding where data is needed").
 
-## Part 3 - The ten consolidating gaps (G24-G33)
+## Part 3 - The consolidating gaps (G24-G38)
 
 Each folds several redteam findings and fills a symmetry hole in a principle.
 
@@ -206,6 +206,56 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   symmetry to an additive-only design); and units as a storage-is-SI /
   display-converts-at-the-edge doctrine (units are baked into field names today).
   MEDIUM.
+- **G36 Composition-resolved weight & the partitioning model** (P1/P3/P4).
+  Scale weight is a LOSSY proxy for the goal-relevant quantity (fat), and it
+  cannot by itself distinguish fat loss from recomposition. The design:
+  - *Observed atoms* are `kg` + `body_fat_pct` (each with a G37 band). Fat mass
+    and fat-free mass are DERIVED (weight x bf%, and the complement), never
+    stored - the decomposition is rebuildable, so it lives in the report layer,
+    not the ground-truth log (P4 firewall).
+  - *The trustworthy signal is the fat-mass trajectory over WEEKS, not the daily
+    scale or the daily bf%.* Bioimpedance FFM is hydration-noisy day to day (a
+    real series can swing ~1 kg of "FFM" within a week - water, not muscle), so
+    short-term FFM change is structurally excluded from any muscle claim; only
+    the multi-week smoothed slope is read.
+  - *The prediction is a PARTITIONING (p-ratio) forecast, not a scale forecast.*
+    Energy balance predicts total tissue energy; a fat-partition fraction splits
+    it into a fat-mass trajectory and a lean-mass trajectory, each with an error
+    band; the scale-weight forecast is their SUM and is explicitly the least
+    informative view. The partition fraction is CALIBRATED from the athlete's own
+    weeks-smoothed bf%-x-weight history (the anchor-audit loop, G24/P6); when
+    history is thin it falls back to a physiological prior from starting body-fat
+    %, training status, protein adequacy and deficit size (a Forbes/Hall-class
+    prior). A hand-built cut spreadsheet's fixed "0.5 kg muscle/month" assumption
+    is the naive, un-calibrated version of exactly this - our model learns the
+    number instead of assuming it.
+  - *Recomposition detector.* A deterministic signal fires when the weeks-smoothed
+    fat trend is falling AND the weeks-smoothed FFM trend is flat-or-up: the
+    athlete is recomposing (best case), and the scale being flat is the SIGNATURE,
+    not a stall. When there is no composition read at all, the engine raises a
+    "measurement-limited: recomposition invisible to the scale" flag and offers a
+    Tier-2 proxy read (progressive overload in the strength log + protein adequacy
+    + circumference/photo trend -> "likely recomposition, not confirmed", low
+    confidence, never a kg-of-muscle number).
+  - *Personal kcal-per-kg is calibrated, not textbook.* The naive 7,700 assumes
+    100% fat; worked from a real cut's fat/lean split the effective figure came to
+    ~6,000-6,500 kcal per scale-kg for a well-run cut. A naive
+    cumulative-deficit-vs-scale-weight arithmetic can report a wildly higher number
+    (a five-figure kcal/kg) - nonsense the model must reject, because a holiday
+    plateau corrupts scale weight while the deficit keeps booking. HIGH.
+- **G37 Measurement-uncertainty intervals on observations** (P3/P1). An observed
+  reading carries an instrument band (`kg_lo`/`kg_hi`, `body_fat_lo`/`body_fat_hi`)
+  distinct from a forecast error band; a wide band (bioimpedance, a jittery scale)
+  downgrades trust in that reading without discarding it, and band ordering
+  (lo<=point<=hi) is validated at ingest. Epistemic tiering (P3) now spans
+  observations, not only inferences. MEDIUM.
+- **G38 Context & data-quality inferred from record shape** (G34/G26/P1). Mode
+  (G34) and tracking-lapse (G26) can be READ OFF the record when undeclared:
+  `intake==expenditure` exact ties for N days = a placeholder fill, not
+  measurement; an overnight >1 kg jump = water/glycogen (a feast), not fat; a
+  weight plateau while a deficit is still booked = the cut paused. The engine
+  flags the low-trust window and PROPOSES a mode; the athlete confirms. Inference,
+  never a silent overwrite (P1). MEDIUM.
 
 ## Part 4 - Consolidations (merges, not new gaps)
 

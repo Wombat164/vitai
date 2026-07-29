@@ -15,7 +15,15 @@ from datetime import date
 
 # dataset -> ordered keys (column order for the SQLite read model)
 KEYS: dict[str, list[str]] = {
-    "weight": ["date", "kg", "source", "note"],
+    # `kg` + `body_fat_pct` are the OBSERVED atoms; fat mass and fat-free mass
+    # are DERIVED from them in the report layer (G36), never stored - scale
+    # weight is a lossy proxy for the goal-relevant quantity (fat), so the
+    # decomposition is rebuildable, not ground truth. `*_lo`/`*_hi` carry the
+    # instrument's measurement-uncertainty band (G37): a wide band (bioimpedance
+    # FFM, a jittery scale) downgrades trust in that reading without discarding
+    # it. All gen-2 (see KEY_GENERATION); gen-1 weight lines predate them.
+    "weight": ["date", "kg", "source", "note", "body_fat_pct",
+               "kg_lo", "kg_hi", "body_fat_lo", "body_fat_hi"],
     "daily": ["date", "steps", "distance_km", "active_min", "kcal_out", "kcal_in",
               "protein_g", "sleep_h", "rhr", "hip_pain", "alcohol", "note"],
     "sessions": ["date", "type", "distance_km", "duration_s", "avg_hr", "max_hr",
@@ -42,8 +50,11 @@ INFERENCE_KINDS = {"pattern", "risk", "recommendation", "observation", "question
 KEY_GENERATION: dict[str, dict[str, int]] = {
     # dataset -> {key: generation it was introduced}. Keys absent here are gen 1.
     # e.g. increment 2 will add:  "daily": {"mood": 2, "feel": 2, "coverage": 2}
+    "weight": {"body_fat_pct": 2, "kg_lo": 2, "kg_hi": 2,
+               "body_fat_lo": 2, "body_fat_hi": 2},
 }
 CURRENT_GENERATION: dict[str, int] = {name: 1 for name in KEYS}
+CURRENT_GENERATION["weight"] = 2
 
 
 def key_generation(dataset: str, key: str) -> int:
@@ -65,6 +76,8 @@ _TYPES: dict[str, tuple[type, ...]] = {
     "rhr": (int,), "hip_pain": (int,), "duration_s": (int,), "avg_hr": (int,),
     "max_hr": (int,), "cadence": (int,), "kcal": _NUMERIC, "rpe": (int,),
     "confidence": _NUMERIC,
+    "body_fat_pct": _NUMERIC, "kg_lo": _NUMERIC, "kg_hi": _NUMERIC,
+    "body_fat_lo": _NUMERIC, "body_fat_hi": _NUMERIC,
 }
 
 # extra keys that are always legal (the supersedes mechanic + schema generation)
@@ -102,6 +115,18 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
         if k in keys and (v := rec.get(k)) is not None and k in rec:
             if isinstance(v, bool) or not isinstance(v, types):
                 problems.append(f"'{k}' should be a number or null, got {v!r}")
+    if dataset == "weight":
+        if (bf := rec.get("body_fat_pct")) is not None and not isinstance(bf, bool):
+            if isinstance(bf, _NUMERIC) and not 0 < bf < 100:
+                problems.append(f"'body_fat_pct' is a 0-100 percentage, got {bf!r}")
+        # measurement band (G37): lo <= point <= hi when all three are present
+        for point, lo, hi in (("kg", "kg_lo", "kg_hi"),
+                              ("body_fat_pct", "body_fat_lo", "body_fat_hi")):
+            p, a, b = rec.get(point), rec.get(lo), rec.get(hi)
+            if all(isinstance(v, _NUMERIC) and not isinstance(v, bool)
+                   for v in (p, a, b)) and not a <= p <= b:
+                problems.append(f"band out of order: {lo}<={point}<={hi} "
+                                f"violated ({a} <= {p} <= {b})")
     if dataset == "daily" and (a := rec.get("alcohol")) is not None:
         if not isinstance(a, bool):
             problems.append(f"'alcohol' should be true/false/null, got {a!r}")

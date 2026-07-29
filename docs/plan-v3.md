@@ -161,9 +161,13 @@ founding deployment already has two sources claiming the same dates.
 - `sessions`: `source`, `start_time`, `elevation_m`, `setting`, `route`,
   `place` (supersedes free-text `location`), `with` (comma slugs),
   `context`, `planned`, `weather`.
-- `measurements.jsonl` (G16): sparse anchor-class dataset (body fat %,
-  circumferences) - additive, rides this schema pass; anchors top the
-  resolution precedence ladder.
+- `measurements.jsonl` (G16): sparse anchor-class dataset (circumferences,
+  DEXA-class reads) - additive, rides this schema pass; anchors top the
+  resolution precedence ladder. NOTE: `body_fat_pct` + measurement bands
+  (`kg_lo`/`kg_hi`, `body_fat_lo`/`body_fat_hi`) already landed on the
+  `weight` dataset as gen-2 (G36/G37), ahead of schedule, via a historical
+  cut backfill - they ride the scale read itself. This dataset carries the
+  reads that DON'T come off the scale (tape, DEXA, InBody).
 - `suppressed_metrics` profile field (G33: "leave this one alone" - the
   subtractive primitive) alongside G7's `nudge_ok`; storage-is-SI /
   display-converts-at-edge becomes written doctrine (G33 units).
@@ -320,6 +324,21 @@ G6/increment 1, intake plan from the dated targets).
 - `models/` registry seeded: weight (thermodynamic ~7700 kcal/kg,
   adaptive-TDEE, metabolic-adaptation), fitness (Banister CTL/ATL/TSB,
   load-to-pace) - each a documented scientific formula with parameters.
+- **Partitioning (p-ratio) model (G36)**: the weight forecast is not a scale
+  forecast - energy balance predicts total tissue energy, and a fat-partition
+  fraction splits it into a fat-mass trajectory and a lean-mass trajectory,
+  each banded; scale weight is their SUM (the least informative view). The
+  partition fraction is CALIBRATED from the athlete's weeks-smoothed
+  bf%-x-weight history (anchor-audit, G24/P6), with a Forbes/Hall-class prior
+  (from starting body-fat %, training status, protein, deficit size) when
+  history is thin. Replaces a hand-built cut sheet's fixed "0.5 kg muscle/month"
+  assumption with a learned number. A deterministic RECOMPOSITION detector
+  fires when smoothed fat-trend<0 AND smoothed FFM-trend>=0 (the plateau is
+  the signature, not a stall) and powers the coach's plateau-comfort; a
+  "measurement-limited" flag fires when there is no composition read and
+  offers the Tier-2 proxy (progressive overload + protein + tape/photos ->
+  "likely recomposing, not confirmed", never a kg-of-muscle number). Personal
+  kcal-per-kg is calibrated from the fat/lean split, not the textbook 7700.
 - `forecasts` derivation: enabled models + accuracy-weighted ensemble over
   planned inputs -> dated trajectories with prediction intervals (widening
   with horizon), model-provenanced.

@@ -76,6 +76,36 @@ plus what's available - scale, gym, AC, routes):
   weeks; judge against the mode in force, and don't read a good/bad
   fortnight in an abnormal mode as a trend.
 
+## The scale is the wrong instrument (recomposition & plateaus) (G36)
+
+Weight cannot by itself tell fat loss from muscle gain, and a flat scale is the
+SIGNATURE of recomposition, not a stall. This is where most athletes quit for the
+wrong reason - handle it deliberately:
+- **Judge fat, not weight.** The trustworthy signal is the weeks-smoothed
+  fat-mass trajectory (`body_fat_pct` x `kg`, derived), never the daily scale or
+  a single bf% read. Bioimpedance FFM bounces with hydration - never announce
+  muscle loss (or gain) off a few days of it; only a multi-week slope earns a
+  word, and always with its band.
+- **A few days flat is noise, full stop.** Water masks fat loss - new training,
+  sodium, glycogen and cortisol hold water in the very tissue that's changing
+  ("the whoosh" comes later). Fat loss needs WEEKS to read on a scale. Say this
+  plainly and calmly; never prescribe cutting harder over a few flat days (that's
+  how you lose the muscle you're keeping).
+- **When composition IS measured**, and fat trend is down while FFM trend is
+  flat-or-up over 3-4 weeks, name it: "you're recomposing - leaning out while
+  holding/building muscle. The scale is the last place that shows up, and that's
+  exactly right." Best-case outcome, framed as one.
+- **When composition is NOT measured**, be honest that recomp is invisible to the
+  scale, then give the Tier-2 proxy read: rising lifts (progressive overload) +
+  adequate protein + waist/photos trending down = "likely recomposition, not
+  confirmed" - low confidence, never a kilograms-of-muscle number. Suggest a
+  same-conditions morning body-fat read if they want to actually see it.
+- **kcal-per-kg is personal, not 7,700.** If they do the deficit-vs-scale-weight
+  arithmetic and get a wild number, explain that scale weight is a lossy proxy
+  (a holiday plateau corrupts it while the deficit keeps counting); the calibrated
+  figure from their own fat/lean split is the real one (~6,000-6,500/kg for a
+  well-run cut, not the textbook 7,700).
+
 ## Proactive check-in (motivator-anchored, opportune)
 
 Beyond the weekly review, surface a LIVE goal at the right moment - anchored
