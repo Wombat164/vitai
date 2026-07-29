@@ -116,7 +116,7 @@ these; nothing else exists.
    safety/privacy-critical: consent ledger, access-scope, suppression prefs -
    NOT markdown pages (the redteam's "prose still hiding where data is needed").
 
-## Part 3 - The consolidating gaps (G24-G42)
+## Part 3 - The consolidating gaps (G24-G46)
 
 Each folds several redteam findings and fills a symmetry hole in a principle.
 
@@ -378,6 +378,53 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   relevance-paged topic files) is this pattern already in production. Couples
   tightly to G41 (the rollups ARE the default warm context; cold-store is what
   pages back in). DEFERRED with G41. MEDIUM.
+
+- **G43 Conversational capture -> typed claims** (P1/G39/P4). The world model
+  GROWS from what the athlete says. A chat statement ("I like running to Zwin",
+  "we're in Knokke till Sunday", "Meerminlaan 30 is the flat") is parsed by the
+  LLM into a PROPOSED typed claim, filed to the right dataset (context / goals /
+  preferences / places), effective-dated, `provenance=stated-in-chat`, confidence
+  per how explicit it was. The athlete CONFIRMS (or it lands low-trust, pending);
+  never silently written. This is the G39 loop run in REVERSE - the app extracts
+  structure and confirms, instead of asking. Firewall: the LLM proposes
+  STRUCTURE, never computes a number; an extraction is a claim, adjudicated like
+  any other (P1). This is literally how the cold-boot scenario's facts got into
+  the model. HIGH.
+- **G44 Places, routes & multi-modal journeys** (extends G40). Named PLACE
+  entities (home-base, a destination reserve, a trailhead) with coarse coords
+  (G32). ROUTES between places are first-class and SOURCED: the athlete's OWN
+  history (Strava/Polar GPX -> the registry) is deterministic/high-trust with
+  real distance/elevation/typical-time; an external-routed path (OSM) is
+  inference-tier. Route MATCHING + ADAPTATION - "an exact home->Zwin route? a
+  near-match to adapt? or route it fresh?" - the own-history one always wins.
+  And JOURNEYS are composite/multi-modal: a transit leg (drive/bus, external
+  schedule) + a ONE-WAY run leg, enabling further-out point-to-point runs ("bus
+  east, run the 12 km home along the dike"); the planner sizes the run leg to the
+  goal target. MEDIUM.
+- **G45 Plan <-> route <-> goal reconciliation** (P1 / increment-1). A scheduled
+  session carries a TARGET (distance/duration/pace) from the coach's plan OR an
+  external plan (Runna/imported). A candidate route carries ESTIMATED parameters
+  (own-history or external routing). The app reconciles: does this route ACHIEVE
+  the target? Match -> propose it; mismatch -> extend/shorten/pick another, and
+  say why. Multiple plan sources (coach vs Runna) are themselves reconciled like
+  any conserved claim - one canonical target, provenance kept, disagreement
+  surfaced not summed. MEDIUM.
+- **G46 Source router + gated live world-lookups** (extends G42; P4/G32). The
+  operational answer to "what to query vs live-look-up, and when". Every fact the
+  coach needs routes to a source-of-truth:
+  - STORED (world-model DB: goals, mode, preferences, own routes, places) -> read.
+  - DERIVED (route distance from a stored trajectory, time from distance x pace,
+    today's deficit) -> compute in the engine.
+  - LIVE-LOOKUP (weather / FIRE-risk, road/trail CLOSURES, transit schedules,
+    novel routing) -> external, and only under three gates: CONSENT (granted
+    source, G32), NECESSITY (looked up when a decision needs it, not speculatively
+    on every boot), PRIVACY (on-boundary / coarsened).
+  SAFETY overrides the capture budget: a fire advisory on a planned nature-reserve
+  run, or a closure on the route, is surfaced PROACTIVELY even though it is a live
+  lookup. On boot: read stored + granted-volatile only; DEFER routing / transit /
+  fire lookups until the athlete engages the relevant decision. This is the
+  machinery under the cold-boot greeting - the router is what lets the app "know
+  on opening what to query and what to live look up (if allowed)". HIGH.
 
 ## The frame: a guardrailed world model (belief-state, not a learned net)
 

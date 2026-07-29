@@ -354,6 +354,40 @@ The comparison engine and the flagship demo.
 - Explicitly the first thing to POSTPONE if real-world usage (dogfood or
   early adopters) surfaces better-informed priorities by then.
 
+## Increment 6b - world-model growth + trip planning (vNEXT; G43-G46) [2-3 sessions]
+
+The machinery under the cold-boot greeting (see
+[cold-boot-greeting.md](cold-boot-greeting.md)) - how the model captures what the
+athlete says and answers "run to X?" concretely. Ordering: G43 can land as early
+as the ingest work (it is how the model grows); G44/G45 sit with the geodata
+enrichment (increment 6); G46 couples to context assembly (increment 9).
+
+- **G43 conversational capture -> typed claims:** an LLM extraction step that
+  turns a chat statement into a PROPOSED typed claim (context/goals/preferences/
+  places), effective-dated + `provenance=stated-in-chat`, athlete-confirmed,
+  never silently written. The G39 ask-loop in reverse. LLM proposes STRUCTURE
+  only (P4). Tests: an extraction lands as a low-trust pending claim; confirmation
+  promotes it; a number is never engine-authored from an extraction.
+- **G44 places, routes & multi-modal journeys:** PLACE entities (coarse coords);
+  ROUTES sourced (own Strava/Polar GPX = deterministic; external OSM = inference)
+  with matching/adaptation (own-history wins); composite JOURNEYS (transit leg +
+  one-way run leg sized to the goal). Builds on the G40 semantic-trajectory
+  registry. Tests: an own-history route reports real distance/time; a fresh route
+  is tagged inference; a one-way journey sizes its run leg to a target.
+- **G45 plan<->route<->goal reconciliation:** compare a session TARGET (coach or
+  Runna/imported) to a route's estimated params; propose/extend/swap on mismatch;
+  reconcile multi-source plans to one canonical target (not summed). Tests: a
+  route short of target proposes an extension; coach-vs-Runna disagreement
+  surfaces, never sums.
+- **G46 source router + gated live lookups:** the STORED / DERIVED / LIVE routing
+  policy; live gated by consent + necessity + privacy; SAFETY (fire advisory,
+  closure) overrides the budget and is proactive; boot reads stored +
+  granted-volatile only. Tests: a boot performs no speculative external call; a
+  route decision triggers exactly the needed lookups; a safety advisory is
+  surfaced above the capture budget.
+- NOT: autonomous booking of transit/anything; any live lookup without a granted
+  source; any coarse-coord leak past the enrichment boundary (G32).
+
 ## Increment 7 - forecasting (v0.9.0; G21) [2-3 sessions]
 
 The engine projects, not just describes. Depends on baselines + the shape
