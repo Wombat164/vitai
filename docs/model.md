@@ -116,7 +116,7 @@ these; nothing else exists.
    safety/privacy-critical: consent ledger, access-scope, suppression prefs -
    NOT markdown pages (the redteam's "prose still hiding where data is needed").
 
-## Part 3 - The consolidating gaps (G24-G71)
+## Part 3 - The consolidating gaps (G24-G77)
 
 Each folds several redteam findings and fills a symmetry hole in a principle.
 
@@ -743,6 +743,55 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   across three wakings" and "5.5 daytime hours behind blackout blinds" both
   reduce to a number, and fragmentation plus timing are the entire story for
   both athletes. Where a quantity or a structure exists, store it. Validation E6.
+
+- **G72 Medication as a first-class modifier** (P3/G57/G28). CRITICAL, sweep 2.
+  A GLP-1 agonist (semaglutide) changes the meaning of nearly every number:
+  appetite suppression produces INVOLUNTARY sub-800 kcal days that are not
+  restriction and not non-compliance; rapid loss is EXPECTED, so a naive
+  rate tripwire fires wrongly; and the real risk is lean-mass loss from rapid
+  loss plus inadequate protein plus no resistance training. Beta blockers
+  invalidate HR caps and zones; steroids alter weight and glucose; insulin and
+  sulfonylureas create hypoglycaemia risk around exercise; SSRIs, diuretics and
+  statins all matter. **Voluntary and involuntary under-eating need opposite
+  interventions**, and no field distinguishes them. See
+  [validation-personas.md](validation-personas.md) sweep 2.
+- **G73 A CLINICAL HOLD tier above "flag"** (P4/P7/G28). CRITICAL, sweep 2. The
+  RED-S persona showed a severity that no existing tier expresses: recurrent
+  bone stress injury + amenorrhea + energy availability far below the clinical
+  threshold is not a tripwire to surface alongside the week's rate line. The
+  correct system behaviour is a **hold**: suspend algorithmic load progression,
+  BLOCK the coach from issuing training advice on the case at all, and surface a
+  mandatory clinical referral. G28 as written escalates a message; this
+  escalates by DISABLING the product's own advice. A system that logs
+  "tripwire: nutrition" here is still under-detecting.
+- **G74 The athlete's benign self-explanation is not evidence** (P1/P3/G59).
+  HIGH, and the sharpest cross-cutting finding of sweep 2 - it appeared in FOUR
+  of eight personas. Each supplied an innocent cause for a concerning sign:
+  "it's the reflux" (exertional chest pain), "that's just what happens when you
+  train hard" (five months of amenorrhea), "my legs aren't used to carrying the
+  lighter me" (weakness on stairs during rapid loss on a GLP-1 - i.e. probable
+  sarcopenia), "I stood up too fast" (near-syncope while under-eating). The
+  athlete's causal attribution is a CLAIM like any other (P1) and must never
+  suppress the pattern it explains away. The engine reads the sign; the
+  explanation is recorded, not deferred to.
+- **G75 Subjective and objective measures are different quantities** (P1/P3).
+  MEDIUM. A device reported 6.1 h of sleep and the athlete reported "felt like
+  5", every night, systematically. These are not competing claims to resolve
+  (G15) - both are true, and the DIVERGENCE is itself the signal (in
+  perimenopause, fragmented sleep with normal duration is the presentation).
+  Resolution must not collapse a perceived measure into a measured one.
+- **G76 Logging bias is not the same as logging coverage** (P1/G26). MEDIUM.
+  "I log breakfast and lunch because those are the meals that already look
+  fine" - her logged 1580-1710 kcal days are systematically biased low, not
+  merely incomplete. `coverage: partial` records that something is missing; it
+  cannot record that what is PRESENT is unrepresentative. A biased sample read
+  as a complete one produces confidently wrong energy arithmetic.
+- **G77 Capacity-limited progression** (G6/G62). MEDIUM. For an athlete with
+  knee osteoarthritis the limiter is PAIN, not fitness: 15 minutes of walking is
+  a hard ceiling that no ramp rule can progress through, and the goal (a 5 km
+  walk) must be approached by changing the constraint - load, surface, footwear,
+  strength work, clinical input - rather than by adding volume. The model's
+  progression logic assumes the limiter is conditioning.
 
 ## The frame: a guardrailed world model (belief-state, not a learned net)
 
