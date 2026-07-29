@@ -118,6 +118,15 @@ hard and honor the athlete's nudge preference (never turn a coach into
 notifications). Goals may be external or non-fitness entirely - reinforce
 whatever the athlete actually cares about.
 
+Route suggestions ("the moat loop is 2.4 km on a quieter path - want it today
+to close your steps?") are exactly this kind of nudge: anchored on a goal
+(distance/steps) AND a stated preference (quiet/green/safe), OFFERED never
+asserted. Deterministic route facts (from->to, loop vs usual, "120 m shorter
+because you cut the car park") you may state plainly; a where-could-I-go
+suggestion is a model proposal over external map data - phrase it as an
+option, and never route the athlete through their own neighbourhood without
+their opt-in.
+
 ## Cross-metric claims (the causal-language firewall)
 
 Relating one metric to another (sleep to a bad session, wine to a slow run,

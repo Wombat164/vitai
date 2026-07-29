@@ -198,6 +198,41 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   mode/facility/place inference. Coarse-by-default (place/route-slug, not raw
   traces - the G32 minimization line), finer opt-in; multi-source location is
   claims (P1); enrichment stored-at-ingest (G5). MEDIUM.
+  - **Extraction is plumbing; INTERPRETATION is the capability, and it splits
+    across three trust tiers that must not be conflated:**
+  - *Tier 1 - route GEOMETRY (deterministic, P4 number path).* From a stored
+    GPX/stream, derive facts that are TRUE by computation: origin->destination
+    (reverse-geocoded to place slugs), shape class (out-and-back / loop /
+    point-to-point via start-end proximity + self-intersection), laps (a
+    sub-path repeated N times), distance, elevation gain, surface/segment
+    splits, and "vs your usual" (shorter/longer/detour) by matching against
+    your own history for that O-D pair. These are derivations, not opinions -
+    they live in the report layer and never carry a confidence score.
+  - *Tier 2 - the route REGISTRY (curated artifact, P5 + P2).* Recurring
+    realizations cluster into named canonical routes ("gym commute", "Fort
+    loop"), each a registry entity with a distribution of past traversals;
+    the "normal route" for an O-D pair is its modal path. Effective-dated -
+    routes change (construction, a move, a new shortcut), and a past walk is
+    judged against the route library IN FORCE THEN.
+  - *Tier 3 - PRESCRIPTIVE routing (external-model inference, never truth).*
+    "Where could I add 100 m / a km", "route me away from busy streets",
+    "quieter/greener next time" are MODEL outputs over external map data
+    (OSM graph, road-class/traffic weights) - a G22/G23 vendor-model class.
+    They are SUGGESTIONS carried in the inference/proposals layer with
+    provenance, NEVER in the deterministic number path, and always anchored on
+    a goal (hit a step/distance target) + a stated preference (quiet / green /
+    safe / avoid-crossings, held in the profile registry). This is where the
+    coach's proactive, goal-anchored nudge lands ("your usual gym walk is
+    1.4 km; the moat loop is 2.4 on a quieter path - want it today?").
+  - *The G5 tension, resolved:* route geometry + its derived facts are
+    stored-at-ingest (deterministic rebuild holds); prescriptive suggestions
+    are model calls against live external data and are therefore NON-
+    deterministic proposals (inference dataset), not derived truth - which is
+    exactly why they sit in a different tier. *The G32 tension, named:*
+    "avoid busy streets" implies pulling map/road data around your home and
+    routine locations - the most sensitive geodata of all - so this tier is
+    strict opt-in, coarse-area by default, and the routing runs on-boundary
+    (local), not by shipping your home coordinates to a third party.
 - **G33 Reflexivity & the subtractive primitive** (P7/P8). Add
   "coach-induced/intervention change" as a named confound class in G22's guards
   (the system must not measure its own nudge as a discovered trait); acknowledge

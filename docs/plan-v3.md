@@ -312,6 +312,23 @@ The comparison engine and the flagship demo.
   mode/facility/place inference (which populates G34's context.jsonl);
   multi-source location as claims (P1). Privacy: coarse-by-default,
   finer opt-in.
+- **Route intelligence, three tiers (the interpretation layer - the actual
+  value, not the GPX plumbing):** (1) deterministic GEOMETRY in the number
+  path - from->to, loop/lap/point-to-point, distance/elevation, "vs your
+  usual" for an O-D pair; (2) a route REGISTRY (P5/P2) clustering recurring
+  traversals into named canonical routes with a "normal route" = modal path,
+  effective-dated; (3) PRESCRIPTIVE routing as external-model INFERENCE
+  (add-100m / add-a-km / avoid-busy-streets / quieter-greener) - proposals
+  layer only, goal+preference anchored, on-boundary/local routing over OSM,
+  strict opt-in (home-area map data is the most sensitive geodata). Tiers 1-2
+  ship first; tier 3 is its own opt-in sub-increment.
+- **Ingest tooling (content-repo side, not the public engine):** a
+  `strava_pull.py` (Strava API - non-destructive, rich latlng/time/elevation
+  streams; the durable geodata source since it aggregates Polar); FIX the
+  `polar_pull.py` FIT/TCX pre-commit archiving bug (transactional exercises
+  DISCARD on commit - the track must be captured BEFORE committing or the GPS
+  is lost, as happened to two real walks); a GPX/TCX file-ingest path for
+  manual exports.
 - Explicitly the first thing to POSTPONE if real-world usage (dogfood or
   early adopters) surfaces better-informed priorities by then.
 
