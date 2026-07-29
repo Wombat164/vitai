@@ -354,6 +354,93 @@ The comparison engine and the flagship demo.
 - Explicitly the first thing to POSTPONE if real-world usage (dogfood or
   early adopters) surfaces better-informed priorities by then.
 
+## Increment 6b - world-model growth + trip planning (vNEXT; G43-G46) [2-3 sessions]
+
+The machinery under the cold-boot greeting (see
+[cold-boot-greeting.md](cold-boot-greeting.md)) - how the model captures what the
+athlete says and answers "run to X?" concretely. Ordering: G43 can land as early
+as the ingest work (it is how the model grows); G44/G45 sit with the geodata
+enrichment (increment 6); G46 couples to context assembly (increment 9).
+
+- **G43 conversational capture -> typed claims:** an LLM extraction step that
+  turns a chat statement into a PROPOSED typed claim (context/goals/preferences/
+  places), effective-dated + `provenance=stated-in-chat`, athlete-confirmed,
+  never silently written. The G39 ask-loop in reverse. LLM proposes STRUCTURE
+  only (P4). Tests: an extraction lands as a low-trust pending claim; confirmation
+  promotes it; a number is never engine-authored from an extraction.
+- **G44 places, routes & multi-modal journeys:** PLACE entities (coarse coords);
+  ROUTES sourced (own Strava/Polar GPX = deterministic; external OSM = inference)
+  with matching/adaptation (own-history wins); composite JOURNEYS (transit leg +
+  one-way run leg sized to the goal). Builds on the G40 semantic-trajectory
+  registry. Tests: an own-history route reports real distance/time; a fresh route
+  is tagged inference; a one-way journey sizes its run leg to a target.
+- **G45 plan<->route<->goal reconciliation:** compare a session TARGET (coach or
+  Runna/imported) to a route's estimated params; propose/extend/swap on mismatch;
+  reconcile multi-source plans to one canonical target (not summed). Tests: a
+  route short of target proposes an extension; coach-vs-Runna disagreement
+  surfaces, never sums.
+- **G46 source router + gated live lookups:** the STORED / DERIVED / LIVE routing
+  policy; live gated by consent + necessity + privacy; SAFETY (fire advisory,
+  closure) overrides the budget and is proactive; boot reads stored +
+  granted-volatile only. Tests: a boot performs no speculative external call; a
+  route decision triggers exactly the needed lookups; a safety advisory is
+  surfaced above the capture budget.
+- **G47 blocking-vs-enriching question gating** (rides the G39 question-loop
+  work): classify each unfilled slot as blocking (changes the recommendation ->
+  ask first or branch explicitly) or enriching (trail/drop); forbid a confident
+  single recommendation resting on an unstated blocking assumption. Tests: a
+  proposal with an unfilled blocking slot either asks first or emits a branch,
+  never a bare plan; an unknown renders as unknown, never as invented prose.
+- **G48 per-place inventory:** equipment / amenities / constraints on the PLACE
+  entity, effective-dated, captured on place-onboard or from chat (G43). The
+  planner may only propose what the place affords. Tests: a place with no rower
+  never yields a rowing proposal; the inventory is asked once, then reused.
+- **G49 dependents & availability windows:** dependents (with ages as DATA),
+  routines, partner schedule -> availability windows, intersected with heat /
+  daylight (G34) and the calendar to yield schedulable slots. Tests: a proposal
+  lands inside a real window; dependent-care vetoes a leave-the-home plan; no
+  age is ever inferred.
+- **G50 context-scoped preferences:** scope predicates on preferences +
+  most-specific-wins resolution + provenance (stated vs behavioural, the latter
+  lower-trust). Tests: a place-scoped and a global preference resolve
+  deterministically; the coach can name the preference that drove a proposal;
+  a behavioural preference is never quoted back as if stated.
+- **G51 person model:** a `people` dataset (relationship, household/dependent
+  flags + age as data, participation capability, availability + travel state
+  incl. with-me-or-not, coarse restriction). The planner evaluates people-state
+  BEFORE proposing: constraint propagation in both directions (their presence
+  blocks a shared asset; their absence transfers care duty to me; their
+  availability expands options to joint sessions). **Third-party minimization is
+  a build requirement, not a doc note:** the schema must have nowhere to put a
+  diagnosis, a metric, or a location history for another person. Tests: a
+  partner's departure vetoes a leave-the-house proposal; an available willing
+  person yields a joint-session option; the schema rejects third-party medical
+  or metric fields outright.
+- **G52 shared-resource contention:** assets carry claimed-use windows; the
+  planner intersects (my free window) x (asset free) x (care duty clear). Tests:
+  a contended crosstrainer yields the alternative + a stated reason, never a
+  silent drop; an unavailable car invalidates a drive-to-trailhead journey (G44).
+- **G53 kit, attire, access & carry-load:** per-activity x place kit
+  requirements (modulated by what the place affords, G48); access credentials as
+  hard feasibility preconditions; attire state; **carry-load constrains
+  locomotion mode**; and pack-ahead LEAD TIME - kit surfaces before the athlete
+  leaves, never on arrival. Tests: a missing credential marks a session
+  infeasible (not merely "remember your phone"); a 10 kg carry rules out the run
+  mode on the next leg; a place with showers shortens the packing list; the
+  checklist fires pre-departure, not post.
+- **G54 trip chaining & leg-state propagation:** a journey is a leg sequence
+  where each leg mutates the next leg's preconditions; validate the CHAIN and
+  report where it breaks. Transport legs carry a SECURED/unsecured state (bus
+  timetable, booking, a lift agreed by a person, G51); unsecured = a proposal,
+  not a schedule, and the coach says so. Tests: gym->shop->home downgrades the
+  final leg to walk and explains why; an unsecured outbound leg blocks a one-way
+  route from being scheduled.
+- NOT: autonomous booking of transit/anything (G54 - options are laid out, the
+  athlete books); any live lookup without a granted source; any coarse-coord leak
+  past the enrichment boundary (G32); any inferred age, relationship or dependent
+  detail (G49/G51 - stated or absent); any third-party health/metric/location
+  storage (G51 hard line).
+
 ## Increment 7 - forecasting (v0.9.0; G21) [2-3 sessions]
 
 The engine projects, not just describes. Depends on baselines + the shape
@@ -442,6 +529,40 @@ Last, because it stands on features (4), forecasting (7), and resolution (2).
   scores trusted over the resolved SSoT.
 - Cut-first: the adherence-context classifier (needs calendar enrichment,
   G5); ship sleep/HR-kcal/weight-pace handling first.
+
+## Increment 9 - data lifecycle + context assembly (vNEXT; G41, G42) [DEFERRED - scaling]
+
+Explicitly DEFERRED "until the data actually grows" (the operator's own
+framing). A scaling concern, not a correctness one, so it waits until the
+record is large enough to warrant it - but designed now so nothing built
+earlier blocks it (raw stays append-only + rebuildable, which is the only
+precondition).
+
+- **G41 lifecycle:** raw ages to high-ratio LOSSLESS cold-store (columnar+zstd,
+  or Gorilla delta-of-delta for regular samples) - NEVER lossily reduced or
+  deleted, so deterministic rebuild (P4) and late-correction cascade (G29)
+  survive; any period rehydrates bit-identical. The warm read model gains a
+  per-metric, effective-dated retention/rollup LADDER in the registry (P5/P2):
+  full recent -> progressively coarser buckets (the 14d/1mo/6mo/1y/2y/10y
+  fidelity fractions), tuned per value-density (HR samples decay fast, weigh-in
+  anchors never, old geodata's warm form is its G40 semantic-trajectory summary).
+  Rollups are derived + provenance-tiered (P3) + reversible; a query over a
+  coarse period returns fidelity-tagged values and the coach says "roughly".
+- **G42 context assembly:** the coach loads the minimum SUFFICIENT slice at
+  moment T - a compact standing state summary (the MEMORY.md-index analogue) +
+  full recent detail + any old period the current query pages back in from cold.
+  Recency + relevance + question drive the working set; the G41 ladder is the
+  default. Firewall: assembly feeds NARRATION only; the number-path always
+  computes over full raw + rollups, never the truncated window (P4).
+- Prior art (see [prior-art-world-model.md](prior-art-world-model.md) + a future
+  sweep): RRDtool/Whisper/Prometheus/Timescale/Gorilla (lifecycle); MemGPT/Letta
+  virtual context management + ACT-R retrieval (assembly).
+- Tests: rehydrate-a-cold-period -> rebuild is byte-identical to pre-archive;
+  a rollup re-derives at higher fidelity from cold; a correction to an archived
+  day cascades (G29) after rehydration; the number-path result is invariant to
+  what context the coach happened to assemble.
+- NOT: any lossy operation on raw; any coach number computed from the assembled
+  window rather than the full record.
 
 ## Increment ordering note
 

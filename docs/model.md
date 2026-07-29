@@ -116,7 +116,7 @@ these; nothing else exists.
    safety/privacy-critical: consent ledger, access-scope, suppression prefs -
    NOT markdown pages (the redteam's "prose still hiding where data is needed").
 
-## Part 3 - The consolidating gaps (G24-G40)
+## Part 3 - The consolidating gaps (G24-G55)
 
 Each folds several redteam findings and fills a symmetry hole in a principle.
 
@@ -334,6 +334,254 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   ran the crude version and its best find was an ABSENCE - the untracked 8-min gap
   between two point-to-point walks was the real stop; gaps are first-class events.
   MEDIUM.
+
+- **G41 Data lifecycle: lossless cold-store + progressive warm rollup**
+  (P4/P3/P2/P5). As the record grows, age it - but the naive "downsample old
+  data" breaks determinism and correctability, so the ladder splits in two:
+  - *Raw is sacrosanct.* Data older than a threshold moves to high-ratio
+    LOSSLESS cold-store (columnar + zstd, or Gorilla-style delta-of-delta for
+    regular samples), NEVER lossily reduced or deleted - the deterministic
+    rebuild (P4) and late-correction cascade (G29) both need the complete
+    source. Any period rehydrates and rebuilds bit-identical.
+  - *The warm read model carries a per-metric, effective-dated retention/rollup
+    LADDER* (the registry, P5/P2): e.g. 14d full / 1mo 3/4 / 6mo 1/2 / 1y 1/4 /
+    2y 1/8 / 10y 1/20 - but PER METRIC by value-density, not global. Continuous
+    HR (~13 s samples) decays to near-worthless in days; a weigh-in anchor is
+    valuable forever; and old GEODATA's warm form is its G40 semantic-trajectory
+    summary ("Fort loop, 1.5 km, one 8-min stop"), the raw 800-point trace going
+    cold. Rollups are DERIVED, provenance-tiered (P3), rebuildable, reversible.
+  - *Coarse old data confesses it (G27).* A query over a 1/20-fidelity period
+    returns values tagged with their tier; the coach says "roughly ~72 kg that
+    quarter", never a false-precise number.
+  - Prior art: RRDtool round-robin archives, Graphite/Whisper retention schemas,
+    Prometheus/Thanos + TimescaleDB downsampling/continuous-aggregates, Facebook
+    Gorilla. The ADAPTATION: those DELETE fine data (disposable observability);
+    a personal life-record cold-stores it losslessly instead. It is memory
+    consolidation - episodic detail -> semantic gist, ACT-R activation decay -
+    made deterministic and reversible. DEFERRED until data actually grows. MEDIUM.
+- **G42 Moment-relative context assembly (the coach's working set)**
+  (P4/P8/P3). The coach/agent has a BOUNDED attention; it must load the minimum
+  SUFFICIENT slice of the world model at moment T, never all of it. Assembly =
+  a compact always-on STATE SUMMARY (active goals, current phase, recent trend,
+  live tripwires - the `MEMORY.md`-index analogue) + full RECENT detail + any
+  old period the CURRENT QUERY makes relevant, PAGED IN from cold and rehydrated
+  to higher fidelity on demand ("compare to my last cut" pulls a 2y-old block
+  back to full detail though it sits at 1/8 by default). Recency + relevance +
+  the question drive the working set; the G41 ladder is only the DEFAULT.
+  Firewall: assembly feeds NARRATION only - the deterministic number-path
+  computes over full raw + rollups, never over the truncated window, so the coach
+  never derives a number from what happens to be in context (P4). P8's
+  capture-cost economy extends to a CONTEXT-cost economy: minimum sufficient, not
+  maximum available. Prior art: MemGPT / Letta (virtual context management,
+  paging main-context <-> external memory over unbounded data); ACT-R activation-
+  boosted retrieval; the operator's own `MEMORY.md` discipline (bounded index +
+  relevance-paged topic files) is this pattern already in production. Couples
+  tightly to G41 (the rollups ARE the default warm context; cold-store is what
+  pages back in). DEFERRED with G41. MEDIUM.
+
+- **G43 Conversational capture -> typed claims** (P1/G39/P4). The world model
+  GROWS from what the athlete says. A chat statement ("I like running to Zwin",
+  "we're in Knokke till Sunday", "Meerminlaan 30 is the flat") is parsed by the
+  LLM into a PROPOSED typed claim, filed to the right dataset (context / goals /
+  preferences / places), effective-dated, `provenance=stated-in-chat`, confidence
+  per how explicit it was. The athlete CONFIRMS (or it lands low-trust, pending);
+  never silently written. This is the G39 loop run in REVERSE - the app extracts
+  structure and confirms, instead of asking. Firewall: the LLM proposes
+  STRUCTURE, never computes a number; an extraction is a claim, adjudicated like
+  any other (P1). This is literally how the cold-boot scenario's facts got into
+  the model. HIGH.
+- **G44 Places, routes & multi-modal journeys** (extends G40). Named PLACE
+  entities (home-base, a destination reserve, a trailhead) with coarse coords
+  (G32). ROUTES between places are first-class and SOURCED: the athlete's OWN
+  history (Strava/Polar GPX -> the registry) is deterministic/high-trust with
+  real distance/elevation/typical-time; an external-routed path (OSM) is
+  inference-tier. Route MATCHING + ADAPTATION - "an exact home->Zwin route? a
+  near-match to adapt? or route it fresh?" - the own-history one always wins.
+  And JOURNEYS are composite/multi-modal: a transit leg (drive/bus, external
+  schedule) + a ONE-WAY run leg, enabling further-out point-to-point runs ("bus
+  east, run the 12 km home along the dike"); the planner sizes the run leg to the
+  goal target. MEDIUM.
+- **G45 Plan <-> route <-> goal reconciliation** (P1 / increment-1). A scheduled
+  session carries a TARGET (distance/duration/pace) from the coach's plan OR an
+  external plan (Runna/imported). A candidate route carries ESTIMATED parameters
+  (own-history or external routing). The app reconciles: does this route ACHIEVE
+  the target? Match -> propose it; mismatch -> extend/shorten/pick another, and
+  say why. Multiple plan sources (coach vs Runna) are themselves reconciled like
+  any conserved claim - one canonical target, provenance kept, disagreement
+  surfaced not summed. MEDIUM.
+- **G46 Source router + gated live world-lookups** (extends G42; P4/G32). The
+  operational answer to "what to query vs live-look-up, and when". Every fact the
+  coach needs routes to a source-of-truth:
+  - STORED (world-model DB: goals, mode, preferences, own routes, places) -> read.
+  - DERIVED (route distance from a stored trajectory, time from distance x pace,
+    today's deficit) -> compute in the engine.
+  - LIVE-LOOKUP (weather / FIRE-risk, road/trail CLOSURES, transit schedules,
+    novel routing) -> external, and only under three gates: CONSENT (granted
+    source, G32), NECESSITY (looked up when a decision needs it, not speculatively
+    on every boot), PRIVACY (on-boundary / coarsened).
+  SAFETY overrides the capture budget: a fire advisory on a planned nature-reserve
+  run, or a closure on the route, is surfaced PROACTIVELY even though it is a live
+  lookup. On boot: read stored + granted-volatile only; DEFER routing / transit /
+  fire lookups until the athlete engages the relevant decision. This is the
+  machinery under the cold-boot greeting - the router is what lets the app "know
+  on opening what to query and what to live look up (if allowed)". HIGH.
+
+- **G47 Blocking vs enriching questions (answer-gating)** (refines G39). G39
+  ranks WHICH slots to ask; this decides WHEN. A slot whose value would CHANGE
+  the recommendation is **BLOCKING** and must be resolved BEFORE the answer -
+  either asked first, or handled by an explicit BRANCH ("if you have a step ->
+  this circuit; if bare floor -> that one"). A slot that merely enriches is
+  non-blocking and may trail or be dropped entirely. **Never produce a confident
+  single recommendation resting on an unstated assumption about a blocking
+  slot** - the failure mode is a plan that is quietly wrong plus a footnote
+  asking the question that would have changed it. Prefer BRANCHING over asking
+  when the branch is cheap (2-3 outcomes); ask when the space is wide. Corollary
+  (P7/P1): an unknown must be visibly unknown - a coach that says "at their age"
+  without holding the age is fabricating, which is a firewall breach in prose
+  form. HIGH.
+- **G48 Per-place facility & equipment inventory** (extends G34/G44). A PLACE
+  entity (G44) carries a persistent, effective-dated inventory: EQUIPMENT (step,
+  band, kettlebell, mat, bike, rower), AMENITIES (AC, fan, stairwell, garden,
+  pool, scale), CONSTRAINTS (neighbours/noise, floor type, space, hours).
+  Captured ONCE when a place enters the model - a short onboard-this-place flow
+  or extracted from chat (G43) - then reused forever and editable. This is what
+  turns "do you have a step?" from a question asked every session into a fact
+  asked once. G34's coarse facilities (scale/gym/AC) generalize into this; the
+  planner reads it to constrain what it may propose (no rower where there is no
+  rower, no 21:00 skipping above a neighbour). MEDIUM.
+- **G49 Household, dependents & availability windows** (P2/G34). The model must
+  know WHO is around and WHEN a session is actually possible. DEPENDENTS with
+  ages (data, never assumed - ages gate what they can join in with and whether
+  they can be left unattended), their routine (awake / screen-time / asleep /
+  own activity), the PARTNER's schedule, and the resulting **availability
+  windows**. A proposal must land in a REAL window, not an abstract "evening":
+  "20:00 while they are on the sofa - they can join the first rounds" vs "21:00
+  once they are down, so keep it quiet". Windows intersect with the heat and
+  daylight windows (G34) and the calendar; the intersection IS the schedulable
+  slot. Dependent-care is a hard constraint, not a preference - it can veto an
+  otherwise-perfect plan (a stairwell session means leaving the flat). MEDIUM.
+- **G50 Context-scoped preferences** (P2/P5/G43). A preference is rarely global;
+  it is SCOPED: `{subject, domain, scope: {place?, mode?, phase?, time-of-day?,
+  weather?, with-whom?}, strength, provenance, effective-dated}`. "Likes running
+  to Zwin" is scoped to a place; "prefers short circuits" may be scoped to
+  phase=cutting; "will not do burpees" is global. Resolution when several apply:
+  **most-specific wins** (CSS-specificity-like), ties broken by strength then
+  recency, and the coach can always say WHICH preference drove a proposal.
+  Preferences are learned from statement (G43, higher trust) AND from behaviour -
+  what actually gets done vs silently skipped - the latter at lower trust and
+  never asserted as a stated preference (P3). This is what lets "preferred
+  exercises", "preferred exercises at Knokke", and "preferred exercises when
+  cutting" coexist without contradiction. MEDIUM.
+
+- **G51 Person model: people as typed entities AND constraint sources**
+  (subsumes G49's dependents; P2/G32). A `people` dataset of typed entities -
+  `relationship`: partner | child | family | friend | colleague | coach | other;
+  flags `household` (shares my resources) and `dependent` (+ age as DATA, never
+  guessed). Each carries only what MY planning needs:
+  - *Participation capability*: which sports/intensities they do, rough level or
+    pace band, what they can join ("kids can do 10 min of a circuit", "X runs my
+    easy pace"). Turns a solo session into a joint one.
+  - *Availability & travel state*: home place, and where they will BE in the
+    planning window - home | out | away | on-holiday | at-a-conference, and
+    crucially **with-me or without-me** (a partner at a conference *with* me
+    shares my mode and place; *without* me flips me to sole care duty).
+  - *Coarse restriction*: "unavailable for running until <date>" - a planning
+    fact, NOT a diagnosis.
+  **The load-bearing semantic is CONSTRAINT PROPAGATION - another person's state
+  changes MY feasible set, in both directions:**
+  - their PRESENCE can block me (they are using the shared crosstrainer -> G52);
+  - their ABSENCE can block me (they leave -> I hold dependent care -> no
+    leave-the-house session, however good the weather);
+  - their AVAILABILITY can expand me (free + willing + able -> a partner run, or
+    the kids joining rounds).
+  The planner must evaluate people-state before proposing, not after.
+  **Third-party privacy is a hard line (G32).** These people never consented to
+  being in my health record. Store the MINIMUM for planning - availability,
+  participation capability, coarse restriction - and NEVER their medical detail,
+  their metrics, or their location history. Another person's health data belongs
+  to them, in their own record if they want one. Minors get extra restraint. A
+  person entity is a planning aid, not a dossier. HIGH.
+- **G52 Shared-resource contention & allocation** (extends G48; P2). G48 says a
+  place HAS an asset; this says whether it is FREE. Shared assets (a
+  crosstrainer, the car, one bike, a single mat, a bookable gym slot) have
+  **exclusive use over a window**: a household member's claimed use BLOCKS mine
+  for that window, and the planner checks asset AVAILABILITY, not merely asset
+  existence. Generalizes past equipment - if the partner has the car, the
+  drive-to-trailhead journey (G44) is off, which silently invalidates an
+  otherwise-valid plan. Contention resolves against the availability windows of
+  G49/G51: the intersection of (my free window) x (asset free) x (care duty
+  clear) is the real schedulable slot. A blocked asset is a REASON the coach can
+  state ("the crosstrainer is taken till 19:45 - want the 20:00 slot, or the
+  bodyweight version now?"), never a silent omission. MEDIUM.
+
+- **G53 Kit, attire, access credentials & carry-load** (P8/G48/G52). The
+  logistics layer that silently invalidates otherwise-perfect plans. A planned
+  activity carries REQUIREMENTS, and the athlete carries STATE:
+  - *Kit requirements* per activity x place: a gym session needs a towel and a
+    bag to carry it; a run needs running clothes; finishing anywhere that is not
+    home needs shower kit, a drying towel, fresh underwear. What is needed
+    depends on what the PLACE already affords (G48): a gym with showers and towel
+    hire changes the packing list entirely.
+  - *Access credentials are HARD GATES*, not conveniences: the phone that shows
+    the entry QR, a badge, a members card, a booking confirmation. Missing it
+    means the session cannot happen at all - the planner must treat it as a
+    feasibility precondition, at the same level as "is the gym open".
+  - *Attire state*: the athlete IS in some attire (running kit, civilian, work
+    clothes), and changing requires being somewhere with the right kit. Driving
+    to the office in civilian clothing forecloses a run there unless it was
+    packed.
+  - *CARRY LOAD CONSTRAINS LOCOMOTION MODE* - the sharp one. Carried mass and
+    bulk restrict which modes are available for the NEXT leg: 10 kg of shopping
+    means walking, not running; a loaded backpack makes a run possible but slower
+    and less pleasant; hands-full rules out some modes entirely. Carry state is a
+    first-class planning variable, not a detail.
+  - *PREPARATION LEAD TIME (pack-ahead)*: kit must be surfaced at the LAST MOMENT
+    THE ATHLETE CAN STILL ACT - before leaving home this morning for a session
+    this evening - never on arrival, when the information is useless. A
+    pre-departure checklist is a rare nudge that EARNS its interrupt (G39/P8):
+    high value, time-critical, and cheap to act on.
+  MEDIUM.
+- **G54 Trip chaining & leg-state propagation** (extends G44/G51). A journey is
+  a SEQUENCE OF LEGS, and each leg MUTATES the state the next leg depends on -
+  so legs cannot be validated independently. Shopping on the way home from the
+  gym adds carry-load, which downgrades the last leg from run to walk (G53); a
+  session leaves the athlete sweaty, which gates what comes next without a
+  shower; a one-way route consumes the outbound transport. The planner validates
+  the WHOLE CHAIN and reports where it breaks, rather than proposing a pretty
+  first leg that strands the athlete.
+  **Transport legs may need SECURING, not merely choosing.** A one-way route
+  ("run home from a town along the coast") requires an outbound leg that actually
+  exists and is arranged: a bus with a real timetable, a taxi/rideshare that must
+  be booked, a lift from a family member - which is a dependency on ANOTHER
+  PERSON (G51) and needs their agreement before the plan is real. An unsecured
+  transport leg makes the plan a proposal, not a schedule, and the coach must say
+  so ("the Cadzand start needs a lift or the bus at 08:40 - want me to lay out
+  the options?"). Autonomous booking is never done on the athlete's behalf.
+  MEDIUM.
+
+- **G55 Owned gear inventory & consumable lifecycle** (extends G53/G48/G52).
+  G53 covers what is CARRIED for a session; this covers what is OWNED, and it
+  behaves differently in three ways:
+  - *Gear GATES activities.* No racket, no tennis; no stick, no hockey. The
+    planner may only propose sports the athlete is equipped for, and acquiring
+    gear is a signal in itself - a new stick or racket often means a new sport
+    entering the plan, which the coach should notice and ask about rather than
+    ignore (a goal may be forming).
+  - *Consumables have a LIFECYCLE, and it is deterministically trackable.*
+    Running shoes are the canonical case: they carry accumulated mileage and a
+    replacement threshold (commonly ~600-800 km, brand and model dependent). The
+    engine can sum run distance per shoe pair since purchase and flag
+    replacement - a genuine derived metric, in the number path, not a guess.
+    Worn-out shoes are an injury-risk factor, so this is a safety-adjacent
+    signal, not a shopping reminder. HR-strap batteries, worn kit and expiring
+    memberships are the same shape.
+  - *Gear has a LOCATION and may not be duplicated.* Shoes at the home address
+    are not shoes at the holiday flat; a watch left on the charger at home is
+    unavailable. Gear location joins the place inventory (G48) and the carry/kit
+    check (G53), and a single-instance item is contended like any shared asset
+    (G52) when a household member has it.
+  Condition/availability (dead battery, kit in the wash, shoes soaked from
+  yesterday's rain) gates use as hard as absence does. MEDIUM.
 
 ## The frame: a guardrailed world model (belief-state, not a learned net)
 
