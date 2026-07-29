@@ -183,6 +183,21 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   derived/graduated artifacts and the host-ledger boundary; a documented stance
   on household/shared-device isolation and minors (Art. 8). MEDIUM->HIGH for any
   hosted deployment.
+- **G34 Situational context & facilities** (P7/P8/P2). A dated `context.jsonl`
+  (mode: vacation/work/conference/weekend/social/deadline/heatwave/travel;
+  facilities: scale/gym/AC/routes; location). Three jobs: sets the baseline
+  (mode-aware judging), EXPLAINS missingness (no scale -> the absent weigh-in
+  is expected, not non-compliance - reassure, never shame), and CONSTRAINS
+  the plan/scheduler (facilities + weather gate what the coach prescribes).
+  Plus the coach behavior it enables: proactively EXPLAIN and COMFORT a
+  scary-looking number (a big deficit, an app disagreement) unprompted -
+  comfort is coaching. HIGH.
+- **G35 Geodata & location-time provenance** (P1/G5/G32). Routes/GPS on
+  sessions + a where-was-I-when signal from many sources (photo geodata,
+  calendar events, Maps/Waze route history, chat mentions) feeding
+  mode/facility/place inference. Coarse-by-default (place/route-slug, not raw
+  traces - the G32 minimization line), finer opt-in; multi-source location is
+  claims (P1); enrichment stored-at-ingest (G5). MEDIUM.
 - **G33 Reflexivity & the subtractive primitive** (P7/P8). Add
   "coach-induced/intervention change" as a named confound class in G22's guards
   (the system must not measure its own nudge as a discovered trait); acknowledge

@@ -307,6 +307,15 @@ for the v3 model: v3 is done when every question has a non-gap tag.
 184. When a vendor score contradicts vitai's SSoT, who wins? - the SSoT: it is transparent, resolved from raw observations + anchors, and auditable; the vendor is a black box. But the disagreement is logged and interesting - a vendor readiness score cratering while vitai's signals look fine is itself a hypothesis to surface. [G23 x G15]
 185. Does a vendor insight ever get counted twice or summed with our own? - never: conservation (G15) applies - a vendor's kcal or load is a competing CLAIM about the same physical quantity, resolved by precedence, not added to vitai's. And a vendor estimate cannot masquerade as the anchor that audits it. [G23 x G15 x principle 6]
 
+### 2.22 Situational context, facilities, and geodata
+
+186. Should the coach explain/comfort a scary number without being asked? - YES: a big single-day deficit, two apps disagreeing, a weight spike - explain it naturally, anchor on the trend, reassure. Comfort is coaching; a worried athlete disengages. [G34, coach behavior]
+187. Is a missing weigh-in on holiday non-compliance? - NO: no scale at the location EXPLAINS the missingness. Context turns "missing data" into "expected gap" - reassure ("re-anchor when home"), never flag it, never shame. [G34 x P7 x G27]
+188. Can the athlete run in a heatwave with no gym/AC? - the plan must know: FACILITY + weather availability constrains what the coach prescribes (no midday run in a heatwave, no gym where there's none - adapt to early/indoor/rest). [G34, context constrains the plan/scheduler]
+189. Does "vacation" vs "deadline week" vs "weekend with friends" change how a week reads? - yes: MODE sets the baseline and expectations (a good fortnight on holiday is not a trend; a social weekend explains alcohol + a step dip). A dated situational mode is first-class context. [G34, effective-dated P2]
+190. Where do routes and GPS of runs/walks/commutes live, and where I was at what time? - geodata: route/elevation on sessions, plus a where-was-I-when signal fed from MANY sources - photo geodata, calendar events, Google Maps / Waze route history, chat mentions - to infer mode/facility/place. [G35: geodata & location-time provenance]
+191. Isn't storing my GPS a privacy risk? - coarse by default (place/route-slug, not raw traces - the G32 minimization line); finer opt-in per the athlete; multi-source location is claims (P1), reconciled, and enrichment is stored-at-ingest not fetched-at-derive (G5). [G35 x G32 x G5]
+
 ## 3. Redteam findings (the gaps, ranked)
 
 | # | Gap | Severity | Why it matters |
@@ -352,6 +361,8 @@ core principle (see [model.md](model.md) Part 3 for the full mapping).
 | G31 | **Registry & config effective-dating** - registries get as-of + decay audit; streak definitions migrate out of mutable vitai.toml; thresholds get a correction marker; estimate-vs-estimate ties break on accuracy not home-team. | MEDIUM | P2 / P5 |
 | G32 | **Access scope & consent-as-data** - per-consumer redaction/ACL; a consent ledger as data; deletion cascade widened to all artifacts + host boundary; household/minor stance. | MEDIUM (HIGH hosted) | P5 / P8 |
 | G33 | **Reflexivity & the subtractive primitive** - coach-induced-change as a G22 confound class; per-metric suppression ("leave this alone"); capture-level observer effect; units storage-vs-display. | MEDIUM | P7 / P8 |
+| G34 | **Situational context & facilities** (operator, 2026-07-29) - a dated `context.jsonl` (mode: vacation/work/conference/weekend/social/deadline/heatwave/travel + facilities: scale/gym/AC/routes + location) that: sets the baseline (mode-aware), EXPLAINS missingness (no scale -> weigh-in expected-absent, never non-compliance/shame), CONSTRAINS the plan+scheduler (no heatwave run, no gym where there's none), and drives PROACTIVE explain/comfort when a number looks scary. | HIGH | P7 / P8 / P2 |
+| G35 | **Geodata & location-time provenance** (operator, 2026-07-29) - routes/GPS on sessions + a where-was-I-when signal fed from many sources (photo geodata, calendar events, Maps/Waze route history, chat mentions) to infer mode/facility/place. Coarse-by-default (place/route-slug not raw traces, G32), finer opt-in; multi-source = claims (P1); stored-at-ingest (G5). | MEDIUM | P1 / G5 / G32 |
 
 Merges (not new gaps): G1 folds into G15; G2 becomes a projection of G17;
 G10 scope-widens into G32; the "late truth cascades" pattern unifies G16 +

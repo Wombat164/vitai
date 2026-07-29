@@ -167,6 +167,12 @@ founding deployment already has two sources claiming the same dates.
 - `suppressed_metrics` profile field (G33: "leave this one alone" - the
   subtractive primitive) alongside G7's `nudge_ok`; storage-is-SI /
   display-converts-at-edge becomes written doctrine (G33 units).
+- `context.jsonl` (G34): dated situational mode (vacation/work/conference/
+  weekend/social/deadline/heatwave/travel) + facilities (scale/gym/AC/
+  routes) + location. Engine: mode-aware baseline; missingness EXPLAINED by
+  context (an absent weigh-in under no-scale is not flagged); coach reads it
+  to constrain prescriptions and to proactively explain/comfort. Effective-
+  dated (P2).
 - Ingest skill: extracts the new fields when visible, never nags;
   validator messages stay actionable.
 - **Resolution layer (G15)**: field-wise per-quantity precedence merge of
@@ -292,10 +298,16 @@ The comparison engine and the flagship demo.
 - Cut-first: the consent ledger UX (ship the access-scope contract + the
   correction cascade first).
 
-## Increment 6 - enrichment at ingest (v0.8.0; G5) [1 session, optional]
+## Increment 6 - enrichment at ingest (v0.8.0; G5, G35) [1-2 sessions, optional]
 
 - Doctrine + ingest-skill support for stored-at-ingest weather/calendar
   context; no engine changes (fields landed in increment 2).
+- Geodata & location-time (G35): routes/GPS on sessions (coarse route-slug
+  by default, G32); a where-was-I-when signal from many sources (photo
+  geodata, calendar, Maps/Waze route history, chat mentions) feeding
+  mode/facility/place inference (which populates G34's context.jsonl);
+  multi-source location as claims (P1). Privacy: coarse-by-default,
+  finer opt-in.
 - Explicitly the first thing to POSTPONE if real-world usage (dogfood or
   early adopters) surfaces better-informed priorities by then.
 
