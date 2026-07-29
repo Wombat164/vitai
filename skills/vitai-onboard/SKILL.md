@@ -33,11 +33,32 @@ plan they will follow, not the best plan.
    zones from measured HR, nutrition with the eat-back policy, tripwires).
 5. **Tune `vitai.toml`** from the plan: rate phases, easy-HR cap, RHR
    baseline, steps floor, sleep floor, pain gate. The engine flags what the
-   plan cares about - nothing else.
-6. **Fill the content repo's `CLAUDE.md`**: settled decisions (with
+   plan cares about - nothing else. Write the starting values there and the
+   same values as dated lines in `data/thresholds.jsonl`, so later changes
+   have a history to append to rather than overwriting the past.
+6. **Write `data/goals.jsonl`.** A goal in `plan.md` prose is unqueryable;
+   make it data. For each one capture:
+   - `metric` + `target`, and `dataset`/`session_type` to scope which events
+     count (`distance_km` is walking on a daily line, running on a session);
+   - `policy`: `monotonic` where more always counts (steps, protein), or
+     `guarded` with a `guard_pct` where volume beyond a ramp does not
+     (running, and anything with an injury history behind it);
+   - `motivator` - the intrinsic why, in the athlete's own words. This is
+     what the coach anchors on later, so a flat restatement of the metric
+     ("walk more") is a wasted field; "keep the desk job from winning" is not;
+   - `rationale` - why THIS number, so the target can be interrogated later
+     as the proxy it usually is;
+   - `period` + `on_period_end` for recurring containers ("8 gym visits a
+     month"), and `on_success`/`on_miss` for what a made or missed period
+     means next time - never punishment;
+   - `deadline` and `accountability` where the athlete named them.
+   Goals need not be fitness goals, and need not be measurable here: one the
+   athlete tracks in another app is `metric: "external"` plus a `tracker`.
+   vitai will reinforce and ask about it without inventing a verdict.
+7. **Fill the content repo's `CLAUDE.md`**: settled decisions (with
    evidence), how this athlete works, standing sensitivities. This file is
    what makes session two as good as session one.
-7. **Seed `data/`** with the observations that founded the plan (append,
+8. **Seed `data/`** with the observations that founded the plan (append,
    validate, build), so the first weekly rollup has a baseline.
 
 ## Rate-of-loss guidance

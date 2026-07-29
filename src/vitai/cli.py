@@ -1,6 +1,9 @@
-"""vitai CLI: init | build | validate | status.
+"""vitai CLI: init | build | validate | status | verdicts | goals | infer.
 
 Run from (or point --root at) a content repo produced by `vitai init`.
+
+The CLI is a harness over `vitai.api`, never a second code path (P9): every
+command here is a thin rendering of one API method.
 """
 
 from __future__ import annotations
@@ -96,6 +99,64 @@ def cmd_verdicts(args: argparse.Namespace) -> None:
         print(json.dumps(row))
 
 
+def _fmt_goal(row: dict) -> str:
+    """One goal line: what it is, how far in, and when it was last moved."""
+    target, counted, pct = row.get("target"), row.get("counted"), row.get("progress_pct")
+    if row.get("metric") == "external":
+        head = f"tracked in {row.get('tracker')}"
+    elif target is None:
+        head = f"{counted:g} logged (no target)"
+    else:
+        head = f"{counted:g}/{target:g}" + (f" ({pct:.0f}%)" if pct is not None else "")
+    bits = [f"{row['slug']}: {head}"]
+    if row.get("policy") == "guarded" and row.get("unbudgeted"):
+        bits.append(f"{row['unbudgeted']:g} unbudgeted")
+    if row.get("milestones"):
+        bits.append(f"{row['milestones']} milestone(s)")
+    if row.get("deadline"):
+        bits.append(f"by {row['deadline']}")
+    dates = f"set {row.get('declared')}"
+    if row.get("last_edited") and row["last_edited"] != row.get("declared"):
+        dates += f", last moved {row['last_edited']}"
+    return f"{' - '.join(bits)}\n    {dates}" + (
+        f"\n    why: {row['motivator']}" if row.get("motivator") else "")
+
+
+def cmd_goals(args: argparse.Namespace) -> None:
+    """Active goals with progress, dates, and each event's contribution."""
+    root = _root(args)
+    v = Vitai(root)
+    today = date.fromisoformat(args.on) if args.on else None
+    rows = v.goals(today=today)
+    if args.json:
+        for row in rows:
+            print(json.dumps(row))
+        return
+    active = [r for r in rows if r.get("status") == "active"]
+    if not active:
+        print("no active goals - append lines to data/goals.jsonl "
+              "(the vitai-onboard skill writes them)")
+        return
+    for row in active:
+        print(_fmt_goal(row))
+    contributions = v.contributions()
+    recent = [c for c in contributions[-args.recent:]] if args.recent else []
+    if recent:
+        print("\nrecent contributions:")
+        for c in recent:
+            mark = {"advances": "+", "partial": "~", "unbudgeted": "0",
+                    "regresses": "-", "neutral": "."}.get(c["contribution"], "?")
+            print(f"  {c['date']} {mark} {c['goal']}: {c['metric']}={c['value']:g}"
+                  f" counted {c['counted']:g} ({c['contribution']})")
+    flagged = [e for e in v.churn(today=today) if e.get("suspicious")]
+    if flagged:
+        print("\nworth a question:")
+        for e in flagged:
+            why = e.get("reason") or "no reason given"
+            print(f"  {e['date']} {e['slug']} loosened "
+                  f"{e['before']:g} -> {e['after']:g} after a miss ({why})")
+
+
 def cmd_infer(args: argparse.Namespace) -> None:
     """Opt-in intelligence layer: a model reads the record, validated new
     knowledge is appended to data/inferences.jsonl. Never touches numbers."""
@@ -183,6 +244,7 @@ def main(argv: list[str] | None = None) -> None:
         ("validate", cmd_validate, "schema-check every data line"),
         ("status", cmd_status, "one-line state: latest weight, rate, tripwires"),
         ("verdicts", cmd_verdicts, "weekly goal-attainment rows as JSONL (the platform contract)"),
+        ("goals", cmd_goals, "active goals: progress, dates, contributions, flagged edits"),
         ("infer", cmd_infer, "opt-in: model reads the record, appends validated inferences"),
     ]:
         p = sub.add_parser(name, help=help_)
@@ -190,6 +252,13 @@ def main(argv: list[str] | None = None) -> None:
         if name == "infer":
             p.add_argument("--dry-run", action="store_true",
                            help="print validated inferences without appending")
+        if name == "goals":
+            p.add_argument("--json", action="store_true",
+                           help="emit goal rows as JSONL instead of prose")
+            p.add_argument("--on", metavar="YYYY-MM-DD",
+                           help="reconstruct goals as they stood on this date")
+            p.add_argument("--recent", type=int, default=10, metavar="N",
+                           help="show the last N per-goal contributions (0 = none)")
         p.set_defaults(fn=fn)
 
     args = ap.parse_args(argv)

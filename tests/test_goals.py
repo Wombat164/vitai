@@ -1,0 +1,462 @@
+"""Increment 1: goals as data, contribution, and temporal validity.
+
+Synthetic data only (public repo: no real measurements). The dates are in 2030
+for the same reason the rest of the suite uses them - a fictional athlete.
+
+The three tests that matter most here are the ones guarding a property rather
+than a feature: `test_editing_a_target_today_leaves_past_verdicts_alone` and
+`test_past_week_keeps_the_threshold_in_force_then` are the G14/G20 regression
+(working rule 6, "value-history stability"), and
+`test_milestone_does_not_fire_on_unbudgeted_volume` is what stops the engine
+congratulating an athlete for the behaviour most likely to injure them.
+"""
+
+import json
+from pathlib import Path
+
+from vitai.config import Config, overlay
+from vitai.contributions import compute_contributions, goal_progress
+from vitai.jsonl import heads, load
+from vitai.policy import LOOSENED, TIGHTENED, plan_churn, state
+from vitai.schema import validate_record
+from vitai.verdicts import compute_verdicts
+
+
+def write(p: Path, lines):
+    p.write_text("\n".join(json.dumps(x) for x in lines) + "\n", encoding="utf-8")
+
+
+def goal(slug="steps", date="2030-04-01", metric="steps", target=10000,
+         policy="monotonic", **kw):
+    rec = {
+        "date": date, "slug": slug, "title": f"{slug} goal", "metric": metric,
+        "dataset": None, "session_type": None,
+        "tracker": None, "target": target, "policy": policy, "guard_pct": None,
+        "period": "weekly", "on_period_end": "reset", "deadline": None,
+        "status": "active", "motivator": None, "rationale": None,
+        "on_success": None, "on_miss": None, "accountability": None,
+        "set_by": "athlete", "reason": None, "note": None,
+    }
+    rec.update(kw)
+    return rec
+
+
+def threshold(key="steps_floor", date="2030-04-01", value=9000, **kw):
+    rec = {"date": date, "key": key, "value": value, "change_kind": "change",
+           "set_by": "athlete", "reason": None, "note": None}
+    rec.update(kw)
+    return rec
+
+
+def daily(date, steps=None, **kw):
+    rec = {"date": date, "steps": steps, "distance_km": None, "active_min": None,
+           "kcal_out": None, "kcal_in": None, "protein_g": None, "sleep_h": None,
+           "rhr": None, "hip_pain": None, "alcohol": None, "note": None}
+    rec.update(kw)
+    return rec
+
+
+def session(date, type="run", distance_km=None, **kw):
+    rec = {"date": date, "type": type, "distance_km": distance_km,
+           "duration_s": None, "avg_hr": None, "max_hr": None, "cadence": None,
+           "kcal": None, "location": None, "rpe": None, "note": None}
+    rec.update(kw)
+    return rec
+
+
+# ---- schema ------------------------------------------------------------------
+
+def test_valid_goal_line_passes():
+    assert validate_record("goals", goal()) == []
+
+
+def test_guarded_goal_requires_guard_pct():
+    problems = validate_record("goals", goal(policy="guarded"))
+    assert any("guard_pct" in p for p in problems)
+
+
+def test_external_goal_requires_a_tracker():
+    problems = validate_record("goals", goal(metric="external", target=None))
+    assert any("tracker" in p for p in problems)
+    assert validate_record(
+        "goals", goal(metric="external", target=None, tracker="a segment app")) == []
+
+
+def test_active_internal_goal_needs_a_target():
+    problems = validate_record("goals", goal(target=None))
+    assert any("target" in p for p in problems)
+    # ...but an abandoned one does not - history keeps goals that never had one.
+    assert validate_record("goals", goal(target=None, status="abandoned")) == []
+
+
+def test_closed_vocabularies_are_enforced():
+    assert any("policy" in p for p in validate_record("goals", goal(policy="vibes")))
+    assert any("status" in p for p in validate_record("goals", goal(status="ongoing")))
+    assert any("change_kind" in p
+               for p in validate_record("thresholds", threshold(change_kind="fixed")))
+
+
+def test_threshold_and_achievement_shapes():
+    assert validate_record("thresholds", threshold()) == []
+    assert validate_record("achievements", {
+        "date": "2030-05-01", "title": "first 10k", "goal": "running",
+        "source": "athlete", "note": None}) == []
+
+
+# ---- slug-scoped supersedes + heads ------------------------------------------
+
+def test_same_slug_append_is_an_edit_and_keeps_both_lines(tmp_path):
+    write(tmp_path / "goals.jsonl", [
+        goal(date="2030-04-01", target=10000),
+        goal(date="2030-05-01", target=12000),
+    ])
+    recs = load(tmp_path, "goals")
+    assert len(recs) == 2, "an edit keeps the history; it is not a replacement"
+    assert heads(recs, "goals")["steps"]["target"] == 12000
+
+
+def test_slug_scoped_supersedes_drops_the_corrected_line(tmp_path):
+    write(tmp_path / "goals.jsonl", [
+        goal(date="2030-04-01", target=10000),
+        goal(date="2030-05-01", target=1200),                     # typo
+        goal(date="2030-05-01", target=12000, supersedes="steps@2030-05-01"),
+    ])
+    recs = load(tmp_path, "goals")
+    assert len(recs) == 2
+    assert [r["target"] for r in recs] == [10000, 12000]
+
+
+def test_supersedes_is_scoped_per_slug(tmp_path):
+    # A correction to one goal must not touch a same-dated line of another.
+    write(tmp_path / "goals.jsonl", [
+        goal(slug="steps", date="2030-04-01", target=10000),
+        goal(slug="running", date="2030-04-01", metric="distance_km", target=20),
+        goal(slug="steps", date="2030-04-01", target=11000,
+             supersedes="steps@2030-04-01"),
+    ])
+    recs = load(tmp_path, "goals")
+    assert {r["slug"] for r in recs} == {"steps", "running"}
+    assert heads(recs, "goals")["steps"]["target"] == 11000
+    assert heads(recs, "goals")["running"]["target"] == 20
+
+
+# ---- as-of reconstruction (G20) ----------------------------------------------
+
+def test_state_returns_the_policy_in_force_then():
+    goals = [goal(date="2030-04-01", target=10000),
+             goal(date="2030-05-15", target=12000)]
+    thresholds = [threshold(date="2030-04-01", value=9000),
+                  threshold(date="2030-05-15", value=8000)]
+    assert state(goals, thresholds, "2030-05-01").goal("steps")["target"] == 10000
+    assert state(goals, thresholds, "2030-05-01").threshold("steps_floor") == 9000
+    assert state(goals, thresholds, "2030-06-01").goal("steps")["target"] == 12000
+    assert state(goals, thresholds, "2030-06-01").threshold("steps_floor") == 8000
+
+
+def test_a_goal_is_invisible_before_it_was_declared():
+    goals = [goal(date="2030-05-01")]
+    assert state(goals, [], "2030-04-30").goals == ()
+    assert state(goals, [], "2030-05-01").goal("steps") is not None
+
+
+def test_state_takes_effect_on_the_line_date():
+    goals = [goal(date="2030-04-01", target=10000),
+             goal(date="2030-05-01", target=12000)]
+    assert state(goals, [], "2030-04-30").goal("steps")["target"] == 10000
+    assert state(goals, [], "2030-05-01").goal("steps")["target"] == 12000
+
+
+def test_overlay_prefers_dated_thresholds_over_the_toml():
+    cfg = Config(steps_floor=9000, easy_hr_cap=150)
+    eff = overlay(cfg, {"steps_floor": 11000})
+    assert eff.steps_floor == 11000
+    assert eff.easy_hr_cap == 150, "an unrelated toml threshold survives"
+
+
+# ---- G14 regression: editing today never re-scores the past -------------------
+
+def _week_rows(rows, metric):
+    return {r["week"]: r["verdict"] for r in rows if r["metric"] == metric}
+
+
+def test_past_week_keeps_the_threshold_in_force_then():
+    """The audit-trail killer, guarded: lowering a floor cannot turn an old
+    miss into a hit on the next rebuild."""
+    days = [daily(f"2030-04-{d:02d}", steps=8000) for d in range(1, 8)]
+    days += [daily(f"2030-06-{d:02d}", steps=8000) for d in range(3, 10)]
+    cfg = Config()
+    strict = [threshold(date="2030-04-01", value=9000)]
+    before = _week_rows(compute_verdicts(cfg, [], days, [], thresholds=strict), "steps")
+    assert before["2030-04-01"] == "behind"
+
+    # The athlete lowers the floor in June. April must not move.
+    loosened = strict + [threshold(date="2030-06-01", value=7000)]
+    after = _week_rows(compute_verdicts(cfg, [], days, [], thresholds=loosened), "steps")
+    assert after["2030-04-01"] == "behind", "April was re-scored by a June edit"
+    assert after["2030-06-03"] == "on_target", "June should use the new floor"
+
+
+def test_editing_a_target_today_leaves_past_verdicts_alone():
+    days = [daily(f"2030-04-{d:02d}", steps=8000) for d in range(1, 8)]
+    cfg = Config()
+    thresholds = [threshold(date="2030-04-01", value=9000)]
+    original = compute_verdicts(cfg, [], days, [], thresholds=thresholds)
+    edited = compute_verdicts(cfg, [], days, [],
+                              thresholds=thresholds + [threshold(
+                                  date="2030-05-01", value=5000)])
+    past = [r for r in original if r["week"] == "2030-04-01"]
+    still = [r for r in edited if r["week"] == "2030-04-01"]
+    assert past == still
+
+
+def test_verdicts_carry_goal_linkage():
+    days = [daily(f"2030-04-{d:02d}", steps=9500) for d in range(1, 8)]
+    rows = compute_verdicts(Config(steps_floor=9000), [], days, [],
+                            goals=[goal(date="2030-04-01")])
+    steps = [r for r in rows if r["metric"] == "steps"]
+    assert steps and all(r["goal"] == "steps" for r in steps)
+
+
+# ---- contribution fan-out (G18) ----------------------------------------------
+
+def test_one_event_fans_out_to_every_goal_it_touches():
+    """The increment's point: one run, two goals, two different verdicts."""
+    goals = [
+        goal(slug="calories", metric="kcal", target=2000, policy="monotonic"),
+        goal(slug="running", metric="distance_km", target=20, policy="guarded",
+             guard_pct=0.1),
+    ]
+    # Four prior weeks establish a ~10 km/week running baseline, and the
+    # athlete has already run their planned 10 km this week - so the week's
+    # budget is spent before the unplanned run happens.
+    history = [session(f"2030-04-{d:02d}", distance_km=10.0, kcal=600)
+               for d in (2, 9, 16, 23)]
+    planned = session("2030-04-29", distance_km=11.0, kcal=600)  # base + the 10%
+    big_run = session("2030-04-30", distance_km=25.0, kcal=1500)
+    contributions, _ = compute_contributions(
+        goals, [], [], history + [planned, big_run])
+
+    on_the_day = {c["goal"]: c for c in contributions if c["date"] == "2030-04-30"}
+    assert set(on_the_day) == {"calories", "running"}
+    # The same event, two honest and opposite verdicts. This is the increment.
+    assert on_the_day["calories"]["contribution"] == "advances"
+    assert on_the_day["calories"]["counted"] == 1500
+    assert on_the_day["running"]["contribution"] == "unbudgeted"
+    assert on_the_day["running"]["counted"] == 0.0, (
+        "volume beyond the ramp guard must not advance a guarded goal")
+
+
+def test_guarded_goal_credits_volume_within_the_ramp():
+    goals = [goal(slug="running", metric="distance_km", target=20,
+                  policy="guarded", guard_pct=0.2)]
+    history = [session(f"2030-04-{d:02d}", distance_km=10.0)
+               for d in (2, 9, 16, 23)]
+    modest = session("2030-04-30", distance_km=11.0)   # +10%, inside a 20% guard
+    contributions, _ = compute_contributions(goals, [], [], history + [modest])
+    last = [c for c in contributions if c["date"] == "2030-04-30"][0]
+    assert last["contribution"] == "advances"
+    assert last["counted"] == 11.0
+
+
+def test_guarded_goal_splits_a_straddling_event():
+    goals = [goal(slug="running", metric="distance_km", target=100,
+                  policy="guarded", guard_pct=0.0)]
+    history = [session(f"2030-04-{d:02d}", distance_km=10.0)
+               for d in (2, 9, 16, 23)]
+    straddle = session("2030-04-30", distance_km=14.0)  # budget is 10.0
+    contributions, _ = compute_contributions(goals, [], [], history + [straddle])
+    last = [c for c in contributions if c["date"] == "2030-04-30"][0]
+    assert last["contribution"] == "partial"
+    assert last["counted"] == 10.0
+
+
+def test_guard_cannot_fire_without_a_baseline():
+    goals = [goal(slug="running", metric="distance_km", target=20,
+                  policy="guarded", guard_pct=0.1)]
+    first = session("2030-04-02", distance_km=15.0)
+    contributions, _ = compute_contributions(goals, [], [], [first])
+    assert contributions[0]["contribution"] == "advances", (
+        "there is no ramp to exceed in the first week of a goal")
+
+
+def test_a_goal_can_be_scoped_to_one_dataset_and_session_type():
+    """`distance_km` means walking on daily and running on sessions."""
+    running = goal(slug="running", metric="distance_km", target=100,
+                   dataset="sessions", session_type="run")
+    days = [daily("2030-04-02", distance_km=8.0)]
+    runs = [session("2030-04-02", type="run", distance_km=5.0),
+            session("2030-04-03", type="walk", distance_km=4.0)]
+    contributions, _ = compute_contributions([running], [], days, runs)
+    assert [c["counted"] for c in contributions] == [5.0], (
+        "only the run counts: not the commute, not the walk")
+
+
+def test_external_goals_are_tracked_but_never_auto_verdicted():
+    goals = [goal(slug="segment", metric="external", target=None,
+                  tracker="a segment app")]
+    contributions, _ = compute_contributions(
+        goals, [], [daily("2030-04-02", steps=12000)], [])
+    assert contributions == []
+    rows = goal_progress(goals, [], [daily("2030-04-02", steps=12000)], [],
+                         "2030-04-30")
+    assert rows[0]["tracker"] == "a segment app"
+
+
+def test_contributions_are_judged_against_the_goal_of_the_day():
+    goals = [goal(date="2030-05-01", target=10000)]
+    days = [daily("2030-04-20", steps=9000), daily("2030-05-02", steps=9000)]
+    contributions, _ = compute_contributions(goals, [], days, [])
+    assert [c["date"] for c in contributions] == ["2030-05-02"], (
+        "a day before the goal existed cannot contribute to it")
+
+
+# ---- milestones ---------------------------------------------------------------
+
+def test_milestone_fires_on_genuine_progress():
+    goals = [goal(slug="steps", metric="steps", target=10000, period="none")]
+    days = [daily("2030-04-01", steps=3000), daily("2030-04-02", steps=3000)]
+    _, milestones = compute_contributions(goals, [], days, [])
+    assert [m["fraction"] for m in milestones] == [0.25, 0.5]
+
+
+def test_milestone_does_not_fire_on_unbudgeted_volume():
+    """A 30 km week off a 12 km base mints nothing."""
+    goals = [goal(slug="running", metric="distance_km", target=40,
+                  policy="guarded", guard_pct=0.1, period="none")]
+    history = [session(f"2030-04-{d:02d}", distance_km=3.0)
+               for d in (2, 9, 16, 23)]
+    _, before = compute_contributions(goals, [], [], history)
+    blowout = session("2030-04-30", distance_km=30.0)
+    _, after = compute_contributions(goals, [], [], history + [blowout])
+    assert after == before, "unbudgeted volume minted a milestone"
+
+
+def test_a_milestone_is_minted_once():
+    goals = [goal(slug="steps", metric="steps", target=1000, period="none")]
+    days = [daily(f"2030-04-{d:02d}", steps=600) for d in range(1, 5)]
+    _, milestones = compute_contributions(goals, [], days, [])
+    assert len(milestones) == len({m["fraction"] for m in milestones})
+
+
+# ---- progress math ------------------------------------------------------------
+
+def test_progress_counts_only_what_was_banked():
+    goals = [goal(slug="running", metric="distance_km", target=20,
+                  policy="guarded", guard_pct=0.1, period="none")]
+    history = [session(f"2030-04-{d:02d}", distance_km=5.0) for d in (2, 9, 16, 23)]
+    rows = goal_progress(goals, [], [], history + [session("2030-04-30",
+                                                           distance_km=25.0)],
+                         "2030-04-30")
+    row = rows[0]
+    assert row["counted"] == 20.0 + 5.5, "banked = the four base weeks + the ramp"
+    assert row["unbudgeted"] == 19.5
+    assert row["progress_pct"] == 127.5
+
+
+def test_progress_reports_declaration_and_edit_dates():
+    goals = [goal(date="2030-04-01", target=10000),
+             goal(date="2030-05-01", target=12000)]
+    rows = goal_progress(goals, [], [daily("2030-05-02", steps=9000)], [],
+                         "2030-05-02")
+    assert rows[0]["declared"] == "2030-04-01"
+    assert rows[0]["last_edited"] == "2030-05-01"
+    assert rows[0]["target"] == 12000
+
+
+def test_weekly_period_resets_progress():
+    goals = [goal(slug="steps", metric="steps", target=50000, period="weekly")]
+    days = [daily("2030-04-01", steps=9000), daily("2030-04-08", steps=7000)]
+    rows = goal_progress(goals, [], days, [], "2030-04-08")
+    assert rows[0]["counted"] == 7000, "a new week starts from zero"
+
+
+# ---- churn + the suspiciously-timed edit (G20) --------------------------------
+
+def test_churn_records_an_edit_but_not_the_declaration():
+    goals = [goal(date="2030-04-01", target=10000),
+             goal(date="2030-05-01", target=12000)]
+    rows = plan_churn(goals, [])
+    assert len(rows) == 1
+    assert rows[0]["edit_no"] == 1 and rows[0]["direction"] == TIGHTENED
+
+
+def test_a_correction_is_not_churn():
+    thresholds = [threshold(date="2030-04-01", value=9000),
+                  threshold(date="2030-04-02", value=900,
+                            change_kind="correction", reason="dropped a zero")]
+    assert plan_churn([], thresholds) == []
+
+
+def test_loosening_right_after_a_miss_is_flagged():
+    days = [daily(f"2030-04-{d:02d}", steps=8000) for d in range(1, 8)]
+    thresholds = [threshold(date="2030-03-01", value=9000)]
+    verdicts = compute_verdicts(Config(), [], days, [], thresholds=thresholds)
+    assert any(r["verdict"] == "behind" for r in verdicts)
+
+    # The floor is lowered three days after that missed week ended.
+    loosened = thresholds + [threshold(date="2030-04-10", value=7000)]
+    rows = plan_churn([], loosened, verdicts)
+    assert len(rows) == 1
+    assert rows[0]["direction"] == LOOSENED
+    assert rows[0]["suspicious"] is True
+    assert rows[0]["unexplained"] is True, "no reason given is the askable case"
+
+
+def test_a_tightening_after_a_miss_is_not_suspicious():
+    days = [daily(f"2030-04-{d:02d}", steps=8000) for d in range(1, 8)]
+    thresholds = [threshold(date="2030-03-01", value=9000)]
+    verdicts = compute_verdicts(Config(), [], days, [], thresholds=thresholds)
+    rows = plan_churn([], thresholds + [threshold(date="2030-04-10", value=11000)],
+                      verdicts)
+    assert rows[0]["direction"] == TIGHTENED
+    assert rows[0]["suspicious"] is False
+
+
+def test_an_explained_loosening_is_flagged_but_not_unexplained():
+    days = [daily(f"2030-04-{d:02d}", steps=8000) for d in range(1, 8)]
+    thresholds = [threshold(date="2030-03-01", value=9000)]
+    verdicts = compute_verdicts(Config(), [], days, [], thresholds=thresholds)
+    rows = plan_churn([], thresholds + [threshold(
+        date="2030-04-10", value=7000, reason="calf strain, deloading")], verdicts)
+    assert rows[0]["suspicious"] is True
+    assert rows[0]["unexplained"] is False
+
+
+def test_cap_and_floor_loosen_in_opposite_directions():
+    floor = plan_churn([], [threshold(key="steps_floor", date="2030-04-01", value=9000),
+                            threshold(key="steps_floor", date="2030-05-01", value=8000)])
+    cap = plan_churn([], [threshold(key="pain_gate", date="2030-04-01", value=3),
+                          threshold(key="pain_gate", date="2030-05-01", value=5)])
+    assert floor[0]["direction"] == LOOSENED, "a lowered floor is easier"
+    assert cap[0]["direction"] == LOOSENED, "a raised cap is easier"
+
+
+def test_a_pushed_deadline_counts_as_loosening():
+    goals = [goal(date="2030-04-01", deadline="2030-06-01"),
+             goal(date="2030-05-01", deadline="2030-09-01")]
+    rows = plan_churn(goals, [])
+    assert rows[0]["deadline_pushed"] is True
+    assert rows[0]["direction"] == LOOSENED
+
+
+# ---- determinism --------------------------------------------------------------
+
+def test_same_day_events_with_mixed_null_types_sort():
+    """Two sessions on one day, one with a null the other fills in: the
+    ordering tiebreak must not try to compare None against a number."""
+    goals = [goal(slug="running", metric="distance_km", target=20,
+                  dataset="sessions")]
+    same_day = [session("2030-04-02", type="run", distance_km=5.0, kcal=300),
+                session("2030-04-02", type="gym_a", distance_km=None, kcal=None)]
+    contributions, _ = compute_contributions(goals, [], [], same_day)
+    assert [c["counted"] for c in contributions] == [5.0]
+
+
+def test_contributions_are_stable_across_runs():
+    goals = [goal(slug="steps"), goal(slug="running", metric="distance_km",
+                                      target=20, policy="guarded", guard_pct=0.1)]
+    days = [daily(f"2030-04-{d:02d}", steps=9000 + d) for d in range(1, 15)]
+    sessions = [session(f"2030-04-{d:02d}", distance_km=float(d)) for d in (3, 10)]
+    first = compute_contributions(goals, [], days, sessions)
+    second = compute_contributions(goals, [], days, sessions)
+    assert first == second

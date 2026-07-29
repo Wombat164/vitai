@@ -8,18 +8,40 @@ consume the engine without touching its internals.
 ## The three surfaces
 
 1. **The library**: `vitai.api.Vitai(root)` - `datasets()`, `verdicts()`,
-   `rollup()`, `build()`, `status_line()` over one user's store.
+   `rollup()`, `build()`, `status_line()`, plus the goal surface added in
+   contract 2: `goals()`, `contributions()`, `milestones()`, `churn()` and
+   `state(date)` over one user's store.
 2. **The read model**: `derived/health.db` - one table per dataset, plus
-   `verdicts` (week, metric, value, target, verdict) and `meta` (contract
-   version). Rebuilt from zero on every build; consumers treat it as
-   read-only.
-3. **The CLI**: `vitai verdicts` emits the same rows as JSONL for
-   non-Python consumers.
+   `verdicts` (week, metric, value, target, verdict, goal), the goal
+   derivations (`contributions`, `milestones`, `plan_churn`,
+   `goal_progress`), and `meta` (contract version). Rebuilt from zero on
+   every build; consumers treat it as read-only.
+3. **The CLI**: `vitai verdicts` and `vitai goals --json` emit the same rows
+   as JSONL for non-Python consumers.
 
 The `verdicts` table is the interesting one for games: deterministic weekly
 goal-attainment rows - exactly the signal an economy should mint premium
 currency from, and unforgeable in the sense that it only moves when the
-engine's arithmetic over the record moves.
+engine's arithmetic over the record moves. Each row now carries the `goal`
+it serves, so an economy can mint per goal rather than per metric.
+
+`milestones` is the second mintable signal, and it is deliberately harder to
+earn: it counts only progress that stayed inside a goal's contribution
+policy, so a host cannot be gamed by an athlete who blows through a ramp
+guard. `contributions` explains any single event's effect on any single goal,
+which is what a UI needs to answer "why did this run not move my bar".
+
+## Contract history
+
+| Contract | Version | Change |
+|---|---|---|
+| 1 | 0.2.0 | Founding: one table per dataset, `verdicts`, `meta` |
+| 2 | 0.3.0 | `goals`/`thresholds`/`achievements` tables; `contributions`, `milestones`, `plan_churn`, `goal_progress` derivations; `verdicts.goal` linkage |
+
+A consumer should read `meta.contract` and refuse to render what it does not
+understand. Contract 2 is additive - a contract-1 reader that ignores the new
+tables still works, except that `verdicts` has gained a trailing column, so
+`SELECT *` positional reads must be updated to named columns.
 
 ## Single-user or multi-user?
 
