@@ -28,6 +28,9 @@ from .jsonl import load
 from .policy import State, context_on, plan_churn, state
 from .report import build_report
 from .resolution import live_inferences, resolve, retractions
+from .safety import (
+    active_episodes, banner, escalations, gates_on, is_gated, urgent_now,
+)
 from .schema import KEYS
 from .verdicts import compute_verdicts
 
@@ -96,6 +99,38 @@ class Vitai:
         return context_on(self.dataset("context"),
                           on or date.today())
 
+    # --- the safety layer (G28) ----------------------------------------------
+    # Read straight from the record rather than from resolution: an escalation
+    # must not depend on a precedence ladder resolving the way someone expected.
+
+    def episodes(self, on: date | str | None = None) -> list[dict]:
+        """Medical episodes open on a date."""
+        return active_episodes(self.dataset("medical"), on or date.today())
+
+    def gates(self, on: date | str | None = None) -> list[dict]:
+        """What is blocked on a date, and why. Deterministic, not advisory."""
+        return gates_on(self.dataset("medical"), on or date.today(),
+                        pain_gate=self.config.pain_gate,
+                        daily=self.dataset("daily"))
+
+    def gated(self, activity: str, on: date | str | None = None) -> bool:
+        """Is this activity class or session type blocked on a date?"""
+        return is_gated(self.gates(on), activity)
+
+    def safety(self, on: date | str | None = None) -> list[dict]:
+        """Every escalation the record justifies, most urgent first."""
+        d = self.datasets()
+        return escalations(d["medical"], d["daily"], d["weight"], d["sessions"],
+                           on=on)
+
+    def urgent(self, on: date | str | None = None) -> list[dict]:
+        """The fast path: escalations that must not wait for the weekly rollup."""
+        return urgent_now(self.safety(on), on=on or date.today())
+
+    def safety_banner(self, on: date | str | None = None) -> str:
+        """The fixed escalation text for the fast path; empty when clear."""
+        return banner(self.urgent(on))
+
     def verdicts(self, today: date | None = None) -> list[dict]:
         d = self.canonical()
         return compute_verdicts(self.config, d["weight"], d["daily"],
@@ -104,8 +139,11 @@ class Vitai:
 
     def rollup(self, today: date | None = None) -> str:
         d = self.canonical()
+        on = today or date.today()
         return build_report(self.config, d["weight"], d["daily"],
-                            d["sessions"], today=today)
+                            d["sessions"], today=today,
+                            gates=self.gates(on),
+                            escalations=self.urgent(on))
 
     def state(self, on: date | str) -> State:
         """The goals and thresholds in force on a date - as-of reconstruction.
@@ -161,6 +199,11 @@ class Vitai:
             "justifications": resolved["justifications"],
             "conservation": resolved["tripwires"],
             "retractions": retractions(self.datasets()),
+            # Safety reads the RAW record, not canonical rows: an escalation
+            # must not be able to disappear because a precedence ladder picked
+            # the other source's null.
+            "gates": self.gates(on),
+            "escalations": self.safety(),
         }
 
     def build(self, today: date | None = None) -> Path:
@@ -181,7 +224,9 @@ class Vitai:
                       derivations=derivations)
         (derived / "weekly.md").write_text(
             build_report(self.config, d["weight"], d["daily"], d["sessions"],
-                         today=today),
+                         today=today, gates=derivations["gates"],
+                         escalations=urgent_now(derivations["escalations"],
+                                                on=today or date.today())),
             encoding="utf-8", newline="\n")
         return db
 

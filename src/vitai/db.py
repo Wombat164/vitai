@@ -20,7 +20,11 @@ from .schema import KEYS
 #    fields on daily/sessions, and the resolution layer: primary tables now
 #    hold CANONICAL rows, with raw claims in *_claims and the adjudication in
 #    resolution/justifications/conservation/retractions.
-CONTRACT_VERSION = "3"
+# 4: increment 3 - the medical dataset, plus the safety layer's outputs:
+#    `gates` (what is blocked today and why) and `escalations` (deterministic
+#    severity-to-action). A consumer that renders training suggestions MUST
+#    read `gates`, or it will propose activity the record has blocked.
+CONTRACT_VERSION = "4"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
@@ -42,7 +46,11 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               "facilities", "mode", "depends_on",
               "claim_id", "merged_into", "retracted_by", "cascaded_from",
               "field", "chosen_source", "over_source",
-              "tier", "quantity_class", "severity", "detail"}
+              "tier", "quantity_class", "severity", "detail",
+              # increment 3: the medical layer and the safety outputs
+              "title", "body_site", "status", "resolved_date", "restricts",
+              "provider_type", "source_kind", "escalation", "level", "trigger",
+              "action"}
 
 VERDICT_KEYS = ["week", "metric", "value", "target", "verdict", "goal"]
 
@@ -69,6 +77,11 @@ JUSTIFICATION_KEYS = ["date", "dataset", "field", "claim_id", "source", "tier",
 CONSERVATION_KEYS = ["date", "kind", "detail", "severity"]
 RETRACTION_KEYS = ["date", "kind", "claim_id", "retracted_by", "reason",
                    "cascaded_from"]
+# Increment 3. `gates` is the table a consumer must respect before suggesting
+# any activity; `escalations` is the deterministic severity-to-action output.
+GATE_KEYS = ["date", "source_kind", "slug", "restricts", "reason", "severity",
+             "escalation"]
+ESCALATION_KEYS = ["date", "level", "trigger", "detail", "action"]
 
 DERIVED_TABLES: dict[str, list[str]] = {
     "verdicts": VERDICT_KEYS,
@@ -81,6 +94,8 @@ DERIVED_TABLES: dict[str, list[str]] = {
     "justifications": JUSTIFICATION_KEYS,
     "conservation": CONSERVATION_KEYS,
     "retractions": RETRACTION_KEYS,
+    "gates": GATE_KEYS,
+    "escalations": ESCALATION_KEYS,
 }
 
 

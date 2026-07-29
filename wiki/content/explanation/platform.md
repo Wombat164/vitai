@@ -38,6 +38,7 @@ which is what a UI needs to answer "why did this run not move my bar".
 | 1 | 0.2.0 | Founding: one table per dataset, `verdicts`, `meta` |
 | 2 | unreleased | `goals`/`thresholds`/`achievements` tables; `contributions`, `milestones`, `plan_churn`, `goal_progress` derivations; `verdicts.goal` linkage |
 | 3 | unreleased | `measurements`/`context` tables; generation-2 columns on `daily` and `sessions`; the resolution layer - primary tables hold CANONICAL rows, with `claims`, `resolution`, `justifications`, `conservation`, `retractions` |
+| 4 | unreleased | `medical` table; the safety layer's `gates` and `escalations` |
 
 A consumer should read `meta.contract` and refuse to render what it does not
 understand. Contract 2 is additive - a contract-1 reader that ignores the new
@@ -68,6 +69,29 @@ audit trail. Three tables explain what happened:
 - `retractions` - claims that stopped being true and what fell with them.
   A consumer that caches derived values must honour these: an inference
   resting on a retracted claim is no longer current knowledge.
+
+## Gates and escalations - the one table you must not ignore
+
+Contract 4 adds `gates` and `escalations`, and they are different in kind
+from everything else here. Every other table is an input you may render as
+you see fit. These two constrain what you are allowed to render.
+
+**Before suggesting any activity, read `gates`.** A gate row names the
+activity classes it blocks (`run`, `impact`, `gym`, `all`, ...) and carries
+its own escalation text. A consumer that skips this will cheerfully propose a
+run to someone whose record has blocked running - which is the exact failure
+the table exists to prevent. `Vitai.gated("run")` answers it in one call.
+
+**`escalations` is not a notification feed.** Rows at `emergency` or `urgent`
+level mean the athlete needs a clinician, and the `action` string is fixed
+text that must be shown verbatim. Do not summarise it, rank it against other
+UI priorities, or let a language model rewrite it for tone. A game must not
+mint anything from a day carrying one, and must not treat a gated day as a
+missed target.
+
+Neither table is advisory and neither is a diagnosis - they route to a human
+and stop. If you are building something that could plausibly encourage
+training, honouring these two tables is the minimum bar.
 
 ## Single-user or multi-user?
 

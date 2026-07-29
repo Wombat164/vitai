@@ -368,9 +368,10 @@ def test_api_build_projects_verdicts_and_contract(tmp_path):
             "goals", "thresholds", "achievements", "contributions",
             "milestones", "plan_churn", "goal_progress",
             "measurements", "context", "claims", "resolution",
-            "justifications", "conservation", "retractions"} <= tables
+            "justifications", "conservation", "retractions",
+            "medical", "gates", "escalations"} <= tables
     assert con.execute("SELECT COUNT(*) FROM inferences").fetchone()[0] == 1
-    assert con.execute("SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "3"
+    assert con.execute("SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "4"
     con.close()
     assert v.status_line().startswith("77.3 kg")
     assert isinstance(v.verdicts(), list)

@@ -211,12 +211,13 @@ def _build(target: Path) -> None:
 
     goals, thresholds, achievements = _policy(start)
     context, measurements = _situational(start, END)
+    medical = _medical(start, END)
 
     for name, rows in (("weight", weight), ("daily", daily),
                        ("sessions", sessions), ("inferences", inferences),
                        ("goals", goals), ("thresholds", thresholds),
                        ("achievements", achievements), ("context", context),
-                       ("measurements", measurements)):
+                       ("measurements", measurements), ("medical", medical)):
         (target / "data" / f"{name}.jsonl").write_text(
             _jsonl(rows), encoding="utf-8", newline="\n")
 
@@ -290,6 +291,47 @@ def _policy(start: date) -> tuple[list[dict], list[dict], list[dict]]:
          "note": "unplanned, and the hip held - but it was not budgeted"},
     ]
     return goals, thresholds, achievements
+
+
+def _medical(start: date, end: date) -> list[dict]:
+    """Two episodes: one closed, one still gating (G11).
+
+    The resolved calf strain shows a complete lifecycle - onset, physio visit,
+    resolution - so the episode window is visible with both ends. The achilles
+    episode is deliberately left open at the end of the block so the demo
+    always renders an ACTIVE gate: the state a consumer most needs to handle
+    correctly, and the one that is easiest to forget to test against.
+
+    Nothing here is a diagnosis and no clinician is named - `provider_type` is
+    as specific as the record gets about who was seen.
+    """
+    return [
+        {"date": (start + timedelta(days=9)).isoformat(), "slug": "calf-strain",
+         "kind": "injury", "title": "Left calf strain on a hill rep",
+         "body_site": "calf", "severity": "moderate", "status": "active",
+         "resolved_date": None, "restricts": "run impact",
+         "provider_type": None, "source": "athlete",
+         "note": "pulled up mid-session, walked home"},
+        {"date": (start + timedelta(days=14)).isoformat(), "slug": "calf-strain",
+         "kind": "visit", "title": "Physio assessment - left calf",
+         "body_site": "calf", "severity": "mild", "status": "monitoring",
+         "resolved_date": None, "restricts": "impact",
+         "provider_type": "physio", "source": "athlete",
+         "note": "cleared to walk and cycle; graded return to running"},
+        {"date": (start + timedelta(days=31)).isoformat(), "slug": "calf-strain",
+         "kind": "injury", "title": "Left calf strain resolved",
+         "body_site": "calf", "severity": "none", "status": "resolved",
+         "resolved_date": (start + timedelta(days=31)).isoformat(),
+         "restricts": None, "provider_type": "physio", "source": "athlete",
+         "note": "full sessions with no symptoms for two weeks"},
+        # Still open at the end of the block: the demo always has a live gate.
+        {"date": (end - timedelta(days=4)).isoformat(), "slug": "achilles",
+         "kind": "symptom", "title": "Right achilles soreness after the long run",
+         "body_site": "achilles", "severity": "mild", "status": "monitoring",
+         "resolved_date": None, "restricts": "impact", "provider_type": None,
+         "source": "athlete",
+         "note": "stiff first thing; eases once warm - watching it"},
+    ]
 
 
 def _situational(start: date, end: date) -> tuple[list[dict], list[dict]]:

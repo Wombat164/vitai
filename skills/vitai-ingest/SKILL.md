@@ -78,6 +78,18 @@ be interrogated for costs more than it returns:
 - `context.jsonl` when the athlete mentions circumstances that change what is
   possible - a trip with no scale, a heatwave, a deadline week. One line when
   it changes, not one per day.
+- `medical.jsonl` when they mention an injury, a symptom, a clinician visit
+  or a restriction. Reuse the same `slug` for every step of one condition so
+  the lifecycle stays joined up, set `restricts` when something is off the
+  table, and close the episode with `status: resolved` plus a
+  `resolved_date`. Record `provider_type` (gp/physio/specialist) and never
+  the clinician's identity.
+
+  **If they describe something dangerous, write `severity: red_flag`.** You
+  can only ever raise an escalation, never lower one - the engine has its own
+  triggers and will fire regardless of what you conclude. Erring toward the
+  flag is the cheap direction. Never write a medical line that reads as a
+  diagnosis; record what they said and let the engine route it.
 
 If the athlete VOLUNTEERS context ("rainy, went with my partner"), capture
 it. That is the difference between a day that is legible in six months and a
