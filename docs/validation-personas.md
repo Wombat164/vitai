@@ -262,3 +262,135 @@ written. Findings were taken from where the coach had to invent something the
 model does not contain - which is a sharper signal than reviewing the model
 against itself, and produced the two safety-critical gaps (F1, F3) that a
 document review had missed across two full redteam passes.
+
+---
+
+# Part 2: the engine, run on their actual data
+
+Each persona produced 14 days of the data their life really generates - not the
+data the model wishes for. Those were built into three content repos and run
+through the real engine (`vitai validate` / `build` / `status`). This is a harder
+test than the conversation, and it went worse.
+
+**Result in one line: for all three athletes the engine produced almost nothing
+useful, and for the two with genuine medical concerns it explicitly reported
+"Tripwires: Nothing firing."**
+
+## E1. The safety net is OPT-IN, and silence is the default (G68) - CRITICAL
+
+Persona B: eating ~1200 kcal while exclusively breastfeeding, losing ~1.05
+kg/week, protein 40-58 g, sleeping 2-4 broken hours, one near-syncope.
+
+The engine's verdict: **`74.0 kg - tripwires: none`** and `## Tripwires -
+Nothing firing.`
+
+The reason is structural, not a bug: the rate verdict requires configured phase
+targets (`no phase targets configured`), and tripwires require configured
+thresholds. She has neither, because she is a new user who has configured
+nothing. **So the entire safety apparatus is inert by default.** Every athlete
+is unprotected until they configure the protection - which is precisely backwards
+for the population most at risk (new, uninformed, motivated, doing something
+dangerous they read about online).
+
+**Absolute-danger rules must fire from DEFAULTS, never from configuration.** A
+physiologically impossible rate of loss, an intake below a floor, a red-flag
+symptom - none of these may depend on the athlete having set something up first.
+Configuration should be able to *tighten* the net, never to be the thing that
+creates it.
+
+## E2. Five exertional chest-pain episodes produced silence (G59) - CRITICAL
+
+Persona C's 14 days contained five episodes, with durations INCREASING (about
+5s on the stairs, 10s lifting, 15s after mowing, a few seconds on a pallet, 20s
+reaching overhead with a drill). He supplied them clearly when asked.
+
+Engine output: `97.0 kg (2026-07-14) - tripwires: none`.
+
+They live in free-text `note` fields because there is nowhere else to put them -
+`medical.jsonl` does not exist until increment 3 - and no engine rule can ever
+see a free-text note. This is G59 confirmed empirically rather than argued: the
+most clinically important data in the entire exercise is invisible to the engine
+that is supposed to protect him.
+
+## E3. A signed rate that means the opposite of how it reads (G69) - HIGH
+
+Persona B's rollup rendered:
+
+> **Rate:** +1.10 kg/week (no phase targets configured)
+
+She lost 1.5 kg. The convention is `(older - newer)`, so **positive means
+losing** - but it is displayed as a bare signed number, and `+1.10 kg/week`
+reads in plain English as *gaining* 1.1 kg a week.
+
+For this athlete specifically - fixated on the scale, terrified of the number
+going up, already under-eating - reading "+1.10" as a gain is not a cosmetic
+problem. It is the exact input most likely to make her cut further. **A signed
+quantity must be labelled with its direction in words ("losing 1.10 kg/week"),
+never rendered as a bare sign the reader has to know a convention to decode.**
+
+## E4. The status line demands the one metric she refused (G62/G64) - HIGH
+
+Persona A's `vitai status`, the one-line summary and the first thing she would
+ever see:
+
+> `no weight data yet - weight.jsonl alone still carries the primary goal`
+
+She stated plainly at the outset: *"I do NOT want this to turn into a weight loss
+thing, I'll be honest that'll annoy me."* The engine's opening move is to tell
+her she has failed to weigh herself, and to assert that weight IS the primary
+goal. G33 can suppress a metric, but the status line, the rollup's leading
+section and the rate verdict are all architecturally weight-first.
+
+Her 14 days of genuinely real data - phone step counts, 1,800 to 9,500 a day,
+tracking her shift pattern exactly - appear nowhere in the rollup at all.
+
+## E5. Strength training is unmodelled (G70) - HIGH
+
+Persona A's entire goal is strength, and `sessions` has: `distance_km`,
+`duration_s`, `avg_hr`, `max_hr`, `cadence`, `elevation_m`, `route`, `weather`.
+Every one of them is an ENDURANCE field. **There is nowhere to record a set, a
+rep, or a load anywhere in the schema.** A gym session can only be logged as a
+duration with a note.
+
+This is a large hole for a project claiming domain-genericity: the entire
+resistance-training half of fitness has no representation, and the progressive-
+overload signal (the thing that actually predicts her pull-up, and the Tier-2
+recomposition proxy G36 explicitly relies on) cannot be computed because its
+inputs cannot be stored.
+
+## E6. Booleans and scalars where quantities are needed (G71) - MEDIUM
+
+- `alcohol` is a **boolean**. Persona C drinks five pints on a Friday and a can
+  with his tea on a Tuesday; both record as `true`. Roughly 1,400 kcal across his
+  weekend - plausibly his single biggest dietary lever - is invisible, and the
+  engine cannot tell a heavy session from a half.
+- `sleep_h` is a **scalar**. Persona B sleeps "2-4 hours broken across two or
+  three wakings" and Persona A sleeps 5.5 daytime hours behind blackout blinds.
+  Fragmentation and timing are the entire story for both, and neither survives
+  into a single number.
+- `setting` enumerates `home | indoor | outdoor | treadmill` - with **no `gym`**,
+  which is where Persona A trains exclusively.
+
+## E7. What the engine could not even ingest
+
+Sixteen distinct things the athletes SAID had no home in the schema. Beyond
+those already listed: shift type (the organising fact of Persona A's life,
+stuffed into a note); that her sleep figures are *recalled guesses* rather than
+measurements, and her wellbeing scores were reconstructed after the fact rather
+than logged in the moment (G37's uncertainty bands exist for weight only, so a
+guessed 5 is indistinguishable from a measured 5); breastfeeding status; a
+caesarean with no return-to-impact clearance; diabetes, metformin and an HbA1c;
+and eight hours a day on his feet.
+
+## What this changes
+
+The conversational validation found the model's judgement sound and its
+structure narrow. Running the engine on real-shaped data is harsher: **the
+engine is currently usable only by an athlete who looks like its author** -
+device-instrumented, weight-goal-driven, endurance-training, configured, and on
+a Monday-to-Sunday week.
+
+The good news is that none of these findings are philosophical. They are
+schema and default-configuration problems, and the two CRITICAL ones (E1, E2)
+are both already scoped into increment 3, which now has a far sharper
+specification than it had this morning.

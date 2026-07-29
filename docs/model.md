@@ -116,7 +116,7 @@ these; nothing else exists.
    safety/privacy-critical: consent ledger, access-scope, suppression prefs -
    NOT markdown pages (the redteam's "prose still hiding where data is needed").
 
-## Part 3 - The consolidating gaps (G24-G67)
+## Part 3 - The consolidating gaps (G24-G71)
 
 Each folds several redteam findings and fills a symmetry hole in a principle.
 
@@ -706,6 +706,43 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   silently and worked around; a deferred lever is named honestly ONCE without
   moralising, then left alone and revisited much later. Nagging either loses the
   athlete. Validation F14.
+
+- **G68 Safety must not be opt-in; defaults fire unconfigured** (P4/G28).
+  CRITICAL, found by RUNNING the engine. A nursing mother eating ~1200 kcal,
+  losing ~1 kg/week, protein 40-58 g, with a near-syncope, produced
+  `tripwires: none` - because the rate verdict needs configured phase targets
+  and tripwires need configured thresholds, and she is a new user who has
+  configured nothing. **The entire safety apparatus is inert by default**, which
+  is backwards for the population most at risk: new, motivated, uninformed, and
+  already doing something dangerous. Absolute-danger rules (impossible rate of
+  loss, intake below a floor, a red-flag symptom) must fire from DEFAULTS.
+  Configuration may TIGHTEN the net; it must never be the thing that creates it.
+  See [validation-personas.md](validation-personas.md) E1.
+- **G69 Signed quantities must be labelled, not bare** (P7/G34). HIGH. The
+  rollup rendered `**Rate:** +1.10 kg/week` for an athlete who had LOST 1.5 kg -
+  the convention is `(older - newer)`, so positive means losing, but the plain
+  reading of "+1.10 kg/week" is gaining. For a scale-anxious athlete already
+  under-eating, that misreading is the single input most likely to make her cut
+  further. Every signed quantity states its direction in WORDS ("losing 1.10
+  kg/week"), never a bare sign the reader must know a convention to decode.
+  Validation E3.
+- **G70 Resistance training is unmodelled** (P8/artifact-1). HIGH. `sessions`
+  carries `distance_km`, `duration_s`, `avg_hr`, `cadence`, `elevation_m`,
+  `route`, `weather` - every field is an ENDURANCE field. **There is nowhere to
+  record a set, a rep or a load anywhere in the schema**, so a gym session can
+  only be stored as a duration plus a note. This blocks: any strength goal
+  (an athlete whose entire objective was a pull-up), progressive-overload as a
+  signal, and the Tier-2 recomposition proxy G36 explicitly depends on. A large
+  hole for a project claiming domain-genericity. Needs a sets/reps/load
+  structure and a `setting` value for `gym` (the enum today is home | indoor |
+  outdoor | treadmill). Validation E5.
+- **G71 Quantities recorded as booleans and scalars** (P1/P3). MEDIUM.
+  `alcohol` is a BOOLEAN: five pints on a Friday and one can with dinner both
+  store as `true`, hiding ~1,400 kcal across a weekend that is plausibly the
+  athlete's largest dietary lever. `sleep_h` is a SCALAR: "2-4 hours broken
+  across three wakings" and "5.5 daytime hours behind blackout blinds" both
+  reduce to a number, and fragmentation plus timing are the entire story for
+  both athletes. Where a quantity or a structure exists, store it. Validation E6.
 
 ## The frame: a guardrailed world model (belief-state, not a learned net)
 
