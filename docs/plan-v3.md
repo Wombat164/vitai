@@ -405,9 +405,25 @@ enrichment (increment 6); G46 couples to context assembly (increment 9).
   lower-trust). Tests: a place-scoped and a global preference resolve
   deterministically; the coach can name the preference that drove a proposal;
   a behavioural preference is never quoted back as if stated.
+- **G51 person model:** a `people` dataset (relationship, household/dependent
+  flags + age as data, participation capability, availability + travel state
+  incl. with-me-or-not, coarse restriction). The planner evaluates people-state
+  BEFORE proposing: constraint propagation in both directions (their presence
+  blocks a shared asset; their absence transfers care duty to me; their
+  availability expands options to joint sessions). **Third-party minimization is
+  a build requirement, not a doc note:** the schema must have nowhere to put a
+  diagnosis, a metric, or a location history for another person. Tests: a
+  partner's departure vetoes a leave-the-house proposal; an available willing
+  person yields a joint-session option; the schema rejects third-party medical
+  or metric fields outright.
+- **G52 shared-resource contention:** assets carry claimed-use windows; the
+  planner intersects (my free window) x (asset free) x (care duty clear). Tests:
+  a contended crosstrainer yields the alternative + a stated reason, never a
+  silent drop; an unavailable car invalidates a drive-to-trailhead journey (G44).
 - NOT: autonomous booking of transit/anything; any live lookup without a granted
   source; any coarse-coord leak past the enrichment boundary (G32); any inferred
-  age, relationship or dependent detail (G49 - these are stated or absent).
+  age, relationship or dependent detail (G49/G51 - stated or absent); any
+  third-party health/metric/location storage (G51 hard line).
 
 ## Increment 7 - forecasting (v0.9.0; G21) [2-3 sessions]
 

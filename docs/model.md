@@ -116,7 +116,7 @@ these; nothing else exists.
    safety/privacy-critical: consent ledger, access-scope, suppression prefs -
    NOT markdown pages (the redteam's "prose still hiding where data is needed").
 
-## Part 3 - The consolidating gaps (G24-G50)
+## Part 3 - The consolidating gaps (G24-G52)
 
 Each folds several redteam findings and fills a symmetry hole in a principle.
 
@@ -472,6 +472,47 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   never asserted as a stated preference (P3). This is what lets "preferred
   exercises", "preferred exercises at Knokke", and "preferred exercises when
   cutting" coexist without contradiction. MEDIUM.
+
+- **G51 Person model: people as typed entities AND constraint sources**
+  (subsumes G49's dependents; P2/G32). A `people` dataset of typed entities -
+  `relationship`: partner | child | family | friend | colleague | coach | other;
+  flags `household` (shares my resources) and `dependent` (+ age as DATA, never
+  guessed). Each carries only what MY planning needs:
+  - *Participation capability*: which sports/intensities they do, rough level or
+    pace band, what they can join ("kids can do 10 min of a circuit", "X runs my
+    easy pace"). Turns a solo session into a joint one.
+  - *Availability & travel state*: home place, and where they will BE in the
+    planning window - home | out | away | on-holiday | at-a-conference, and
+    crucially **with-me or without-me** (a partner at a conference *with* me
+    shares my mode and place; *without* me flips me to sole care duty).
+  - *Coarse restriction*: "unavailable for running until <date>" - a planning
+    fact, NOT a diagnosis.
+  **The load-bearing semantic is CONSTRAINT PROPAGATION - another person's state
+  changes MY feasible set, in both directions:**
+  - their PRESENCE can block me (they are using the shared crosstrainer -> G52);
+  - their ABSENCE can block me (they leave -> I hold dependent care -> no
+    leave-the-house session, however good the weather);
+  - their AVAILABILITY can expand me (free + willing + able -> a partner run, or
+    the kids joining rounds).
+  The planner must evaluate people-state before proposing, not after.
+  **Third-party privacy is a hard line (G32).** These people never consented to
+  being in my health record. Store the MINIMUM for planning - availability,
+  participation capability, coarse restriction - and NEVER their medical detail,
+  their metrics, or their location history. Another person's health data belongs
+  to them, in their own record if they want one. Minors get extra restraint. A
+  person entity is a planning aid, not a dossier. HIGH.
+- **G52 Shared-resource contention & allocation** (extends G48; P2). G48 says a
+  place HAS an asset; this says whether it is FREE. Shared assets (a
+  crosstrainer, the car, one bike, a single mat, a bookable gym slot) have
+  **exclusive use over a window**: a household member's claimed use BLOCKS mine
+  for that window, and the planner checks asset AVAILABILITY, not merely asset
+  existence. Generalizes past equipment - if the partner has the car, the
+  drive-to-trailhead journey (G44) is off, which silently invalidates an
+  otherwise-valid plan. Contention resolves against the availability windows of
+  G49/G51: the intersection of (my free window) x (asset free) x (care duty
+  clear) is the real schedulable slot. A blocked asset is a REASON the coach can
+  state ("the crosstrainer is taken till 19:45 - want the 20:00 slot, or the
+  bodyweight version now?"), never a silent omission. MEDIUM.
 
 ## The frame: a guardrailed world model (belief-state, not a learned net)
 
