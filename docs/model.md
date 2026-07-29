@@ -116,7 +116,7 @@ these; nothing else exists.
    safety/privacy-critical: consent ledger, access-scope, suppression prefs -
    NOT markdown pages (the redteam's "prose still hiding where data is needed").
 
-## Part 3 - The consolidating gaps (G24-G55)
+## Part 3 - The consolidating gaps (G24-G56)
 
 Each folds several redteam findings and fills a symmetry hole in a principle.
 
@@ -582,6 +582,36 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
     (G52) when a household member has it.
   Condition/availability (dead battery, kit in the wash, shoes soaked from
   yesterday's rain) gates use as hard as absence does. MEDIUM.
+- **G56 Goal currencies & equivalent-outcome substitution** (P7/G18/G45). The
+  hardest live tension in coaching: the athlete wants to ramp fitness AND hold a
+  deficit AND avoid injury, and a guardrail that only says NO loses to
+  motivation every time. The resolution is that **different goals are bought in
+  different CURRENCIES at different risk prices**:
+  - the calorie/deficit goal is bought with TIME ON FEET - walking is nearly
+    free (no ramp cost, no injury price, no recovery debt);
+  - the running-fitness goal is bought with RUNNING VOLUME - scarce, expensive,
+    injury-priced, and the only currency that actually builds the fitness.
+  The characteristic error is **paying for calories with the expensive
+  currency**: a long run chosen "for the burn" spends scarce ramp budget on
+  something cheap movement buys for free. So the engine carries a per-goal
+  currency + risk-price, and when a guardrail rejects the athlete's plan the
+  coach's move is NOT to decline but to **SUBSTITUTE - same outcome, cheaper
+  currency**: cap the risk-priced component at what the ramp affords, then buy
+  the remaining outcome with the free one. (Worked case: a walk-run-walk
+  sandwich delivered an identical deficit at ~45% less running load, with the
+  walks doubling as warm-up and cool-down - strictly better, not a compromise.)
+  Design consequences:
+  - a rejection must always ship with a **counter-offer** - "here is how to get
+    what you wanted, for less" - because "doing something beats a rest day" is a
+    real adherence fact, not a weakness to be corrected (P7);
+  - substitutions are computed from the athlete's OWN calibrated rates (their
+    logged kcal/min per modality), never textbook METs, so the equivalence claim
+    is theirs and defensible;
+  - the coach names honestly what is lost and gained, including the
+    MOTIVATIONAL stat (an external tracker still logs the walk; the compounding
+    metric is weekly consistency; holding back now is what makes the easy pace
+    fall later). A substitution sold as a downgrade gets refused; sold as the
+    same outcome at a lower price, it gets taken. HIGH.
 
 ## The frame: a guardrailed world model (belief-state, not a learned net)
 
