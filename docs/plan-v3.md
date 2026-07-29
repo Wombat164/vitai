@@ -385,8 +385,29 @@ enrichment (increment 6); G46 couples to context assembly (increment 9).
   granted-volatile only. Tests: a boot performs no speculative external call; a
   route decision triggers exactly the needed lookups; a safety advisory is
   surfaced above the capture budget.
+- **G47 blocking-vs-enriching question gating** (rides the G39 question-loop
+  work): classify each unfilled slot as blocking (changes the recommendation ->
+  ask first or branch explicitly) or enriching (trail/drop); forbid a confident
+  single recommendation resting on an unstated blocking assumption. Tests: a
+  proposal with an unfilled blocking slot either asks first or emits a branch,
+  never a bare plan; an unknown renders as unknown, never as invented prose.
+- **G48 per-place inventory:** equipment / amenities / constraints on the PLACE
+  entity, effective-dated, captured on place-onboard or from chat (G43). The
+  planner may only propose what the place affords. Tests: a place with no rower
+  never yields a rowing proposal; the inventory is asked once, then reused.
+- **G49 dependents & availability windows:** dependents (with ages as DATA),
+  routines, partner schedule -> availability windows, intersected with heat /
+  daylight (G34) and the calendar to yield schedulable slots. Tests: a proposal
+  lands inside a real window; dependent-care vetoes a leave-the-home plan; no
+  age is ever inferred.
+- **G50 context-scoped preferences:** scope predicates on preferences +
+  most-specific-wins resolution + provenance (stated vs behavioural, the latter
+  lower-trust). Tests: a place-scoped and a global preference resolve
+  deterministically; the coach can name the preference that drove a proposal;
+  a behavioural preference is never quoted back as if stated.
 - NOT: autonomous booking of transit/anything; any live lookup without a granted
-  source; any coarse-coord leak past the enrichment boundary (G32).
+  source; any coarse-coord leak past the enrichment boundary (G32); any inferred
+  age, relationship or dependent detail (G49 - these are stated or absent).
 
 ## Increment 7 - forecasting (v0.9.0; G21) [2-3 sessions]
 

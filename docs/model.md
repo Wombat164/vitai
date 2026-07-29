@@ -116,7 +116,7 @@ these; nothing else exists.
    safety/privacy-critical: consent ledger, access-scope, suppression prefs -
    NOT markdown pages (the redteam's "prose still hiding where data is needed").
 
-## Part 3 - The consolidating gaps (G24-G46)
+## Part 3 - The consolidating gaps (G24-G50)
 
 Each folds several redteam findings and fills a symmetry hole in a principle.
 
@@ -425,6 +425,53 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   fire lookups until the athlete engages the relevant decision. This is the
   machinery under the cold-boot greeting - the router is what lets the app "know
   on opening what to query and what to live look up (if allowed)". HIGH.
+
+- **G47 Blocking vs enriching questions (answer-gating)** (refines G39). G39
+  ranks WHICH slots to ask; this decides WHEN. A slot whose value would CHANGE
+  the recommendation is **BLOCKING** and must be resolved BEFORE the answer -
+  either asked first, or handled by an explicit BRANCH ("if you have a step ->
+  this circuit; if bare floor -> that one"). A slot that merely enriches is
+  non-blocking and may trail or be dropped entirely. **Never produce a confident
+  single recommendation resting on an unstated assumption about a blocking
+  slot** - the failure mode is a plan that is quietly wrong plus a footnote
+  asking the question that would have changed it. Prefer BRANCHING over asking
+  when the branch is cheap (2-3 outcomes); ask when the space is wide. Corollary
+  (P7/P1): an unknown must be visibly unknown - a coach that says "at their age"
+  without holding the age is fabricating, which is a firewall breach in prose
+  form. HIGH.
+- **G48 Per-place facility & equipment inventory** (extends G34/G44). A PLACE
+  entity (G44) carries a persistent, effective-dated inventory: EQUIPMENT (step,
+  band, kettlebell, mat, bike, rower), AMENITIES (AC, fan, stairwell, garden,
+  pool, scale), CONSTRAINTS (neighbours/noise, floor type, space, hours).
+  Captured ONCE when a place enters the model - a short onboard-this-place flow
+  or extracted from chat (G43) - then reused forever and editable. This is what
+  turns "do you have a step?" from a question asked every session into a fact
+  asked once. G34's coarse facilities (scale/gym/AC) generalize into this; the
+  planner reads it to constrain what it may propose (no rower where there is no
+  rower, no 21:00 skipping above a neighbour). MEDIUM.
+- **G49 Household, dependents & availability windows** (P2/G34). The model must
+  know WHO is around and WHEN a session is actually possible. DEPENDENTS with
+  ages (data, never assumed - ages gate what they can join in with and whether
+  they can be left unattended), their routine (awake / screen-time / asleep /
+  own activity), the PARTNER's schedule, and the resulting **availability
+  windows**. A proposal must land in a REAL window, not an abstract "evening":
+  "20:00 while they are on the sofa - they can join the first rounds" vs "21:00
+  once they are down, so keep it quiet". Windows intersect with the heat and
+  daylight windows (G34) and the calendar; the intersection IS the schedulable
+  slot. Dependent-care is a hard constraint, not a preference - it can veto an
+  otherwise-perfect plan (a stairwell session means leaving the flat). MEDIUM.
+- **G50 Context-scoped preferences** (P2/P5/G43). A preference is rarely global;
+  it is SCOPED: `{subject, domain, scope: {place?, mode?, phase?, time-of-day?,
+  weather?, with-whom?}, strength, provenance, effective-dated}`. "Likes running
+  to Zwin" is scoped to a place; "prefers short circuits" may be scoped to
+  phase=cutting; "will not do burpees" is global. Resolution when several apply:
+  **most-specific wins** (CSS-specificity-like), ties broken by strength then
+  recency, and the coach can always say WHICH preference drove a proposal.
+  Preferences are learned from statement (G43, higher trust) AND from behaviour -
+  what actually gets done vs silently skipped - the latter at lower trust and
+  never asserted as a stated preference (P3). This is what lets "preferred
+  exercises", "preferred exercises at Knokke", and "preferred exercises when
+  cutting" coexist without contradiction. MEDIUM.
 
 ## The frame: a guardrailed world model (belief-state, not a learned net)
 
