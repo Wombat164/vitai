@@ -22,6 +22,24 @@
 # sleep_floor_h = 7.0    # 7-day average sleep floor
 # pain_gate = 3          # pain score (0-10) above which the gate fires
 
+# [preferences]
+# suppressed_metrics = []  # metrics to LEAVE ALONE: still recorded, never
+#                          # scored. Use this rather than deleting history
+#                          # when a number is not healthy to be judged on.
+# nudge_ok = false         # may the coach interrupt proactively at all?
+
+# [resolution]           # Only needed once a SECOND source appears.
+# source_order = ["scale", "watch", "app"]   # fallback ladder
+# [resolution.precedence]                    # per-quantity overrides
+# kcal_out = ["watch", "app"]   # the watch measures burn; the app models it
+# kcal_in = ["app"]             # the food ledger owns intake
+# steps = ["watch", "phone"]
+#
+# Storage is SI and display converts at the edge: kilograms, kilometres,
+# seconds, grams go in the record whatever units the athlete reads them in.
+# A record that stores what a screen happened to show cannot be compared
+# with itself after a device changes locale.
+
 # [inference]            # OPT-IN intelligence layer for `vitai infer`:
                          # a model reads the record and appends validated
                          # knowledge to data/inferences.jsonl. Never feeds

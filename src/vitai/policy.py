@@ -111,6 +111,36 @@ def state(goals: list[dict], thresholds: list[dict], on: str | date) -> State:
     )
 
 
+def context_on(context: list[dict], on: str | date) -> dict | None:
+    """The situational mode in force on a date (G34), or None if unrecorded.
+
+    Context is a timeline like every other policy: the mode in force is the
+    latest line dated on or before `on`. It exists so the engine can EXPLAIN
+    missingness instead of flagging it - a week with no weigh-in while the
+    facilities line says there was no scale is not a lapse, and treating it
+    as one teaches the athlete that the record punishes honesty about
+    circumstances.
+    """
+    on_s = on.isoformat() if isinstance(on, date) else str(on)
+    live = [c for c in context if c.get("date") and c["date"] <= on_s]
+    if not live:
+        return None
+    return sorted(live, key=lambda c: c["date"])[-1]
+
+
+def has_facility(context: list[dict], on: str | date, facility: str) -> bool | None:
+    """Was a facility available on this date? None when context is silent.
+
+    None and False are different answers and must not collapse: "we do not
+    know" is not "there was no scale".
+    """
+    current = context_on(context, on)
+    if current is None or current.get("facilities") is None:
+        return None
+    have = {f.strip() for f in str(current["facilities"]).replace(",", " ").split()}
+    return facility in have
+
+
 def _direction(kind: str, key: str, before: float | None, after: float | None) -> str:
     """Did this edit make the policy easier or harder to satisfy?"""
     if before is None or after is None:

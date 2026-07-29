@@ -5,8 +5,87 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+Increment 2 - provenance, context, feel + RESOLUTION (G1, G3, G4, G7, G15,
+G29). Read-model contract bumped to **3**.
+
+### Added
+- **The resolution layer (G15) - the conservation golden rule.** A calorie is
+  eaten once and burned once. When two sources describe the same day, the
+  record holds ONE canonical value per quantity, chosen by precedence, and
+  never a sum. Three rules: per-quantity precedence (the watch wins
+  `kcal_out` while the food ledger wins `kcal_in`, on the same day);
+  activity identity, so one run logged on two platforms is one run, matched
+  by intersecting `start_time` intervals or, lacking times, by type plus
+  duration/distance tolerance bands; and energy as attribution, not addition
+  - a device's daily burn already contains its sessions' energy.
+  Primary tables now hold canonical rows; raw claims are projected to
+  `claims`, and every adjudication is auditable.
+- **Resolution explanations (G29)** as ROUTINE output, not an error channel:
+  `vitai resolve` says which source won a contested field and why, every
+  time, so "why does the record say 2,443" always has an answer.
+- **Conservation tripwires**, flagged and never auto-fixed: sessions
+  attributing more energy than the day measured, near-miss duplicate
+  sessions that failed the fuzzy match narrowly, and high-precedence sources
+  disagreeing beyond tolerance.
+- **Claims as JTMS nodes (Doyle 1979) with cascade retraction.** Each
+  resolved value carries a justification (`claim_id`, source, tier, quantity
+  class). Revoking a justification retracts what stood on it: an inference
+  declaring `depends_on` a corrected claim is retracted with it rather than
+  left as a stale belief whose evidence no longer exists. The labeled-
+  assumption-set and cascade-invalidate rule only - no ATMS engine, and
+  confidence remains a property of tier and source, never LLM-assigned.
+- **`daily` gen-2 fields**: `source`, `mood`, `feel`, `coverage`, and
+  `pain` + `pain_site` generalizing `hip_pain`.
+- **`sessions` gen-2 fields**: `source`, `start_time`, `elevation_m`,
+  `setting`, `route`, `place`, `with`, `context`, `planned`, `weather`.
+- **`measurements.jsonl`** (G16): sparse anchor-class reads that do not come
+  off the scale (tape, DEXA, InBody). Anchors top the precedence ladder.
+- **`context.jsonl`** (G34): dated situational mode, facilities and place.
+  The engine uses it to EXPLAIN missingness rather than flag it - a week
+  with no weigh-in while the facilities line says there was no scale is not
+  a lapse. `has_facility()` deliberately distinguishes "no scale" from "we
+  do not know".
+- **`suppressed_metrics`** (G33, the subtractive primitive) and **`nudge_ok`**
+  (G7) in `[preferences]`. A suppressed metric keeps being recorded and
+  stops being scored: someone recovering from a bad relationship with a
+  number can stop being judged on it without deleting their history.
+- **`vitai resolve` and `vitai context`**, with `Vitai.resolution()`,
+  `.canonical()`, `.explanations()`, `.conservation()`, `.retractions()`
+  and `.context()` (P9 parity).
+
+### Changed
+- **Migration: `hip_pain` -> `pain` + `pain_site`.** No action required and
+  nothing to rewrite. `hip_pain` is retired at generation 2, which means it
+  stays legal forever and stops being required: old lines keep validating
+  and the engine reads them as pain at site `hip`. A line carrying both
+  keeps its explicit `pain`. The same mechanism retires `sessions.location`
+  in favour of `place` + `route`.
+- **`meta.contract` is 3.** Primary tables changed meaning: they now hold
+  canonical rows rather than raw lines. A single-source repo is unaffected -
+  where there is nothing to adjudicate, nothing moves, which the
+  `test_single_source_resolution_is_byte_identical` regression pins.
+- Weekly verdicts read `pain` (falling back to `hip_pain`) and skip any
+  metric listed in `suppressed_metrics`.
+- The demo athlete gained a mid-block generation switch (so one file holds
+  both shapes), a declared travel week whose missing weigh-ins are explained
+  by context rather than flagged, a two-source day resolving field-wise, a
+  rainy partner walk on a named route, and sparse tape/DEXA measurements.
+
+### Fixed
+- Schema generations could only ever ADD. A retired key had no way to stop
+  being required, so replacing a field would have forced every new line to
+  keep writing the field it replaced. `KEY_RETIREMENT` fixes that, and is
+  what makes the `hip_pain` generalization possible without a rewrite.
+- `pain: 0` no longer demands a `pain_site`. "Nothing hurt today" is a
+  complete statement, and it stays distinct from null, which means nobody
+  looked.
+
+---
+
 Increment 1 - goals are data, contribution, and temporal validity
 (G6 + G14 + G18 + G19 + G20). Read-model contract bumped to **2**.
+Also unreleased: both increments ship together or in sequence once the
+founding deployment has migrated (working rule 3).
 
 ### Added
 - **`goals.jsonl`** - goals are data, not prose in `plan.md`. A goal carries

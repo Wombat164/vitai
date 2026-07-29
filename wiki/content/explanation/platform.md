@@ -36,12 +36,38 @@ which is what a UI needs to answer "why did this run not move my bar".
 | Contract | Version | Change |
 |---|---|---|
 | 1 | 0.2.0 | Founding: one table per dataset, `verdicts`, `meta` |
-| 2 | 0.3.0 | `goals`/`thresholds`/`achievements` tables; `contributions`, `milestones`, `plan_churn`, `goal_progress` derivations; `verdicts.goal` linkage |
+| 2 | unreleased | `goals`/`thresholds`/`achievements` tables; `contributions`, `milestones`, `plan_churn`, `goal_progress` derivations; `verdicts.goal` linkage |
+| 3 | unreleased | `measurements`/`context` tables; generation-2 columns on `daily` and `sessions`; the resolution layer - primary tables hold CANONICAL rows, with `claims`, `resolution`, `justifications`, `conservation`, `retractions` |
 
 A consumer should read `meta.contract` and refuse to render what it does not
 understand. Contract 2 is additive - a contract-1 reader that ignores the new
 tables still works, except that `verdicts` has gained a trailing column, so
 `SELECT *` positional reads must be updated to named columns.
+
+**Contract 3 changes what the primary tables MEAN**, which is the one
+migration worth reading twice. `daily`, `sessions`, `weight` and
+`measurements` now hold canonical rows - one adjudicated record per quantity
+per date - rather than raw lines. A consumer that wants the raw claims must
+read `claims` and join on `claim_id`. This is a change no reader can detect
+by shape, only by contract number, which is exactly why the number exists.
+
+For a single-source record nothing moves: with one witness per quantity, the
+canonical row is that witness. The change bites only where the athlete owns
+two devices, and there it stops the dashboard double-counting.
+
+## Resolution, for consumers
+
+A game or dashboard should build on canonical rows and treat `claims` as the
+audit trail. Three tables explain what happened:
+
+- `resolution` - each contested field: which source won, over what, and why.
+  Routine output; render it when the athlete asks where a number came from.
+- `conservation` - physically impossible arithmetic (sessions burning more
+  than the day), flagged and never auto-fixed. Surface it; do not silently
+  correct it, and do not mint anything from a day carrying one.
+- `retractions` - claims that stopped being true and what fell with them.
+  A consumer that caches derived values must honour these: an inference
+  resting on a retracted claim is no longer current knowledge.
 
 ## Single-user or multi-user?
 

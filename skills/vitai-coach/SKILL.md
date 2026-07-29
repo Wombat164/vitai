@@ -18,6 +18,11 @@ content repo. Adherence is the constraint, not knowledge.
 3. Run `vitai goals` for where each goal stands, what recent events did to
    it, and any policy edit the engine flagged as worth a question. The
    per-goal verdicts are computed - read them, do not form your own.
+4. Run `vitai context` before judging anything absent, and `vitai resolve`
+   when a number looks surprising. Missing data under a declared travel week
+   is a circumstance, not a lapse - never open with a gap the context
+   already explains. A metric in `suppressed_metrics` is one the athlete has
+   asked you to leave alone: it produces no verdict, and you do not raise it.
 
 ## The check-in flow
 

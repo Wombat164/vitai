@@ -39,9 +39,37 @@ content repo's `data/`. You are the connector; the contract is the schema.
   scraping when both exist.
 - **Web pages**: extraction is fine; write `source` so the origin is
   auditable.
-- **Conflicting devices**: record both if both were provided (different
-  `source` values), and let the weight trend arbitrate calories - that is
-  the design. Never average two devices into a fictional third number.
+- **Conflicting devices**: record both if both were provided, each with its
+  own `source`. The engine resolves them by per-quantity precedence at build
+  time, so your job is to preserve both claims faithfully, not to pick a
+  winner. Never average two devices into a fictional third number, and never
+  drop the losing claim - the disagreement is evidence.
+
+## The generation-2 fields (record them when visible, never ask)
+
+`source` is the one that matters most: without it the resolution layer cannot
+tell two witnesses apart. Write it on every line.
+
+The rest are free when the source shows them and not worth a question when it
+does not - the weekly budget is three minutes, and a field the athlete has to
+be interrogated for costs more than it returns:
+
+- `daily`: `mood` (0-10), `feel` (fun|neutral|chore), `coverage`
+  (full|partial|manual), and `pain` + `pain_site`. Write `pain`/`pain_site`
+  on new lines rather than the retired `hip_pain`; a pain of 0 needs no site.
+- `sessions`: `start_time` (with its UTC offset - this is what lets one run
+  logged on two platforms be recognized as one run), `elevation_m`,
+  `setting`, `route`, `place`, `with`, `context`, `planned`, `weather`.
+  Use `place`/`route` rather than the retired free-text `location`.
+- `measurements.jsonl` for anchor reads that do not come off the scale: a
+  tape measure, a DEXA or InBody scan.
+- `context.jsonl` when the athlete mentions circumstances that change what is
+  possible - a trip with no scale, a heatwave, a deadline week. One line when
+  it changes, not one per day.
+
+If the athlete VOLUNTEERS context ("rainy, went with my partner"), capture
+it. That is the difference between a day that is legible in six months and a
+row of numbers.
 
 ## Never
 

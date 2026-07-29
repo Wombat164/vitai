@@ -139,7 +139,11 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
                                  ON if avg >= eff.sleep_floor_h else BEHIND,
                                  _goal_for(active, "sleep_h")))
         if eff.pain_gate is not None:
-            pains = [d["hip_pain"] for d in days if d.get("hip_pain") is not None]
+            # `pain` after the gen-2 generalization; old lines arrive here
+            # already mapped from `hip_pain` by resolution.canonical_daily.
+            pains = [d.get("pain") if d.get("pain") is not None else d.get("hip_pain")
+                     for d in days
+                     if d.get("pain") is not None or d.get("hip_pain") is not None]
             if pains:
                 worst = max(pains)
                 rows.append(_row(wk, "pain_gate", float(worst), float(eff.pain_gate),
@@ -153,4 +157,9 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
                                  ON if avg <= eff.rhr_baseline + 5 else BEHIND,
                                  _goal_for(active, "rhr")))
 
+    # G33, last: a suppressed metric is still RECORDED, just not scored. The
+    # data keeps accumulating for the day the athlete wants it back; what
+    # stops is the judging.
+    if cfg.suppressed_metrics:
+        rows = [r for r in rows if r["metric"] not in cfg.suppressed_metrics]
     return rows

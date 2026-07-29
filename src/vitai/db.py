@@ -16,7 +16,11 @@ from .schema import KEYS
 # 2: increment 1 - goals/thresholds/achievements datasets, the contributions,
 #    milestones, plan_churn and goal_progress derivations, and a `goal` column
 #    linking each verdict row to the goal it serves.
-CONTRACT_VERSION = "2"
+# 3: increment 2 - measurements/context datasets, gen-2 provenance and context
+#    fields on daily/sessions, and the resolution layer: primary tables now
+#    hold CANONICAL rows, with raw claims in *_claims and the adjudication in
+#    resolution/justifications/conservation/retractions.
+CONTRACT_VERSION = "3"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
@@ -28,7 +32,17 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               "change_kind", "goal",
               # derivations
               "dataset", "contribution", "label", "bucket", "direction",
-              "declared", "last_edited"}
+              "declared", "last_edited",
+              # increment 2: provenance, context, resolution.
+              # `mood`/`pain` and the two resolution VALUES stay numeric-
+              # affinity on purpose - a claim's value may be a number, and
+              # TEXT affinity would stringify it for every consumer.
+              "feel", "coverage", "pain_site", "start_time", "setting",
+              "route", "place", "with", "context", "planned", "weather",
+              "facilities", "mode", "depends_on",
+              "claim_id", "merged_into", "retracted_by", "cascaded_from",
+              "field", "chosen_source", "over_source",
+              "tier", "quantity_class", "severity", "detail"}
 
 VERDICT_KEYS = ["week", "metric", "value", "target", "verdict", "goal"]
 
@@ -44,12 +58,29 @@ PROGRESS_KEYS = ["slug", "title", "metric", "policy", "status", "period",
                  "declared", "last_edited", "deadline", "motivator", "tracker",
                  "milestones"]
 
+# Increment 2: the adjudication trail. Primary dataset tables hold CANONICAL
+# rows; these say where those rows came from and what was overruled.
+CLAIM_KEYS = ["claim_id", "dataset", "date", "source", "kind", "merged_into",
+              "retracted"]
+RESOLUTION_KEYS = ["date", "dataset", "field", "chosen_source", "chosen_value",
+                   "over_source", "over_value", "witnesses", "reason", "disagreed"]
+JUSTIFICATION_KEYS = ["date", "dataset", "field", "claim_id", "source", "tier",
+                      "quantity_class", "witnesses"]
+CONSERVATION_KEYS = ["date", "kind", "detail", "severity"]
+RETRACTION_KEYS = ["date", "kind", "claim_id", "retracted_by", "reason",
+                   "cascaded_from"]
+
 DERIVED_TABLES: dict[str, list[str]] = {
     "verdicts": VERDICT_KEYS,
     "contributions": CONTRIBUTION_KEYS,
     "milestones": MILESTONE_KEYS,
     "plan_churn": CHURN_KEYS,
     "goal_progress": PROGRESS_KEYS,
+    "claims": CLAIM_KEYS,
+    "resolution": RESOLUTION_KEYS,
+    "justifications": JUSTIFICATION_KEYS,
+    "conservation": CONSERVATION_KEYS,
+    "retractions": RETRACTION_KEYS,
 }
 
 

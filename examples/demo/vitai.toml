@@ -8,3 +8,15 @@ rhr_baseline = 51
 steps_floor = 9000
 sleep_floor_h = 7.0
 pain_gate = 3
+
+# Which source wins which quantity when two of them describe one day.
+# The watch measures burn; the calorie app only models it. The app owns
+# intake, which the watch never sees at all.
+[resolution]
+source_order = ["scale", "watch", "app"]
+
+[resolution.precedence]
+kcal_out = ["watch", "app"]
+kcal_in = ["app"]
+protein_g = ["app"]
+steps = ["watch", "app"]

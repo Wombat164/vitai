@@ -22,6 +22,20 @@ class Config:
     steps_floor: int | None = None       # daily steps floor
     sleep_floor_h: float | None = None   # 7-day average sleep floor
     pain_gate: int | None = None         # pain score (0-10) above which the gate fires
+    # [resolution] which source wins which quantity (G15). `source_order` is
+    # the fallback ladder; `precedence` overrides it per field.
+    source_order: tuple[str, ...] = field(default_factory=tuple)
+    precedence: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    # [preferences]
+    # G33, the subtractive primitive: metrics the athlete has asked the engine
+    # to LEAVE ALONE. They keep being recorded - the record stays complete -
+    # but they produce no verdict and no tripwire. Someone recovering from a
+    # disordered relationship with a number needs to be able to stop being
+    # scored on it without deleting their history.
+    suppressed_metrics: tuple[str, ...] = field(default_factory=tuple)
+    # G7: whether proactive nudges are welcome at all. Default False - a coach
+    # that has to be invited to interrupt is the safer default.
+    nudge_ok: bool = False
 
 
 def load_inference_config(root: Path) -> dict:
@@ -41,9 +55,16 @@ def load_config(root: Path) -> Config:
     raw = tomllib.loads(path.read_text(encoding="utf-8"))
     targets = raw.get("targets", {})
     trip = raw.get("tripwires", {})
+    res = raw.get("resolution", {})
+    prefs = raw.get("preferences", {})
     phases = tuple(
         (float(p[0]), float(p[1]), float(p[2])) for p in targets.get("phases", [])
     )
+    precedence = {
+        str(k): tuple(str(s) for s in v)
+        for k, v in (res.get("precedence") or {}).items()
+        if isinstance(v, (list, tuple))
+    }
     return Config(
         phases=phases,
         easy_hr_cap=trip.get("easy_hr_cap"),
@@ -51,6 +72,10 @@ def load_config(root: Path) -> Config:
         steps_floor=trip.get("steps_floor"),
         sleep_floor_h=trip.get("sleep_floor_h"),
         pain_gate=trip.get("pain_gate"),
+        source_order=tuple(str(s) for s in res.get("source_order", [])),
+        precedence=precedence,
+        suppressed_metrics=tuple(str(m) for m in prefs.get("suppressed_metrics", [])),
+        nudge_ok=bool(prefs.get("nudge_ok", False)),
     )
 
 
