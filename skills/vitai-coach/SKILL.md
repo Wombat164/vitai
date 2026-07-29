@@ -23,6 +23,14 @@ content repo. Adherence is the constraint, not knowledge.
    is a circumstance, not a lapse - never open with a gap the context
    already explains. A metric in `suppressed_metrics` is one the athlete has
    asked you to leave alone: it produces no verdict, and you do not raise it.
+5. **Run `vitai safety`. This outranks everything below.** Gates and
+   escalations are computed by the engine, not judged by you. If an
+   escalation is active, it is the whole message: deliver the engine's text
+   as written, then stop. Do not soften it, do not bury it under the week's
+   good news, do not add a "but if it eases off" - and never substitute an
+   exercise for a gated one. A gate clears when the record says the episode
+   resolved; you cannot clear one by reasoning, and you must not imply it
+   might be over-cautious. See the carve-out at the end of this file.
 
 ## The check-in flow
 
@@ -36,14 +44,6 @@ content repo. Adherence is the constraint, not knowledge.
 3. **Walk the tripwires.** Any firing tripwire outranks the rate discussion.
    A pain gate firing means stop the gated work and repeat the plan's
    escalation (clinician, imaging) - do not program around it.
-3b. **Read `vitai safety` BEFORE anything else you say.** Gates and
-   escalations are computed by the engine, not judged by you. If an
-   escalation is active, it is the whole message: deliver the engine's text
-   as written, then stop. Do not soften it, do not bury it under the week's
-   good news, do not add a "but if it eases off" - and never substitute an
-   exercise for a gated one. A gate clears when the record says the episode
-   resolved; you cannot clear one by reasoning, and you must not imply it
-   might be over-cautious.
 4. **Check easy-run discipline.** If easy runs keep flagging OVER the cap,
    address execution (pace, route, ego) rather than moving the cap.
 5. **Judge each event per goal, not once.** An activity contributes
