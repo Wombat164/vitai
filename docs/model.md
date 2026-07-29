@@ -116,7 +116,7 @@ these; nothing else exists.
    safety/privacy-critical: consent ledger, access-scope, suppression prefs -
    NOT markdown pages (the redteam's "prose still hiding where data is needed").
 
-## Part 3 - The consolidating gaps (G24-G40)
+## Part 3 - The consolidating gaps (G24-G42)
 
 Each folds several redteam findings and fills a symmetry hole in a principle.
 
@@ -334,6 +334,50 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   ran the crude version and its best find was an ABSENCE - the untracked 8-min gap
   between two point-to-point walks was the real stop; gaps are first-class events.
   MEDIUM.
+
+- **G41 Data lifecycle: lossless cold-store + progressive warm rollup**
+  (P4/P3/P2/P5). As the record grows, age it - but the naive "downsample old
+  data" breaks determinism and correctability, so the ladder splits in two:
+  - *Raw is sacrosanct.* Data older than a threshold moves to high-ratio
+    LOSSLESS cold-store (columnar + zstd, or Gorilla-style delta-of-delta for
+    regular samples), NEVER lossily reduced or deleted - the deterministic
+    rebuild (P4) and late-correction cascade (G29) both need the complete
+    source. Any period rehydrates and rebuilds bit-identical.
+  - *The warm read model carries a per-metric, effective-dated retention/rollup
+    LADDER* (the registry, P5/P2): e.g. 14d full / 1mo 3/4 / 6mo 1/2 / 1y 1/4 /
+    2y 1/8 / 10y 1/20 - but PER METRIC by value-density, not global. Continuous
+    HR (~13 s samples) decays to near-worthless in days; a weigh-in anchor is
+    valuable forever; and old GEODATA's warm form is its G40 semantic-trajectory
+    summary ("Fort loop, 1.5 km, one 8-min stop"), the raw 800-point trace going
+    cold. Rollups are DERIVED, provenance-tiered (P3), rebuildable, reversible.
+  - *Coarse old data confesses it (G27).* A query over a 1/20-fidelity period
+    returns values tagged with their tier; the coach says "roughly ~72 kg that
+    quarter", never a false-precise number.
+  - Prior art: RRDtool round-robin archives, Graphite/Whisper retention schemas,
+    Prometheus/Thanos + TimescaleDB downsampling/continuous-aggregates, Facebook
+    Gorilla. The ADAPTATION: those DELETE fine data (disposable observability);
+    a personal life-record cold-stores it losslessly instead. It is memory
+    consolidation - episodic detail -> semantic gist, ACT-R activation decay -
+    made deterministic and reversible. DEFERRED until data actually grows. MEDIUM.
+- **G42 Moment-relative context assembly (the coach's working set)**
+  (P4/P8/P3). The coach/agent has a BOUNDED attention; it must load the minimum
+  SUFFICIENT slice of the world model at moment T, never all of it. Assembly =
+  a compact always-on STATE SUMMARY (active goals, current phase, recent trend,
+  live tripwires - the `MEMORY.md`-index analogue) + full RECENT detail + any
+  old period the CURRENT QUERY makes relevant, PAGED IN from cold and rehydrated
+  to higher fidelity on demand ("compare to my last cut" pulls a 2y-old block
+  back to full detail though it sits at 1/8 by default). Recency + relevance +
+  the question drive the working set; the G41 ladder is only the DEFAULT.
+  Firewall: assembly feeds NARRATION only - the deterministic number-path
+  computes over full raw + rollups, never over the truncated window, so the coach
+  never derives a number from what happens to be in context (P4). P8's
+  capture-cost economy extends to a CONTEXT-cost economy: minimum sufficient, not
+  maximum available. Prior art: MemGPT / Letta (virtual context management,
+  paging main-context <-> external memory over unbounded data); ACT-R activation-
+  boosted retrieval; the operator's own `MEMORY.md` discipline (bounded index +
+  relevance-paged topic files) is this pattern already in production. Couples
+  tightly to G41 (the rollups ARE the default warm context; cold-store is what
+  pages back in). DEFERRED with G41. MEDIUM.
 
 ## The frame: a guardrailed world model (belief-state, not a learned net)
 

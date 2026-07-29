@@ -443,6 +443,40 @@ Last, because it stands on features (4), forecasting (7), and resolution (2).
 - Cut-first: the adherence-context classifier (needs calendar enrichment,
   G5); ship sleep/HR-kcal/weight-pace handling first.
 
+## Increment 9 - data lifecycle + context assembly (vNEXT; G41, G42) [DEFERRED - scaling]
+
+Explicitly DEFERRED "until the data actually grows" (the operator's own
+framing). A scaling concern, not a correctness one, so it waits until the
+record is large enough to warrant it - but designed now so nothing built
+earlier blocks it (raw stays append-only + rebuildable, which is the only
+precondition).
+
+- **G41 lifecycle:** raw ages to high-ratio LOSSLESS cold-store (columnar+zstd,
+  or Gorilla delta-of-delta for regular samples) - NEVER lossily reduced or
+  deleted, so deterministic rebuild (P4) and late-correction cascade (G29)
+  survive; any period rehydrates bit-identical. The warm read model gains a
+  per-metric, effective-dated retention/rollup LADDER in the registry (P5/P2):
+  full recent -> progressively coarser buckets (the 14d/1mo/6mo/1y/2y/10y
+  fidelity fractions), tuned per value-density (HR samples decay fast, weigh-in
+  anchors never, old geodata's warm form is its G40 semantic-trajectory summary).
+  Rollups are derived + provenance-tiered (P3) + reversible; a query over a
+  coarse period returns fidelity-tagged values and the coach says "roughly".
+- **G42 context assembly:** the coach loads the minimum SUFFICIENT slice at
+  moment T - a compact standing state summary (the MEMORY.md-index analogue) +
+  full recent detail + any old period the current query pages back in from cold.
+  Recency + relevance + question drive the working set; the G41 ladder is the
+  default. Firewall: assembly feeds NARRATION only; the number-path always
+  computes over full raw + rollups, never the truncated window (P4).
+- Prior art (see [prior-art-world-model.md](prior-art-world-model.md) + a future
+  sweep): RRDtool/Whisper/Prometheus/Timescale/Gorilla (lifecycle); MemGPT/Letta
+  virtual context management + ACT-R retrieval (assembly).
+- Tests: rehydrate-a-cold-period -> rebuild is byte-identical to pre-archive;
+  a rollup re-derives at higher fidelity from cold; a correction to an archived
+  day cascades (G29) after rehydration; the number-path result is invariant to
+  what context the coach happened to assemble.
+- NOT: any lossy operation on raw; any coach number computed from the assembled
+  window rather than the full record.
+
 ## Increment ordering note
 
 Forecasting (7) is deliberately LAST of the CORE engine increments, and
