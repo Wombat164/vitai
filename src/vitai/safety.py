@@ -36,7 +36,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from .schema import IDENTITY_KEY, _restriction_classes
+from .schema import IDENTITY_KEY, _restriction_classes, onset_of
 
 # --- escalation levels --------------------------------------------------------
 # EMERGENCY: same day, do not wait for the weekly review.
@@ -80,6 +80,19 @@ MESSAGES: dict[str, str] = {
         "This activity is gated by an active entry in your record. The gate "
         "clears when the episode is resolved in the data, not by explaining "
         "it away."),
+    "check_not_done": (
+        "This activity is gated until today's check is done and recorded. "
+        "Not having done it is not the same as passing it - the gate stands "
+        "until the check says otherwise. Do the check, record the result, "
+        "rebuild."),
+    "check_failed": (
+        "Today's check did not pass, so this activity stays gated today. "
+        "That is the check doing its job, not a setback. Try again tomorrow "
+        "and tell your clinician if it keeps failing."),
+    "check_passed": (
+        "Today's check passed, so this restriction is lifted FOR TODAY. It "
+        "returns tomorrow until the episode itself is resolved in the "
+        "record."),
 }
 
 # --- engine-owned triggers ----------------------------------------------------
@@ -138,6 +151,11 @@ def episodes_on(medical: list[dict], on: str | date) -> list[dict]:
     after `on` is invisible, so last Tuesday is judged by what was known last
     Tuesday (P2) - a resolution recorded today does not retroactively un-gate
     the week the athlete was actually injured.
+
+    Head selection reads `date` (recorded-at) deliberately, NOT onset. Onset
+    says when the episode began; `date` says when the record learned of it,
+    and P2's as-of reconstruction is a question about knowledge. `is_open`
+    then uses onset for the window itself.
     """
     when = _as_date(on)
     if when is None:
@@ -154,12 +172,20 @@ def episodes_on(medical: list[dict], on: str | date) -> list[dict]:
 def is_open(episode: dict, on: str | date) -> bool:
     """Is this episode still open on `on`?
 
-    Open means: not resolved, or resolved with a closing date that has not yet
-    passed. The window is what streak forgiveness will be computed from in a
-    later increment, so it has to be a date range and not a boolean.
+    Open means: on or after ONSET, and either not resolved or resolved with a
+    closing date that has not yet passed. The window is what streak
+    forgiveness will be computed from in a later increment, so it has to be a
+    date range and not a boolean.
+
+    Onset opens the window, not the entry date. A 2025 injury recorded today
+    was open through 2025 - which is the whole point of being able to backfill
+    it - even though the record only learned of it this morning.
     """
     when = _as_date(on)
     if when is None:
+        return False
+    began = _as_date(onset_of(episode))
+    if began is not None and when < began:
         return False
     if episode.get("status") in (None, "resolved"):
         closed = _as_date(episode.get("resolved_date"))
@@ -186,15 +212,47 @@ SESSION_CLASSES: dict[str, set[str]] = {
 }
 
 
+def check_result(checks: list[dict], slug: str, on: str | date) -> str:
+    """The result of a named check on a date. Absence reads as NOT DONE.
+
+    The asymmetry that matters: a missing record is never a pass. An athlete
+    who did not run the hop test has not demonstrated anything, and silence
+    must not clear a gate a clinician set.
+    """
+    when = _as_date(on)
+    if when is None:
+        return "not_done"
+    for rec in sorted((r for r in checks or [] if _as_date(r.get("date"))),
+                      key=lambda r: str(r.get("date"))):
+        if _as_date(rec["date"]) == when and str(rec.get("slug")) == slug:
+            result = str(rec.get("result") or "not_done")
+            return result if result in ("pass", "fail", "not_done") else "not_done"
+    return "not_done"
+
+
 def gates_on(medical: list[dict], on: str | date,
              pain_gate: int | None = None,
-             daily: list[dict] | None = None) -> list[dict]:
+             daily: list[dict] | None = None,
+             checks: list[dict] | None = None) -> list[dict]:
     """Every gate in force on `on`, as data.
 
     A gate is a deterministic fact about a date, derived from the record: an
     open episode that restricts something, or pain at or above the athlete's
     configured gate. It carries its own escalation text so that whatever
     surfaces it - CLI, rollup, a coach - says the same thing.
+
+    A gate carrying a PRECONDITION has three states, not two. Rehab is full of
+    conditional instructions - "run if the hop test is painless", "progress
+    when you can do ten without compensation" - and a gate that can only say
+    blocked or not-blocked cannot express most of clinical practice. So:
+
+      cleared         today's check passed; the restriction lifts
+      blocked         today's check failed
+      check_not_done  no check recorded; the restriction stands
+
+    The third is reported separately from the second because they mean
+    different things to the athlete: one is "your leg said no today", the
+    other is "you have not asked it yet". Neither clears the gate.
     """
     when = _as_date(on)
     if when is None:
@@ -204,15 +262,28 @@ def gates_on(medical: list[dict], on: str | date,
         classes = _restriction_classes(episode)
         if not classes:
             continue
-        out.append({
+        gate = {
             "date": when.isoformat(),
             "source_kind": "episode",
             "slug": episode.get("slug"),
             "restricts": " ".join(sorted(classes)),
             "reason": f"{episode.get('title')} ({episode.get('status')})",
             "severity": episode.get("severity"),
+            "status": "blocked",
+            "precondition": None,
             "escalation": MESSAGES["gate"],
-        })
+        }
+        if pre := episode.get("precondition"):
+            result = check_result(checks or [], str(pre), when)
+            gate["precondition"] = str(pre)
+            gate["status"] = {"pass": "cleared", "fail": "blocked"}.get(
+                result, "check_not_done")
+            gate["reason"] += f" - check '{pre}': {result}"
+            gate["escalation"] = {
+                "cleared": MESSAGES["check_passed"],
+                "blocked": MESSAGES["check_failed"],
+            }.get(gate["status"], MESSAGES["check_not_done"])
+        out.append(gate)
 
     if pain_gate is not None:
         for row in daily or []:
@@ -230,6 +301,8 @@ def gates_on(medical: list[dict], on: str | date,
                     "restricts": "all",
                     "reason": f"pain {score} at {site} is over the gate ({pain_gate})",
                     "severity": "severe" if score >= PAIN_ABSOLUTE else "moderate",
+                    "status": "blocked",
+                    "precondition": None,
                     "escalation": MESSAGES["gate"],
                 })
     out.sort(key=lambda g: (g["source_kind"], str(g["slug"])))
@@ -244,6 +317,11 @@ def is_gated(gates: list[dict], activity: str) -> bool:
     """
     classes = SESSION_CLASSES.get(activity, {activity})
     for gate in gates:
+        # A gate whose precondition passed today is reported but does not
+        # block. Every other state does, including check_not_done: silence is
+        # not a pass.
+        if gate.get("status") == "cleared":
+            continue
         blocked = set(str(gate.get("restricts", "")).split())
         if "all" in blocked or blocked & classes:
             return True

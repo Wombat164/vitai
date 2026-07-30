@@ -86,7 +86,11 @@ KEYS: dict[str, list[str]] = {
     # A recorded accomplishment worth keeping. Distinct from a MILESTONE, which
     # the engine derives; `source` carries authorship (G31) so a hand-logged
     # race finish is never confused with an engine-derived crossing.
-    "achievements": ["date", "title", "goal", "source", "note"],
+    # `occurred_date` is the same event-versus-entry split as `medical`'s
+    # `onset_date`: a race finished in March and written up in July belongs on
+    # the day it happened. Named differently on purpose - an achievement is a
+    # point event that OCCURRED, an episode has an ONSET that opens a window.
+    "achievements": ["date", "title", "goal", "source", "note", "occurred_date"],
     # --- increment 2 -------------------------------------------------------
     # Sparse ANCHOR-class reads that do not come off the scale: a tape measure,
     # a DEXA scan, an InBody. Anchors top the resolution precedence ladder and,
@@ -104,9 +108,25 @@ KEYS: dict[str, list[str]] = {
     # the deterministic severity-to-action mapping in safety.py. `restricts`
     # names the activity classes an episode gates. `provider_type` is coarse on
     # purpose: which KIND of clinician, never which clinician.
+    #
+    # `date` is WHEN THIS WAS WRITTEN; `onset_date` is when the episode began
+    # in the world. They were one field, which meant backfilling any history -
+    # an old injury, a diagnosis from years ago, a surgery - was rejected
+    # ("resolved_date precedes onset"), and the workaround of back-dating the
+    # row destroyed the only record of when it was entered. Both matter: P2
+    # needs the entry date (what was known when), and the episode window needs
+    # the onset. Absent, onset defaults to `date`, so nothing existing moves.
+    #
+    # `precondition` names a daily check that must PASS before the gate lifts.
     "medical": ["date", "slug", "kind", "title", "body_site", "severity",
                 "status", "resolved_date", "restricts", "provider_type",
-                "source", "note"],
+                "source", "note", "onset_date", "precondition"],
+    # The result of a named check, on a day (G28 gate mechanics). A rehab plan
+    # says "5 gentle hops before each run; pain in the hip means do not run
+    # today" - a gate CONDITIONAL on a test performed that morning. Without
+    # this the whole instruction sits in a note where no rule can read it,
+    # which is the prose problem G28 exists to solve, one level down.
+    "checks": ["date", "slug", "result", "value", "source", "note"],
     # Dated situational mode (G34): what was going on around the athlete. The
     # engine uses it to explain missingness rather than flag it - an absent
     # weigh-in in a week with no scale is not a lapse - and the coach uses it
@@ -184,6 +204,14 @@ JOURNAL_STATUSES = {"open", "resolved", "superseded", "declined"}
 GOAL_PERIODS = {"none", "weekly", "monthly", "quarterly", "yearly"}
 ON_PERIOD_END = {"reset", "carry", "escalate"}
 CHANGE_KINDS = {"change", "correction"}
+
+# A daily check has three outcomes, and the third is the point: NOT-DONE IS
+# NOT PASS. An athlete who never ran the hop test is not cleared by silence,
+# and a coach should be able to say "you have not done the check today"
+# rather than assuming either outcome. Absence of a record reads as not_done
+# too - the explicit value exists so "I skipped it" can be stated rather than
+# inferred from a gap.
+CHECK_RESULTS = {"pass", "fail", "not_done"}
 AUTHORS = {"athlete", "coach", "onboard", "derived"}
 EXTERNAL_METRIC = "external"
 
@@ -205,6 +233,8 @@ KEY_GENERATION: dict[str, dict[str, int]] = {
                  "route": 2, "place": 2, "with": 2, "context": 2,
                  "planned": 2, "weather": 2},
     "inferences": {"depends_on": 2},
+    "medical": {"onset_date": 2, "precondition": 2},
+    "achievements": {"occurred_date": 2},
 }
 
 # The mirror of KEY_GENERATION: the generation at which a key stopped being
@@ -219,7 +249,8 @@ KEY_RETIREMENT: dict[str, dict[str, int]] = {
 }
 
 CURRENT_GENERATION: dict[str, int] = {name: 1 for name in KEYS}
-for _ds in ("weight", "daily", "sessions", "inferences"):
+for _ds in ("weight", "daily", "sessions", "inferences", "medical",
+            "achievements"):
     CURRENT_GENERATION[_ds] = 2
 
 
@@ -421,12 +452,16 @@ def _validate_medical(rec: dict) -> list[str]:
     if (site := rec.get("body_site")) is not None and not is_site(site):
         problems.append(f"unknown 'body_site' {site!r} - use one of "
                         f"{', '.join(known_sites())} (semantics/body_sites.toml)")
+    if (od := rec.get("onset_date")) is not None and _bad_date(od):
+        problems.append(f"bad onset_date {od!r} (ISO-8601 YYYY-MM-DD)")
     if (rd := rec.get("resolved_date")) is not None:
+        # Compared against ONSET, not the entry date. Recording a 2025 injury
+        # today is ordinary backfill, and the old rule rejected it outright.
+        began = onset_of(rec)
         if _bad_date(rd):
             problems.append(f"bad resolved_date {rd!r} (ISO-8601 YYYY-MM-DD)")
-        elif isinstance(rec.get("date"), str) and not _bad_date(rec["date"]) \
-                and rd < rec["date"]:
-            problems.append(f"resolved_date {rd} precedes onset {rec['date']}")
+        elif isinstance(began, str) and not _bad_date(began) and rd < began:
+            problems.append(f"resolved_date {rd} precedes onset {began}")
     # A resolved episode without a closing date leaves the window open forever,
     # which quietly breaks forgiveness maths downstream (a day is excused iff it
     # falls inside an episode window).
@@ -440,7 +475,29 @@ def _validate_medical(rec: dict) -> list[str]:
         if cls not in ACTIVITY_CLASSES:
             problems.append(f"unknown activity class {cls!r} in 'restricts' - "
                             f"use one of {sorted(ACTIVITY_CLASSES)}")
+    if (pre := rec.get("precondition")) is not None:
+        if not isinstance(pre, str) or not pre:
+            problems.append("'precondition' names a daily check, e.g. 'hop-test'")
+        elif not rec.get("restricts"):
+            problems.append("'precondition' without 'restricts' gates nothing - "
+                            "a check that lifts no restriction is just a note")
     return problems
+
+
+def onset_of(rec: dict) -> object:
+    """When the episode BEGAN, falling back to when it was written.
+
+    The two are different questions and the record needs both: `date` answers
+    "when did we learn this" (which is what P2's as-of reconstruction reads),
+    `onset_date` answers "when did it start" (which is what the episode window
+    and any forgiveness maths read).
+    """
+    return rec.get("onset_date") or rec.get("date")
+
+
+def occurred_of(rec: dict) -> object:
+    """When an achievement HAPPENED, falling back to when it was written."""
+    return rec.get("occurred_date") or rec.get("date")
 
 
 def _restriction_classes(rec: dict) -> list[str]:
@@ -548,4 +605,11 @@ def _validate_policy(dataset: str, rec: dict) -> list[str]:
         if not isinstance(rec.get("title"), str) or not rec.get("title"):
             problems.append("'title' must be a non-empty string")
         problems += _enum(rec, "source", AUTHORS)
+        if (od := rec.get("occurred_date")) is not None and _bad_date(od):
+            problems.append(f"bad occurred_date {od!r} (ISO-8601 YYYY-MM-DD)")
+    if dataset == "checks":
+        if not isinstance(rec.get("slug"), str) or not rec.get("slug"):
+            problems.append("'slug' must name the check, e.g. 'hop-test'")
+        problems += _enum(rec, "result", CHECK_RESULTS)
+        problems += _enum(rec, "source", AUTHORS, optional=True)
     return problems

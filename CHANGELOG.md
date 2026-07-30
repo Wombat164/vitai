@@ -5,6 +5,49 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Gate preconditions** (#19). A rehab plan says *"5 gentle hops on the right
+  leg before each run; pain in the groin means do not run that day"* - a gate
+  CONDITIONAL on a test performed that morning. The engine could say
+  restricted or not restricted, so the whole instruction had to sit in a
+  `note` where no rule could read it: the prose problem G28 exists to solve,
+  reappearing one level down. A medical episode may now carry a
+  `precondition` naming a daily check, with results in a new `checks.jsonl`.
+
+  A preconditioned gate has **three** states, not two:
+  - `cleared` - today's check passed; the restriction lifts, for today only;
+  - `blocked` - today's check failed;
+  - `check_not_done` - nothing recorded, and the restriction stands.
+
+  **Not-done is not pass.** An athlete who never ran the check is not cleared
+  by silence, and `Vitai.pending_checks()` lets a coach say "you have not done
+  the hop test today" rather than assuming either outcome. This is the first
+  mechanism that can CLEAR a gate from athlete-supplied input, so the
+  asymmetry is preserved deliberately: only an explicit pass clears, and only
+  for that day.
+- **`onset_date` on medical, `occurred_date` on achievements** (#19). The row
+  `date` was doing double duty as when-this-was-written and
+  when-it-began. Recording a resolved 2025 injury today produced
+  `resolved_date 2025-12-01 precedes onset 2026-07-27`, and back-dating the
+  row to work around it destroyed the only record of when it was entered -
+  which P2 needs (the record is a timeline of what was KNOWN when) and G29
+  needs (a condition recorded today that began two years ago should inform
+  old weeks). Both dates now exist; onset defaults to the row date, so
+  nothing existing moves.
+  - `resolved_date` is validated against onset rather than the entry date.
+  - The episode window opens at **onset**; head selection still reads `date`,
+    because P2's as-of reconstruction is a question about knowledge.
+
+### Changed
+- `meta.contract` is **5**: adds the `checks` table, `onset_date`/
+  `precondition` on `medical`, `occurred_date` on `achievements`, and
+  `status`/`precondition` columns on `gates`. **A consumer reading `gates`
+  must now check `status`** - a row with status `cleared` is reported but does
+  not block.
+- The demo carries a conditional gate whose check passes, fails, and is left
+  undone on consecutive days, so all three states render; plus a historical
+  episode with an onset two years before its entry date.
+
 Increment 3 - medical layer + SAFETY ESCALATION (G11 + G28). Read-model
 contract bumped to **4**.
 

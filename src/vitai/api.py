@@ -129,10 +129,33 @@ class Vitai:
         return active_episodes(self.dataset("medical"), on or date.today())
 
     def gates(self, on: date | str | None = None) -> list[dict]:
-        """What is blocked on a date, and why. Deterministic, not advisory."""
+        """What is blocked on a date, and why. Deterministic, not advisory.
+
+        A gate with a precondition carries a `status` of `cleared`, `blocked`
+        or `check_not_done` - three states, because "your leg said no today"
+        and "you have not asked it yet" are different facts.
+        """
         return gates_on(self.dataset("medical"), on or date.today(),
                         pain_gate=self.config.pain_gate,
-                        daily=self.dataset("daily"))
+                        daily=self.dataset("daily"),
+                        checks=self.dataset("checks"))
+
+    def checks(self, on: date | str | None = None) -> list[dict]:
+        """Daily check results, optionally for one date."""
+        rows = self.dataset("checks")
+        if on is None:
+            return sorted(rows, key=lambda r: (str(r.get("date")),
+                                               str(r.get("slug"))))
+        when = on.isoformat() if isinstance(on, date) else str(on)
+        return [r for r in rows if str(r.get("date")) == when]
+
+    def pending_checks(self, on: date | str | None = None) -> list[dict]:
+        """Checks a gate needs today that have not been recorded.
+
+        This is what lets a coach say "you have not done the hop test today"
+        instead of assuming either outcome.
+        """
+        return [g for g in self.gates(on) if g.get("status") == "check_not_done"]
 
     def gated(self, activity: str, on: date | str | None = None) -> bool:
         """Is this activity class or session type blocked on a date?"""

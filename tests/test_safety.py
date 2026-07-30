@@ -443,7 +443,7 @@ def test_build_projects_the_safety_tables(tmp_path):
             "SELECT trigger FROM escalations WHERE level='emergency'"
         ).fetchone()[0] == "cardiac"
         assert con.execute(
-            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "4"
+            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "5"
     finally:
         con.close()
 
@@ -504,3 +504,158 @@ def test_a_record_with_no_medical_data_is_unaffected(tmp_path):
     first = db.read_bytes()
     v.build()
     assert db.read_bytes() == first, "two builds differ"
+
+
+# ==========================================================================
+# Issue #19: gate mechanics - preconditions and the onset/recorded-at split
+# ==========================================================================
+
+def check(date="2030-05-10", slug="hop-test", result="pass", **kw):
+    rec = {"date": date, "slug": slug, "result": result, "value": None,
+           "source": "athlete", "note": None}
+    rec.update(kw)
+    return rec
+
+
+# ---- onset vs recorded-at ----------------------------------------------------
+
+def test_a_historical_episode_can_be_entered_today(tmp_path):
+    """Backfilling a 2025 injury today used to be rejected outright:
+    `resolved_date 2025-12-01 precedes onset 2026-07-27`. The row date was
+    doing double duty as when-written and when-it-began."""
+    rec = medical(date="2030-07-27", onset_date="2029-09-01",
+                  status="resolved", resolved_date="2029-12-01")
+    assert validate_record("medical", rec) == []
+
+
+def test_resolved_date_is_still_checked_against_onset():
+    """The rule is not dropped, only pointed at the right field."""
+    rec = medical(date="2030-07-27", onset_date="2030-06-01",
+                  status="resolved", resolved_date="2030-05-01")
+    assert any("precedes onset" in p for p in validate_record("medical", rec))
+
+
+def test_onset_defaults_to_the_row_date_so_nothing_existing_moves():
+    from vitai.schema import onset_of
+    assert onset_of({"date": "2030-05-01"}) == "2030-05-01"
+    assert onset_of({"date": "2030-05-01",
+                     "onset_date": "2029-01-01"}) == "2029-01-01"
+
+
+def test_the_episode_window_opens_at_onset_not_at_entry():
+    """A 2029 injury recorded in 2030 was open through 2029 - which is the
+    whole point of being able to backfill it."""
+    episode = medical(date="2030-07-27", onset_date="2029-09-01",
+                      status="resolved", resolved_date="2029-12-01")
+    assert is_open(episode, "2029-10-01") is True
+    assert is_open(episode, "2029-08-01") is False, "before it began"
+    assert is_open(episode, "2030-01-01") is False, "after it closed"
+
+
+def test_head_selection_still_reads_the_entry_date():
+    """P2 is a question about KNOWLEDGE: what was known last Tuesday. Onset
+    says when it began; `date` says when the record learned of it."""
+    lines = [medical(date="2030-07-27", slug="old-injury",
+                     onset_date="2029-09-01")]
+    assert episodes_on(lines, "2030-01-01") == [], "not yet known in January"
+    assert len(episodes_on(lines, "2030-08-01")) == 1
+
+
+def test_an_achievement_can_record_when_it_actually_happened():
+    from vitai.schema import occurred_of
+    rec = {"date": "2030-07-27", "title": "Ran a half marathon",
+           "goal": None, "source": "athlete", "note": None,
+           "occurred_date": "2030-03-15"}
+    assert validate_record("achievements", rec) == []
+    assert occurred_of(rec) == "2030-03-15"
+    assert any("occurred_date" in p for p in validate_record(
+        "achievements", {**rec, "occurred_date": "last spring"}))
+
+
+# ---- preconditions -----------------------------------------------------------
+
+def _hop_test_episode():
+    """The real instruction: 5 gentle hops before each run; pain means no run
+    that day. A gate CONDITIONAL on a test performed that morning."""
+    return [medical(date="2030-05-01", slug="groin", title="Groin strain",
+                    body_site="groin", restricts="run impact",
+                    precondition="hop-test")]
+
+
+def test_a_passed_check_lifts_the_gate_for_today():
+    gates = gates_on(_hop_test_episode(), "2030-05-10",
+                     checks=[check(result="pass")])
+    assert len(gates) == 1
+    assert gates[0]["status"] == "cleared"
+    assert is_gated(gates, "run") is False
+    assert "FOR TODAY" in gates[0]["escalation"], "it returns tomorrow"
+
+
+def test_a_failed_check_blocks():
+    gates = gates_on(_hop_test_episode(), "2030-05-10",
+                     checks=[check(result="fail")])
+    assert gates[0]["status"] == "blocked"
+    assert is_gated(gates, "run") is True
+
+
+def test_no_check_recorded_is_reported_distinctly_and_still_blocks():
+    """THE acceptance criterion. Not-done is not pass: an athlete who never
+    ran the check is not cleared by silence."""
+    gates = gates_on(_hop_test_episode(), "2030-05-10", checks=[])
+    assert gates[0]["status"] == "check_not_done"
+    assert gates[0]["status"] not in ("cleared", "blocked"), "a third state"
+    assert is_gated(gates, "run") is True, "silence does not clear a gate"
+    assert "not the same as passing" in gates[0]["escalation"]
+
+
+def test_an_explicit_not_done_reads_the_same_as_silence():
+    gates = gates_on(_hop_test_episode(), "2030-05-10",
+                     checks=[check(result="not_done")])
+    assert gates[0]["status"] == "check_not_done"
+
+
+def test_yesterdays_pass_does_not_clear_today():
+    """The check is DAILY. A pass on Monday says nothing about Tuesday."""
+    gates = gates_on(_hop_test_episode(), "2030-05-10",
+                     checks=[check(date="2030-05-09", result="pass")])
+    assert gates[0]["status"] == "check_not_done"
+    assert is_gated(gates, "run") is True
+
+
+def test_a_check_for_a_different_gate_does_not_clear_this_one():
+    gates = gates_on(_hop_test_episode(), "2030-05-10",
+                     checks=[check(slug="calf-raise", result="pass")])
+    assert gates[0]["status"] == "check_not_done"
+
+
+def test_a_gate_without_a_precondition_is_unchanged():
+    gates = gates_on([medical(restricts="run")], "2030-05-10", checks=[])
+    assert gates[0]["status"] == "blocked"
+    assert gates[0]["precondition"] is None
+
+
+def test_a_precondition_that_gates_nothing_is_rejected():
+    """A check that lifts no restriction is just a note."""
+    problems = validate_record("medical", medical(precondition="hop-test"))
+    assert any("gates nothing" in p for p in problems)
+
+
+def test_check_results_are_a_closed_vocabulary():
+    assert validate_record("checks", check()) == []
+    assert any("result" in p for p in validate_record(
+        "checks", check(result="sort of")))
+    assert any("slug" in p for p in validate_record("checks", check(slug="")))
+
+
+def test_the_api_lists_what_has_not_been_checked_today(tmp_path):
+    """So a coach can say "you have not done the hop test today" rather than
+    assuming either outcome."""
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    write(root / "data" / "medical.jsonl", _hop_test_episode())
+    v = Vitai(root)
+    pending = v.pending_checks("2030-05-10")
+    assert len(pending) == 1 and pending[0]["precondition"] == "hop-test"
+
+    write(root / "data" / "checks.jsonl", [check(result="pass")])
+    assert Vitai(root).pending_checks("2030-05-10") == []
