@@ -88,8 +88,29 @@ def _build(target: Path) -> None:
         # would be punishing the athlete for being away from their bathroom.
         weighed = rng.random() < 0.8 and not TRAVEL_WEEK[0] <= i <= TRAVEL_WEEK[1]
         if weighed:
-            weight.append({"date": d, "kg": round(kg + rng.gauss(0, 0.25), 1),
-                           "source": "scale", "note": None})
+            row_w = {"date": d, "kg": round(kg + rng.gauss(0, 0.25), 1),
+                     "source": "scale", "note": None}
+            if gen2:
+                # Observation time (#37). A settled morning routine until the
+                # travel week, after which the athlete weighs whenever they
+                # remember - which is the artifact the caveat exists for.
+                # Body mass swings about a kilogram across a day, so a window
+                # mixing 07:00 and 19:00 weigh-ins can manufacture or erase a
+                # week of apparent progress. The routine falling apart after a
+                # disruption is the ordinary way this happens.
+                erratic = i > TRAVEL_WEEK[1] and rng.random() < 0.45
+                hh = 19 if erratic else 7
+                row_w.update({
+                    # A gen-3 line carries every key introduced up to gen 3,
+                    # null where unknown - the scale reports mass only.
+                    "_gen": 3,
+                    "body_fat_pct": None, "kg_lo": None, "kg_hi": None,
+                    "body_fat_lo": None, "body_fat_hi": None,
+                    "measured_at": f"{hh:02d}:{rng.randrange(0, 40):02d}",
+                    # Written the same evening the athlete logs the day.
+                    "recorded_at": f"{d}T21:{i % 60:02d}:00+02:00",
+                })
+            weight.append(row_w)
         steps = int(rng.gauss(11500 if dow < 5 else 8300, 2100))
         if TRAVEL_WEEK[0] <= i <= TRAVEL_WEEK[1]:
             # A travel week: the steps floor is missed outright. This is the

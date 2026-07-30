@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
+from .clocks import is_stamp, order_key  # noqa: F401  (re-exported for callers)
+
 # dataset -> ordered keys (column order for the SQLite read model)
 KEYS: dict[str, list[str]] = {
     # `kg` + `body_fat_pct` are the OBSERVED atoms; fat mass and fat-free mass
@@ -22,8 +24,16 @@ KEYS: dict[str, list[str]] = {
     # instrument's measurement-uncertainty band (G37): a wide band (bioimpedance
     # FFM, a jittery scale) downgrades trust in that reading without discarding
     # it. All gen-2 (see KEY_GENERATION); gen-1 weight lines predate them.
+    #
+    # `measured_at` is OBSERVATION time - HH:MM local, the same shape as
+    # `sessions.start_time`, because a weigh-in is a point measurement. It
+    # matters more than it looks: body mass swings about a kilogram between
+    # morning-fasted and evening, so an unrecorded drift from evening to
+    # morning weigh-ins manufactures a week of apparent progress. Absent stays
+    # absent - the engine never infers a probable weigh-in time, it says the
+    # rate could not be checked.
     "weight": ["date", "kg", "source", "note", "body_fat_pct",
-               "kg_lo", "kg_hi", "body_fat_lo", "body_fat_hi"],
+               "kg_lo", "kg_hi", "body_fat_lo", "body_fat_hi", "measured_at", "recorded_at"],
     # `hip_pain` is RETIRED at generation 2 in favour of `pain` + `pain_site`:
     # the hip was this record's founding injury, but a record that can only
     # describe one joint cannot describe a second one. Old lines keep it and
@@ -35,7 +45,7 @@ KEYS: dict[str, list[str]] = {
     "daily": ["date", "steps", "distance_km", "active_min", "kcal_out", "kcal_in",
               "protein_g", "sleep_h", "rhr", "hip_pain", "alcohol", "note",
               "source", "mood", "feel", "coverage", "pain", "pain_site",
-              "pain_side"],
+              "pain_side", "recorded_at"],
     # `location` is RETIRED at generation 2, split into `place` (coarse, and
     # deliberately coarse - "home"/"work"/a travel slug, never an address) and
     # `route` (a personal slug the athlete names). Free text could not be
@@ -43,7 +53,7 @@ KEYS: dict[str, list[str]] = {
     "sessions": ["date", "type", "distance_km", "duration_s", "avg_hr", "max_hr",
                  "cadence", "kcal", "location", "rpe", "note",
                  "source", "start_time", "elevation_m", "setting", "route",
-                 "place", "with", "context", "planned", "weather"],
+                 "place", "with", "context", "planned", "weather", "recorded_at"],
     # Third data tier: MODEL-INFERRED knowledge. Append-only like everything
     # else, but carries provenance (model, evidence, confidence) because it is
     # neither ground truth (observed) nor rebuildable (derived). The engine
@@ -53,7 +63,7 @@ KEYS: dict[str, list[str]] = {
     # inference with it, rather than leaving a stale belief behind whose
     # evidence quietly no longer exists.
     "inferences": ["date", "kind", "statement", "confidence", "model",
-                   "evidence", "note", "depends_on"],
+                   "evidence", "note", "depends_on", "recorded_at"],
     # --- policy datasets (increment 1) --------------------------------------
     # These are DATED POLICY, not observations: what the athlete was aiming at,
     # and when. A goal is edited by appending a new line with the same `slug`
@@ -93,7 +103,7 @@ KEYS: dict[str, list[str]] = {
               "tracker", "target", "policy", "guard_pct", "period",
               "on_period_end", "deadline", "status", "motivator", "rationale",
               "on_success", "on_miss", "accountability", "set_by", "reason",
-              "note", "event", "deadline_kind", "verification", "change_kind"],
+              "note", "event", "deadline_kind", "verification", "change_kind", "recorded_at"],
     # A dated real-world FIXTURE, and the thing a plan is built backwards from
     # (G86). Distinct from a MILESTONE, which the engine derives as a fraction
     # of a target: a milestone is a consequence of progress, an event happens
@@ -108,13 +118,13 @@ KEYS: dict[str, list[str]] = {
     # `deadline_kind` is a property of a GOAL. They are related but not the
     # same field - a soft goal may still be anchored to a hard fixture.
     "events": ["date", "slug", "title", "kind", "event_date", "priority",
-               "immovable", "place", "status", "set_by", "reason", "note"],
+               "immovable", "place", "status", "set_by", "reason", "note", "recorded_at"],
     # G14/G20: every threshold is effective-dated, so editing one today can
     # never silently re-score a past week. `change_kind` separates a genuine
     # policy CHANGE from a CORRECTION of a mis-entered number (G31) - only the
     # former is churn, and only the former can be suspiciously timed.
     "thresholds": ["date", "key", "value", "change_kind", "set_by", "reason",
-                   "note"],
+                   "note", "recorded_at"],
     # A recorded accomplishment worth keeping. Distinct from a MILESTONE, which
     # the engine derives; `source` carries authorship (G31) so a hand-logged
     # race finish is never confused with an engine-derived crossing.
@@ -122,14 +132,14 @@ KEYS: dict[str, list[str]] = {
     # `onset_date`: a race finished in March and written up in July belongs on
     # the day it happened. Named differently on purpose - an achievement is a
     # point event that OCCURRED, an episode has an ONSET that opens a window.
-    "achievements": ["date", "title", "goal", "source", "note", "occurred_date"],
+    "achievements": ["date", "title", "goal", "source", "note", "occurred_date", "recorded_at"],
     # --- increment 2 -------------------------------------------------------
     # Sparse ANCHOR-class reads that do not come off the scale: a tape measure,
     # a DEXA scan, an InBody. Anchors top the resolution precedence ladder and,
     # like weight, are read as TENDENCIES over a sparse trend - never as a
     # single point. `body_fat_pct` measured BY the scale already rides the
     # `weight` line (gen-2, G36/G37); this dataset is for the other instruments.
-    "measurements": ["date", "kind", "value", "source", "note"],
+    "measurements": ["date", "kind", "value", "source", "note", "recorded_at"],
     # --- increment 3: the medical layer (G11) ------------------------------
     # One condition's whole lifecycle shares a `slug`: onset, the visit, the
     # restriction, the resolution. Appending a line advances the episode; the
@@ -153,18 +163,18 @@ KEYS: dict[str, list[str]] = {
     "medical": ["date", "slug", "kind", "title", "body_site", "severity",
                 "status", "resolved_date", "restricts", "provider_type",
                 "source", "note", "expects", "onset_date", "precondition",
-                "restriction"],
+                "restriction", "recorded_at"],
     # The result of a named check, on a day (G28 gate mechanics). A rehab plan
     # says "5 gentle hops before each run; pain in the hip means do not run
     # today" - a gate CONDITIONAL on a test performed that morning. Without
     # this the whole instruction sits in a note where no rule can read it,
     # which is the prose problem G28 exists to solve, one level down.
-    "checks": ["date", "slug", "result", "value", "source", "note"],
+    "checks": ["date", "slug", "result", "value", "source", "note", "recorded_at"],
     # Dated situational mode (G34): what was going on around the athlete. The
     # engine uses it to explain missingness rather than flag it - an absent
     # weigh-in in a week with no scale is not a lapse - and the coach uses it
     # to constrain what it asks for. Effective-dated like all policy (P2).
-    "context": ["date", "mode", "facilities", "place", "source", "note"],
+    "context": ["date", "mode", "facilities", "place", "source", "note", "recorded_at"],
     # What the ATHLETE said, in their own words. Deliberately NOT `inferences`,
     # which is MODEL-inferred and carries a `model` field: filing a first-hand
     # statement there would launder the athlete's own claim as engine output,
@@ -178,7 +188,7 @@ KEYS: dict[str, list[str]] = {
     # never how likely it is to be true. `status` lets a worry be resolved, or a
     # grain of a goal be superseded once it becomes a real goal.
     "journal": ["date", "kind", "text", "about", "source", "confidence",
-                "status", "note"],
+                "status", "note", "recorded_at"],
 }
 
 # Sourced from semantics/session_types.toml (G85): a curated registry, not a
@@ -368,6 +378,21 @@ for _ds in ("weight", "daily", "sessions", "inferences", "medical",
 # Generation 3 adds the post-coordinated `restriction` spec to medical.
 CURRENT_GENERATION["medical"] = 3
 
+# --- transaction time (#37) ---------------------------------------------------
+# `recorded_at` lands on EVERY dataset at once - the largest schema move so
+# far - so its generation is registered as "one past whatever each dataset was
+# already at", which is precisely what an additive field on all of them means.
+#
+# Derived rather than transcribed on purpose: thirteen hand-written generation
+# numbers is thirteen chances to typo one, and a wrong generation here does
+# not fail loudly - it silently starts REQUIRING a field on lines that predate
+# it, which is the exact G25 time bomb the mechanism exists to defuse.
+for _ds, _gen in list(CURRENT_GENERATION.items()):
+    KEY_GENERATION.setdefault(_ds, {})["recorded_at"] = _gen + 1
+    CURRENT_GENERATION[_ds] = _gen + 1
+# Observation time on weight rides the same generation as the field above.
+KEY_GENERATION["weight"]["measured_at"] = CURRENT_GENERATION["weight"]
+
 
 def key_generation(dataset: str, key: str) -> int:
     """Generation a key was introduced in (1 = founding)."""
@@ -413,6 +438,26 @@ def _bad_date(v: object) -> bool:
         return True
 
 
+def _bad_hhmm(v: object) -> bool:
+    """A local wall-clock time, HH:MM, 24-hour.
+
+    Deliberately NOT `start_time`'s full offset-bearing timestamp, though both
+    are observation time. A session has a duration and can cross a timezone,
+    so it needs the offset to be comparable across platforms; a weigh-in is a
+    point on a day the row already names, and the useful question about it is
+    only ever "morning or evening". HH:MM is also what an athlete can answer
+    from memory - "I weigh at seven" - and a format nobody can fill in
+    accurately is a field that stays null.
+    """
+    if not isinstance(v, str):
+        return True
+    try:
+        datetime.strptime(v, "%H:%M")
+        return False
+    except ValueError:
+        return True
+
+
 def _bad_time(v: object) -> bool:
     """An ISO-8601 timestamp, offset optional but strongly preferred.
 
@@ -451,10 +496,15 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
             problems.append(f"unknown key '{k}'")
     if _bad_date(rec.get("date")):
         problems.append(f"bad date {rec.get('date')!r} (ISO-8601 YYYY-MM-DD)")
+    problems += _validate_recorded_at(rec)
     for k, types in _TYPES.items():
         if k in keys and (v := rec.get(k)) is not None and k in rec:
             if isinstance(v, bool) or not isinstance(v, types):
                 problems.append(f"'{k}' should be a number or null, got {v!r}")
+    if dataset == "weight" and rec.get("measured_at") is not None and (
+            _bad_hhmm(rec.get("measured_at"))):
+        problems.append(f"bad measured_at {rec.get('measured_at')!r} - HH:MM "
+                        "local, the same shape as sessions.start_time")
     if dataset == "weight":
         if (bf := rec.get("body_fat_pct")) is not None and not isinstance(bf, bool):
             if isinstance(bf, _NUMERIC) and not 0 < bf < 100:
@@ -677,6 +727,75 @@ def _validate_pain_location(rec: dict) -> list[str]:
             problems.append(
                 f"'{resolve(site)}' is a midline site ({describe(site)}) and "
                 "takes no 'pain_side'")
+    return problems
+
+
+def _validate_recorded_at(rec: dict) -> list[str]:
+    """Transaction time must be ISO 8601 and carry an explicit offset (#37).
+
+    SHAPE only, deliberately. The three properties this clock needs are
+    enforced at the three layers that can actually see them:
+
+    - shape, here, per line;
+    - MONOTONICITY, per file, in `vitai validate` - which is the durable
+      integrity check, because a hand-edited or forged stamp almost always
+      lands out of order and no per-line rule could ever notice;
+    - machine ownership, at the append boundary, where a caller-supplied
+      value can be refused outright.
+
+    Not checked here: "is it in the future". Tempting, and wrong - every
+    fixture and the whole demo are deliberately dated 2030 so a synthetic
+    record can never be mistaken for a real one, and a wall-clock comparison
+    would reject the repo's own test corpus while catching nothing that
+    monotonicity does not.
+    """
+    stamp = rec.get("recorded_at")
+    if stamp is None:
+        return []
+    if not is_stamp(stamp):
+        return [f"bad recorded_at {stamp!r} - ISO 8601 with an explicit UTC "
+                "offset (e.g. 2026-07-31T14:32:05+02:00), machine-set on "
+                "append and never authored"]
+    return []
+
+
+def recorded_at_problems(dataset: str, rows: list[tuple[int, dict]]) -> list[str]:
+    """File-level checks on transaction time: monotonic, and no exact ties.
+
+    Monotonicity is what makes `recorded_at` an ordering rather than a
+    decoration. It is a property of the FILE, not of any line, so it cannot
+    live in `validate_record` - and it is the check that actually catches a
+    hand-authored stamp, since a human writing a plausible-looking value will
+    almost never land it in the right place in the sequence.
+
+    An exact tie between two stamped rows sharing an identity and a date is
+    reported rather than silently broken: the whole point of the field is that
+    ordering comes from data, and two rows claiming the same instant means the
+    data cannot answer. Unstamped rows never tie - they legitimately share the
+    "absent" key, which is what keeps the migration a read no-op.
+    """
+    problems: list[str] = []
+    stamped = [(n, r) for n, r in rows if r.get("recorded_at") is not None]
+    for (pn, prev), (n, cur) in zip(stamped, stamped[1:]):
+        if str(cur["recorded_at"]) < str(prev["recorded_at"]):
+            problems.append(
+                f"{dataset}.jsonl line {n}: recorded_at "
+                f"{cur['recorded_at']!r} precedes line {pn}'s "
+                f"{prev['recorded_at']!r} - transaction time is monotonic by "
+                "construction, so an out-of-order stamp means the line was "
+                "hand-written or the clock moved")
+    ident = IDENTITY_KEY.get(dataset)
+    seen: dict[tuple, int] = {}
+    for n, r in stamped:
+        key = (r.get(ident) if ident else r.get("source"), r.get("date"),
+               r.get("recorded_at"))
+        if (first := seen.get(key)) is not None:
+            problems.append(
+                f"{dataset}.jsonl line {n}: same date and recorded_at as line "
+                f"{first} - two rows claiming the same instant cannot be "
+                "ordered from the data, which is the one thing this field is "
+                "for")
+        seen[key] = n
     return problems
 
 

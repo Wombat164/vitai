@@ -21,6 +21,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from statistics import mean
 
+from .clocks import weigh_in_timing
 from .config import Config, overlay, phase_rate_for
 from .policy import state
 from .schema import EXTERNAL_METRIC
@@ -76,9 +77,11 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
 
     # --- weight rate: mean(kg) this week vs previous week, vs phase target ---
     by_week_kg: dict[str, list[float]] = defaultdict(list)
+    by_week_rows: dict[str, list[dict]] = defaultdict(list)
     for w in weight:
         if w.get("kg") is not None:
             by_week_kg[_week_key(w["date"])].append(w["kg"])
+            by_week_rows[_week_key(w["date"])].append(w)
     for wk in weeks:
         vals = by_week_kg.get(wk)
         prev_wk = (datetime.fromisoformat(wk).date() - timedelta(days=7)).isoformat()
@@ -92,6 +95,19 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
         goal = _goal_for(goals_for[wk], "weight_rate")
         if target is None:
             rows.append(_row(wk, "weight_rate", rate, None, NODATA, goal))
+            continue
+        # #37: a rate whose weigh-in times are spread widely enough to
+        # account for it is not a rate, and this is the machine-readable
+        # contract - a consumer reading AHEAD or BEHIND here will render it as
+        # fact. Reporting the number with NODATA says "here is what the scale
+        # did, and no, we cannot judge it", which is the honest pair. The same
+        # shape as `_drops_rate_verdict` for a medical contraindication: the
+        # engine already knows how to decline to score something.
+        timing = weigh_in_timing(by_week_rows.get(wk, [])
+                                 + by_week_rows.get(prev_wk, []))
+        if timing["known"] and not timing["unknown"] and (
+                timing["drift_kg"] >= abs(rate)):
+            rows.append(_row(wk, "weight_rate", rate, target, NODATA, goal))
             continue
         if abs(rate - target) <= 0.25:
             verdict = ON

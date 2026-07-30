@@ -41,8 +41,10 @@ blacklists from injury history - substitute rather than comply.]
 
 - Numbers come from `vitai build` outputs. If your reading of the data and
   the engine's disagree, the engine wins - recompute nothing by hand.
-- New observations: append schema-valid JSONL, run `vitai validate`, then
-  `vitai build`. Never edit an existing line; supersede it.
+- New observations: `vitai append <dataset>` with the row on stdin, then
+  `vitai validate` and `vitai build`. Append stamps the clocks the machine
+  owns (`recorded_at`, `_gen`) - never write `recorded_at` by hand, and never
+  edit an existing line; supersede it.
 - Corrections in narrative files: strike through, do not silently edit.
   Maintain the changelog at the end of long documents.
 

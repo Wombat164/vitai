@@ -24,7 +24,7 @@ from pathlib import Path
 from .config import Config, load_config
 from .contributions import compute_contributions, goal_progress
 from .db import build_db
-from .jsonl import load
+from .jsonl import append, load
 from . import query
 from .policy import (State, context_on, days_between, events_on, plan_churn,
                      state)
@@ -50,6 +50,17 @@ class Vitai:
     @property
     def config(self) -> Config:
         return load_config(self.root)
+
+    def append(self, name: str, record: dict) -> dict:
+        """Append one line to a dataset, stamping the machine-owned clocks.
+
+        The WRITE half of P9, and the reason `recorded_at` is trustworthy: a
+        field every caller must remember to set is absent exactly when it
+        matters. Raises if the caller supplies `recorded_at`, fills missing
+        keys with null, stamps `_gen`, and validates before writing - an
+        append-only file cannot be un-appended.
+        """
+        return append(self.root / "data", name, record)
 
     def dataset(self, name: str) -> list[dict]:
         if name not in KEYS:

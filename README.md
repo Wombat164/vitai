@@ -122,6 +122,12 @@ the key name. Three datasets record what happened:
 | `data/medical.jsonl` | step in one condition's lifecycle | `slug`, `kind`, `severity`, `status`, `restricts` |
 | `data/events.jsonl` | dated real-world fixture | `slug`, `kind`, `event_date`, `priority`, `immovable` |
 
+Every dataset also carries **`recorded_at`** - transaction time, stamped by
+`vitai append`, never written by hand. `date` says when something became true
+and may be backdated; `recorded_at` says when the line was written and may
+not. Together they order two rows that share a date, which file position used
+to do by accident.
+
 Corrections are appended with `"supersedes":"<date>/<source>"` - a wrong line
 is never edited. The audit chain is the point: how a number changed is often
 more informative than the number. Goals and thresholds supersede by slug
@@ -220,6 +226,7 @@ than lingering as a belief whose evidence no longer exists.
 | 3 | unreleased | Adds `measurements` + `context` datasets, generation-2 provenance/context fields on `daily` and `sessions`, and the resolution layer: primary tables now hold CANONICAL rows, with `claims`, `resolution`, `justifications`, `conservation` and `retractions` alongside | Nothing required. `hip_pain` is retired, not removed: old lines keep validating and are read as `pain` at site `hip`, and the same applies to `sessions.location` -> `place`/`route`. A single-source repo resolves to exactly what it built before. To adopt: start writing `source` on new lines, and add `[resolution.precedence]` to `vitai.toml` when a second source appears |
 | 4 | unreleased | Adds the `medical` dataset and the safety layer's outputs: `gates` (what is blocked today and why) and `escalations` (deterministic severity-to-action) | Nothing required. **A consumer that renders training suggestions MUST read `gates`**, or it will propose activity the record has already blocked |
 | 5 | unreleased | Adds the `checks` dataset, `onset_date`/`precondition` on `medical`, `occurred_date` on `achievements`, and `status`/`precondition` on `gates` | Nothing required. **A consumer reading `gates` MUST now check `status`**: a row with status `cleared` is reported but does not block. Not-done is not pass - a gate whose check was never recorded stays uncleared |
+| 7 | unreleased | Adds `recorded_at` (transaction time) to **every** dataset and `measured_at` (observation time, HH:MM local) to `weight`. Resolution orders by `(date, recorded_at)` instead of falling back to file position | Nothing required, and the migration is a read no-op: absent sorts before present, so a file of unstamped rows resolves in exactly the order it always did. **A consumer that reconstructs history MUST order by both clocks**, or a same-date correction resolves by whatever order the rows happen to be in. A `weight_rate` verdict may now be `nodata` because the weigh-in times behind it are spread widely enough to account for the rate. To adopt: write new rows through `vitai append` / `Vitai.append()`, which stamps the clocks the machine owns |
 | 6 | unreleased | Adds the `events` dataset (dated real-world fixtures), `deadline_kind`/`event`/`verification`/`change_kind` on `goals` (generation 2), `deadline_kind` on `plan_churn`, and `days_to_deadline`/`event`/`verification` on `goal_progress` | Nothing required; gen-1 goal lines keep validating unchanged. **Two things a consumer must act on.** A `goal_progress` row with `verification` of `attested` has no metric, no target and no progress: render it as a goal nothing can measure, never as 0%. And a `plan_churn` row is only a retreat from a deadline when `deadline_kind` is `hard` - a consumer reading `deadline_pushed` alone will accuse the athlete of gaming a date they invented |
 
 ## Skills
