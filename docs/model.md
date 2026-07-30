@@ -116,7 +116,7 @@ these; nothing else exists.
    safety/privacy-critical: consent ledger, access-scope, suppression prefs -
    NOT markdown pages (the redteam's "prose still hiding where data is needed").
 
-## Part 3 - The consolidating gaps (G24-G87)
+## Part 3 - The consolidating gaps (G24-G88)
 
 Each folds several redteam findings and fills a symmetry hole in a principle.
 
@@ -1023,6 +1023,47 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   that the athlete may already have given this data to vendors is not a reason
   for this engine to add another copy: each egress is a separate decision
   (consent-per-consumer, G32).
+
+- **G88 Degraded data must be self-describing at every boundary** (P3/G37/P4).
+  HIGH, and the thing that makes masking (G87) safe rather than actively
+  harmful. If a value is altered on its way out - masked, coarsened, rounded,
+  imputed, defaulted, sampled - and the receiver is not TOLD, the receiver will
+  compute on it as though it were exact and produce confidently wrong
+  inferences. The masking then does more damage than no masking, because it
+  substitutes a plausible falsehood for a known unknown.
+  **The trap is specific to GOOD masking.** A stable pseudo-anchor (G87) is
+  deliberately deterministic so repeated exports cannot be averaged back to the
+  truth - and that same self-consistency makes it INDISTINGUISHABLE from a real
+  observation. Noisy masking at least wobbles suspiciously; deterministic
+  masking is perfectly believable and silently wrong. The property that buys
+  the privacy is the property that invites the false inference.
+  So a degraded value travels with its own description:
+  - **What was done** (`masked | coarsened | rounded | imputed | defaulted |
+    sampled`) and by what method.
+  - **The error it introduces, as a band.** This is not a new mechanism - it is
+    G37's measurement-uncertainty interval, reused: a 300 m keyed offset IS an
+    observation with a +/-300 m band, and it must present as one. A masked
+    coordinate that reports itself to 5 decimal places is lying about its own
+    precision.
+  - **What may NOT be derived from it.** Distance from a masked start point,
+    "did the run begin somewhere unusual", time-of-day patterns from coarsened
+    timestamps - each is a derivation the degradation has destroyed, and the
+    payload should say so rather than leave the consumer to work it out.
+  **Derivations over degraded inputs either propagate the band or refuse.**
+  A 2.29 km walk measured from a +/-300 m anchor is not 2.29 km. The engine
+  must not silently produce a precise-looking number from an imprecise input -
+  that is exactly the confidence-laundering P3 forbids, arriving through the
+  privacy layer instead of the inference layer.
+  **This is a CONTRACT at the boundary, not a hope about the consumer.** The
+  payload declares its own degradation so an LLM, a dashboard, a game backend
+  or a future maintainer cannot reason past it by accident. A consumer that
+  receives an undeclared masked value has been misled by the system, not by
+  the athlete.
+  Generalised beyond masking on purpose (the G85 lesson): the same rule covers
+  a coarsened timestamp, a rounded weight, an imputed missing day, a
+  default-substituted threshold and a sampled subset. Any lossy transform
+  applied on the way to a consumer is a tier demotion, and a tier demotion that
+  is not announced is indistinguishable from data corruption.
 
 ## The frame: a guardrailed world model (belief-state, not a learned net)
 
