@@ -42,8 +42,14 @@ from .schema import IDENTITY_KEY, _restriction_classes
 # EMERGENCY: same day, do not wait for the weekly review.
 # URGENT: contact a clinician; stop the gated activity now.
 # ADVISORY: worth raising at the next check-in.
-EMERGENCY, URGENT, ADVISORY = "emergency", "urgent", "advisory"
-LEVEL_ORDER = {EMERGENCY: 0, URGENT: 1, ADVISORY: 2}
+# HOLD sits between them because it is not a louder message - it is a different
+# ACT. An escalation tells the athlete something; a hold changes what the system
+# is allowed to do: algorithmic progression suspends and the coach may not issue
+# training advice at all. Printing a warning and then carrying on prescribing is
+# exactly the failure a hold exists to make impossible.
+EMERGENCY, HOLD, URGENT, ADVISORY = "emergency", "hold", "urgent", "advisory"
+LEVEL_ORDER = {EMERGENCY: 0, HOLD: 1, URGENT: 2, ADVISORY: 3}
+BLOCKING_LEVELS = (EMERGENCY, HOLD)
 
 # --- hardcoded messages -------------------------------------------------------
 # These strings are the product. They are constants so that what the athlete
@@ -80,6 +86,35 @@ MESSAGES: dict[str, str] = {
         "This activity is gated by an active entry in your record. The gate "
         "clears when the episode is resolved in the data, not by explaining "
         "it away."),
+    "clinical_hold": (
+        "TRAINING IS ON HOLD. This is not a suggestion to take it easy: no "
+        "plan, progression or session will be issued until a clinician has "
+        "reviewed you. The pattern in your record - low energy availability "
+        "alongside other findings - is associated with bone, hormonal and "
+        "cardiac harm, and continuing to train through it is how that harm "
+        "happens. Take this record to a doctor or a sports physician."),
+    "intake_floor": (
+        "Your logged intake is below the level a body needs to run on, "
+        "sustained over more than a week. Eat more today, and contact a "
+        "doctor or a registered dietitian. If your intake is low because "
+        "eating is hard right now, that is a reason to get support, not a "
+        "reason to wait."),
+    "protein_floor": (
+        "Your protein intake is far below what is needed during weight loss. "
+        "Losing weight on inadequate protein without resistance training "
+        "takes the weight off muscle as well as fat, and that loss is hard to "
+        "reverse. Raise protein and add resistance work - and if a medication "
+        "is suppressing your appetite, tell the prescriber it is this low."),
+    "syncope": (
+        "Stop training and contact a doctor. Losing consciousness, or nearly "
+        "losing it, during or around exercise is never something to train "
+        "through and is never explained by being unfit. It needs looking at "
+        "before your next session, not after it."),
+    "prose_symptom": (
+        "Something you wrote in a note describes a symptom that should be "
+        "checked rather than trained through. Contact a doctor. If the note "
+        "did not mean what it sounds like, record the entry properly so the "
+        "record stops guessing."),
 }
 
 # --- engine-owned triggers ----------------------------------------------------
@@ -103,17 +138,80 @@ RHR_ABSOLUTE_MAX = 120
 # 0-10 self-reported pain at or above this is not trainable through.
 PAIN_ABSOLUTE = 9
 
+# --- the prose net (G59) ------------------------------------------------------
+# The escalation path above only works for an athlete who files structured
+# entries. The finding that produced this: five exertional chest-pain episodes
+# of increasing duration, every one of them written into a free-text note and
+# downplayed - "twinge on the stairs, few seconds, gone" - and the engine saw
+# none of them, because frightened people do not fill in a `pain_site` field.
+# They write "it's nothing, not really worth going on about".
+#
+# This is a NET, not a parser. It matches fixed phrases, it can only ever ADD
+# an escalation, and the structured path remains primary. It exists because
+# under-triage is the failure that matters, and a symptom nobody structured is
+# still a symptom.
+CARDIAC_PHRASES = ("chest pain", "chest tightness", "chest twinge",
+                   "tight chest", "chest pressure", "pain in my chest",
+                   "chest hurts")
+SYNCOPE_PHRASES = ("blacked out", "black out", "blackout", "passed out",
+                   "fainted", "syncope", "lost consciousness")
+AMENORRHOEA_PHRASES = ("period still absent", "periods stopped",
+                       "period stopped", "no period", "periods have stopped",
+                       "amenorrh", "missed period")
+BONE_STRESS_PHRASES = ("stress fracture", "stress fractures",
+                       "stress reaction", "bone stress")
+PROSE_TRIGGERS = {"cardiac": CARDIAC_PHRASES, "syncope": SYNCOPE_PHRASES}
+
+# A phrase preceded by one of these is a denial, not a report. Five lines of
+# guard rather than none, because escalating "no chest pain" to an emergency
+# is exactly the crying-wolf that teaches people to ignore the alarm.
+NEGATIONS = ("no ", "not ", "never ", "without ", "denies ", "wasn't ",
+             "was not ", "didn't ", "did not ")
+
 # --- RED-S / low energy availability -----------------------------------------
 # The syndrome a tool that coaches deficits can itself cause, which is why it
-# is the engine's job to watch for it rather than the athlete's. Screened as a
-# composite because no single one of these is alarming on its own: a deep
-# deficit is a choice, fast loss is sometimes water, and high load is training.
-# Together, sustained, they are the pattern.
+# is the engine's job to watch for it rather than the athlete's.
+#
+# THE CORRECTION (issue #12). The first version required deficit AND rate of
+# loss AND load - all three. That reasoning holds for an athlete who is losing,
+# and it is wrong for the syndrome, because RED-S very commonly presents
+# WEIGHT-STABLE: the body downregulates instead of shedding. Resting heart rate
+# drifts, periods stop, resting metabolic rate falls, recovery degrades, and
+# the scale says nothing at all.
+#
+# Requiring loss therefore made weight stability EXONERATING, when in this
+# syndrome stability is frequently the finding itself. The validation persona
+# who exposed it - stable at 57 kg for months, RHR drifted 42 -> 51, five
+# months amenorrhoeic, two prior stress fractures - is textbook, and the old
+# composite could not see her.
+#
+# So rate of loss is now SUFFICIENT BUT NOT NECESSARY: low energy availability
+# plus load plus ANY ONE corroborating marker fires. Fast loss is one such
+# marker. It is no longer the only door in.
 RED_S_WINDOW_DAYS = 14
 RED_S_DEFICIT_KCAL = -1000.0      # mean daily energy balance over the window
 RED_S_LOSS_PCT_PER_WEEK = 1.0     # % of bodyweight per week
 RED_S_LOAD_MIN_PER_WEEK = 180.0   # minutes of logged sessions per week
 RED_S_MIN_DAYS = 10               # do not screen on a nearly-empty window
+
+# Energy availability = (intake - exercise energy) / fat-free mass, in kcal per
+# kg FFM per day. Below ~30 is the threshold the sports-medicine literature
+# uses for low energy availability; below ~45 is where adaptations begin. This
+# is the measure the syndrome is actually defined by, and it needs no weight
+# TREND at all - which is exactly why it sees the stable presentation.
+EA_LOW_THRESHOLD = 30.0
+# Fat-free mass needs a body-composition read. Without one, EA is not computed
+# rather than guessed: inventing a body-fat percentage to feed a safety rule
+# would be manufacturing the input to a clinical decision.
+
+# Absolute floors, applying to everyone with no configuration at all - the same
+# pattern as the absolute resting-heart-rate band. A safety net that has to be
+# switched on protects only the people who already knew they needed it, and
+# the athlete this caught had configured nothing, as new users have not.
+INTAKE_FLOOR_KCAL = 1200.0        # sustained mean intake at or below this
+INTAKE_FLOOR_MIN_DAYS = 7
+PROTEIN_FLOOR_G_PER_KG = 0.8      # below the general adult minimum
+RAPID_LOSS_PCT_PER_WEEK = 1.0     # for the lean-mass composite
 
 
 def _as_date(value: str | date | None) -> date | None:
@@ -236,6 +334,35 @@ def gates_on(medical: list[dict], on: str | date,
     return out
 
 
+def hold_gates(escalation_rows: list[dict], on: str | date) -> list[dict]:
+    """A clinical hold expressed as a gate (G73).
+
+    This is what makes a hold an ACT rather than a message. A gate is the
+    thing the coach is structurally unable to talk around, so routing the hold
+    through it means "no training advice" is enforced by the same mechanism
+    that already blocks a gated activity - not by asking the coach nicely.
+    """
+    when = _as_date(on)
+    if when is None:
+        return []
+    out = []
+    for row in escalation_rows:
+        if row.get("level") not in BLOCKING_LEVELS:
+            continue
+        if (raised := _as_date(row.get("date"))) is None or raised > when:
+            continue
+        out.append({
+            "date": when.isoformat(),
+            "source_kind": "hold",
+            "slug": f"hold:{row['trigger']}",
+            "restricts": "all",
+            "reason": f"{row['level']}: {row['detail']}",
+            "severity": "red_flag",
+            "escalation": row["action"],
+        })
+    return out
+
+
 def is_gated(gates: list[dict], activity: str) -> bool:
     """Is this activity class or session type blocked by any gate?
 
@@ -270,8 +397,10 @@ def escalations(medical: list[dict], daily: list[dict], weight: list[dict],
     out += _declared_red_flags(medical)
     out += _red_flag_sites(medical, daily)
     out += _absolute_thresholds(daily)
+    out += _prose_symptoms(daily, sessions, medical)
+    out += _intake_and_protein_floors(daily, weight, medical, sessions)
     if include_red_s:
-        out += _red_s(daily, weight, sessions)
+        out += _red_s(daily, weight, sessions, medical)
 
     if (limit := _as_date(on)) is not None:
         out = [e for e in out if (d := _as_date(e["date"])) and d <= limit]
@@ -319,6 +448,134 @@ def _red_flag_sites(medical: list[dict], daily: list[dict]) -> list[dict]:
     return out
 
 
+def _negated(text: str, index: int) -> bool:
+    """Is the phrase at `index` preceded by a denial within a short window?"""
+    lead = text[max(0, index - 24):index]
+    return any(neg in lead for neg in NEGATIONS)
+
+
+def scan_prose(text: str | None) -> list[str]:
+    """Red-flag triggers named by a free-text note. Deterministic, additive."""
+    if not text:
+        return []
+    low = str(text).lower()
+    found: list[str] = []
+    for trigger, phrases in PROSE_TRIGGERS.items():
+        for phrase in phrases:
+            idx = low.find(phrase)
+            if idx >= 0 and not _negated(low, idx):
+                found.append(trigger)
+                break
+    return found
+
+
+def _prose_symptoms(daily: list[dict], sessions: list[dict],
+                    medical: list[dict]) -> list[dict]:
+    """Escalate red-flag language wherever the athlete actually wrote it.
+
+    One mention is enough. Waiting for a pattern would mean waiting for the
+    fifth episode, which is what happened to the persona this rule exists for.
+    """
+    out: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    sources = ([(r.get("date"), r.get("note")) for r in daily]
+               + [(r.get("date"), r.get("note")) for r in sessions]
+               + [(r.get("date"), f"{r.get('title') or ''} {r.get('note') or ''}")
+                  for r in medical])
+    for when, note in sources:
+        if not when:
+            continue
+        for trigger in scan_prose(note):
+            if (str(when), trigger) in seen:
+                continue
+            seen.add((str(when), trigger))
+            quoted = " ".join(str(note).split())[:90]
+            level = EMERGENCY if trigger == "cardiac" else URGENT
+            # Keyed by the SPECIFIC trigger, not by the fact it came from
+            # prose: a chest symptom is the same clinical fact however it was
+            # written down, and downstream should not have to care which
+            # field it arrived in.
+            row = _escalation(str(when), level, trigger,
+                              f"a note reports {trigger}: \"{quoted}\"")
+            row["action"] = MESSAGES.get(trigger, MESSAGES["prose_symptom"])
+            out.append(row)
+    return out
+
+
+def _intake_and_protein_floors(daily: list[dict], weight: list[dict],
+                               medical: list[dict],
+                               sessions: list[dict]) -> list[dict]:
+    """Absolute nutrition floors that fire with no configuration at all (G68).
+
+    The athlete who exposed this had configured nothing - as new users have
+    not - and was eating ~1200 kcal a day while exclusively breastfeeding and
+    losing a kilo a week. The engine said `tripwires: none`, because every
+    rule it had needed a threshold somebody had set.
+    """
+    window, start, end = _window(daily, RED_S_WINDOW_DAYS)
+    if not window:
+        return []
+    out: list[dict] = []
+    expects = _expectations(medical, end)
+    floor = INTAKE_FLOOR_KCAL
+    if "elevated_requirement" in expects:
+        # A declared state raises the floor; it can never remove it (G57).
+        floor += 500.0
+
+    intakes = [float(r["kcal_in"]) for r in window if _numeric(r.get("kcal_in"))]
+    if len(intakes) >= INTAKE_FLOOR_MIN_DAYS:
+        mean_intake = sum(intakes) / len(intakes)
+        if mean_intake <= floor:
+            detail = (f"mean intake {mean_intake:.0f} kcal/day over "
+                      f"{len(intakes)} days, at or below the {floor:.0f} floor")
+            if "elevated_requirement" in expects:
+                detail += " (raised for a declared physiological state)"
+            out.append(_escalation(end.isoformat(), URGENT, "intake_floor", detail))
+
+    # Protein against bodyweight, and the lean-mass composite that matters
+    # during rapid loss (G72): weight coming off fast, protein far too low, and
+    # no resistance training to defend muscle.
+    kg = _latest_weight(weight, end)
+    proteins = [float(r["protein_g"]) for r in window
+                if _numeric(r.get("protein_g"))]
+    if kg and len(proteins) >= INTAKE_FLOOR_MIN_DAYS:
+        per_kg = (sum(proteins) / len(proteins)) / kg
+        if per_kg < PROTEIN_FLOOR_G_PER_KG:
+            loss = _loss_pct_per_week(weight, start, end) or 0.0
+            resistance = any(str(s.get("type", "")).startswith("gym")
+                             for s in sessions
+                             if _as_date(s.get("date"))
+                             and start <= _as_date(s["date"]) <= end)
+            detail = (f"protein {per_kg:.2f} g/kg bodyweight/day, below the "
+                      f"{PROTEIN_FLOOR_G_PER_KG} g/kg minimum")
+            if loss >= RAPID_LOSS_PCT_PER_WEEK and not resistance:
+                detail += (f"; losing {loss:.1f}%/week with no resistance "
+                           "training - lean-mass loss risk")
+            out.append(_escalation(end.isoformat(), URGENT, "protein_floor",
+                                   detail))
+    return out
+
+
+def _latest_weight(weight: list[dict], end: date) -> float | None:
+    pts = sorted((str(w["date"]), float(w["kg"])) for w in weight
+                 if _numeric(w.get("kg")) and _as_date(w.get("date"))
+                 and _as_date(w["date"]) <= end)
+    return pts[-1][1] if pts else None
+
+
+def _expectations(medical: list[dict], on: date) -> set[str]:
+    """What open states and medications tell the engine to expect (G57/G72)."""
+    out: set[str] = set()
+    for episode in active_episodes(medical, on):
+        raw = episode.get("expects")
+        if not raw:
+            continue
+        tokens = (raw if isinstance(raw, list)
+                  else str(raw).replace(",", " ").split())
+        out.update(str(t).strip() for t in tokens if str(t).strip())
+    return out
+
+
 def _absolute_thresholds(daily: list[dict]) -> list[dict]:
     """Values outside physiological range, judged with no reference to baseline.
 
@@ -346,60 +603,159 @@ def _absolute_thresholds(daily: list[dict]) -> list[dict]:
     return out
 
 
-def _red_s(daily: list[dict], weight: list[dict],
-           sessions: list[dict]) -> list[dict]:
-    """Low-energy-availability screening over the most recent window.
-
-    Three conditions, all required: a sustained deep energy deficit, weight
-    coming off faster than a percent of bodyweight a week, and real training
-    load on top. Any one alone is unremarkable; together and sustained they are
-    the pattern that damages bone and hormonal health.
-
-    Screened over one trailing window rather than every historical window, so
-    the escalation says "this is happening now" instead of producing a wall of
-    identical rows about last spring.
-    """
+def _window(daily: list[dict], days_back: int) -> tuple[list[dict], date, date]:
+    """The trailing window of daily rows, and its bounds."""
     days = sorted((r for r in daily if _as_date(r.get("date"))),
                   key=lambda r: str(r["date"]))
     if not days:
-        return []
+        return [], date.min, date.min
     end = _as_date(days[-1]["date"])
-    start = end - timedelta(days=RED_S_WINDOW_DAYS - 1)
-    window = [r for r in days if start <= _as_date(r["date"]) <= end]
+    start = end - timedelta(days=days_back - 1)
+    return [r for r in days if start <= _as_date(r["date"]) <= end], start, end
 
+
+def _loss_pct_per_week(weight: list[dict], start: date, end: date) -> float | None:
+    pts = sorted((str(w["date"]), float(w["kg"])) for w in weight
+                 if _numeric(w.get("kg")) and _as_date(w.get("date"))
+                 and start <= _as_date(w["date"]) <= end)
+    if len(pts) < 2:
+        return None
+    span = (_as_date(pts[-1][0]) - _as_date(pts[0][0])).days
+    if span <= 0 or not pts[0][1]:
+        return None
+    return ((pts[0][1] - pts[-1][1]) / pts[0][1]) * 100.0 * 7.0 / span
+
+
+def _fat_free_mass(weight: list[dict], end: date) -> float | None:
+    """Fat-free mass from the most recent body-composition read, or None.
+
+    Never estimated. A guessed body-fat percentage would be a manufactured
+    input to a clinical decision, and the honest answer to "we do not know the
+    athlete's composition" is to not compute the metric that needs it.
+    """
+    reads = sorted((str(w["date"]), float(w["kg"]), float(w["body_fat_pct"]))
+                   for w in weight
+                   if _numeric(w.get("kg")) and _numeric(w.get("body_fat_pct"))
+                   and _as_date(w.get("date")) and _as_date(w["date"]) <= end)
+    if not reads:
+        return None
+    _, kg, bf = reads[-1]
+    return kg * (1.0 - bf / 100.0) if 0 < bf < 100 else None
+
+
+def _session_minutes(sessions: list[dict], start: date, end: date) -> float:
+    return sum(float(s["duration_s"]) / 60.0 for s in sessions
+               if _numeric(s.get("duration_s")) and _as_date(s.get("date"))
+               and start <= _as_date(s["date"]) <= end)
+
+
+def energy_availability(daily: list[dict], weight: list[dict],
+                        sessions: list[dict]) -> tuple[float | None, dict]:
+    """EA in kcal per kg fat-free mass per day, plus the terms behind it.
+
+    This is the measure the syndrome is defined by, and it needs no weight
+    trend - which is why it sees the weight-stable presentation the first
+    version of this composite was blind to.
+    """
+    window, start, end = _window(daily, RED_S_WINDOW_DAYS)
+    intakes = [float(r["kcal_in"]) for r in window if _numeric(r.get("kcal_in"))]
+    ffm = _fat_free_mass(weight, end) if window else None
+    if len(intakes) < RED_S_MIN_DAYS or not ffm:
+        return None, {}
+    exercise = sum(float(s["kcal"]) for s in sessions
+                   if _numeric(s.get("kcal")) and _as_date(s.get("date"))
+                   and start <= _as_date(s["date"]) <= end)
+    mean_intake = sum(intakes) / len(intakes)
+    per_day_exercise = exercise / RED_S_WINDOW_DAYS
+    ea = (mean_intake - per_day_exercise) / ffm
+    return ea, {"intake": mean_intake, "exercise": per_day_exercise,
+                "ffm": ffm, "end": end.isoformat()}
+
+
+def _corroborating_markers(daily: list[dict], weight: list[dict],
+                           medical: list[dict], start: date,
+                           end: date) -> list[str]:
+    """Findings that, with low EA and load, are enough on their own.
+
+    Each of these is a recognised consequence of chronic low energy
+    availability. Any ONE alongside low EA is the pattern; requiring the scale
+    to move as well is what made the syndrome invisible when it presents
+    weight-stable.
+    """
+    markers: list[str] = []
+
+    loss = _loss_pct_per_week(weight, start, end)
+    if loss is not None and loss >= RED_S_LOSS_PCT_PER_WEEK:
+        markers.append(f"losing {loss:.1f}% bodyweight/week")
+
+    # Resting heart rate drifting UP over the window against the record's own
+    # earlier baseline - the autonomic cost of underfuelling.
+    history = sorted((str(r["date"]), float(r["rhr"])) for r in daily
+                     if _numeric(r.get("rhr")) and _as_date(r.get("date")))
+    recent = [v for d, v in history if start <= _as_date(d) <= end]
+    earlier = [v for d, v in history if _as_date(d) < start]
+    if len(recent) >= 3 and len(earlier) >= 3:
+        drift = sum(recent) / len(recent) - sum(earlier) / len(earlier)
+        if drift >= 5.0:
+            markers.append(f"resting heart rate drifted +{drift:.0f}")
+
+    prose = " ".join(str(r.get("note") or "") for r in daily).lower()
+    prose += " " + " ".join(f"{m.get('title')} {m.get('note')}".lower()
+                            for m in medical)
+    if any(p in prose for p in AMENORRHOEA_PHRASES):
+        markers.append("menstrual function reported absent")
+    if any(p in prose for p in BONE_STRESS_PHRASES) or any(
+            str(m.get("body_site")) and "stress" in str(m.get("title", "")).lower()
+            for m in medical):
+        markers.append("bone-stress injury history")
+    return markers
+
+
+def _red_s(daily: list[dict], weight: list[dict], sessions: list[dict],
+           medical: list[dict]) -> list[dict]:
+    """Low-energy-availability screening over the most recent window.
+
+    Fires on low EA + real training load + ANY ONE corroborating marker. Rate
+    of loss is one marker among several rather than a gate, because the
+    syndrome does not require the scale to move.
+
+    Falls back to the energy-BALANCE form when body composition is unknown, so
+    an athlete who logs intake and expenditure but never a body-fat read is
+    still screened - just by the cruder measure, which does need the trend.
+    """
+    window, start, end = _window(daily, RED_S_WINDOW_DAYS)
+    if not window:
+        return []
+
+    per_week = _session_minutes(sessions, start, end) * 7.0 / RED_S_WINDOW_DAYS
+    if per_week < RED_S_LOAD_MIN_PER_WEEK:
+        return []
+
+    markers = _corroborating_markers(daily, weight, medical, start, end)
+    ea, terms = energy_availability(daily, weight, sessions)
+
+    if ea is not None and ea < EA_LOW_THRESHOLD:
+        if not markers:
+            return []
+        return [_escalation(
+            end.isoformat(), HOLD, "clinical_hold",
+            f"energy availability {ea:.0f} kcal/kg FFM/day (below "
+            f"{EA_LOW_THRESHOLD:.0f}), {per_week:.0f} min/week of training, "
+            f"and: {'; '.join(markers)}")]
+
+    # No body-composition read: fall back to energy balance, which cannot see
+    # the weight-stable presentation but is better than screening nothing.
     balances = [float(r["kcal_in"]) - float(r["kcal_out"]) for r in window
                 if _numeric(r.get("kcal_in")) and _numeric(r.get("kcal_out"))]
     if len(balances) < RED_S_MIN_DAYS:
         return []
     mean_balance = sum(balances) / len(balances)
-    if mean_balance > RED_S_DEFICIT_KCAL:
+    if mean_balance > RED_S_DEFICIT_KCAL or not markers:
         return []
-
-    pts = sorted((str(w["date"]), float(w["kg"])) for w in weight
-                 if _numeric(w.get("kg")) and _as_date(w.get("date"))
-                 and start <= _as_date(w["date"]) <= end)
-    if len(pts) < 2:
-        return []
-    span_days = (_as_date(pts[-1][0]) - _as_date(pts[0][0])).days
-    if span_days <= 0:
-        return []
-    lost = pts[0][1] - pts[-1][1]
-    pct_per_week = (lost / pts[0][1]) * 100.0 * 7.0 / span_days
-    if pct_per_week < RED_S_LOSS_PCT_PER_WEEK:
-        return []
-
-    minutes = sum(float(s["duration_s"]) / 60.0 for s in sessions
-                  if _numeric(s.get("duration_s")) and _as_date(s.get("date"))
-                  and start <= _as_date(s["date"]) <= end)
-    per_week = minutes * 7.0 / RED_S_WINDOW_DAYS
-    if per_week < RED_S_LOAD_MIN_PER_WEEK:
-        return []
-
     return [_escalation(
-        end.isoformat(), URGENT, "red_s",
-        f"mean energy balance {mean_balance:.0f} kcal/day, losing "
-        f"{pct_per_week:.1f}% bodyweight/week, {per_week:.0f} min/week of "
-        f"training over {RED_S_WINDOW_DAYS} days")]
+        end.isoformat(), HOLD, "clinical_hold",
+        f"mean energy balance {mean_balance:.0f} kcal/day, {per_week:.0f} "
+        f"min/week of training, and: {'; '.join(markers)}")]
 
 
 # --- the fast path ------------------------------------------------------------
