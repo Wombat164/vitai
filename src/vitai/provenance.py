@@ -67,12 +67,26 @@ def hops(path: object) -> list[str]:
 def role_of(hop: object) -> str:
     """The registry role for a hop name, or `unknown` if unrecognised.
 
-    Unrecognised is deliberately not an error. A vocabulary of vendors would
-    be a sample of the platforms this author happens to use (G85), and a
-    stranger hop is handled by assuming it MIGHT have mutated - the safe
-    direction, since assuming lossless is what costs something.
+    Real hops are named for their vendor: `fitbit-api`, `mfp-export`,
+    `polar-flow`. So a bare-role lookup alone would classify almost every real
+    chain as unknown, and a trust signal that is always "unknown" tells nobody
+    anything. The LAST token of the name is therefore tried against the role
+    vocabulary - `fitbit-api` ends in `api`, `mfp-export` ends in `export`.
+
+    That is a spelling rule over declared role names, not a vendor list and
+    not a fuzzy match: it can only ever reach a role the registry already
+    declares. A name whose last token names nothing stays `unknown`.
+
+    The one direction that could cost something is promoting a hop to a
+    NON-mutating role it does not deserve - a mutating step called
+    `something-watch` would read as a device. Named here rather than guarded
+    against, because the alternative (suffix-matching only mutating roles)
+    makes every device hop unknown, which is the failure this exists to fix.
     """
-    return resolve("provenance", "roles", hop) or UNKNOWN
+    if (direct := resolve("provenance", "roles", hop)) is not None:
+        return direct
+    tail = str(hop or "").replace("_", "-").replace(" ", "-").split("-")[-1]
+    return resolve("provenance", "roles", tail) or UNKNOWN
 
 
 def may_mutate(hop: object) -> bool:
