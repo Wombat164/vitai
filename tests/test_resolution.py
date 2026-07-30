@@ -13,6 +13,8 @@ import json
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from vitai.api import Vitai
 from vitai.cli import main
 from vitai.config import Config, load_config
@@ -463,3 +465,102 @@ def test_build_projects_the_adjudication_trail(tmp_path):
             "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "4"
     finally:
         con.close()
+
+
+# ---- issue #14: similarity is not identity -----------------------------------
+
+def test_three_similar_walks_in_one_day_are_not_one_walk():
+    """THE regression. A record reported 1.39 km of walking on a day when
+    6.26 km across four walks had happened, and nothing surfaced it.
+
+    Anyone with a habitual short activity - a dog walked three times, a
+    commute each way - produces near-identical shapes BY DESIGN. Their
+    routine is exactly what made them look duplicated.
+    """
+    walks = [
+        session("2030-05-01", source="phone", type="walk",
+                duration_s=844, distance_km=1.39),
+        session("2030-05-01", source="phone", type="walk",
+                duration_s=868, distance_km=1.52),
+        session("2030-05-01", source="phone", type="walk",
+                duration_s=817, distance_km=1.34),
+    ]
+    out = resolve({"sessions": walks})
+    assert len(out["canonical"]["sessions"]) == 3, (
+        "similar shapes were treated as one activity and volume was deleted")
+    assert sum(r["distance_km"] for r in out["canonical"]["sessions"]) == \
+        pytest.approx(1.39 + 1.52 + 1.34)
+
+
+def test_a_repeated_activity_says_so_rather_than_failing_silently():
+    """A false merge silently DELETES data and leaves a plausible row behind,
+    which is worse than double-counting - so it must be visible."""
+    walks = [session("2030-05-01", source="phone", type="walk",
+                     duration_s=800 + i * 20, distance_km=1.4)
+             for i in range(3)]
+    out = resolve({"sessions": walks})
+    kept = [t for t in out["tripwires"] if t["kind"] == "repeated_activity_kept"]
+    assert len(kept) == 1, "the decision not to merge was invisible"
+    assert "start_time" in kept[0]["detail"], "and it says how to resolve them"
+
+
+def test_two_similar_sessions_from_one_source_do_not_merge():
+    """Same source, same shape, no timestamps: two real events far more
+    likely than one connector emitting the same activity twice."""
+    pair = [session("2030-05-01", source="phone", type="walk",
+                    duration_s=840, distance_km=1.4),
+            session("2030-05-01", source="phone", type="walk",
+                    duration_s=860, distance_km=1.45)]
+    out = resolve({"sessions": pair})
+    assert len(out["canonical"]["sessions"]) == 2
+    assert any(t["kind"] == "near_miss_duplicate" for t in out["tripwires"])
+
+
+def test_disjoint_sources_still_merge_on_shape():
+    """The case the shape test was written for survives: two platforms each
+    claiming one physical event, which the shape alone cannot distinguish but
+    the differing sources can."""
+    pair = [session("2030-05-01", source="watch", type="run",
+                    duration_s=1800, distance_km=5.0),
+            session("2030-05-01", source="app", type="run",
+                    duration_s=1850, distance_km=5.1)]
+    out = resolve({"sessions": pair})
+    assert len(out["canonical"]["sessions"]) == 1
+
+
+def test_every_shape_only_merge_is_reported():
+    """A merge that removes volume is exactly what tripwires are for."""
+    pair = [session("2030-05-01", source="watch", type="run",
+                    duration_s=1800, distance_km=5.0),
+            session("2030-05-01", source="app", type="run",
+                    duration_s=1850, distance_km=5.1)]
+    out = resolve({"sessions": pair})
+    merges = [t for t in out["tripwires"] if t["kind"] == "shape_only_merge"]
+    assert len(merges) == 1
+    assert "start_time" in merges[0]["detail"]
+
+
+def test_a_timestamped_merge_needs_no_warning():
+    """Overlapping intervals are positive identification, not a guess."""
+    pair = [session("2030-05-01", source="watch", type="run",
+                    start_time="2030-05-01T07:00:00+00:00",
+                    duration_s=1800, distance_km=5.0),
+            session("2030-05-01", source="app", type="run",
+                    start_time="2030-05-01T07:02:00+00:00",
+                    duration_s=1780, distance_km=4.9)]
+    out = resolve({"sessions": pair})
+    assert len(out["canonical"]["sessions"]) == 1
+    assert not [t for t in out["tripwires"] if t["kind"] == "shape_only_merge"]
+
+
+def test_start_time_resolves_a_routine_positively():
+    """The workaround the issue names becomes the fix: with times, three
+    walks are unambiguously three."""
+    walks = [session("2030-05-01", source="phone", type="walk",
+                     start_time=f"2030-05-01T{h:02d}:00:00+00:00",
+                     duration_s=840, distance_km=1.4)
+             for h in (8, 13, 19)]
+    out = resolve({"sessions": walks})
+    assert len(out["canonical"]["sessions"]) == 3
+    assert not [t for t in out["tripwires"]
+                if t["kind"] == "repeated_activity_kept"]
