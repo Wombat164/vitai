@@ -264,6 +264,39 @@ def cmd_safety(args: argparse.Namespace) -> None:
         raise SystemExit(2)
 
 
+def cmd_route(args: argparse.Namespace) -> None:
+    """Tier-1 geometry for a GPS track, with the parameters that produced it."""
+    from .route import compass
+    v = Vitai(args.root)
+    if args.against:
+        verdict, sim = v.same_route(args.gpx, args.against)
+        print(f"same route: {'YES' if verdict else 'NO'}  (LCSS similarity "
+              f"{sim:.2f})")
+        return
+    s = v.route(args.gpx, barometric=args.barometric)
+    if args.json:
+        import dataclasses
+        print(json.dumps(dataclasses.asdict(s), default=str))
+        return
+    km = s.distance_m / 1000
+    print(f"{km:.2f} km  ({s.points_used} of {s.points_raw} fixes used after "
+          f"cleaning; raw sum would read {s.distance_raw_m / 1000:.2f} km)")
+    if s.duration_s:
+        mins = s.duration_s / 60
+        print(f"{mins:.0f} min" + (f"  ({mins / km:.1f} min/km)" if km else ""))
+    print(f"shape: {s.shape}  (retrace similarity {s.retrace_similarity:.2f})")
+    print(f"start-end gap {s.start_end_gap_m:.0f} m; furthest "
+          f"{s.furthest_m:.0f} m"
+          + (f" {compass(s.bearing_deg)}" if s.bearing_deg is not None else ""))
+    if s.elevation_gain_m is not None:
+        print(f"elevation gain {s.elevation_gain_m:.0f} m "
+              f"(climbs under {s.params['climb_threshold_m']:.0f} m ignored)")
+    print(f"stops: {len(s.stops)}")
+    for st in s.stops:
+        when = st.start.strftime("%H:%M") if st.start else "?"
+        print(f"  {when} for {st.seconds:.0f}s")
+
+
 def cmd_journal(args: argparse.Namespace) -> None:
     """What the athlete said, and what is still open."""
     rows = Vitai(args.root).journal(kind=args.kind, status=args.status,
@@ -500,6 +533,8 @@ def main(argv: list[str] | None = None) -> None:
         ("day", cmd_day, "everything the record holds for one date"),
         ("window", cmd_window, "totals over the last N calendar days"),
         ("ramp", cmd_ramp, "week-on-week volume, with its base-size caveat"),
+        ("route", cmd_route,
+         "deterministic geometry for a GPS track (distance, shape, stops)"),
         ("journal", cmd_journal,
          "what the athlete said: claims, worries, ideas, what is still open"),
         ("infer", cmd_infer, "opt-in: model reads the record, appends validated inferences"),
@@ -547,6 +582,15 @@ def main(argv: list[str] | None = None) -> None:
                            help="emit resolution rows as JSONL")
             p.add_argument("--date", metavar="YYYY-MM-DD",
                            help="only this date")
+        if name == "route":
+            p.add_argument("gpx", help="path to a .gpx track")
+            p.add_argument("--against", metavar="GPX",
+                           help="compare with another track: same route or not")
+            p.add_argument("--barometric", action="store_true",
+                           help="track came from a barometric altimeter "
+                                "(uses the 2 m climb threshold, not 10 m)")
+            p.add_argument("--json", action="store_true",
+                           help="emit the full stats object as JSON")
         if name == "journal":
             p.add_argument("--kind", default=None,
                            help="claim|worry|idea|preference|question|note")
