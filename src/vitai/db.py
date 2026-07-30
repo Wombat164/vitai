@@ -44,7 +44,13 @@ from .schema import KEYS
 #    resolves by whatever order the rows happen to be in - and a `weight_rate`
 #    verdict may now be `nodata` because the weigh-in times behind it are
 #    spread widely enough to account for the rate.
-CONTRACT_VERSION = "7"
+# 8: goal scope (#36) - `goal_progress` gains `dataset` (the scope the goal
+#    actually draws from, INFERRED from the metric where the row left it
+#    unset) and `scope` (`declared` | `inferred` | `ambiguous` | `undeclared`).
+#    A consumer must not read an unset `dataset` as "the default": unstated and
+#    stated-as-daily are different, and a goal whose scope the engine cannot
+#    feed reports null progress rather than 0.
+CONTRACT_VERSION = "8"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
@@ -72,6 +78,7 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               "provider_type", "source_kind", "escalation", "level", "trigger",
               "action", "onset_date", "precondition", "occurred_date",
               "result",
+              "scope",
               # G86: events, and the goal fields that anchor to them.
               "event_date", "priority", "event", "deadline_kind",
               "verification",
@@ -89,7 +96,8 @@ CHURN_KEYS = ["date", "slug", "kind", "metric", "edit_no", "before", "after",
               "set_by", "suspicious", "unexplained"]
 PROGRESS_KEYS = ["slug", "title", "metric", "policy", "status", "period",
                  "bucket", "target", "counted", "unbudgeted", "progress_pct",
-                 "declared", "last_edited", "deadline", "deadline_kind",
+                 "dataset", "scope", "declared", "last_edited", "deadline",
+                 "deadline_kind",
                  "days_to_deadline", "event", "verification", "motivator",
                  "tracker", "milestones"]
 

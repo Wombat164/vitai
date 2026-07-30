@@ -363,13 +363,18 @@ def _policy(start: date) -> tuple[list[dict], list[dict], list[dict]]:
         # accuse anyone of gaming a commitment they invented.
         _goal2((start + timedelta(days=14)).isoformat(), "weight",
                "Down to 78 kg, unhurried", "kg", 78, "monotonic",
-               dataset="weight", period="none", on_period_end=None,
+               # `dataset` deliberately UNSET, which is the shape a
+               # hand-written goal row actually has (#36). The scope is
+               # inferred from the metric - a goal in kg is a weight goal -
+               # and the engine then declines to score it rather than
+               # reporting 0%.
+               period="none", on_period_end=None,
                deadline="2030-10-01", deadline_kind="soft", set_by="athlete",
                motivator="The hill on the way home stops being an event",
                rationale="slow enough that the running keeps improving"),
         _goal2((start + timedelta(days=70)).isoformat(), "weight",
                "Down to 78 kg, unhurried", "kg", 78, "monotonic",
-               dataset="weight", period="none", on_period_end=None,
+               period="none", on_period_end=None,
                deadline="2031-02-01", deadline_kind="soft", set_by="athlete",
                reason="the race block matters more than the scale this year",
                motivator="The hill on the way home stops being an event",
