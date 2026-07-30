@@ -116,7 +116,7 @@ these; nothing else exists.
    safety/privacy-critical: consent ledger, access-scope, suppression prefs -
    NOT markdown pages (the redteam's "prose still hiding where data is needed").
 
-## Part 3 - The consolidating gaps (G24-G85)
+## Part 3 - The consolidating gaps (G24-G86)
 
 Each folds several redteam findings and fills a symmetry hole in a principle.
 
@@ -921,6 +921,45 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   is also exactly what G78 requires. Same fix, two problems.
   Tracked in issue #18. See also G78 (athlete-defined metrics) - the general
   form of the same mistake, found by asking eight athletes what they count.
+
+- **G86 Events, deadline hardness, and attested-only goals** (G6/G20/G62).
+  HIGH. Three distinctions the goal model collapses, all named by the operator
+  on 2026-07-30 and all with real coaching consequences.
+  - **An EVENT is not a derived milestone.** The engine derives milestones as
+    fractions of a target (25/50/75/100%). What actually anchors training is a
+    dated real-world FIXTURE: a wedding, a competition weigh-in, a 10k race, a
+    scan, a holiday. Those are immovable, externally owned, and they are what
+    periodisation is built backwards from. Two different concepts share one
+    word, and only the derived one exists. Needs an `events` dataset (date,
+    slug, title, kind, immovable, place) that goals can anchor to.
+  - **A deadline is HARD or SOFT, and the difference is not cosmetic.** A race
+    date cannot be moved; a self-imposed "73 kg by Q1 2027" can be moved at no
+    cost to anyone. Consequences: a hard date forces backwards planning and a
+    taper, and its approach RAISES urgency; a soft date is a direction of
+    travel. **And G20's churn logic actively misfires without this** - it flags
+    a pushed deadline as possible goalpost-moving, which is exactly right for a
+    target quietly slipped after a bad week and exactly wrong for a soft date
+    the athlete may legitimately move. Accusing someone of gaming a deadline
+    they invented is a trust-destroying false positive.
+  - **Some goals are ATTESTED-ONLY: no metric can ever touch them.** Distinct
+    from G19's `external` (another app measures it - a segment crown, a
+    language streak). Attested means *nothing measures it*: "I want to enjoy
+    running again", "I want to stop worrying about my hip", "I want to be the
+    parent who joins in". The schema currently REQUIRES a non-empty `metric`,
+    so these have no home at all - and the persona sweep found (G83) that what
+    athletes say they would be sad to lose in five years is almost always of
+    exactly this kind. The engine must be able to hold a goal it can never
+    verdict: track it, surface it, ask about it, and take the athlete's word as
+    the only evidence there will ever be.
+  - **Goals overlap, and that is normal.** Two goals may share a metric, or be
+    coupled (weight loss serves a pace goal). G18 already fans one event out to
+    many goals, so contribution is handled; what is missing is recognising the
+    RELATION - so the coach can say "these two move together" rather than
+    treating them as independent, and so a single event is not celebrated twice
+    as if it were two wins.
+  Found while capturing a real goal, which also surfaced a G85 instance: goal
+  `dataset` scopes only to `daily`|`sessions`, so a WEIGHT goal - the most
+  common goal in the domain - cannot be scoped to the weight dataset.
 
 ## The frame: a guardrailed world model (belief-state, not a learned net)
 
