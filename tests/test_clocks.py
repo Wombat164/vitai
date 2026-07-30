@@ -324,14 +324,22 @@ def test_an_unreadable_rate_does_not_get_an_actionable_verdict(tmp_path):
 
 # ---- G25: the per-dataset regression the largest schema move needs --------------
 
-def test_recorded_at_landed_one_generation_past_every_dataset():
+def test_recorded_at_never_lands_on_the_founding_generation():
     """`recorded_at` touches EVERY dataset at once. A wrong generation does
     not fail loudly - it silently starts REQUIRING the field on lines that
-    predate it, which is the exact G25 time bomb the mechanism defuses."""
+    predate it, which is the exact G25 time bomb the mechanism defuses.
+
+    This asserted `gen == CURRENT_GENERATION[name]` until `sessions` moved
+    again for #43, which is when it became clear that was pinning a SNAPSHOT
+    rather than an invariant: it said recorded_at must remain the newest field
+    on every dataset forever, which no schema can promise. The durable
+    property is that it postdates the founding generation and does not claim
+    to be newer than its own dataset.
+    """
     for name in KEYS:
         gen = key_generation(name, "recorded_at")
-        assert gen == CURRENT_GENERATION[name], name
         assert gen > 1, f"{name}: no existing line can be required to carry it"
+        assert gen <= CURRENT_GENERATION[name], name
 
 
 def test_every_dataset_carries_the_field():

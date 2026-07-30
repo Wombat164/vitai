@@ -195,13 +195,46 @@ def _why(winner: object, loser: object, ladder: tuple[str, ...]) -> str:
     return f"neither source is ranked; {w} sorts first"
 
 
-def _carry_meta(canonical: dict, claims: list[tuple[str, dict]]) -> dict:
+def _carry_meta(canonical: dict, claims: list[tuple[str, dict]],
+                dataset: str | None = None) -> dict:
     """Keep the highest schema generation seen, so a merged row is not
-    mistaken for an older-shaped one."""
+    mistaken for an older-shaped one - and keep the identity triple coherent."""
     gens = [c.get("_gen") for _, c in claims if isinstance(c.get("_gen"), int)]
     if gens:
         canonical["_gen"] = max(gens)
+    if dataset is not None:
+        _keep_identity_together(dataset, canonical, claims)
     return canonical
+
+
+# The external identity of a session is a TRIPLE, and its parts are only
+# meaningful together (#43).
+IDENTITY_TRIPLE = ("activity_id", "activity_source", "track")
+
+
+def _keep_identity_together(dataset: str, canonical: dict,
+                            claims: list[tuple[str, dict]]) -> None:
+    """Take the identity triple from ONE claim, not field by field.
+
+    Per-field precedence is right for quantities - each resolves on its own
+    merits. It is wrong for an identity: resolving `activity_id` and
+    `activity_source` independently can pair one platform's id with another
+    platform's name for who assigned it, which asserts a provenance neither
+    source ever claimed. That is the #35 error made by the resolver rather
+    than by a connector.
+
+    Two platforms recording one activity genuinely have two ids. A canonical
+    row can hold one, so it holds a COHERENT one - and both raw ids survive
+    untouched in `claims`, which is where the full trail lives.
+    """
+    if dataset != "sessions":
+        return
+    owner = next((rec for _, rec in claims if rec.get("activity_id")), None)
+    if owner is None:
+        return
+    for field in IDENTITY_TRIPLE:
+        if field in KEYS[dataset]:
+            canonical[field] = owner.get(field)
 
 
 # --- session activity identity ------------------------------------------------
@@ -464,7 +497,7 @@ def resolve(datasets: dict[str, list[dict]],
             for group in groups:
                 merged, just, expl = _merge_fields(dataset, group, precedence,
                                                    source_order)
-                merged = _carry_meta(merged, group)
+                merged = _carry_meta(merged, group, dataset)
                 resolved.append(merged)
                 explanations += expl
                 for j in just:

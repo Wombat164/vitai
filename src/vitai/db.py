@@ -50,7 +50,14 @@ from .schema import KEYS
 #    A consumer must not read an unset `dataset` as "the default": unstated and
 #    stated-as-daily are different, and a goal whose scope the engine cannot
 #    feed reports null progress rather than 0.
-CONTRACT_VERSION = "8"
+# 9: the track foreign key (#43) - `track` (repo-relative path to the stored
+#    GPX/FIT/TCX), `activity_id` (the platform's opaque id) and
+#    `activity_source` (who ASSIGNED that id, which is not necessarily who
+#    recorded it) on `sessions`. `activity_id` is also the per-row identity a
+#    session previously lacked, so a correction can name one of two runs on a
+#    day instead of retiring both. It is TEXT and must never be read as a
+#    number: leading zeros and ids past 2^53 both occur.
+CONTRACT_VERSION = "9"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
@@ -79,6 +86,11 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               "action", "onset_date", "precondition", "occurred_date",
               "result",
               "scope",
+              # #43. `activity_id` MUST be TEXT: a REAL-affinity column
+              # converts "9914203377" to a float, which destroys leading
+              # zeros and any id past 2^53 - silently, and in exactly the
+              # field whose whole job is to be an opaque token.
+              "track", "activity_id", "activity_source",
               # G86: events, and the goal fields that anchor to them.
               "event_date", "priority", "event", "deadline_kind",
               "verification",
