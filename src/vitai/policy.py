@@ -25,6 +25,8 @@ from datetime import date, datetime, timedelta
 
 from .schema import IDENTITY_KEY
 
+HARD, SOFT = "hard", "soft"
+
 # Which way is "easier" for a threshold. A FLOOR (walk at least 9000 steps) is
 # loosened by lowering it; a CAP (keep easy runs under 152 bpm, keep pain under
 # 3) is loosened by raising it. Without this the engine cannot tell a genuine
@@ -141,6 +143,71 @@ def has_facility(context: list[dict], on: str | date, facility: str) -> bool | N
     return facility in have
 
 
+def days_between(on: str, when: str | None) -> int | None:
+    """Days from `on` to a date; negative once it has passed, None if unset.
+
+    A countdown is the practical value of a hard date: it is what a taper is
+    planned backwards from, and "how long have I got" is the question the
+    athlete actually asks. Derived at read time, never stored.
+    """
+    if not isinstance(when, str):
+        return None
+    try:
+        return (datetime.fromisoformat(when).date()
+                - datetime.fromisoformat(on).date()).days
+    except ValueError:
+        return None
+
+
+def events_on(events: list[dict], on: str | date) -> tuple[dict, ...]:
+    """The fixtures known on a date, soonest first - what a plan aims at (G86).
+
+    Effective-dated like all policy: a line takes effect on its own `date`, and
+    the fixture itself falls on `event_date`. Both matter and they are usually
+    months apart, which is why they are separate fields.
+    """
+    on_s = on.isoformat() if isinstance(on, date) else str(on)
+    heads = _in_force(events, "events", on_s)
+    live = [e for e in heads.values() if e.get("status") != "cancelled"]
+    return tuple(sorted(live, key=lambda e: (str(e.get("event_date") or ""),
+                                             str(e.get("slug") or ""))))
+
+
+def _event_index(events: list[dict] | None) -> dict[str, dict]:
+    """Latest line per event slug, regardless of date - the anchor lookup.
+
+    Deliberately NOT as-of filtered: a goal edited in April that anchors to a
+    race declared in May still points at a real fixture, and refusing to
+    resolve it would report the goal as having no deadline at all.
+    """
+    out: dict[str, dict] = {}
+    for e in sorted((e for e in (events or []) if e.get("date")),
+                    key=lambda e: e["date"]):
+        if (slug := e.get("slug")) is not None:
+            out[str(slug)] = e
+    return out
+
+
+def deadline_of(goal: dict, events: dict[str, dict] | None = None) -> tuple[
+        str | None, str | None, str | None]:
+    """(deadline, hardness, source) for a goal - resolving any event anchor.
+
+    An anchored goal takes the fixture's date, and that date is HARD whenever
+    the event says it is immovable: an organiser's race date is not the
+    athlete's to move, so the hardness is derived rather than re-declared.
+    An explicit `deadline_kind` on the goal still wins - the athlete may hold
+    themselves to a soft interpretation of a fixed date, and saying so is
+    exactly the kind of thing this field exists to record.
+    """
+    declared = goal.get("deadline_kind")
+    anchor = (events or {}).get(str(goal.get("event") or ""))
+    if anchor is not None:
+        hardness = declared or (HARD if anchor.get("immovable") else None)
+        return (anchor.get("event_date") or goal.get("deadline"), hardness,
+                str(goal.get("event")))
+    return goal.get("deadline"), declared, None
+
+
 def _direction(kind: str, key: str, before: float | None, after: float | None) -> str:
     """Did this edit make the policy easier or harder to satisfy?"""
     if before is None or after is None:
@@ -181,7 +248,8 @@ def _follows_a_miss(metric: str, edit_date: str, behind: dict[str, list[str]]) -
 
 
 def _edits(records: list[dict], dataset: str, kind: str,
-           value_key: str, metric_of) -> list[dict]:
+           value_key: str, metric_of,
+           events: dict[str, dict] | None = None) -> list[dict]:
     """Consecutive-line diffs per identity, oldest first, declaration excluded."""
     ident = IDENTITY_KEY[dataset]
     chains: dict[str, list[dict]] = {}
@@ -201,12 +269,21 @@ def _edits(records: list[dict], dataset: str, kind: str,
             ordinal += 1
             before, after = prev.get(value_key), cur.get(value_key)
             direction = _direction(kind, slug, before, after)
-            deadline_pushed = (
-                kind == "goal"
-                and isinstance(prev.get("deadline"), str)
-                and isinstance(cur.get("deadline"), str)
-                and cur["deadline"] > prev["deadline"]
-            )
+            was, _, _ = deadline_of(prev, events) if kind == "goal" else (None,) * 3
+            now, hardness, _ = deadline_of(cur, events) if kind == "goal" else (None,) * 3
+            deadline_pushed = (isinstance(was, str) and isinstance(now, str)
+                               and now > was)
+            # A pushed deadline only reads as a LOOSENING when the date was
+            # HARD. A race date cannot move, so moving it is a retreat from
+            # something real; a date the athlete invented is a direction of
+            # travel they may revise at no cost to anyone, and calling that
+            # goalpost-moving is a trust-destroying false accusation (G86).
+            #
+            # When hardness is UNKNOWN the engine says so and stops there. The
+            # push is still recorded as the fact it is, so a coach can ask "was
+            # that a hard date?" - which is the G89 shape: accumulate the
+            # evidence, surface it, do not decide on the athlete's behalf.
+            reads_as_retreat = deadline_pushed and hardness == HARD
             rows.append({
                 "slug": slug,
                 "kind": kind,
@@ -215,9 +292,10 @@ def _edits(records: list[dict], dataset: str, kind: str,
                 "metric": metric_of(cur, slug),
                 "before": before,
                 "after": after,
-                "direction": LOOSENED if deadline_pushed and direction in
+                "direction": LOOSENED if reads_as_retreat and direction in
                              (UNCHANGED, UNKNOWN) else direction,
                 "deadline_pushed": deadline_pushed,
+                "deadline_kind": hardness,
                 "reason": cur.get("reason"),
                 "set_by": cur.get("set_by"),
             })
@@ -225,18 +303,25 @@ def _edits(records: list[dict], dataset: str, kind: str,
 
 
 def plan_churn(goals: list[dict], thresholds: list[dict],
-               verdicts: list[dict] | None = None) -> list[dict]:
+               verdicts: list[dict] | None = None,
+               events: list[dict] | None = None) -> list[dict]:
     """One row per policy EDIT: what moved, which way, and whether to ask.
 
-    `suspicious` fires when a loosening (or a pushed deadline) lands within a
-    week of a week that metric was judged behind - the "moved the goalposts
-    right after a bad week" pattern. It is a prompt, never a verdict: the row
-    carries the athlete's own `reason` so an explained change reads as what it
-    is. An edit with no stated reason is exactly the one worth asking about.
+    `suspicious` fires when a loosening (or a pushed HARD deadline) lands
+    within a week of a week that metric was judged behind - the "moved the
+    goalposts right after a bad week" pattern. It is a prompt, never a verdict:
+    the row carries the athlete's own `reason` so an explained change reads as
+    what it is. An edit with no stated reason is exactly the one worth asking
+    about.
+
+    A CORRECTION is not churn at all and never reaches these rows (G31/#26):
+    it asserts the retired line was never a real intention, so counting it
+    would manufacture a plan-stability problem out of a fixed typo.
     """
     behind = _behind_weeks(verdicts)
+    index = _event_index(events)
     rows = _edits(goals, "goals", "goal", "target",
-                  lambda rec, slug: rec.get("metric"))
+                  lambda rec, slug: rec.get("metric"), events=index)
     rows += _edits(thresholds, "thresholds", "threshold", "value",
                    lambda rec, slug: THRESHOLD_METRIC.get(slug, slug))
     for row in rows:

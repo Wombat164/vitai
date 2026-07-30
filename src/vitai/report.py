@@ -52,10 +52,12 @@ def _week_key(d: str) -> str:
 def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                  sessions: list[dict], today: date | None = None,
                  gates: list[dict] | None = None,
-                 escalations: list[dict] | None = None) -> str:
+                 escalations: list[dict] | None = None,
+                 events: list[dict] | None = None) -> str:
     today = today or date.today()
     gates = gates or []
     escalations = escalations or []
+    events = events or []
     L = ["# Weekly rollup", "",
          f"Generated {today.isoformat()} - derived, do not edit.",
          "", "## Weight", ""]
@@ -197,6 +199,20 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
         for e in escalations:
             L.append(f"- **{e['level'].upper()}** {e['date']} - {e['detail']}")
         L += ["", "> " + escalations[0]["action"]]
+
+    # G86: a fixture is what a plan is built backwards FROM, so it belongs in
+    # the rollup as a countdown rather than buried in the goal list. Only what
+    # is still ahead is shown - a race last March is history, not a plan.
+    ahead = [e for e in events
+             if (e.get("days_away") is not None and e["days_away"] >= 0)]
+    if ahead:
+        L += ["", "## Coming up", ""]
+        for e in ahead:
+            away = e["days_away"]
+            when = "today" if away == 0 else f"in {away} day{'s' * (away != 1)}"
+            fixed = " - fixed date" if e.get("immovable") else ""
+            L.append(f"- **{e.get('title')}** {when} "
+                     f"({e.get('event_date')}){fixed}")
 
     L += ["", "## Coverage", "",
           f"- weight: {len(weight)} - daily: {len(daily)} - sessions: {len(sessions)}",

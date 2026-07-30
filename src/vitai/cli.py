@@ -117,11 +117,44 @@ def cmd_verdicts(args: argparse.Namespace) -> None:
         print(json.dumps(row))
 
 
+def _fmt_deadline(row: dict) -> str:
+    """The deadline phrase: a hard date gets a countdown, a soft one does not.
+
+    The wording carries the distinction rather than a label the reader has to
+    decode. A hard date is externally owned and the plan is built backwards
+    from it, so "12 days to" is the useful framing; a soft date is a direction
+    of travel, and counting down to one the athlete invented manufactures an
+    urgency nobody asked for (G86).
+    """
+    when, kind, away = (row.get("deadline"), row.get("deadline_kind"),
+                        row.get("days_to_deadline"))
+    if not when:
+        return ""
+    anchor = f" ({row['event']})" if row.get("event") else ""
+    if kind == "hard" and away is not None:
+        if away < 0:
+            return f"{-away} day(s) past {when}{anchor}"
+        return f"{away} day(s) to {when}{anchor} - fixed"
+    if kind == "soft":
+        return f"aiming at {when}{anchor}"
+    return f"by {when}{anchor}"
+
+
 def _fmt_goal(row: dict) -> str:
     """One goal line: what it is, how far in, and when it was last moved."""
     target, counted, pct = row.get("target"), row.get("counted"), row.get("progress_pct")
-    if row.get("metric") == "external":
+    if row.get("verification") == "attested":
+        # An attested goal has no measure and never will. Rendering it as
+        # "0/0" or "0%" would report a goal nothing can score as a goal going
+        # badly, which is the opposite of what it is (G86/G83).
+        head = "your word is the measure"
+    elif row.get("metric") == "external" or row.get("verification") == "external":
         head = f"tracked in {row.get('tracker')}"
+    elif counted is None:
+        # A goal scoped to a dataset the contribution engine cannot read.
+        # Saying "0%" here would report a goal it cannot see as a goal going
+        # badly, which is the same error as rendering an attested one at 0%.
+        head = f"target {target:g} - progress not counted from this record"
     elif target is None:
         head = f"{counted:g} logged (no target)"
     else:
@@ -131,8 +164,8 @@ def _fmt_goal(row: dict) -> str:
         bits.append(f"{row['unbudgeted']:g} unbudgeted")
     if row.get("milestones"):
         bits.append(f"{row['milestones']} milestone(s)")
-    if row.get("deadline"):
-        bits.append(f"by {row['deadline']}")
+    if phrase := _fmt_deadline(row):
+        bits.append(phrase)
     dates = f"set {row.get('declared')}"
     if row.get("last_edited") and row["last_edited"] != row.get("declared"):
         dates += f", last moved {row['last_edited']}"
@@ -173,6 +206,39 @@ def cmd_goals(args: argparse.Namespace) -> None:
             why = e.get("reason") or "no reason given"
             print(f"  {e['date']} {e['slug']} loosened "
                   f"{e['before']:g} -> {e['after']:g} after a miss ({why})")
+
+
+def cmd_events(args: argparse.Namespace) -> None:
+    """Dated real-world fixtures, soonest first - what the plan aims at."""
+    root = _root(args)
+    on = args.on or date.today().isoformat()
+    rows = Vitai(root).events(on)
+    if args.json:
+        for row in rows:
+            print(json.dumps(row))
+        return
+    if not rows:
+        print("no events - append lines to data/events.jsonl "
+              "(a race, a scan, a wedding: what the plan is built around)")
+        return
+    for row in rows:
+        away = row.get("days_away")
+        if away is None:
+            when = str(row.get("event_date"))
+        elif away < 0:
+            when = f"{row.get('event_date')} ({-away} day(s) ago)"
+        else:
+            when = f"{row.get('event_date')} (in {away} day(s))"
+        bits = [f"{row.get('slug')}: {row.get('title')} - {when}"]
+        if row.get("kind"):
+            bits.append(str(row["kind"]))
+        if row.get("priority"):
+            bits.append(f"priority {row['priority']}")
+        if row.get("immovable"):
+            bits.append("fixed date")
+        if row.get("status") == "tentative":
+            bits.append("not yet confirmed")
+        print(" - ".join(bits))
 
 
 def cmd_resolve(args: argparse.Namespace) -> None:
@@ -526,6 +592,8 @@ def main(argv: list[str] | None = None) -> None:
         ("status", cmd_status, "one-line state: latest weight, rate, tripwires"),
         ("verdicts", cmd_verdicts, "weekly goal-attainment rows as JSONL (the platform contract)"),
         ("goals", cmd_goals, "active goals: progress, dates, contributions, flagged edits"),
+        ("events", cmd_events,
+         "dated fixtures the plan is built backwards from (races, scans, dates)"),
         ("resolve", cmd_resolve, "which source won each contested field, and why"),
         ("safety", cmd_safety, "active escalations and gates (exits 2 if urgent)"),
         ("context", cmd_context, "the situational mode in force on a date"),
@@ -577,6 +645,11 @@ def main(argv: list[str] | None = None) -> None:
                            help="reconstruct goals as they stood on this date")
             p.add_argument("--recent", type=int, default=10, metavar="N",
                            help="show the last N per-goal contributions (0 = none)")
+        if name == "events":
+            p.add_argument("--json", action="store_true",
+                           help="emit event rows as JSONL instead of prose")
+            p.add_argument("--on", metavar="YYYY-MM-DD",
+                           help="the day to count down from (default: today)")
         if name == "resolve":
             p.add_argument("--json", action="store_true",
                            help="emit resolution rows as JSONL")

@@ -72,7 +72,26 @@ content repo. Adherence is the constraint, not knowledge.
    week talking?"). If the athlete recorded a reason, lead with it and take
    it at face value. Never re-litigate an edit they have already explained,
    and never imply cheating - they own the record.
-7. **Adjust the plan**, minimally. Update `plan.md` section 0 (open actions),
+
+   **A moved deadline is only worth raising when `deadline_kind` is `hard`.**
+   A soft date is one the athlete invented and may revise at no cost to
+   anyone; treating that as goalpost-moving accuses them of gaming a
+   commitment nobody else ever held them to. Where the kind is null the
+   engine does not know - if it matters, ask which it is, once, as a
+   question about the date and not about their character.
+
+   A row marked `change_kind: correction` never reaches `plan_churn` at all.
+   If the athlete says a line was a mistake, that is the field for it.
+7. **Surface an ATTESTED goal by asking, never by scoring.** A goal whose
+   `verification` is `attested` has no metric and never will. Do not
+   estimate one, do not find a proxy, and never render it as a percentage.
+   The only way it moves is that you ask and they answer - which is the
+   point, because this is usually the goal the measured ones are FOR.
+8. **Plan backwards from a hard date.** `vitai events` lists what is coming
+   and how far away it is. An `a`-priority fixture is what the block is
+   built around; a `c` is trained through. A fixture nobody can move
+   constrains the plan more than any target does.
+9. **Adjust the plan**, minimally. Update `plan.md` section 0 (open actions),
    strike through what changed, append to its changelog. One or two changes a
    week maximum - a plan that churns weekly is a plan that gets abandoned.
 

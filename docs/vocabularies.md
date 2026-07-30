@@ -106,6 +106,8 @@ error - stops being offered, and resolves forward.
 | **ICF** (WHO) | **Reference the framework, vendor nothing** | ICF is the reference classification for activity limitation and informs the shape of the restriction axes. But WHO licenses ICF **on the same terms as ICD** - free to reference, distribution needs formal permission. This is the SNOMED CT situation from #9 again: map outward, never ship. |
 | **SNOMED CT** | **Avoid as content** | Established in #9: non-Affiliates may not distribute its content or derivatives, and this is a public MIT repo anyone may fork. |
 | **HL7 FHIR / openEHR post-coordination** | **Adopt the pattern** | Already adopted for laterality in #9; the restriction axes are the same idea applied to movement. |
+| **RFC 5545 (iCalendar) VEVENT** | **Adopt the shape and the STATUS values** | The open standard for a dated occurrence: uid, start, summary, location, categories, status. Adopting its shape rather than inventing one means an event can round-trip to a real calendar later, which is where most of these actually live. `tentative \| confirmed \| cancelled` is taken verbatim. |
+| **Friel A/B/C race prioritisation** | **Adopt as a separate axis** | The standard periodisation convention: an A event gets a full taper and the season is built around it, a B event a minimal one, a C event is trained through. Generalises past racing - a wedding is an A fixture, a routine check-up a C - and it is what stops every declared event from demanding a taper. |
 
 ## The audit, for any new vocabulary
 
@@ -122,15 +124,24 @@ Before a vocabulary ships, from `skills/vitai-validate/SKILL.md`:
 
 ## Status
 
-Migrated to registries: **session types** (`session_types.toml`) and
-**restrictions** (`restrictions.toml`, five axes).
+Migrated to registries: **session types** (`session_types.toml`),
+**restrictions** (`restrictions.toml`, five axes) and **events**
+(`events.toml`, two axes: `kind` and `priority`).
 
 Still Python sets, with their defects documented above and unfixed:
 `CONTEXT_MODES`, `SETTINGS`, `WEATHERS`, `MEASUREMENT_KINDS`,
 `SESSION_CONTEXTS`, `PROVIDER_TYPES`, `FEELS`. None of them is safety-bearing,
 which is why they queued behind the ones that are. They are the next slice.
 
-Two judgement calls recorded rather than hidden:
+Three judgement calls recorded rather than hidden:
+
+- **`deadline_kind` and `verification` stay Python sets.** Both are complete
+  answers to one closed question - "may the athlete move this date" and "who
+  can ever settle this goal" - rather than samples of the author's cases. A
+  registry exists so a vocabulary can grow past what the developer imagined;
+  there is no third kind of deadline to discover. `EVENT_STATUSES` stays in
+  code for a different reason: it is closed by RFC 5545, not by us. The event
+  axes that ARE open - `kind`, `priority` - went to the registry.
 
 - **`severity` keeps `red_flag`.** The issue is right that it mixes a
   magnitude scale with a routing decision. It is also the value the entire

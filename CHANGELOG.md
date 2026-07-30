@@ -5,6 +5,58 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Events: the dated fixtures a plan is built backwards from** (#24, G86).
+  A new `events` dataset - a race, a scan, a wedding, a competition weigh-in.
+  An event is not a milestone: a milestone is a fraction of a target the
+  engine DERIVES from progress already made, while an event happens whether
+  the athlete is ready or not and is owned by somebody else. Two concepts had
+  one word and only the derived one existed. Goals anchor to an event, and an
+  immovable fixture makes the goal's deadline hard by derivation rather than
+  by re-declaring it. `vitai events` + `Vitai.events()`, and a "Coming up"
+  countdown in the weekly rollup.
+
+  The vocabulary is a registry (`semantics/events.toml`), post-coordinated on
+  two axes: `kind` (what sort of fixture) from RFC 5545 VEVENT, and
+  `priority` (how much the plan bends for it) from Friel's A/B/C.
+- **Attested-only goals** (#24, G86/G83). `verification` says who can ever
+  settle a goal: the engine (`measured`), another app (`external`, the G19
+  case) or *nobody* (`attested`). "I want to enjoy running again" has no
+  metric and never will, and the schema REQUIRED one - so the thing athletes
+  say they would be saddest to lose in five years had nowhere to live at all.
+  The engine now holds a goal it can never verdict: it tracks it, surfaces
+  it, asks about it, and takes the athlete's word as the only evidence there
+  will ever be. An attested goal is never scored and never rendered at 0%.
+
+### Fixed
+- **A moved SOFT deadline is no longer flagged as goalpost-moving** (#24,
+  G86/G20). `deadline_kind` (`hard` | `soft`) on goals. A race date cannot be
+  moved, so pushing it is a retreat from something real; a date the athlete
+  invented is a direction of travel they may revise at no cost to anyone, and
+  flagging that accuses them of gaming a commitment nobody else ever held
+  them to. A live record was carrying exactly that false positive.
+
+  Where hardness is UNKNOWN - a goal written before the field existed - the
+  engine records that the deadline moved and says it does not know whether
+  that matters, rather than guessing in either direction. The push is never
+  hidden; only the accusation is withheld. A loosened TARGET is still flagged
+  regardless, so hardness cannot be used to launder a genuine retreat.
+- **A goal correction is no longer counted as churn** (#26, G31). `goals`
+  gains `change_kind` (`change` | `correction`), which `thresholds` has had
+  since G31 and which matters more on goals because goals are what
+  `plan_churn` analyses. A correction asserts the retired line was never a
+  real intention; counting it manufactures a plan-stability problem that does
+  not exist. A correction must carry a `reason` - unexplained, it cannot be
+  told from a quiet retreat wearing the right label.
+- **A goal scoped to `weight` or `measurements` reports unknown progress, not
+  0%.** `GOAL_DATASETS` widened in #18, but the contribution engine only
+  iterates `daily` and `sessions`, so a weight goal silently rendered as
+  `0/78 (0%)`. Telling an athlete who has lost 3 kg that they are at 0% of
+  their weight goal is the G69 harm in a new place. Reaching a target from a
+  starting point is an APPROACH, not an accumulation, and modelling it needs
+  the goal KINDS of G62; until then the engine says it does not know, which
+  is both true and safe.
+
 ### Changed
 - **Vocabularies are curated registries, not Python sets** (#18, G85).
   `semantics/session_types.toml` and `semantics/restrictions.toml` join

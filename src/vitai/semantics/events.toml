@@ -1,0 +1,95 @@
+# Events - the dated real-world fixtures a plan is built backwards from.
+#
+# An EVENT is not a milestone. The engine DERIVES milestones as fractions of a
+# target (25/50/75/100%); an event is a fixture in the world - a race, a
+# wedding, a scan, a competition weigh-in - which is immovable, externally
+# owned, and the thing periodisation is planned backwards FROM. Two concepts
+# had one word, and only the derived one existed (G86).
+#
+# TWO AXES, POST-COORDINATED. `kind` says what sort of fixture it is;
+# `priority` says how much the plan bends for it. They are independent: a
+# B-priority race and an A-priority medical procedure are both coherent, and
+# pre-coordinating them ("a-race", "minor-appointment") would multiply the
+# vocabulary and hide the second axis - the body-sites lesson again.
+#
+# PRIOR ART
+#
+# `kind` and the event SHAPE come from RFC 5545 (iCalendar) VEVENT, which is
+# the open standard for exactly this object: a dated occurrence with a uid, a
+# start, a summary, a location, categories and a status. Adopting its shape
+# rather than inventing one means an event can round-trip to and from a real
+# calendar later, which is where most of these actually live. The status
+# vocabulary (tentative | confirmed | cancelled) is taken from VEVENT STATUS
+# verbatim and lives in schema.py as a closed set, because it is closed by the
+# RFC rather than by our sample. Only the axes that are OPEN - the ones an
+# athlete could have a case we never imagined - live here.
+#
+# `priority` is Friel's A/B/C race prioritisation (The Triathlete's Training
+# Bible), the standard periodisation convention: an A event gets a full taper
+# and the season is built around it, a B event gets a minimal taper, a C event
+# is trained through as a workout. It generalises past racing without strain -
+# a wedding is an A fixture, a routine check-up is a C - and it is the axis
+# that stops every declared event from demanding a taper.
+#
+# `bends_plan` records what the priority actually licenses the planner to do.
+# It is here rather than in code for the session_types reason: adding an event
+# class should not mean editing the layer that decides what a taper is.
+#
+# EXTENDING IT: an athlete whose fixture is missing should get a kind added
+# here. A vocabulary in code can only ever contain what the developer had
+# seen, and the author of this file does not race, get married often, or have
+# a competition weigh-in.
+
+version = 1
+
+# --- what sort of fixture ------------------------------------------------------
+
+[kinds.competition]
+label = "Competition"
+aliases = ["race", "match", "meet", "fixture", "event", "tournament", "game"]
+note = "externally scheduled, and the archetype of a hard date"
+
+[kinds.assessment]
+label = "Assessment"
+aliases = ["test", "time trial", "tt", "weigh in", "weigh-in", "benchmark",
+           "fitness test", "retest"]
+note = "a dated measurement the athlete is preparing FOR, not one they log"
+
+[kinds.clinical]
+label = "Clinical appointment or procedure"
+aliases = ["appointment", "scan", "surgery", "operation", "procedure",
+           "consult", "consultation", "physio", "review"]
+note = "coarse on purpose - which KIND of fixture, never the diagnosis"
+
+[kinds.life]
+label = "Life event"
+aliases = ["wedding", "birthday", "funeral", "exam", "graduation", "move",
+           "moving", "birth"]
+note = "the G83 finding: what athletes train for is usually one of these"
+
+[kinds.travel]
+label = "Travel"
+aliases = ["holiday", "trip", "vacation", "deployment", "conference", "flight"]
+note = "a window, not a point - the end date rides on a second event line"
+
+[kinds.commitment]
+label = "Commitment to another person"
+aliases = ["promise", "meetup", "club", "group run", "parkrun", "session with"]
+note = "someone else is counting on it, which is why it holds when a solo plan would not"
+
+# --- how much the plan bends for it --------------------------------------------
+
+[priority.a]
+label = "A - the plan is built around it"
+aliases = ["primary", "goal event", "key", "target"]
+bends_plan = "taper"
+
+[priority.b]
+label = "B - important, minimal taper"
+aliases = ["secondary", "supporting"]
+bends_plan = "reduce"
+
+[priority.c]
+label = "C - trained through"
+aliases = ["tertiary", "training event", "workout", "low"]
+bends_plan = "none"
