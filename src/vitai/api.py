@@ -95,6 +95,27 @@ class Vitai:
         """What stopped being true, and what fell with it (JTMS cascade)."""
         return retractions(self.datasets())
 
+    def journal(self, kind: str | None = None, status: str | None = None,
+                about: str | None = None) -> list[dict]:
+        """What the athlete SAID, filtered. Their words are observations of a
+        statement, not engine inferences - which is why they live in their own
+        dataset rather than in `inferences` (P3: no laundering in either
+        direction). Sorted by date, then by text, so the order is stable."""
+        rows = self.dataset("journal")
+        if kind is not None:
+            rows = [r for r in rows if r.get("kind") == kind]
+        if status is not None:
+            rows = [r for r in rows if r.get("status") == status]
+        if about is not None:
+            rows = [r for r in rows if r.get("about") == about]
+        return sorted(rows, key=lambda r: (str(r.get("date")), str(r.get("text"))))
+
+    def open_worries(self) -> list[dict]:
+        """Worries nobody has closed. The coach reads these before opening with
+        anything cheerful - an unaddressed concern outranks a rate line."""
+        return [r for r in self.journal(kind="worry")
+                if r.get("status") in (None, "open")]
+
     def context(self, on: date | str | None = None) -> dict | None:
         """The situational mode in force on a date (G34)."""
         return context_on(self.dataset("context"),

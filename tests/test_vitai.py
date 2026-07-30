@@ -418,3 +418,67 @@ def test_infer_cli_requires_optin(tmp_path):
     main(["init", str(root)])
     with pytest.raises(SystemExit, match="opt-in"):
         main(["infer", "--root", str(root)])
+
+
+# ---- journal: what the athlete SAID (G43 capture) ---------------------------
+
+def _journal(**kw):
+    rec = {k: None for k in ["date", "kind", "text", "about", "source",
+                             "confidence", "status", "note"]}
+    rec.update(kw)
+    return rec
+
+
+def test_journal_entry_validates():
+    rec = _journal(date="2030-05-01", kind="worry", text="hip not assessed",
+                   about="hip-gate", source="stated-in-chat", confidence=1.0,
+                   status="open")
+    assert validate_record("journal", rec) == []
+
+
+def test_journal_text_may_not_be_empty():
+    """An entry with no words is not an entry - the text IS the datum."""
+    rec = _journal(date="2030-05-01", kind="note", text="   ")
+    assert any("text" in p for p in validate_record("journal", rec))
+
+
+def test_journal_kind_is_a_closed_vocabulary():
+    rec = _journal(date="2030-05-01", kind="rant", text="something")
+    assert any("kind" in p for p in validate_record("journal", rec))
+
+
+def test_journal_confidence_is_firmness_not_truth():
+    """0-1, and out of range is an error - it records how firmly a thing was
+    said, never how likely it is to be true."""
+    rec = _journal(date="2030-05-01", kind="idea", text="maybe a half marathon",
+                   confidence=1.4)
+    assert any("confidence" in p for p in validate_record("journal", rec))
+
+
+def test_a_goal_may_be_proposed_but_not_committed():
+    """A grain of a goal. Without this status a musing has nowhere to live but
+    prose, and the coach cannot tell an aspiration from a decision."""
+    from vitai.schema import GOAL_STATUSES
+    assert "proposed" in GOAL_STATUSES
+
+
+def test_journal_reads_back_through_the_api(tmp_path):
+    """P9: the capability exists on the API, not only in the CLI."""
+    from vitai.api import Vitai
+    (tmp_path / "data").mkdir()
+    (tmp_path / "vitai.toml").write_text('[athlete]\nname = "t"\n', encoding="utf-8")
+    rows = [
+        _journal(date="2030-05-01", kind="worry", text="knee twinge",
+                 about="knee", status="open"),
+        _journal(date="2030-05-02", kind="idea", text="try a 10k", status="open"),
+        _journal(date="2030-05-03", kind="worry", text="old worry",
+                 status="resolved"),
+    ]
+    (tmp_path / "data" / "journal.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    v = Vitai(tmp_path)
+    assert len(v.journal()) == 3
+    assert len(v.journal(kind="worry")) == 2
+    assert len(v.journal(about="knee")) == 1
+    # a resolved worry is not an open one
+    assert [r["text"] for r in v.open_worries()] == ["knee twinge"]
