@@ -93,6 +93,27 @@ Check every rendered string for the plain reading, not the intended one.
 **A safety behaviour proven by a paragraph will regress. Prove it with a
 fixture.**
 
+## The vocabulary check (G85)
+
+Every closed vocabulary is a place the author's own life leaked into the model.
+Before any sweep concludes, audit them:
+
+- **Does it mix axes?** A list holding a setting, a body region, a loading
+  modality and a named activity is four vocabularies wearing one name.
+- **Would a stranger find their case in it?** If a cyclist, a swimmer, a
+  climber or a shift worker falls into `other`, the vocabulary is a sample of
+  the author, not a taxonomy.
+- **Are there personal labels in it?** `gym_a` shipped in a public engine.
+- **Are units baked into value names?** `waist_cm` excludes an imperial user.
+- **Is it pre-coordinated where it could post-coordinate?** Laterality taught
+  this once: name the structure, qualify it separately.
+- **Can the ATHLETE extend it?** If only a developer can, it can only ever
+  contain what the developer had seen - which is the root cause, not a symptom.
+
+Prior art exists for nearly all of these (Compendium of Physical Activities,
+ICF, FHIR value sets). Sweep it before writing, as `body_sites` did - that is
+the one vocabulary without this defect, and it is not a coincidence.
+
 ## The guardrail invariants (assert these every sweep)
 
 - **Defaults protect.** An athlete who configured nothing is still covered.

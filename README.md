@@ -161,6 +161,16 @@ record says the episode resolved.
 Anything urgent surfaces the moment the record is rebuilt rather than waiting
 for the weekly rollup, and `vitai safety` exits non-zero while it stands.
 
+Some rules fire with **no configuration at all** - absolute resting-heart-rate
+bounds, an intake floor, a protein floor - because a safety net you have to
+switch on protects only the people who already knew they needed it. The
+symptom net reads free-text notes too, since frightened people write "it's
+nothing, not really worth going on about" rather than filling in a field.
+
+The most serious finding raises a **clinical hold**: not a louder warning but
+a suspension, routed through the same gate mechanism, so no plan or session is
+issued until a clinician has looked.
+
 None of it is diagnosis. Every escalation routes to a human, and the
 thresholds are deliberately conservative screening bounds - the resting-heart-
 rate floor sits below a trained athlete's genuinely low rate, because a safety

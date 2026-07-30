@@ -106,12 +106,26 @@ KEYS: dict[str, list[str]] = {
     # purpose: which KIND of clinician, never which clinician.
     "medical": ["date", "slug", "kind", "title", "body_site", "severity",
                 "status", "resolved_date", "restricts", "provider_type",
-                "source", "note"],
+                "source", "note", "expects"],
     # Dated situational mode (G34): what was going on around the athlete. The
     # engine uses it to explain missingness rather than flag it - an absent
     # weigh-in in a week with no scale is not a lapse - and the coach uses it
     # to constrain what it asks for. Effective-dated like all policy (P2).
     "context": ["date", "mode", "facilities", "place", "source", "note"],
+    # What the ATHLETE said, in their own words. Deliberately NOT `inferences`,
+    # which is MODEL-inferred and carries a `model` field: filing a first-hand
+    # statement there would launder the athlete's own claim as engine output,
+    # which is P3 inverted. A journal entry is an OBSERVATION of a statement -
+    # that it was said, on a date, is ground truth even when what was said is a
+    # worry, a guess or an aspiration.
+    #
+    # `about` links loosely to a goal slug, a metric name or a body site, so a
+    # worry can be found again from the thing it concerns. `confidence` is how
+    # FIRMLY it was expressed - a passing "maybe I should" is not a decision -
+    # never how likely it is to be true. `status` lets a worry be resolved, or a
+    # grain of a goal be superseded once it becomes a real goal.
+    "journal": ["date", "kind", "text", "about", "source", "confidence",
+                "status", "note"],
 }
 
 SESSION_TYPES = {"run", "gym_a", "gym_b", "walk", "test", "other"}
@@ -136,7 +150,27 @@ IDENTITY_KEY: dict[str, str] = {"goals": "slug", "thresholds": "key",
                                 "medical": "slug"}
 
 # --- the medical layer (increment 3) -----------------------------------------
-MEDICAL_KINDS = {"visit", "injury", "symptom", "lab", "medication", "restriction"}
+# `state` (G57) is a physiological condition rather than an illness -
+# breastfeeding, pregnancy, postpartum. It is not something to resolve or treat,
+# but it changes what the numbers MEAN: a deficit that is unremarkable normally
+# is contraindicated while nursing.
+MEDICAL_KINDS = {"visit", "injury", "symptom", "lab", "medication",
+                 "restriction", "state"}
+
+# What a state or medication tells the engine to EXPECT (G57/G72). This is the
+# difference between a number that is alarming and the same number that is the
+# treatment working: rapid loss on a GLP-1 agonist is the drug doing its job,
+# and firing a rate tripwire at it tells a succeeding athlete she is failing.
+#
+# A modifier may RAISE a floor or suppress a rule that would misfire. It may
+# never silence an absolute floor - the asymmetry that keeps the safety layer
+# honest holds here too.
+EXPECTATIONS = {
+    "elevated_requirement",   # nursing, pregnancy: needs MORE, not less
+    "rapid_loss",             # expected on this medication; do not alarm
+    "appetite_suppression",   # low intake is involuntary, not restriction
+    "lean_mass_risk",         # the risk that replaces the one we suppressed
+}
 MEDICAL_STATUSES = {"active", "monitoring", "resolved"}
 PROVIDER_TYPES = {"gp", "physio", "specialist", "other"}
 
@@ -153,7 +187,20 @@ ACTIVITY_CLASSES = {"run", "walk", "gym", "impact", "upper_body", "lower_body",
                     "all"}
 
 GOAL_POLICIES = {"monotonic", "guarded"}
-GOAL_STATUSES = {"active", "paused", "achieved", "abandoned"}
+# `proposed` is a GRAIN of a goal: mentioned, not committed. Without it a
+# half-formed intention has nowhere to live except prose, and the coach
+# cannot tell an aspiration from a decision - which matters, because
+# treating a musing as a commitment is how an athlete ends up held to
+# something they never actually chose.
+GOAL_STATUSES = {"proposed", "active", "paused", "achieved", "abandoned"}
+
+# Journal entry kinds. `claim` is the athlete asserting a fact about
+# themselves (checkable against the record); `worry` is a concern worth
+# surfacing later; `idea` is an unformed intention; `preference` shapes what
+# the coach may propose; `question` is something they asked that deserves an
+# answer when the data can give one.
+JOURNAL_KINDS = {"claim", "worry", "idea", "preference", "question", "note"}
+JOURNAL_STATUSES = {"open", "resolved", "superseded", "declined"}
 GOAL_PERIODS = {"none", "weekly", "monthly", "quarterly", "yearly"}
 ON_PERIOD_END = {"reset", "carry", "escalate"}
 CHANGE_KINDS = {"change", "correction"}
@@ -178,6 +225,7 @@ KEY_GENERATION: dict[str, dict[str, int]] = {
                  "route": 2, "place": 2, "with": 2, "context": 2,
                  "planned": 2, "weather": 2},
     "inferences": {"depends_on": 2},
+    "medical": {"expects": 2},
 }
 
 # The mirror of KEY_GENERATION: the generation at which a key stopped being
@@ -192,7 +240,7 @@ KEY_RETIREMENT: dict[str, dict[str, int]] = {
 }
 
 CURRENT_GENERATION: dict[str, int] = {name: 1 for name in KEYS}
-for _ds in ("weight", "daily", "sessions", "inferences"):
+for _ds in ("weight", "daily", "sessions", "inferences", "medical"):
     CURRENT_GENERATION[_ds] = 2
 
 
@@ -348,6 +396,15 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
         for k in ("statement", "model"):
             if not isinstance(rec.get(k), str) or not rec.get(k):
                 problems.append(f"'{k}' must be a non-empty string")
+    if dataset == "journal":
+        problems += _enum(rec, "kind", JOURNAL_KINDS)
+        problems += _enum(rec, "status", JOURNAL_STATUSES, optional=True)
+        if not isinstance(rec.get("text"), str) or not rec.get("text").strip():
+            problems.append("'text' must be a non-empty string - a journal "
+                            "entry with no words is not an entry")
+        if (c := rec.get("confidence")) is not None:
+            if isinstance(c, bool) or not isinstance(c, _NUMERIC) or not 0 <= c <= 1:
+                problems.append(f"'confidence' is 0-1 or null, got {c!r}")
     problems += _validate_policy(dataset, rec)
     return problems
 
@@ -404,17 +461,25 @@ def _validate_medical(rec: dict) -> list[str]:
         if cls not in ACTIVITY_CLASSES:
             problems.append(f"unknown activity class {cls!r} in 'restricts' - "
                             f"use one of {sorted(ACTIVITY_CLASSES)}")
+    for token in _tokens(rec.get("expects")):
+        if token not in EXPECTATIONS:
+            problems.append(f"unknown expectation {token!r} in 'expects' - "
+                            f"use one of {sorted(EXPECTATIONS)}")
     return problems
 
 
-def _restriction_classes(rec: dict) -> list[str]:
-    """Activity classes named by a `restricts` field (comma or space separated)."""
-    raw = rec.get("restricts")
+def _tokens(raw: object) -> list[str]:
+    """Comma- or space-separated slugs from a multi-value text field."""
     if not raw:
         return []
     if isinstance(raw, list):
         return [str(x).strip() for x in raw if str(x).strip()]
     return [p.strip() for p in str(raw).replace(",", " ").split() if p.strip()]
+
+
+def _restriction_classes(rec: dict) -> list[str]:
+    """Activity classes named by a `restricts` field (comma or space separated)."""
+    return _tokens(rec.get("restricts"))
 
 
 def _validate_pain_location(rec: dict) -> list[str]:

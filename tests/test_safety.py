@@ -24,9 +24,9 @@ from vitai.cli import main
 from vitai.config import Config
 from vitai.report import build_report
 from vitai.safety import (
-    EMERGENCY, PAIN_ABSOLUTE, RHR_ABSOLUTE_MAX, RHR_ABSOLUTE_MIN, URGENT,
-    active_episodes, banner, escalations, gates_on, is_gated, is_open,
-    episodes_on, urgent_now,
+    EMERGENCY, HOLD, PAIN_ABSOLUTE, RHR_ABSOLUTE_MAX, RHR_ABSOLUTE_MIN, URGENT,
+    active_episodes, banner, energy_availability, escalations, gates_on,
+    is_gated, is_open, episodes_on, urgent_now,
 )
 from vitai.schema import validate_record
 
@@ -277,8 +277,12 @@ def test_a_declared_red_flag_is_honoured_whoever_wrote_it():
     lower one."""
     rows = escalations([medical(severity="red_flag", title="Fainted after a run")],
                        [], [], [])
-    assert len(rows) == 1 and rows[0]["level"] == URGENT
-    assert rows[0]["trigger"] == "red_flag_declared"
+    declared = [r for r in rows if r["trigger"] == "red_flag_declared"]
+    assert len(declared) == 1 and declared[0]["level"] == URGENT
+    # The prose net independently catches the same title (issue #12). Two
+    # routes to one finding is the design, not a duplicate bug: neither path
+    # can suppress the other.
+    assert any(r["trigger"] == "syncope" for r in rows)
 
 
 # ---- absolute thresholds -----------------------------------------------------
@@ -329,25 +333,26 @@ def _red_s_record(deficit=-1400, kg_start=70.0, kg_end=68.6, minutes=60):
 def test_red_s_fires_on_deep_deficit_plus_fast_loss_plus_load():
     days, weight, sessions = _red_s_record()
     rows = escalations([], days, weight, sessions)
-    red_s = [r for r in rows if r["trigger"] == "red_s"]
+    red_s = [r for r in rows if r["trigger"] == "clinical_hold"]
     assert len(red_s) == 1
-    assert red_s[0]["level"] == URGENT
-    assert "RED-S" in red_s[0]["action"]
-    assert "not as a target met" in red_s[0]["action"], (
-        "the syndrome this tool's own coaching can cause is never a win")
+    # Issue #12 raised this from a message to a HOLD: the correct response is
+    # to suspend progression and refer, not to add a line to the rollup.
+    assert red_s[0]["level"] == HOLD
+    assert "TRAINING IS ON HOLD" in red_s[0]["action"]
+    assert "clinician" in red_s[0]["action"] or "doctor" in red_s[0]["action"]
 
 
 def test_red_s_does_not_fire_on_a_deficit_alone():
     """A deep deficit is a choice; it is the combination that is the pattern."""
     days, weight, sessions = _red_s_record(kg_end=69.9, minutes=5)
     rows = escalations([], days, weight, sessions)
-    assert [r for r in rows if r["trigger"] == "red_s"] == []
+    assert [r for r in rows if r["trigger"] == "clinical_hold"] == []
 
 
 def test_red_s_does_not_fire_without_training_load():
     days, weight, _ = _red_s_record()
     rows = escalations([], days, weight, [])
-    assert [r for r in rows if r["trigger"] == "red_s"] == []
+    assert [r for r in rows if r["trigger"] == "clinical_hold"] == []
 
 
 def test_red_s_does_not_screen_on_a_nearly_empty_window():
@@ -360,7 +365,7 @@ def test_red_s_does_not_screen_on_a_nearly_empty_window():
 def test_red_s_is_the_cut_first_item_and_can_be_disabled():
     days, weight, sessions = _red_s_record()
     rows = escalations([], days, weight, sessions, include_red_s=False)
-    assert [r for r in rows if r["trigger"] == "red_s"] == []
+    assert [r for r in rows if r["trigger"] == "clinical_hold"] == []
 
 
 # ---- the fast path -----------------------------------------------------------
@@ -504,3 +509,194 @@ def test_a_record_with_no_medical_data_is_unaffected(tmp_path):
     first = db.read_bytes()
     v.build()
     assert db.read_bytes() == first, "two builds differ"
+
+
+# ==========================================================================
+# Issue #12: the persona sweeps. Everything below exists because a simulated
+# real user walked into a gap the design did not know it had.
+# ==========================================================================
+
+def _stable_red_s(**kw):
+    """The weight-STABLE presentation: the one the first composite missed.
+
+    57 kg and unchanged, energy availability far below threshold, real load,
+    amenorrhoea in a note. Nothing about the scale is abnormal, which is the
+    entire point.
+    """
+    days = [daily(date=f"2030-06-{d:02d}", kcal_in=1600, rhr=50,
+                  note="period still absent, 5th month" if d % 7 == 3 else None)
+            for d in range(1, 29)]
+    weight = [{"date": "2030-06-01", "kg": 57.0, "source": "scale",
+               "note": None, "body_fat_pct": 17.0, "kg_lo": None, "kg_hi": None,
+               "body_fat_lo": None, "body_fat_hi": None, "_gen": 2},
+              {"date": "2030-06-28", "kg": 57.0, "source": "scale",
+               "note": None, "body_fat_pct": 17.0, "kg_lo": None, "kg_hi": None,
+               "body_fat_lo": None, "body_fat_hi": None, "_gen": 2}]
+    sessions = [session(date=f"2030-06-{d:02d}", type="other", duration_s=13800,
+                        kcal=2650) for d in (6, 13, 20, 27)]
+    return days, weight, sessions
+
+
+def test_red_s_fires_while_the_athlete_is_weight_stable():
+    """THE finding of issue #12.
+
+    RED-S commonly presents weight-stable - the body downregulates instead of
+    losing. Requiring rate of loss made stability EXONERATING when it is
+    often the finding itself.
+    """
+    days, weight, sessions = _stable_red_s()
+    rows = escalations([], days, weight, sessions)
+    holds = [r for r in rows if r["trigger"] == "clinical_hold"]
+    assert len(holds) == 1, "a textbook weight-stable presentation was missed"
+    assert holds[0]["level"] == HOLD
+    assert "energy availability" in holds[0]["detail"]
+    assert "menstrual" in holds[0]["detail"], "the corroborating marker is named"
+
+
+def test_low_energy_availability_alone_is_not_enough():
+    """Still a composite: low EA plus load plus at least one marker. A hard
+    training block with no other finding is training, not a syndrome."""
+    days, weight, sessions = _stable_red_s()
+    quiet = [dict(r, note=None) for r in days]      # no amenorrhoea, no drift
+    rows = escalations([], quiet, weight, sessions)
+    assert [r for r in rows if r["trigger"] == "clinical_hold"] == []
+
+
+def test_energy_availability_is_not_guessed_without_body_composition():
+    """No body-fat read means no EA - never an estimated one. A manufactured
+    input to a clinical decision is worse than no decision."""
+    days, weight, sessions = _stable_red_s()
+    no_comp = [dict(w, body_fat_pct=None) for w in weight]
+    ea, terms = energy_availability(days, no_comp, sessions)
+    assert ea is None and terms == {}
+
+
+def test_a_hold_blocks_training_rather_than_only_warning(tmp_path):
+    """G73: a hold is an ACT, not a louder message. It must reach the gate
+    mechanism, which is the thing a coach cannot talk around."""
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    days, weight, sessions = _stable_red_s()
+    write(root / "data" / "daily.jsonl", days)
+    write(root / "data" / "weight.jsonl", weight)
+    write(root / "data" / "sessions.jsonl", sessions)
+    v = Vitai(root)
+    assert v.gated("run", "2030-06-28") is True
+    assert v.gated("gym_a", "2030-06-28") is True, "a hold suspends everything"
+    hold = [g for g in v.gates("2030-06-28") if g["source_kind"] == "hold"]
+    assert hold and "TRAINING IS ON HOLD" in hold[0]["escalation"]
+
+
+# ---- the prose net (G59) -----------------------------------------------------
+
+def test_a_symptom_buried_in_prose_still_escalates():
+    """Frightened people write "it's nothing, not really worth going on
+    about" - not a structured pain_site."""
+    rows = escalations([], [daily(date="2030-06-01",
+                                  note="chest twinge going up the stairs, few "
+                                       "seconds, gone")], [], [])
+    assert len(rows) == 1
+    assert rows[0]["trigger"] == "cardiac" and rows[0]["level"] == EMERGENCY
+
+
+def test_the_prose_net_does_not_cry_wolf_at_a_denial():
+    """Escalating "no chest pain" would teach the athlete to ignore the alarm,
+    which costs more than the case it catches."""
+    for note in ("no chest pain today", "denies chest pain",
+                 "was not chest pain, just a stitch"):
+        assert escalations([], [daily(date="2030-06-01", note=note)],
+                           [], []) == [], note
+
+
+def test_the_prose_net_reads_sessions_and_medical_notes_too():
+    assert escalations([], [], [], [session(date="2030-06-01",
+                                            note="passed out after")]) != []
+    assert escalations([medical(date="2030-06-01", title="Odd episode",
+                                note="blacked out briefly")], [], [], []) != []
+
+
+def test_prose_findings_reach_the_verdict_rows(tmp_path):
+    """A safety finding only in a channel nobody renders is one nobody sees."""
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    write(root / "data" / "daily.jsonl",
+          [daily(date="2030-06-01", note="chest tightness on the stairs")])
+    metrics = {r["metric"] for r in Vitai(root).verdicts()}
+    assert "symptom_chest_pain" in metrics
+
+
+# ---- absolute nutrition floors (G68) -----------------------------------------
+
+def _sustained(kcal_in, protein_g=None, days=14):
+    return [daily(date=f"2030-06-{d:02d}", kcal_in=kcal_in, protein_g=protein_g)
+            for d in range(1, days + 1)]
+
+
+def test_the_intake_floor_fires_with_no_configuration_at_all():
+    """The athlete who exposed this had configured nothing, as new users have
+    not, and the engine reported `tripwires: none`."""
+    rows = escalations([], _sustained(1200), [], [])
+    assert [r for r in rows if r["trigger"] == "intake_floor"]
+
+
+def test_a_normal_intake_does_not_fire_the_floor():
+    assert escalations([], _sustained(2100), [], []) == []
+
+
+def test_a_declared_state_raises_the_floor_but_never_removes_it():
+    """G57: nursing raises energy requirements, so an intake that would be
+    merely low becomes a floor breach - the modifier can only tighten."""
+    nursing = [medical(date="2030-05-01", slug="breastfeeding", kind="state",
+                       title="Exclusively breastfeeding", severity="none",
+                       status="active", expects="elevated_requirement")]
+    rows = escalations(nursing, _sustained(1600), [], [])
+    assert [r for r in rows if r["trigger"] == "intake_floor"], (
+        "1600 kcal while nursing is below the raised floor")
+    assert not [r for r in escalations([], _sustained(1600), [], [])
+                if r["trigger"] == "intake_floor"], (
+        "...and is above the unmodified floor")
+
+
+def test_the_protein_floor_names_lean_mass_risk_during_rapid_loss():
+    weight = [{"date": "2030-06-01", "kg": 126.0, "source": "clinic",
+               "note": None, "body_fat_pct": None, "kg_lo": None, "kg_hi": None,
+               "body_fat_lo": None, "body_fat_hi": None, "_gen": 2},
+              {"date": "2030-06-14", "kg": 122.0, "source": "clinic",
+               "note": None, "body_fat_pct": None, "kg_lo": None, "kg_hi": None,
+               "body_fat_lo": None, "body_fat_hi": None, "_gen": 2}]
+    rows = escalations([], _sustained(1400, protein_g=30), weight, [])
+    protein = [r for r in rows if r["trigger"] == "protein_floor"]
+    assert protein and "lean-mass loss risk" in protein[0]["detail"]
+    assert "resistance" in protein[0]["action"]
+
+
+# ---- medication as a modifier (G72) ------------------------------------------
+
+def test_expected_rapid_loss_suppresses_the_rate_verdict_only():
+    """Firing the wrong rule is worse than silence: it tells a succeeding
+    athlete she is failing. The floors must still fire."""
+    from vitai.verdicts import compute_verdicts
+    weight = [{"date": f"2030-06-{d:02d}", "kg": 126.0 - d * 0.3,
+               "source": "clinic", "note": None, "body_fat_pct": None,
+               "kg_lo": None, "kg_hi": None, "body_fat_lo": None,
+               "body_fat_hi": None, "_gen": 2} for d in range(1, 15)]
+    days = _sustained(900, protein_g=28)
+    med = [medical(date="2030-05-01", slug="glp1", kind="medication",
+                   title="GLP-1 agonist", severity="none", status="active",
+                   expects="rapid_loss appetite_suppression")]
+
+    unmedicated = compute_verdicts(Config(phases=((130.0, 100.0, 0.7),)),
+                                   weight, days, [], medical=[])
+    medicated = compute_verdicts(Config(phases=((130.0, 100.0, 0.7),)),
+                                 weight, days, [], medical=med)
+    assert any(r["metric"] == "weight_rate" for r in unmedicated)
+    assert not any(r["metric"] == "weight_rate" for r in medicated), (
+        "expected medicated loss was judged against a lifestyle target")
+    assert any(r["metric"] == "intake_floor" and r["verdict"] == "behind"
+               for r in medicated), "a modifier must never silence a floor"
+
+
+def test_the_expects_vocabulary_is_closed():
+    assert any("expects" in p for p in validate_record(
+        "medical", medical(expects="makes_you_taller")))
+    assert validate_record("medical", medical(expects="rapid_loss")) == []
