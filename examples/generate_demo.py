@@ -91,6 +91,11 @@ def _build(target: Path) -> None:
             row_w = {"date": d, "kg": round(kg + rng.gauss(0, 0.25), 1),
                      "source": "scale", "note": None}
             if gen2:
+                # Provenance chain (#35/#51): the scale observed it, the
+                # vendor app and API carried it. `source` is only the
+                # terminus - how it reached this record.
+                row_w.update({"origin": "scale", "origin_evidence": None,
+                              "path": "vendor-app>vendor-api"})
                 # Observation time (#37). A settled morning routine until the
                 # travel week, after which the athlete weighs whenever they
                 # remember - which is the artifact the caveat exists for.
@@ -103,7 +108,7 @@ def _build(target: Path) -> None:
                 row_w.update({
                     # A gen-3 line carries every key introduced up to gen 3,
                     # null where unknown - the scale reports mass only.
-                    "_gen": 3,
+                    "_gen": 4,
                     "body_fat_pct": None, "kg_lo": None, "kg_hi": None,
                     "body_fat_lo": None, "body_fat_hi": None,
                     "measured_at": f"{hh:02d}:{rng.randrange(0, 40):02d}",
@@ -238,6 +243,41 @@ def _build(target: Path) -> None:
         if row["date"] == context_day:
             row.update({"mood": 9, "feel": "fun", "coverage": "full"})
 
+    # THE PAIR THAT MATTERS (#51). Two weigh-ins on one day that look like
+    # two sources agreeing, and are not: the export received its number FROM
+    # the API, so the 20 g between them measures rounding in transit and says
+    # nothing about whether the weight is right. The hand-written entry three
+    # days later IS independent - and it is the one that disagrees by 400 g.
+    # The useless comparison is the clean one; the informative comparison is
+    # the noisy one, which is exactly backwards from how it reads.
+    weighed_days = {row["date"]: row for row in weight}
+    relay_day = next(d for d in sorted(weighed_days)
+                     if d >= (END - timedelta(days=21)).isoformat())
+    independent_day = next(d for d in sorted(weighed_days)
+                           if d >= (END - timedelta(days=18)).isoformat()
+                           and d != relay_day)
+    for day in (relay_day, independent_day):
+        weighed_days[day]["source"] = "vendor-api"
+    weight.append({
+        "date": relay_day,
+        # 20 g apart: the export received this number FROM the API.
+        "kg": round(weighed_days[relay_day]["kg"] + 0.02, 2),
+        "source": "vendor-export", "note": None,
+        "_gen": 4, "body_fat_pct": None, "kg_lo": None, "kg_hi": None,
+        "body_fat_lo": None, "body_fat_hi": None, "measured_at": "07:12",
+        "recorded_at": f"{relay_day}T21:30:00+02:00", "origin": "scale",
+        "path": "vendor-app>vendor-api>other-vendor-api>other-vendor-export",
+        "origin_evidence": "export header names the scale"})
+    weight.append({
+        "date": independent_day,
+        # 400 g apart: a genuinely separate reading, and the informative one.
+        "kg": round(weighed_days[independent_day]["kg"] + 0.4, 2),
+        "source": "hand", "note": None,
+        "_gen": 4, "body_fat_pct": None, "kg_lo": None, "kg_hi": None,
+        "body_fat_lo": None, "body_fat_hi": None, "measured_at": "07:40",
+        "recorded_at": f"{independent_day}T21:31:00+02:00", "origin": "athlete",
+        "path": None, "origin_evidence": "written on a kitchen notepad"})
+
     # A two-source day: the calorie app disagrees with the watch about burn,
     # and owns intake the watch never sees. Field-wise precedence takes the
     # best witness per quantity - it does not add 2,443 to 2,844.
@@ -258,6 +298,12 @@ def _build(target: Path) -> None:
     context, measurements = _situational(start, END)
     medical = _medical(start, END)
     checks = _checks(END)
+
+    # The provenance pair above appends out of order, and `recorded_at` is
+    # derived from the date, so file order must follow date order or the
+    # monotonicity check fires on the demo's own output.
+    weight.sort(key=lambda r: (r["date"], r.get("recorded_at") or "",
+                               r.get("source") or ""))
 
     for name, rows in (("weight", weight), ("daily", daily),
                        ("sessions", sessions), ("inferences", inferences),

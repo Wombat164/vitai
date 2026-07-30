@@ -1,0 +1,84 @@
+# Provenance - the chain a value travelled, and what each hop may have done.
+#
+# WHAT WAS WRONG: `source` was one string being asked to carry a whole chain.
+#
+#   reality -> device -> vendor app -> vendor server -> vendor API
+#           -> second vendor API -> second vendor store -> its export
+#
+# So the resolution layer emitted `fitbit-api+mfp-export` and it read as two
+# sources agreeing. It is not. MyFitnessPal received those weights FROM
+# Fitbit: one number observed at two points on one pipe. The 70 g spread
+# between them measures rounding in transit, not whether the weight is right.
+#
+# The tell, from the live record: the only pair with a claim to independence
+# was `fitbit-api vs a hand-kept spreadsheet`, and that is the pair with the
+# 1.67 kg outlier. THE INDEPENDENT COMPARISON IS THE NOISY ONE AND THE
+# USELESS COMPARISON IS THE CLEAN ONE - exactly backwards from how it read.
+#
+# THE RULE THIS ENCODES: two values may corroborate only if their chains
+# DIVERGE AT THE ORIGIN. Same origin, different path is one measurement seen
+# twice; confidence must not rise. Independent instruments corroborate, a
+# sync pipeline does not - it is the same instrument at the other end of a
+# wire.
+#
+# ROLES, NOT VENDORS. Listing vendors here would be the G85 mistake again: a
+# vocabulary written from the platforms the author happens to use. A hop is
+# named freely in the data and classified by role here, with aliases. An
+# UNRECOGNISED hop is not an error - it resolves to `unknown`, which is
+# treated as possibly-mutating, because assuming a stranger is lossless is
+# the assumption that costs something.
+#
+# `may_mutate` is what decides a value's trust ceiling. A hop that recomputes,
+# rounds, back-fills or re-derives breaks the claim that a value is
+# device-measured, however good the device was. Trust is bounded by the
+# WEAKEST hop, not by the origin.
+
+version = 1
+
+[roles.device]
+label = "The instrument that observed reality"
+aliases = ["watch", "scale", "sensor", "band", "monitor", "tracker-device"]
+may_mutate = false
+note = "the only role that can be an origin without qualification"
+
+[roles.manual]
+label = "A person entering a value"
+aliases = ["athlete", "hand", "self-reported", "typed", "spreadsheet"]
+may_mutate = false
+note = "an origin, not a hop - fallible, but not a pipeline"
+
+[roles.app]
+label = "The vendor's own app on a phone or watch"
+aliases = ["mobile", "phone-app", "companion"]
+may_mutate = true
+note = "commonly fuses, smooths or fills gaps before upload"
+
+[roles.server]
+label = "A vendor's backend store"
+aliases = ["cloud", "backend", "platform"]
+may_mutate = true
+note = "re-derives on its current model; observed rewriting history 29 days later"
+
+[roles.api]
+label = "A read interface onto a vendor's store"
+aliases = ["rest", "endpoint", "connector", "sync"]
+may_mutate = true
+note = "rounds and reshapes; what it returns is the server's current view"
+
+[roles.export]
+label = "A bulk dump the athlete requested"
+aliases = ["archive", "download", "takeout", "dump", "csv"]
+may_mutate = true
+note = "a re-derivation under the vendor's model TODAY, not a record of what was observed"
+
+[roles.aggregator]
+label = "A platform that collects other platforms' data"
+aliases = ["hub", "sink", "health-store"]
+may_mutate = true
+note = "the relay case: mostly receives rather than records, and often loses the originating device"
+
+[roles.unknown]
+label = "An unrecognised hop"
+aliases = []
+may_mutate = true
+note = "assumed to mutate - assuming a stranger is lossless is the costly assumption"

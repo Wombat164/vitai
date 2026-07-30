@@ -100,6 +100,11 @@ class Vitai:
             raise KeyError(f"unknown dataset {name!r}; one of {sorted(KEYS)}")
         return resolved[name]
 
+    def provenance(self) -> list[dict]:
+        """Per resolved row: how many INDEPENDENT instruments observed it,
+        and what its journey could have done to it (#35/#51)."""
+        return self.resolution()["provenance"]
+
     def explanations(self) -> list[dict]:
         """Which source won a contested field, and why (G29).
 
@@ -371,6 +376,7 @@ class Vitai:
                                            d["daily"], d["sessions"], on,
                                            events=d["events"]),
             "claims": resolved["claims"],
+            "provenance": resolved["provenance"],
             "resolution": resolved["explanations"],
             "justifications": resolved["justifications"],
             "conservation": resolved["tripwires"],
