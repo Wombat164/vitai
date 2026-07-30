@@ -5,6 +5,36 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Resolution no longer false-merges repeated similar activities** (#14).
+  Shape-matching - same type, similar duration, similar distance - was being
+  used as a proxy for identity when `start_time` was absent. For repeated
+  activities it is a proxy for ROUTINE instead: a dog walked three times a
+  day, a commute each way, sets of the same length. Anyone with a habit
+  generates near-identical shapes by design, and the resolver was merging
+  them. A real record reported **1.39 km** of walking on a day when **6.26 km
+  across four walks** had happened, and nothing surfaced it.
+
+  This is the mirror of double-counting and worse: double-counting inflates a
+  number visibly, a false merge silently deletes data and leaves a plausible
+  canonical row behind. Three changes:
+  - A shape match now also requires **disjoint sources**. A genuine
+    cross-platform duplicate has a signature shape does not carry - two
+    different systems claiming one physical event. Two claims from the same
+    source with the same shape are far more likely to be two real events, and
+    an identical re-emission from one connector is a connector bug that
+    exact-duplicate detection (G26) already covers.
+  - More than two shape-alike, timestamp-less claims of one type on a date is
+    a **routine, not a duplicate set** - none are merged.
+  - Every shape-only merge, every near miss, and every routine left unmerged
+    now emits a **visible tripwire** saying what was decided and that
+    recording `start_time` resolves it positively. Previously a merge was
+    invisible outside the `claims` table.
+
+  `_same_activity` returns three outcomes rather than two -
+  `match | possible | distinct` - so an uncertain pair is a refusal to decide
+  rather than a weak merge.
+
 Increment 3 - medical layer + SAFETY ESCALATION (G11 + G28). Read-model
 contract bumped to **4**.
 

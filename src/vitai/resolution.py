@@ -57,6 +57,15 @@ QUANTITY_CLASS = {
 # Fuzzy activity-identity tolerances, lacking timestamps to intersect.
 DURATION_RATIO = (0.8, 1.25)
 DISTANCE_RATIO = (0.9, 1.1)
+
+# The three linkage outcomes. POSSIBLE is the whole point: it is not a weaker
+# MATCH, it is a refusal to decide, and it leaves both claims standing.
+MATCH, POSSIBLE, DISTINCT = "match", "possible", "distinct"
+
+# More than this many shape-alike claims of one type on one date is a routine,
+# not a duplicate set. Three similar walks are three walks; nobody's tracker
+# emits the same activity three times.
+ROUTINE_THRESHOLD = 2
 # Just outside those bands is where a near-miss duplicate hides - close enough
 # to suspect, not close enough to merge. Flagged, never merged.
 NEAR_MISS_SLACK = 0.15
@@ -212,71 +221,146 @@ def _ratio(a: object, b: object) -> float | None:
     return float(a) / float(b)
 
 
-def _same_activity(a: dict, b: dict) -> tuple[bool, bool]:
-    """(same, near_miss) for two session claims on one date.
+def _same_activity(a: dict, b: dict) -> str:
+    """MATCH | POSSIBLE | DISTINCT for two session claims on one date.
 
-    Timestamps win when both sides have them: two platforms recording one run
-    describe overlapping intervals, and nothing else does. Without times the
-    test falls back to shape - same type, similar duration, similar distance -
-    which is weaker, so anything landing just outside the bands is reported as
-    a near miss rather than quietly treated as distinct.
+    Three outcomes rather than two, following the Fellegi-Sunter shape of
+    record linkage: link, POSSIBLE link, non-link, with the uncertain middle
+    held back rather than resolved. A possible match never merges - it is
+    reported and both claims survive.
+
+    Timestamps are the strong test: two platforms recording one run describe
+    overlapping intervals, and nothing else does.
+
+    Shape - same type, similar duration, similar distance - is the weak test,
+    and the correction this function exists for (issue #14) is that shape is
+    NOT evidence of identity. It was being used as a proxy for "same activity"
+    when for repeated activities it is a proxy for ROUTINE: a dog walked three
+    times a day, a commute each way, sets of the same length. Anyone with a
+    habit generates near-identical shapes BY DESIGN, and merging them silently
+    deleted their data.
+
+    So a shape match now also requires DISJOINT SOURCES. A genuine
+    cross-platform duplicate has a signature the shape does not carry - two
+    different systems each claiming one physical event. Two claims from the
+    same source with the same shape are far more likely to be two real events,
+    and an identical re-emission from one connector is a connector bug that
+    exact-duplicate detection (G26) already covers.
     """
     ia, ib = _interval(a), _interval(b)
     if ia and ib:
-        overlaps = ia[0] < ib[1] and ib[0] < ia[1]
-        if overlaps:
-            return True, False
+        if ia[0] < ib[1] and ib[0] < ia[1]:
+            return MATCH
         gap = min(abs((ia[0] - ib[1]).total_seconds()),
                   abs((ib[0] - ia[1]).total_seconds()))
-        return False, gap <= 600 and a.get("type") == b.get("type")
+        return (POSSIBLE if gap <= 600 and a.get("type") == b.get("type")
+                else DISTINCT)
     if a.get("type") != b.get("type"):
-        return False, False
+        return DISTINCT
 
     dur = _ratio(a.get("duration_s"), b.get("duration_s"))
     dist = _ratio(a.get("distance_km"), b.get("distance_km"))
     if dur is None and dist is None:
-        return False, False
+        return DISTINCT
 
     def within(r: float | None, band: tuple[float, float], slack: float) -> bool:
         return r is None or band[0] - slack <= r <= band[1] + slack
 
-    same = (within(dur, DURATION_RATIO, 0.0) and within(dist, DISTANCE_RATIO, 0.0))
-    near = (not same
+    alike = within(dur, DURATION_RATIO, 0.0) and within(dist, DISTANCE_RATIO, 0.0)
+    near = (not alike
             and within(dur, DURATION_RATIO, NEAR_MISS_SLACK)
             and within(dist, DISTANCE_RATIO, NEAR_MISS_SLACK))
-    return same, near
+    if not alike:
+        return POSSIBLE if near else DISTINCT
+    # Alike in shape. Only a second, independent witness makes that identity.
+    same_source = (a.get("source") or UNKNOWN_SOURCE) == (b.get("source")
+                                                          or UNKNOWN_SOURCE)
+    return POSSIBLE if same_source else MATCH
 
 
 def _richness(rec: dict) -> int:
     return sum(1 for v in rec.values() if v is not None)
 
 
+def _routine_types(claims: list[tuple[str, dict]]) -> set[str]:
+    """Session types whose claims look like a habit rather than a duplicate set.
+
+    If more than ROUTINE_THRESHOLD timestamp-less claims of one type land on
+    one date, shape-matching them is meaningless: their similarity is what
+    having a routine looks like. No shape merge is attempted for those types.
+    """
+    counts: dict[str, int] = {}
+    for _, rec in claims:
+        if _interval(rec) is None:
+            key = str(rec.get("type"))
+            counts[key] = counts.get(key, 0) + 1
+    return {t for t, n in counts.items() if n > ROUTINE_THRESHOLD}
+
+
 def _cluster_sessions(claims: list[tuple[str, dict]]) -> tuple[list[list[tuple[str, dict]]],
                                                                list[dict]]:
-    """Group one date's session claims into physical activities."""
+    """Group one date's session claims into physical activities.
+
+    A merge that removes volume from the record is exactly the class of event
+    the tripwires exist for, so every shape-only merge is REPORTED. Before
+    issue #14 a merge was invisible outside the `claims` table, which is how a
+    day of four walks came to read as one.
+    """
     clusters: list[list[tuple[str, dict]]] = []
-    near_misses: list[dict] = []
+    notes: list[dict] = []
+    routine = _routine_types(claims)
+    flagged_routine: set[str] = set()
+
     for cid, rec in claims:
+        kind = str(rec.get("type"))
+        if kind in routine:
+            clusters.append([(cid, rec)])
+            if kind not in flagged_routine:
+                flagged_routine.add(kind)
+                notes.append({
+                    "date": rec.get("date"),
+                    "kind": "repeated_activity_kept",
+                    "detail": (f"several similar {kind} sessions on one date with "
+                               "no start_time: treated as a routine and kept "
+                               "separate, not merged. Record start_time to "
+                               "resolve them positively"),
+                    "severity": "review",
+                })
+            continue
+
         placed = False
         for cluster in clusters:
-            same, near = _same_activity(cluster[0][1], rec)
-            if same:
+            head = cluster[0][1]
+            verdict = _same_activity(head, rec)
+            if verdict == MATCH:
                 cluster.append((cid, rec))
                 placed = True
+                if _interval(head) is None or _interval(rec) is None:
+                    notes.append({
+                        "date": rec.get("date"),
+                        "kind": "shape_only_merge",
+                        "detail": (
+                            f"{rec.get('source') or UNKNOWN_SOURCE} and "
+                            f"{head.get('source') or UNKNOWN_SOURCE} logged "
+                            f"{kind} sessions of near-identical shape with no "
+                            "start_time; treated as ONE activity. If they were "
+                            "two, add start_time and rebuild"),
+                        "severity": "review",
+                    })
                 break
-            if near:
-                near_misses.append({
+            if verdict == POSSIBLE:
+                notes.append({
                     "date": rec.get("date"),
                     "kind": "near_miss_duplicate",
                     "detail": (f"{rec.get('source') or UNKNOWN_SOURCE} and "
-                               f"{cluster[0][1].get('source') or UNKNOWN_SOURCE} "
-                               f"logged similar {rec.get('type')} sessions that "
-                               "did not match closely enough to merge"),
+                               f"{head.get('source') or UNKNOWN_SOURCE} "
+                               f"logged similar {kind} sessions that did not "
+                               "match closely enough to merge"),
                     "severity": "review",
                 })
         if not placed:
             clusters.append([(cid, rec)])
-    return clusters, near_misses
+    return clusters, notes
 
 
 # --- the entry point ----------------------------------------------------------
