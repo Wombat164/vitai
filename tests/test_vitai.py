@@ -74,13 +74,29 @@ def test_validate_catches_missing_and_unknown_keys():
 
 
 def test_validate_types_and_enums():
-    rec = {"date": "not-a-date", "type": "swim", "distance_km": "far",
+    # `swim` used to be the invalid example here, which was the defect: an
+    # engine whose session vocabulary rejects swimming is a sample of one
+    # athlete, not a taxonomy (G85). It is valid now, so the invalid case has
+    # to be something genuinely outside the registry.
+    rec = {"date": "not-a-date", "type": "interpretive dance",
+           "distance_km": "far",
            "duration_s": None, "avg_hr": None, "max_hr": None, "cadence": None,
            "kcal": None, "location": None, "rpe": None, "note": None}
     problems = validate_record("sessions", rec)
     assert any("bad date" in p for p in problems)
     assert any("'type' must be one of" in p for p in problems)
     assert any("'distance_km'" in p for p in problems)
+
+
+def test_the_session_vocabulary_covers_sports_the_author_does_not_do():
+    """The G85 regression: cycling, swimming, rowing and climbing collapsed to
+    `other` because the author did not do them."""
+    ok = {"date": "2030-05-01", "distance_km": None, "duration_s": None,
+          "avg_hr": None, "max_hr": None, "cadence": None, "kcal": None,
+          "location": None, "rpe": None, "note": None}
+    for kind in ("cycle", "swim", "row", "climb", "sport", "paddle",
+                 "wintersport", "mobility", "strength"):
+        assert validate_record("sessions", {**ok, "type": kind}) == [], kind
 
 
 def test_validate_supersedes_key_is_legal():

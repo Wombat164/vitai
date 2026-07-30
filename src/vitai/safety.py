@@ -300,14 +300,19 @@ def active_episodes(medical: list[dict], on: str | date) -> list[dict]:
 # Which gate classes a session type falls under. A run is also an impact
 # activity, so an impact gate stops it without anyone having to remember to
 # list both.
-SESSION_CLASSES: dict[str, set[str]] = {
-    "run": {"run", "impact"},
-    "test": {"run", "impact"},
-    "walk": {"walk"},
-    "gym_a": {"gym", "upper_body", "lower_body"},
-    "gym_b": {"gym", "upper_body", "lower_body"},
-    "other": set(),
-}
+# Which restriction classes a session type falls under now comes from
+# semantics/session_types.toml, not a dict here (G85). The old hardcoded map
+# gave `gym_a` and `gym_b` identical class sets - both upper AND lower body -
+# so the two labels carried no gating information at all, which is its own
+# evidence that they were programme names rather than a taxonomy.
+def session_classes(activity: str) -> set[str]:
+    from .vocab import resolve_session_type, session_classes as registry_classes
+    classes = registry_classes(activity)
+    if classes:
+        return classes
+    # An unrecognised activity is treated as its own class rather than as
+    # nothing: a gate naming it directly still bites.
+    return {resolve_session_type(activity) or activity}
 
 
 def check_result(checks: list[dict], slug: str, on: str | date) -> str:
@@ -358,13 +363,22 @@ def gates_on(medical: list[dict], on: str | date,
     out: list[dict] = []
     for episode in active_episodes(medical, on):
         classes = _restriction_classes(episode)
-        if not classes:
+        # A gate may be COARSE (`restricts: run impact`), POST-COORDINATED
+        # (`restriction: pattern=hinge region=hip load=loaded`), or both. The
+        # structured form alone must produce a gate, because that is exactly
+        # the case the coarse vocabulary could not express - and those two
+        # episodes were sitting in a real record marked NOT ENFORCEABLE.
+        if not classes and not episode.get("restriction"):
             continue
         gate = {
             "date": when.isoformat(),
             "source_kind": "episode",
             "slug": episode.get("slug"),
             "restricts": " ".join(sorted(classes)),
+            # The coarse projection stays (contract-compatible, and what
+            # `is_gated` matches); the post-coordinated spec rides alongside
+            # so a gate can finally say what the clinician actually said.
+            "restriction": episode.get("restriction"),
             "reason": f"{episode.get('title')} ({episode.get('status')})",
             "severity": episode.get("severity"),
             "status": "blocked",
@@ -401,6 +415,7 @@ def gates_on(medical: list[dict], on: str | date,
                     "severity": "severe" if score >= PAIN_ABSOLUTE else "moderate",
                     "status": "blocked",
                     "precondition": None,
+                    "restriction": None,
                     "escalation": MESSAGES["gate"],
                 })
     out.sort(key=lambda g: (g["source_kind"], str(g["slug"])))
@@ -442,7 +457,7 @@ def is_gated(gates: list[dict], activity: str) -> bool:
     Deliberately takes the computed gates rather than the record, so a caller
     cannot accidentally ask a question that skips the gate computation.
     """
-    classes = SESSION_CLASSES.get(activity, {activity})
+    classes = session_classes(activity)
     for gate in gates:
         # A gate whose precondition passed today is reported but does not
         # block. Every other state does, including check_not_done: silence is
@@ -870,3 +885,25 @@ def banner(rows: list[dict]) -> str:
     lines += ["", "This is not a diagnosis. vitai routes to a clinician and stops.",
               "=" * 68, ""]
     return "\n".join(lines)
+
+
+def is_movement_gated(gates: list[dict], movement: dict[str, str]) -> bool:
+    """Is a specific MOVEMENT blocked, as opposed to a whole activity?
+
+    `is_gated` answers "may I run today". This answers "may I do a hip
+    thrust today", which is the question a clinician's restriction is
+    actually about and which the coarse activity classes could never reach:
+    `lower_body` bans the squat the clinician permitted.
+
+    A gate whose precondition passed today does not block, exactly as for
+    the coarse path.
+    """
+    from .vocab import parse_restriction, restriction_matches
+
+    for gate in gates:
+        if gate.get("status") == "cleared":
+            continue
+        spec = parse_restriction(gate.get("restriction"))
+        if spec and restriction_matches(spec, movement):
+            return True
+    return False

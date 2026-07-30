@@ -1,0 +1,176 @@
+# Restrictions - post-coordinated, one axis per vocabulary.
+#
+# WHAT WAS WRONG: `ACTIVITY_CLASSES` was one flat list mixing four different
+# kinds of thing - a scope quantifier (`all`), a setting (`gym`), a loading
+# modality (`impact`), and anatomical regions (`upper_body`, `lower_body`) -
+# plus specific activities (`run`, `walk`). Because the axes were conflated,
+# two real clinical gates could not be written at all:
+#
+#   "No loaded lumbar flexion"           (crunches, sit-ups, deadlifts)
+#   "No loaded hip work, squats fine"    (hip thrust, leg press, RDL)
+#
+# The second is the sharp one: `lower_body` would have banned the squats the
+# clinician explicitly permitted. Both sat in the record with `restricts: null`
+# and a RESTRICTION NOT ENFORCEABLE marker, because a WRONG gate is worse than
+# an unenforced one - which meant an athlete with an active injury gate got
+# "no active safety escalations".
+#
+# THE FIX, and it is the body-sites lesson applied twice: name the thing, then
+# QUALIFY it separately. Laterality taught this once (a knee is a knee; left is
+# a separate field). A restriction is the same shape:
+#
+#   pattern=hinge region=hip load=loaded
+#
+# Each axis below is independent and optional. An absent axis means "any",
+# so `pattern=flexion` alone restricts flexion everywhere, and adding
+# `region=lower_back` narrows it to the lumbar spine.
+#
+# REGION IS NOT DEFINED HERE. It reuses semantics/body_sites.toml, including
+# its aliases - "lumbar" and "lumbar spine" both resolve to `lower_back`.
+# Inventing a second anatomy would be the same mistake in a new place.
+#
+# PRIOR ART: the movement-pattern axis is the seven fundamental patterns used
+# throughout strength coaching (squat, hinge, lunge, push, pull, carry,
+# rotate), extended with the spinal and gait patterns a rehab restriction
+# actually needs. The ICF (WHO) is the reference framework for activity
+# limitation and informs the shape, but NONE of its codes are vendored: WHO
+# licenses ICF on the same terms as ICD, so like SNOMED CT in the body-site
+# registry it is something to map outward to, never to ship.
+
+version = 1
+
+# --- axis: movement pattern ---------------------------------------------------
+[pattern.squat]
+label = "Squat"
+aliases = ["squatting", "back squat", "front squat", "goblet squat"]
+
+[pattern.hinge]
+label = "Hip hinge"
+aliases = ["deadlift", "rdl", "romanian deadlift", "hip thrust", "good morning"]
+
+[pattern.lunge]
+label = "Lunge"
+aliases = ["split squat", "step up", "step-up"]
+
+[pattern.push]
+label = "Push"
+aliases = ["press", "bench", "bench press", "overhead press", "push up", "dip"]
+
+[pattern.pull]
+label = "Pull"
+aliases = ["row", "chin up", "pull up", "pulldown", "lat pulldown"]
+
+[pattern.carry]
+label = "Loaded carry"
+aliases = ["farmer walk", "farmers carry", "suitcase carry"]
+
+[pattern.rotate]
+label = "Rotation"
+aliases = ["rotation", "twist", "anti-rotation", "woodchop"]
+
+[pattern.flexion]
+label = "Flexion"
+aliases = ["crunch", "crunches", "sit up", "sit-up", "curl up", "spinal flexion"]
+
+[pattern.extension]
+label = "Extension"
+aliases = ["back extension", "hyperextension", "spinal extension"]
+
+[pattern.gait]
+label = "Gait"
+aliases = ["walking", "running", "locomotion"]
+
+[pattern.jump]
+label = "Jump or plyometric"
+aliases = ["plyo", "plyometric", "hop", "bound", "jumping"]
+
+[pattern.isometric]
+label = "Isometric hold"
+aliases = ["plank", "hold", "static hold", "wall sit"]
+
+# --- axis: load ---------------------------------------------------------------
+# Whether external resistance is involved. This is the axis that lets "no
+# LOADED hip work" leave bodyweight movement alone.
+[load.loaded]
+label = "Loaded (external resistance)"
+aliases = ["weighted", "external load", "with weight"]
+
+[load.bodyweight]
+label = "Bodyweight only"
+aliases = ["unloaded", "unweighted", "body weight"]
+
+# --- axis: plane --------------------------------------------------------------
+[plane.sagittal]
+label = "Sagittal"
+aliases = ["forward", "front-to-back"]
+
+[plane.frontal]
+label = "Frontal"
+aliases = ["lateral", "side-to-side"]
+
+[plane.transverse]
+label = "Transverse"
+aliases = ["rotational"]
+
+# --- axis: activity class -----------------------------------------------------
+# The COARSE axis, kept because a gate is often about a whole activity rather
+# than a movement ("no running"). These are the values a session type declares
+# in session_types.toml, so the two vocabularies stay in step.
+#
+# `all` is a scope quantifier rather than a class, and is kept deliberately:
+# "stop everything" is a real clinical instruction and needs to be sayable in
+# one word. It is documented as a quantifier rather than pretending otherwise.
+[activity.all]
+label = "Everything"
+quantifier = true
+
+[activity.run]
+label = "Running"
+
+[activity.walk]
+label = "Walking"
+
+[activity.cycle]
+label = "Cycling"
+
+[activity.swim]
+label = "Swimming"
+
+[activity.row]
+label = "Rowing"
+
+[activity.strength]
+label = "Strength training"
+
+[activity.mobility]
+label = "Mobility work"
+
+[activity.climb]
+label = "Climbing"
+
+[activity.sport]
+label = "Sport or game"
+
+[activity.wintersport]
+label = "Winter sport"
+
+[activity.paddle]
+label = "Paddle sport"
+
+[activity.impact]
+label = "Impact loading"
+
+[activity.cardio]
+label = "Cardiovascular work"
+
+[activity.upper_body]
+label = "Upper body"
+
+[activity.lower_body]
+label = "Lower body"
+
+# --- retired ------------------------------------------------------------------
+[retired.gym]
+maps_to = "strength"
+since_gen = 2
+reason = "a SETTING used as an activity class; the activity is strength training"
