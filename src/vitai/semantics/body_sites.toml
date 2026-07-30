@@ -30,6 +30,10 @@
 # minutes needs about thirty options, not forty thousand.
 
 version = 1
+# NOTE: `chest` is deliberately present as a musculoskeletal site AND treated
+# as a cardiac red flag by safety.py. Both are true: rib and costochondral
+# pain are real, and a coach handed "chest" alongside a hip will substitute
+# around it. The safety layer wins that tie every time.
 
 [regions]
 head_neck = "Head and neck"

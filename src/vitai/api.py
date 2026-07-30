@@ -29,7 +29,8 @@ from .policy import State, context_on, plan_churn, state
 from .report import build_report
 from .resolution import live_inferences, resolve, retractions
 from .safety import (
-    active_episodes, banner, escalations, gates_on, is_gated, urgent_now,
+    active_episodes, banner, escalations, gates_on, hold_gates, is_gated,
+    urgent_now,
 )
 from .schema import KEYS
 from .verdicts import compute_verdicts
@@ -129,10 +130,17 @@ class Vitai:
         return active_episodes(self.dataset("medical"), on or date.today())
 
     def gates(self, on: date | str | None = None) -> list[dict]:
-        """What is blocked on a date, and why. Deterministic, not advisory."""
-        return gates_on(self.dataset("medical"), on or date.today(),
+        """What is blocked on a date, and why. Deterministic, not advisory.
+
+        Includes gates raised by a clinical HOLD: a hold is not a louder
+        warning, it is a suspension of training advice, and routing it through
+        the gate mechanism is what makes that enforceable rather than polite.
+        """
+        when = on or date.today()
+        rows = gates_on(self.dataset("medical"), when,
                         pain_gate=self.config.pain_gate,
                         daily=self.dataset("daily"))
+        return rows + hold_gates(self.safety(when), when)
 
     def gated(self, activity: str, on: date | str | None = None) -> bool:
         """Is this activity class or session type blocked on a date?"""
@@ -156,7 +164,8 @@ class Vitai:
         d = self.canonical()
         return compute_verdicts(self.config, d["weight"], d["daily"],
                                 d["sessions"], today=today,
-                                goals=d["goals"], thresholds=d["thresholds"])
+                                goals=d["goals"], thresholds=d["thresholds"],
+                                medical=d["medical"])
 
     def rollup(self, today: date | None = None) -> str:
         d = self.canonical()
@@ -206,7 +215,8 @@ class Vitai:
             d["goals"], d["thresholds"], d["daily"], d["sessions"])
         verdicts = compute_verdicts(self.config, d["weight"], d["daily"],
                                     d["sessions"], today=today,
-                                    goals=d["goals"], thresholds=d["thresholds"])
+                                    goals=d["goals"], thresholds=d["thresholds"],
+                                    medical=d["medical"])
         on = (today or date.today()).isoformat()
         return {
             "verdicts": verdicts,
@@ -252,9 +262,27 @@ class Vitai:
         return db
 
     def status_line(self) -> str:
+        """One line of state, led by what the athlete actually tracks.
+
+        Weight-first was architectural, not chosen, and it meant an athlete
+        who had explicitly refused a weight goal opened every session being
+        told she had failed to weigh herself (G62/G64). The record should
+        report what is in it, not name the thing that is missing.
+        """
         pts = sorted((w["date"], w["kg"]) for w in self.dataset("weight")
                      if w.get("kg") is not None)
-        if not pts:
-            return "no weight data yet"
-        d, kg = pts[-1]
-        return f"{kg:.1f} kg ({d})"
+        if pts:
+            d, kg = pts[-1]
+            return f"{kg:.1f} kg ({d})"
+
+        steps = [(r["date"], r["steps"]) for r in self.dataset("daily")
+                 if r.get("steps") is not None]
+        if steps:
+            recent = [s for _, s in steps[-7:]]
+            return (f"{sum(recent) / len(recent):,.0f} steps/day over the last "
+                    f"{len(recent)} logged days ({steps[-1][0]})")
+
+        days = [r for r in self.dataset("daily") if r.get("date")]
+        if days:
+            return f"{len(days)} days logged (latest {days[-1]['date']})"
+        return "nothing logged yet - one number is a complete day"

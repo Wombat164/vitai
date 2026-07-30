@@ -106,7 +106,7 @@ KEYS: dict[str, list[str]] = {
     # purpose: which KIND of clinician, never which clinician.
     "medical": ["date", "slug", "kind", "title", "body_site", "severity",
                 "status", "resolved_date", "restricts", "provider_type",
-                "source", "note"],
+                "source", "note", "expects"],
     # Dated situational mode (G34): what was going on around the athlete. The
     # engine uses it to explain missingness rather than flag it - an absent
     # weigh-in in a week with no scale is not a lapse - and the coach uses it
@@ -150,7 +150,27 @@ IDENTITY_KEY: dict[str, str] = {"goals": "slug", "thresholds": "key",
                                 "medical": "slug"}
 
 # --- the medical layer (increment 3) -----------------------------------------
-MEDICAL_KINDS = {"visit", "injury", "symptom", "lab", "medication", "restriction"}
+# `state` (G57) is a physiological condition rather than an illness -
+# breastfeeding, pregnancy, postpartum. It is not something to resolve or treat,
+# but it changes what the numbers MEAN: a deficit that is unremarkable normally
+# is contraindicated while nursing.
+MEDICAL_KINDS = {"visit", "injury", "symptom", "lab", "medication",
+                 "restriction", "state"}
+
+# What a state or medication tells the engine to EXPECT (G57/G72). This is the
+# difference between a number that is alarming and the same number that is the
+# treatment working: rapid loss on a GLP-1 agonist is the drug doing its job,
+# and firing a rate tripwire at it tells a succeeding athlete she is failing.
+#
+# A modifier may RAISE a floor or suppress a rule that would misfire. It may
+# never silence an absolute floor - the asymmetry that keeps the safety layer
+# honest holds here too.
+EXPECTATIONS = {
+    "elevated_requirement",   # nursing, pregnancy: needs MORE, not less
+    "rapid_loss",             # expected on this medication; do not alarm
+    "appetite_suppression",   # low intake is involuntary, not restriction
+    "lean_mass_risk",         # the risk that replaces the one we suppressed
+}
 MEDICAL_STATUSES = {"active", "monitoring", "resolved"}
 PROVIDER_TYPES = {"gp", "physio", "specialist", "other"}
 
@@ -205,6 +225,7 @@ KEY_GENERATION: dict[str, dict[str, int]] = {
                  "route": 2, "place": 2, "with": 2, "context": 2,
                  "planned": 2, "weather": 2},
     "inferences": {"depends_on": 2},
+    "medical": {"expects": 2},
 }
 
 # The mirror of KEY_GENERATION: the generation at which a key stopped being
@@ -219,7 +240,7 @@ KEY_RETIREMENT: dict[str, dict[str, int]] = {
 }
 
 CURRENT_GENERATION: dict[str, int] = {name: 1 for name in KEYS}
-for _ds in ("weight", "daily", "sessions", "inferences"):
+for _ds in ("weight", "daily", "sessions", "inferences", "medical"):
     CURRENT_GENERATION[_ds] = 2
 
 
@@ -440,17 +461,25 @@ def _validate_medical(rec: dict) -> list[str]:
         if cls not in ACTIVITY_CLASSES:
             problems.append(f"unknown activity class {cls!r} in 'restricts' - "
                             f"use one of {sorted(ACTIVITY_CLASSES)}")
+    for token in _tokens(rec.get("expects")):
+        if token not in EXPECTATIONS:
+            problems.append(f"unknown expectation {token!r} in 'expects' - "
+                            f"use one of {sorted(EXPECTATIONS)}")
     return problems
 
 
-def _restriction_classes(rec: dict) -> list[str]:
-    """Activity classes named by a `restricts` field (comma or space separated)."""
-    raw = rec.get("restricts")
+def _tokens(raw: object) -> list[str]:
+    """Comma- or space-separated slugs from a multi-value text field."""
     if not raw:
         return []
     if isinstance(raw, list):
         return [str(x).strip() for x in raw if str(x).strip()]
     return [p.strip() for p in str(raw).replace(",", " ").split() if p.strip()]
+
+
+def _restriction_classes(rec: dict) -> list[str]:
+    """Activity classes named by a `restricts` field (comma or space separated)."""
+    return _tokens(rec.get("restricts"))
 
 
 def _validate_pain_location(rec: dict) -> list[str]:

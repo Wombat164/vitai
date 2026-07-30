@@ -10,14 +10,17 @@ lands, the xfail flips to a pass and pytest fails the build if it is still
 marked expected-failure. Nothing here may be deleted to make a build green - a
 finding is retired only when its behaviour ships.
 
+**All eight sweep-1 and sweep-2 specifications now hold** (issue #12) and their
+markers are gone. They stay here as plain tests, which is the point: the
+finding is retired by shipping the behaviour, and the test that caught it
+becomes the thing that stops it coming back.
+
 Sweep 1 (2026-07-29): docs/validation-personas.md
 """
 
 from __future__ import annotations
 
 import json
-
-import pytest
 
 from vitai.api import Vitai
 
@@ -113,9 +116,6 @@ def deviceless_athlete(tmp_path):
 # G68 - defaults protect. The safety net may not be opt-in.
 # --------------------------------------------------------------------------
 
-@pytest.mark.xfail(strict=True, reason="G68 unbuilt: tripwires require "
-                   "configured thresholds, so an unconfigured athlete is "
-                   "unprotected. Increment 3.")
 def test_dangerous_deficit_fires_without_any_configuration(tmp_path):
     """THE finding of sweep 1. A nursing mother eating ~1200 kcal and losing
     ~1 kg/week produced `tripwires: none` because she had configured nothing.
@@ -134,8 +134,6 @@ def test_dangerous_deficit_fires_without_any_configuration(tmp_path):
         "only no_data rows over a record that is not empty")
 
 
-@pytest.mark.xfail(strict=True, reason="G57/G28 unbuilt: no physiological "
-                   "state, no intake floor. Increment 3.")
 def test_intake_below_physiological_floor_is_flagged(tmp_path):
     v = Vitai(nursing_mother(tmp_path))
     v.build()
@@ -148,9 +146,6 @@ def test_intake_below_physiological_floor_is_flagged(tmp_path):
 # G59 - a red flag in prose must still escalate
 # --------------------------------------------------------------------------
 
-@pytest.mark.xfail(strict=True, reason="G59 unbuilt: symptoms live in "
-                   "free-text notes where no engine rule can see them, and "
-                   "medical.jsonl does not exist. Increment 3.")
 def test_exertional_chest_pain_in_notes_escalates(tmp_path):
     """Five episodes, increasing duration, produced silence. The escalation
     path must start at ingest: the LLM classifies symptom language into a
@@ -166,8 +161,6 @@ def test_exertional_chest_pain_in_notes_escalates(tmp_path):
 # G62/G64 - the athlete's refusals are honoured; deviceless still works
 # --------------------------------------------------------------------------
 
-@pytest.mark.xfail(strict=True, reason="G62/G64 unbuilt: status is "
-                   "architecturally weight-first. Increment 3b.")
 def test_status_does_not_demand_weight_from_an_athlete_without_a_weight_goal(tmp_path):
     """`vitai status` currently opens by telling an athlete who explicitly
     refused a weight goal that she has failed to weigh herself."""
@@ -177,8 +170,6 @@ def test_status_does_not_demand_weight_from_an_athlete_without_a_weight_goal(tmp
         "status led with weight for an athlete who has no weight goal")
 
 
-@pytest.mark.xfail(strict=True, reason="G64 unbuilt: 14 days of real step "
-                   "data render nowhere. Increment 3b.")
 def test_deviceless_athlete_gets_a_useful_rollup(tmp_path):
     """Her steps are genuinely real and genuinely all she has. They must
     appear somewhere."""
@@ -192,8 +183,6 @@ def test_deviceless_athlete_gets_a_useful_rollup(tmp_path):
 # G69 - no bare signed quantity whose plain reading inverts its meaning
 # --------------------------------------------------------------------------
 
-@pytest.mark.xfail(strict=True, reason="G69 unbuilt: rate renders as a bare "
-                   "signed number. Increment 3b.")
 def test_rate_states_its_direction_in_words(tmp_path):
     """The rollup rendered `+1.10 kg/week` for an athlete who LOST 1.5 kg.
     For a scale-anxious under-eater that misreading is actively dangerous."""
@@ -296,8 +285,6 @@ def glp1_athlete(tmp_path):
     return root
 
 
-@pytest.mark.xfail(strict=True, reason="G73 unbuilt: no CLINICAL HOLD tier, and "
-                   "no RED-S composite. Increment 3.")
 def test_red_s_presentation_triggers_a_hold_not_a_note(tmp_path):
     """Energy availability far below threshold + amenorrhoea + RHR drift +
     prior stress fractures is the highest-severity combination in the model.
@@ -310,9 +297,6 @@ def test_red_s_presentation_triggers_a_hold_not_a_note(tmp_path):
         "a textbook RED-S presentation produced no hold and no referral")
 
 
-@pytest.mark.xfail(strict=True, reason="G72 unbuilt: no medication context, so "
-                   "involuntary low intake is indistinguishable from "
-                   "restriction. Increment 3.")
 def test_glp1_low_protein_flags_lean_mass_risk_not_restriction(tmp_path):
     """Rapid loss on a GLP-1 is EXPECTED and must not fire a rate tripwire.
     The real risk - inadequate protein during rapid loss with no resistance
