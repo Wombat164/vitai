@@ -51,10 +51,29 @@ KEYS: dict[str, list[str]] = {
     # deliberately coarse - "home"/"work"/a travel slug, never an address) and
     # `route` (a personal slug the athlete names). Free text could not be
     # grouped, compared, or safely shared.
+    #
+    # `track` / `activity_id` / `activity_source` are TWO different things,
+    # post-coordinated rather than crammed into one field (#43). `track` is a
+    # LOCAL ARTIFACT - a repo-relative path to the stored GPX/FIT/TCX, which
+    # is what `vitai route` reads. `activity_id` is an EXTERNAL IDENTITY - the
+    # id a platform assigned - which is what dedupes a re-run import. They
+    # have different lifetimes: an archive can be re-laid-out without the id
+    # changing, and an id is meaningless once you leave the platform while the
+    # file stays readable.
+    #
+    # `activity_source` names who ASSIGNED the id, which is not necessarily
+    # who recorded the activity - Strava re-exporting a Polar-recorded run
+    # gives an id that is evidence of relaying, not of recording (#35).
+    #
+    # `activity_id` is also the only per-row IDENTITY a session has. Without
+    # it, two runs on one day from one source share a `supersedes` reference,
+    # so correcting either retires both - silent data loss of exactly the kind
+    # #16 exists to prevent.
     "sessions": ["date", "type", "distance_km", "duration_s", "avg_hr", "max_hr",
                  "cadence", "kcal", "location", "rpe", "note",
                  "source", "start_time", "elevation_m", "setting", "route",
-                 "place", "with", "context", "planned", "weather", "recorded_at"],
+                 "place", "with", "context", "planned", "weather", "recorded_at",
+                 "track", "activity_id", "activity_source"],
     # Third data tier: MODEL-INFERRED knowledge. Append-only like everything
     # else, but carries provenance (model, evidence, confidence) because it is
     # neither ground truth (observed) nor rebuildable (derived). The engine
@@ -394,6 +413,11 @@ for _ds, _gen in list(CURRENT_GENERATION.items()):
 # Observation time on weight rides the same generation as the field above.
 KEY_GENERATION["weight"]["measured_at"] = CURRENT_GENERATION["weight"]
 
+# The track pointer and the external identity beside it (#43).
+CURRENT_GENERATION["sessions"] += 1
+for _k in ("track", "activity_id", "activity_source"):
+    KEY_GENERATION["sessions"][_k] = CURRENT_GENERATION["sessions"]
+
 
 def key_generation(dataset: str, key: str) -> int:
     """Generation a key was introduced in (1 = founding)."""
@@ -532,6 +556,8 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
     if dataset == "daily" and (a := rec.get("alcohol")) is not None:
         if not isinstance(a, bool):
             problems.append(f"'alcohol' should be true/false/null, got {a!r}")
+    if dataset == "sessions":
+        problems += _validate_track(rec)
     if dataset == "sessions" and rec.get("type") not in SESSION_TYPES:
         problems.append(f"'type' must be one of {sorted(SESSION_TYPES)}, got {rec.get('type')!r}")
     if dataset == "daily":
@@ -742,6 +768,41 @@ def _validate_pain_location(rec: dict) -> list[str]:
     return problems
 
 
+def _validate_track(rec: dict) -> list[str]:
+    """The track pointer and the external identity it sits beside (#43)."""
+    problems: list[str] = []
+    track = rec.get("track")
+    if track is not None:
+        if not isinstance(track, str) or not track.strip():
+            problems.append("'track' is a repo-relative path to the stored "
+                            "track file, or null")
+        else:
+            # An absolute path leaks a username and a machine layout into a
+            # record meant to be portable, and it breaks a rebuild anywhere
+            # else - a determinism violation, not merely untidy.
+            first = track.replace("\\", "/").split("/")[0]
+            slashed = track.replace("\\", "/")
+            if (slashed.startswith("/") or track.startswith("~")
+                    or slashed.startswith("//")          # UNC \\server\share
+                    or (len(first) == 2 and first[1] == ":")):
+                problems.append(
+                    f"'track' must be repo-relative, got {track!r} - an "
+                    "absolute path leaks a machine layout and cannot be "
+                    "rebuilt anywhere else")
+            if ".." in track.replace("\\", "/").split("/"):
+                problems.append(f"'track' must stay inside the repo, got {track!r}")
+    for key in ("activity_id", "activity_source"):
+        if (v := rec.get(key)) is not None and (
+                not isinstance(v, str) or not v.strip()):
+            # Never coerced to a number: leading zeros and non-numeric ids
+            # both exist in the wild, and a platform's id is an opaque token.
+            problems.append(f"'{key}' is an opaque string, or null (got {v!r})")
+    if rec.get("activity_source") is not None and rec.get("activity_id") is None:
+        problems.append("'activity_source' names who assigned 'activity_id', "
+                        "so it needs one")
+    return problems
+
+
 def _validate_recorded_at(rec: dict) -> list[str]:
     """Transaction time must be ISO 8601 and carry an explicit offset (#37).
 
@@ -798,6 +859,49 @@ def timestamp_advisories(dataset: str, rows: list[tuple[int, dict]]) -> list[str
             "comparison between the two shapes rests on an assumed offset. "
             "Offset-bearing is canonical - naive local time cannot say which "
             "02:30 it means on the night the clocks go back"]
+
+
+def supersedes_problems(dataset: str, rows: list[tuple[int, dict]]) -> list[str]:
+    """A correction that cannot say WHICH line it corrects (#43).
+
+    `supersedes` retires every line matching its reference, and for a dataset
+    with no per-row identity that can be more than one: two runs on a day from
+    one watch share `<date>/<source>`, so correcting either silently deletes
+    both. That is the same harm as a false merge - two activities becoming
+    one - arriving through the correction path.
+
+    Reported rather than resolved, because the engine cannot know which was
+    meant. The fix is to give the rows an identity (`activity_id` on
+    sessions), and this says so.
+    """
+    from .jsonl import line_key
+    problems: list[str] = []
+    by_key: dict[str, list[int]] = {}
+    for n, r in rows:
+        by_key.setdefault(line_key(dataset, r), []).append(n)
+    superseding = {n for n, r in rows if r.get("supersedes")}
+    for n, r in rows:
+        if not (ref := r.get("supersedes")):
+            continue
+        # Rows that are themselves corrections are excluded from the count. A
+        # CHAIN (A superseded by B, B superseded by C) legitimately shares one
+        # reference and retires all of it - that is documented behaviour, not
+        # ambiguity. What this catches is two rows that were never the same
+        # thing answering to one key, which is the case that loses data.
+        hit = [m for m in by_key.get(str(ref), [])
+               if m != n and m not in superseding]
+        if len(hit) > 1:
+            problems.append(
+                f"{dataset}.jsonl line {n}: 'supersedes' {ref!r} matches "
+                f"{len(hit)} lines ({', '.join(map(str, hit))}) - a correction "
+                "that cannot say which line it corrects would retire all of "
+                "them. Give these rows an identity (activity_id) first")
+        elif not hit:
+            problems.append(
+                f"{dataset}.jsonl line {n}: 'supersedes' {ref!r} matches no "
+                "line - nothing is being corrected, and the reference is "
+                "probably mistyped")
+    return problems
 
 
 def recorded_at_problems(dataset: str, rows: list[tuple[int, dict]]) -> list[str]:

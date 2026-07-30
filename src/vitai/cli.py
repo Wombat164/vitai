@@ -23,8 +23,8 @@ from .config import load_inference_config
 from .inference import append_inferences, backend_from_config, run_inference
 from .jsonl import DataError, load_report, read_lines
 from .safety import banner
-from .schema import (KEYS, recorded_at_problems, timestamp_advisories,
-                     validate_record)
+from .schema import (KEYS, recorded_at_problems, supersedes_problems,
+                     timestamp_advisories, validate_record)
 
 DATASETS = list(KEYS)
 
@@ -377,12 +377,20 @@ def cmd_route(args: argparse.Namespace) -> None:
     """Tier-1 geometry for a GPS track, with the parameters that produced it."""
     from .route import compass
     v = Vitai(args.root)
+    if not args.gpx and not args.session:
+        sys.exit("give a .gpx path or --session <activity_id|date>")
     if args.against:
         verdict, sim = v.same_route(args.gpx, args.against)
         print(f"same route: {'YES' if verdict else 'NO'}  (LCSS similarity "
               f"{sim:.2f})")
         return
-    s = v.route(args.gpx, barometric=args.barometric)
+    if args.session:
+        try:
+            s = v.session_route(args.session, barometric=args.barometric)
+        except (KeyError, FileNotFoundError) as e:
+            sys.exit(str(e).strip("'"))
+    else:
+        s = v.route(args.gpx, barometric=args.barometric)
     if args.json:
         import dataclasses
         print(json.dumps(dataclasses.asdict(s), default=str))
@@ -592,7 +600,18 @@ def cmd_validate(args: argparse.Namespace) -> None:
         for p in recorded_at_problems(name, rows):
             print(p)
             problems += 1
+        for p in supersedes_problems(name, rows):
+            print(p)
+            problems += 1
         advisories += timestamp_advisories(name, rows)
+        # A missing track file is NOT a missing session: the session is the
+        # fact and the track is an attachment, so a broken pointer is
+        # reported and never fails the build (#43).
+        for n, rec in rows:
+            if (t := rec.get("track")) and not (root / str(t)).exists():
+                advisories.append(f"{name}.jsonl line {n}: track {t!r} is not "
+                                  "in this repo - the session stands, but its "
+                                  "geometry cannot be rebuilt")
     # Advisories are NOT problems and never fail the build: they describe
     # rows that are legal but not what new writes should look like. Printed
     # after the errors so a real failure is not buried under housekeeping.
@@ -718,7 +737,11 @@ def main(argv: list[str] | None = None) -> None:
             p.add_argument("--date", metavar="YYYY-MM-DD",
                            help="only this date")
         if name == "route":
-            p.add_argument("gpx", help="path to a .gpx track")
+            p.add_argument("gpx", nargs="?",
+                           help="path to a .gpx track (or use --session)")
+            p.add_argument("--session", metavar="REF",
+                           help="analyse the track a SESSION names, by "
+                                "activity_id or date, resolved from the record")
             p.add_argument("--against", metavar="GPX",
                            help="compare with another track: same route or not")
             p.add_argument("--barometric", action="store_true",

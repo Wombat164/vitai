@@ -128,6 +128,40 @@ class Vitai:
         from .route import analyse, read_gpx
         return analyse(read_gpx(gpx_path), barometric=barometric)
 
+    def sessions_with_tracks(self) -> list[dict]:
+        """Sessions that name a stored track, soonest first (#43)."""
+        return [r for r in self.canonical("sessions") if r.get("track")]
+
+    def session_track(self, ref: str) -> Path:
+        """The stored track for a session named by `activity_id` or by date.
+
+        The link used to live in a prose note and be recovered by regex. As
+        data it can be resolved, which is what lets route geometry rebuild
+        from the record rather than from whatever path someone typed.
+        """
+        rows = [r for r in self.sessions_with_tracks()
+                if str(r.get("activity_id") or "") == ref or r.get("date") == ref]
+        if not rows:
+            raise KeyError(f"no session with a track matches {ref!r} - give an "
+                           "activity_id or a date")
+        if len({r["track"] for r in rows}) > 1:
+            named = ", ".join(sorted(str(r.get("activity_id") or r["date"])
+                                     for r in rows))
+            raise KeyError(f"{ref!r} matches {len(rows)} sessions with different "
+                           f"tracks ({named}) - name one by activity_id")
+        path = self.root / rows[0]["track"]
+        if not path.exists():
+            raise FileNotFoundError(
+                f"session {ref!r} points at {rows[0]['track']!r}, which is not "
+                "in this repo - the session is the fact, the track is an "
+                "attachment, so this is a broken pointer rather than a missing "
+                "activity")
+        return path
+
+    def session_route(self, ref: str, barometric: bool = False):
+        """Tier-1 geometry for a session identified FROM THE RECORD (#43)."""
+        return self.route(self.session_track(ref), barometric=barometric)
+
     def same_route(self, gpx_a, gpx_b):
         """(verdict, similarity) for two tracks - ordering-aware LCSS, so a
         route and its reverse are not confused (the defect of grid overlap)."""

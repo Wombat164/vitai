@@ -6,6 +6,25 @@ versioning follows [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`track`, `activity_id` and `activity_source` on `sessions`** (#43). The
+  link from a session to the file that recorded it lived in a prose note and
+  was recovered by regex - unqueryable, unvalidatable, and silently broken by
+  any change of wording. Two fields rather than one, post-coordinated: `track`
+  is a LOCAL ARTIFACT (a repo-relative path, what `vitai route` reads),
+  `activity_id` is an EXTERNAL IDENTITY (what dedupes a re-run import). They
+  have different lifetimes - an archive can be re-laid-out without the id
+  changing, and an id is meaningless off-platform while the file stays
+  readable. `activity_source` names who ASSIGNED the id, which is not
+  necessarily who recorded the activity (#35).
+
+  `vitai route --session <activity_id|date>` and `Vitai.session_route()`
+  resolve the track from the record, so route geometry can rebuild from
+  `data/*.jsonl` like everything else in `derived/`.
+
+  An absolute path is a validation error - it leaks a username and a machine
+  layout into a portable record, and breaks a rebuild anywhere else. A
+  dangling pointer is an ADVISORY and never fails a build: the session is the
+  fact, the track is an attachment.
 - **The record is bitemporal: `recorded_at` on every dataset** (#37).
   Transaction time - when a line was *written* - alongside the valid time
   `date` already carried. Found on a live record: two `goals` rows shared an

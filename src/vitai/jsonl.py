@@ -143,9 +143,19 @@ def append_many(data_dir: Path, name: str, records: list[dict],
 
 
 def line_key(dataset: str, rec: dict) -> str:
-    """The reference a `supersedes` on a later line would use to name this one."""
+    """The reference a `supersedes` on a later line would use to name this one.
+
+    A session with an `activity_id` is named by it (#43). Without one, two
+    runs on the same day from the same watch share a key, so a `supersedes`
+    aimed at either RETIRES BOTH - two real activities collapsing into one,
+    which is the silent data loss #16 exists to prevent, arriving through the
+    correction path instead of the merge path. `validate` reports a reference
+    that matches more than one line, so the remaining ambiguity is loud.
+    """
     if (ident := IDENTITY_KEY.get(dataset)) is not None:
         return f"{rec.get(ident, '')}@{rec.get('date')}"
+    if dataset == "sessions" and (aid := rec.get("activity_id")):
+        return f"{aid}@{rec.get('date')}"
     return f"{rec.get('date')}/{rec.get('source', '')}"
 
 

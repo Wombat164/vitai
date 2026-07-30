@@ -206,11 +206,21 @@ def _build(target: Path) -> None:
     sessions.append({
         "date": context_day, "type": "walk", "distance_km": 6.4,
         "duration_s": 4920, "avg_hr": 104, "max_hr": None, "cadence": None,
-        "kcal": 290, "rpe": 2, "note": None, "_gen": 2, "source": "watch",
+        "kcal": 290, "rpe": 2, "note": None, "source": "watch",
         "start_time": f"{context_day}T14:05:00+02:00", "elevation_m": 18.0,
         "setting": "outdoor", "route": "canal-loop", "place": "home",
         "with": "partner", "context": "family", "planned": None,
-        "weather": "rain"})
+        "weather": "rain", "_gen": 4, "recorded_at": None,
+        "track": "tracks/canal-loop-2030-06-16.gpx",
+        "activity_id": "9914203377", "activity_source": "watch"})
+    # A stored track, linked from the session as DATA rather than recovered
+    # by regex from a prose note (#43). Repo-relative, so the demo rebuilds
+    # identically on any machine.
+    tracks = target / "tracks"
+    tracks.mkdir(exist_ok=True)
+    (tracks / "canal-loop-2030-06-16.gpx").write_text(
+        _demo_gpx(context_day), encoding="utf-8", newline="\n")
+
     # The SAME walk, as a second connector recorded it - with a NAIVE
     # start_time (#38). This is the shape a legacy connector writes, and until
     # the fix it took the whole build down the moment it met an offset-bearing
@@ -257,6 +267,31 @@ def _build(target: Path) -> None:
                        ("checks", checks), ("events", events)):
         (target / "data" / f"{name}.jsonl").write_text(
             _jsonl(rows), encoding="utf-8", newline="\n")
+
+
+def _demo_gpx(day: str) -> str:
+    """A short synthetic track: a there-and-back along a canal, with a gentle
+    rise. Deterministic - no RNG - so the demo stays byte-reproducible."""
+    import math
+    pts = []
+    n = 240
+    for i in range(n):
+        leg = i if i < n // 2 else n - 1 - i          # out, then back
+        # A curve rather than a straight line, so the shape classifier has
+        # something to classify and RDP keeps a realistic number of vertices.
+        pts.append((51.2100 + leg * 0.00010,
+                    3.2200 + 0.0016 * math.sin(leg * math.pi / (n // 2)),
+                    round(4.0 + leg * 0.55, 1),
+                    f"{day}T14:{5 + i // 6:02d}:{(i * 10) % 60:02d}Z"))
+    body = "\n".join(
+        f'   <trkpt lat="{lat:.5f}" lon="{lon:.5f}"><ele>{ele}</ele>'
+        f"<time>{t}</time></trkpt>" for lat, lon, ele, t in pts)
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<gpx version="1.1" creator="vitai-demo" '
+            'xmlns="http://www.topografix.com/GPX/1/1">\n'
+            " <trk><name>canal-loop</name><trkseg>\n"
+            f"{body}\n"
+            " </trkseg></trk>\n</gpx>\n")
 
 
 def _goal(date: str, slug: str, title: str, metric: str, target, policy: str,
