@@ -223,3 +223,98 @@ def test_a_big_circuit_is_a_loop_even_when_it_ends_a_little_away():
     shape, retrace = classify_shape(pts)
     assert shape == "loop", f"got {shape}"
     assert retrace < 0.3, "a circuit does not retrace itself"
+
+
+# ---- #42: elevation must not be read off the simplified track -----------------
+
+def _undulating_track(n=4800, climbs=6, amplitude_m=9.0, noise_m=0.7, seed=11):
+    """A long, nearly-straight track with real but gentle terrain.
+
+    Modelled on the tracks that exposed this: Flanders, so the undulation is
+    single-digit metres, and densely sampled the way a device actually
+    records.
+
+    SMOOTH IN PLAN VIEW ON PURPOSE, and that is the whole regime. RDP only
+    thins aggressively when the path is close to collinear - which the real
+    files were, at 4,842 points down to 185 (4%). Adding per-point horizontal
+    jitter to this fixture makes RDP retain 30-60% instead, and the bug stops
+    reproducing entirely: with that many points kept, the point-width
+    smoothing window still spans a sane distance. So a jittered fixture would
+    quietly stop testing anything.
+    """
+    import math
+    import random
+    rng = random.Random(seed)
+    out = []
+    for i in range(n):
+        phase = 2 * math.pi * climbs * i / n
+        ele = 12.0 + amplitude_m * math.sin(phase) + rng.gauss(0, noise_m)
+        out.append(Fix(lat=51.0 + i * 0.0000135, lon=3.0 + i * 0.0000002,
+                       ele=ele, t=None))
+    return out
+
+
+def test_a_real_climb_is_not_reported_as_zero():
+    """77 of 99 real tracks reported exactly 0 m, including two 16 km runs.
+    A 0 that looks like a measurement is worse than a null: Flanders is flat,
+    so it reads as plausible and passes review - the G69 shape again."""
+    track = _undulating_track()
+    assert analyse(track).elevation_gain_m > 0.0
+
+
+def test_elevation_comes_from_the_cleaned_track_not_the_simplified_one():
+    """The invariant that makes this unable to drift apart again."""
+    track = _undulating_track()
+    assert analyse(track).elevation_gain_m == elevation_gain_m(clean(track))
+
+
+def test_simplification_destroys_the_vertical_profile():
+    """Stated as a test rather than only as a comment, because it is the
+    reason for the line above and it is not obvious: RDP measures deviation in
+    plan view, so a gradual climb is collinear from above and the discarded
+    points ARE the hill."""
+    track = _undulating_track()
+    cleaned = clean(track)
+    thinned = simplify(cleaned)
+    assert len(thinned) < len(cleaned) / 4, "the track really is being thinned"
+    assert elevation_gain_m(cleaned) > 0.0
+    assert (elevation_gain_m(thinned) or 0.0) < elevation_gain_m(cleaned) / 2
+
+
+def test_distance_still_reads_the_simplified_track():
+    """Distance legitimately differs from elevation here: RDP bounds the
+    horizontal error by epsilon per segment, so summing the simplified
+    vertices is what the prior-art sweep prescribes. Asserted so nobody
+    'fixes' distance to match elevation and diverges from the sweep."""
+    track = _undulating_track()
+    assert analyse(track).distance_m == path_length_m(simplify(clean(track)))
+
+
+def test_raw_distance_overestimates_a_jittering_track():
+    """The reason distance does not read the raw fixes: jitter adds phantom
+    length on every sample. Needs a fixture that actually jitters - the
+    undulating one above is smooth in plan view, so on it the raw and
+    simplified lengths agree to within a metre and this would pass for the
+    wrong reason."""
+    import random
+    rng = random.Random(3)
+    jittery = [Fix(lat=LAT0 + i * 0.0000135 + rng.gauss(0, 2.0 / 111_320),
+                   lon=LON0 + rng.gauss(0, 2.0 / 70_000), ele=None, t=None)
+               for i in range(2000)]
+    stats = analyse(jittery)
+    assert stats.distance_raw_m > stats.distance_m * 1.2
+
+
+def test_a_flat_track_reports_small_but_real_gain_never_exactly_zero():
+    """The acceptance case: a long flat-country track should report
+    single-digit-to-tens of metres, not a suspiciously clean 0."""
+    stats = analyse(_undulating_track(amplitude_m=6.0))
+    assert 0.0 < stats.elevation_gain_m < 200.0
+
+
+def test_a_track_with_no_elevation_still_reports_none():
+    """None and 0.0 are different answers and must not collapse - 'no
+    altimeter' is not 'no hill'."""
+    flat = [Fix(lat=51.0 + i * 0.0001, lon=3.0, ele=None, t=None)
+            for i in range(50)]
+    assert analyse(flat).elevation_gain_m is None
