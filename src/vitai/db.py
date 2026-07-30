@@ -37,7 +37,14 @@ from .schema import KEYS
 #    badly; and a `plan_churn` row is only a retreat from a deadline when
 #    `deadline_kind` is `hard`, so a consumer that reads `deadline_pushed`
 #    alone will accuse the athlete of gaming a date they invented.
-CONTRACT_VERSION = "6"
+# 7: the clocks (#37) - `recorded_at` (transaction time) on EVERY dataset and
+#    `measured_at` (observation time) on weight. Resolution now orders by
+#    (date, recorded_at) instead of falling back to file position. A consumer
+#    that reconstructs history MUST order by both, or a same-date correction
+#    resolves by whatever order the rows happen to be in - and a `weight_rate`
+#    verdict may now be `nodata` because the weigh-in times behind it are
+#    spread widely enough to account for the rate.
+CONTRACT_VERSION = "7"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
@@ -67,7 +74,9 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               "result",
               # G86: events, and the goal fields that anchor to them.
               "event_date", "priority", "event", "deadline_kind",
-              "verification"}
+              "verification",
+              # #37: the three clocks
+              "recorded_at", "measured_at"}
 
 VERDICT_KEYS = ["week", "metric", "value", "target", "verdict", "goal"]
 

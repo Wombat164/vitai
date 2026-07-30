@@ -52,9 +52,23 @@ jobs:
       - run: vitai build --root examples/demo --on 2030-06-30
       - name: Assert the rollup renders real content
         run: |
-          grep -q "ON TARGET" examples/demo/derived/weekly.md
+          grep -q "\*\*Rate:\*\*" examples/demo/derived/weekly.md
           grep -q "Tripwires" examples/demo/derived/weekly.md
+          # The happy path still has to work. It moved off the rollup's rate
+          # line, which now demonstrates the timing artifact (#37), so it is
+          # asserted where it still lives: the weeks with a consistent
+          # weigh-in routine score normally in the machine contract.
           vitai verdicts --root examples/demo | grep -q '"verdict": "on_target"'
+      - name: Assert a rate the weigh-in times cannot support is not scored
+        run: |
+          # #37: the demo's routine falls apart after the travel week, so the
+          # current rate spans ~12 h of weigh-in times - enough diurnal drift
+          # to account for the whole number. The rollup must decline to judge
+          # it and say why, and the machine contract must not emit a verdict
+          # a consumer would render as fact.
+          grep -q "NOT READABLE" examples/demo/derived/weekly.md
+          grep -q "not yet separable from weigh-in timing" examples/demo/derived/weekly.md
+          vitai verdicts --root examples/demo | grep -q '"metric": "weight_rate", .*"verdict": "no_data"'
       - name: Assert the safety layer renders a live gate and a closed episode
         run: |
           grep -q "## Gates" examples/demo/derived/weekly.md

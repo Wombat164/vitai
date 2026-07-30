@@ -17,10 +17,22 @@ content repo's `data/`. You are the connector; the contract is the schema.
 2. **Append, never edit.** A correction to an existing line is a NEW line
    with `"supersedes":"<date>/<source>"`. If the athlete says a number was
    wrong, supersede it - do not touch the original.
-3. **Validate before declaring done.** Run `vitai validate`; fix your lines
+3. **Write through `vitai append`, one row per call**, rather than echoing
+   JSON into the file. It stamps `recorded_at` and `_gen`, fills absent keys
+   with null, and refuses an invalid line at the door - an append-only file
+   cannot be un-appended. Never set `recorded_at` yourself; it is the one
+   clock in the record that must not be authored, and `append` rejects a row
+   that carries it.
+4. **Capture the weigh-in TIME when you can see it.** `weight.measured_at`
+   is HH:MM local. Body mass swings about a kilogram between morning and
+   evening, so a drift from evening to morning weigh-ins manufactures a week
+   of apparent progress - and without the time, the engine can only say the
+   rate could not be checked. If the screenshot does not show a time, leave
+   it null; never infer a probable one.
+5. **Validate before declaring done.** Run `vitai validate`; fix your lines
    (not the rules) until it passes. Then `vitai build` and read back the
    updated rollup so the athlete sees the effect.
-4. **Show your work.** Present the extracted lines to the athlete before or
+6. **Show your work.** Present the extracted lines to the athlete before or
    with the append, with anything uncertain flagged (`note` field + say so).
    Do not silently guess a date, a unit conversion, or which kid of data a
    screenshot shows.

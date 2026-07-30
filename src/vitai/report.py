@@ -12,6 +12,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from statistics import mean
 
+from .clocks import timing_caveat, weigh_in_timing
 from .config import Config, phase_rate_for
 from .vocab import session_classes
 
@@ -97,8 +98,24 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                 magnitude = f"{abs(rate):.2f} kg/week"
                 phrase = (f"{direction} {magnitude}" if rate
                           else "holding steady")
+                window = [w for w in weight
+                          if w.get("kg") is not None
+                          and anchor0 and anchor0.isoformat() <= w["date"]
+                          <= pts[-1][0]]
+                timing = weigh_in_timing(window)
+                # #37: do not print an actionable verdict beside a caveat
+                # saying the number is noise. "SLOW - check logging" tells an
+                # athlete to cut harder, and if the slowness is an artifact of
+                # weighing at 19:00 half the week, that is the engine driving
+                # a real deficit off a clock. P3: confidence never launders
+                # upward, and a crisp verdict on an unreadable number is
+                # exactly that.
+                unreadable = (timing["known"] and not timing["unknown"]
+                              and timing["drift_kg"] >= abs(rate))
                 if target is not None:
-                    verdict = ("ON TARGET" if abs(rate - target) <= 0.25
+                    verdict = ("NOT READABLE - weigh-in times vary too much"
+                               if unreadable
+                               else "ON TARGET" if abs(rate - target) <= 0.25
                                else "FAST - raise intake" if rate > target
                                else "SLOW - check logging")
                     L += ["", f"**Rate:** {phrase} (target: losing "
@@ -106,6 +123,14 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                           "", "> Judge on this line, never a single morning."]
                 else:
                     L += ["", f"**Rate:** {phrase} (no phase targets configured)"]
+                # #37: a rate read across weigh-ins taken at different times
+                # of day is partly reporting the clock. Body mass swings about
+                # a kilogram between morning-fasted and evening, so an
+                # unrecorded drift from evening to morning weigh-ins can
+                # manufacture a whole week of apparent progress - a fabricated
+                # number in the P4 sense, and the caveat IS the payload.
+                if caveat := timing_caveat(timing, rate):
+                    L += ["", f"> {caveat}"]
     else:
         L.append("_No weight data - and that is a valid way to use this._")
 

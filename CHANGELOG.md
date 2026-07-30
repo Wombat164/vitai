@@ -6,6 +6,38 @@ versioning follows [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **The record is bitemporal: `recorded_at` on every dataset** (#37).
+  Transaction time - when a line was *written* - alongside the valid time
+  `date` already carried. Found on a live record: two `goals` rows shared an
+  effective date, one superseding the other, and **nothing in the data said
+  which won**. Resolution fell back to file order, which is real information
+  right up until a sort, a reformat, a merge or a git conflict resolution
+  rewrites it. An ordering a formatter can change is not an ordering.
+
+  Putting a time on `date` would have been the wrong repair: it forces the
+  athlete to state something they never meant - "I decided this at 14:32" is
+  a fact about a keystroke - and it still would not sort, because **valid
+  time is not monotonic and must not be**. A line written today about a
+  decision made last week is legitimately backdated. Transaction time is
+  monotonic by construction and never authored by a human, which is exactly
+  what a tie-break needs (Snodgrass: valid time vs transaction time).
+
+  The migration is a **read no-op**: absent sorts before present, so a file
+  of unstamped rows resolves in exactly the order it always did.
+- **`vitai append` / `Vitai.append()`** (#37). The write half of P9, and the
+  reason the clock is trustworthy rather than aspirational: every row in this
+  record is written by a hand-rolled script, and a field callers must
+  remember to set will be absent exactly when two rows land on the same date,
+  which is the only moment it was needed. Append stamps `recorded_at` and
+  `_gen`, fills absent keys with null, **refuses a caller-supplied
+  `recorded_at`** - a clock you can write is not a clock - and validates
+  before writing, because an append-only file cannot be un-appended.
+- **`weight.measured_at`** (#37): observation time, HH:MM local. Body mass
+  swings about a kilogram between morning-fasted and evening, so an
+  unrecorded drift from evening to morning weigh-ins manufactures a week of
+  apparent progress. Absent stays absent - the engine never infers a probable
+  weigh-in time, it says the rate could not be checked.
+
 - **Events: the dated fixtures a plan is built backwards from** (#24, G86).
   A new `events` dataset - a race, a scan, a wedding, a competition weigh-in.
   An event is not a milestone: a milestone is a fraction of a target the
@@ -29,6 +61,16 @@ versioning follows [SemVer](https://semver.org/).
   will ever be. An attested goal is never scored and never rendered at 0%.
 
 ### Fixed
+- **A weight rate no longer prints an actionable verdict it cannot support**
+  (#37). When the weigh-in times behind a rate are spread widely enough that
+  the diurnal drift alone accounts for it, the rollup reads `NOT READABLE -
+  weigh-in times vary too much` and `verdicts` emits `nodata`, both alongside
+  the number and a caveat quantifying the spread. Previously the demo record
+  rendered `SLOW - check logging` off a rate that 12.4 h of weigh-in spread
+  could fully explain - advice to cut harder, derived from a clock. P3:
+  confidence never launders upward, and a crisp verdict on an unreadable
+  number is exactly that.
+
 - **A moved SOFT deadline is no longer flagged as goalpost-moving** (#24,
   G86/G20). `deadline_kind` (`hard` | `soft`) on goals. A race date cannot be
   moved, so pushing it is a retreat from something real; a date the athlete
