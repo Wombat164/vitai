@@ -38,6 +38,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from .clocks import comparable, is_aware, parse_time
+
 from .schema import KEYS
 
 # Datasets that carry competing observations. Policy datasets (goals,
@@ -204,13 +206,19 @@ def _carry_meta(canonical: dict, claims: list[tuple[str, dict]]) -> dict:
 
 # --- session activity identity ------------------------------------------------
 
-def _interval(rec: dict) -> tuple[datetime, datetime] | None:
-    if not (st := rec.get("start_time")):
-        return None
-    try:
-        start = datetime.fromisoformat(str(st))
-    except ValueError:
-        return None
+def _interval(rec: dict, start: datetime | None = None
+              ) -> tuple[datetime, datetime] | None:
+    """The (start, end) a session occupies, or None without a start_time.
+
+    `start` lets a caller pass an already-frame-aligned instant (see
+    `_same_activity`), so the two intervals being compared are read in the
+    same frame rather than each parsing itself independently.
+    """
+    if start is None:
+        if not (st := rec.get("start_time")):
+            return None
+        if (start := parse_time(st)) is None:
+            return None
     seconds = rec.get("duration_s") if _numeric(rec.get("duration_s")) else 0
     return start, start + timedelta(seconds=float(seconds or 0))
 
@@ -219,6 +227,17 @@ def _ratio(a: object, b: object) -> float | None:
     if not (_numeric(a) and _numeric(b)) or not float(b):
         return None
     return float(a) / float(b)
+
+
+def _frames_differ(a: dict, b: dict) -> bool:
+    """Do these two claims carry timestamps that cannot be compared? (#38)
+
+    True only when BOTH have a start_time and one is naive while the other
+    carries an offset - the mixture that used to raise, and that no amount of
+    guessing can turn into two honest instants.
+    """
+    ta, tb = parse_time(a.get("start_time")), parse_time(b.get("start_time"))
+    return ta is not None and tb is not None and is_aware(ta) != is_aware(tb)
 
 
 def _same_activity(a: dict, b: dict) -> str:
@@ -247,7 +266,16 @@ def _same_activity(a: dict, b: dict) -> str:
     and an identical re-emission from one connector is a connector bug that
     exact-duplicate detection (G26) already covers.
     """
-    ia, ib = _interval(a), _interval(b)
+    # #38: the record holds naive and offset-aware timestamps side by side,
+    # and comparing them directly RAISED - taking the whole build down rather
+    # than degrading. Two timestamps that cannot be compared are a resolution
+    # outcome to report, never an exception, and never a guessed instant: the
+    # strong test is simply unavailable, so the weaker shape test decides and
+    # the caller says why.
+    start_a, start_b, ok = comparable(parse_time(a.get("start_time")),
+                                      parse_time(b.get("start_time")))
+    ia, ib = ((_interval(a, start_a), _interval(b, start_b)) if ok
+              else (None, None))
     if ia and ib:
         if ia[0] < ib[1] and ib[0] < ia[1]:
             return MATCH
@@ -332,6 +360,23 @@ def _cluster_sessions(claims: list[tuple[str, dict]]) -> tuple[list[list[tuple[s
         for cluster in clusters:
             head = cluster[0][1]
             verdict = _same_activity(head, rec)
+            if verdict != DISTINCT and _frames_differ(head, rec):
+                # #38: both rows HAVE a timestamp, and it could not be used.
+                # Without this the pair looks like an ordinary shape-only
+                # merge - "no start_time" - which is not what happened and
+                # would send someone off to record a field they already have.
+                notes.append({
+                    "date": rec.get("date"),
+                    "kind": "incomparable_timestamps",
+                    "detail": (
+                        f"{rec.get('source') or UNKNOWN_SOURCE} and "
+                        f"{head.get('source') or UNKNOWN_SOURCE} logged {kind} "
+                        "sessions whose start_time shapes do not match (one "
+                        "naive, one offset-aware), so the timestamps could not "
+                        "be compared and shape decided it. Write offset-"
+                        "bearing start_time on both to settle it by instant"),
+                    "severity": "review",
+                })
             if verdict == MATCH:
                 cluster.append((cid, rec))
                 placed = True

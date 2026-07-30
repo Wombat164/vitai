@@ -334,3 +334,129 @@ def test_the_committed_demo_corpus_still_validates():
             assert validate_record(name, rec) == [], f"{name}.jsonl line {n}"
             seen += 1
     assert seen > 100, "the corpus should be substantial enough to mean something"
+
+
+# ---- #38: a record holding both timestamp shapes must still build ---------------
+
+def session(date="2030-05-01", type="run", start_time=None, source="watch",
+            distance_km=5.0, duration_s=1800, **kw):
+    rec = {"date": date, "type": type, "distance_km": distance_km,
+           "duration_s": duration_s, "avg_hr": None, "max_hr": None,
+           "cadence": None, "kcal": None, "location": None, "rpe": None,
+           "note": None, "_gen": 2, "source": source,
+           "start_time": start_time, "elevation_m": None, "setting": None,
+           "route": None, "place": None, "with": None, "context": None,
+           "planned": None, "weather": None}
+    rec.update(kw)
+    return rec
+
+
+def test_comparing_a_naive_and_an_aware_timestamp_does_not_raise():
+    """The exact reported failure: `TypeError: can't compare offset-naive and
+    offset-aware datetimes`, which took the whole build down."""
+    from vitai.resolution import _same_activity
+    naive = session(start_time="2030-05-01T09:12:53", source="polar")
+    aware = session(start_time="2030-05-01T09:12:53+02:00", source="watch")
+    assert _same_activity(naive, aware) in {"match", "possible", "distinct"}
+
+
+def test_a_record_mixing_both_shapes_builds(tmp_path):
+    """End to end, because the reported symptom was a traceback out of
+    `vitai build`, not a wrong answer."""
+    from datetime import date as _date
+    root = repo(tmp_path)
+    write(root, "sessions", [
+        session(start_time="2030-05-01T09:12:53", source="polar"),
+        session(start_time="2030-05-01T09:12:53+02:00", source="watch"),
+        session(date="2030-05-03", start_time="2030-05-03T18:00:00", source="polar"),
+    ])
+    Vitai(root).build(today=_date(2030, 5, 4))
+    sessions = Vitai(root).canonical("sessions")
+    assert sessions, "the build produced canonical sessions rather than raising"
+
+
+def test_two_platforms_one_walk_still_resolve_to_one_activity(tmp_path):
+    """The mixture must not cost the athlete the merge. The timestamp test is
+    unavailable, so shape plus disjoint sources decides it - the #16 rule."""
+    root = repo(tmp_path)
+    write(root, "sessions", [
+        session(type="walk", distance_km=6.4, duration_s=4920,
+                start_time="2030-05-01T14:05:00+02:00", source="watch"),
+        session(type="walk", distance_km=6.38, duration_s=4906,
+                start_time="2030-05-01T14:05:11", source="app"),
+    ])
+    canonical = Vitai(root).canonical("sessions")
+    assert len(canonical) == 1
+    assert canonical[0]["source"] == "app+watch"
+
+
+def test_the_undecidable_comparison_is_reported_as_what_it_was(tmp_path):
+    """Not as a shape-only merge. Both rows HAVE a start_time - telling the
+    athlete to record one they already have would send them nowhere."""
+    root = repo(tmp_path)
+    write(root, "sessions", [
+        session(type="walk", distance_km=6.4, duration_s=4920,
+                start_time="2030-05-01T14:05:00+02:00", source="watch"),
+        session(type="walk", distance_km=6.38, duration_s=4906,
+                start_time="2030-05-01T14:05:11", source="app"),
+    ])
+    kinds = {n["kind"] for n in Vitai(root).conservation()}
+    assert "incomparable_timestamps" in kinds
+    assert "shape_only_merge" not in kinds
+
+
+def test_an_offset_is_never_guessed_for_a_naive_timestamp():
+    """The tempting repair, and why it is refused. A platform emitting UTC
+    beside a connector writing naive local is the COMMONEST mixed pairing;
+    lending the UTC row's +00:00 to a naive +02:00 row places it two hours
+    from where it happened, and the result still looks like a clean instant.
+    """
+    from vitai.clocks import comparable, parse_time
+    naive = parse_time("2030-05-01T09:12:53")
+    utc = parse_time("2030-05-01T07:12:53+00:00")
+    _, _, ok = comparable(naive, utc)
+    assert ok is False, "declined, not guessed"
+
+
+def test_two_aware_timestamps_compare_as_instants_across_offsets():
+    """Where the frames ARE known, the comparison is by instant and not by
+    wall clock: these two read 09:12 and 07:12 but are the same moment."""
+    from vitai.resolution import _same_activity
+    brussels = session(start_time="2030-05-01T09:12:53+02:00", source="watch",
+                       distance_km=5.0, duration_s=1800)
+    utc = session(start_time="2030-05-01T07:12:53+00:00", source="strava",
+                  distance_km=9.9, duration_s=1805)      # shapes disagree
+    assert _same_activity(brussels, utc) == "match", "only the instant can say so"
+
+
+def test_two_naive_timestamps_share_a_frame_and_stay_comparable():
+    """The existing record is uniformly naive and must keep working: two naive
+    values share a frame by construction, so wall-clock order IS instant order
+    between them, and a DST fold cannot order them wrongly relative to each
+    other."""
+    from vitai.resolution import _same_activity
+    early = session(start_time="2030-05-01T09:00:00", source="polar",
+                    distance_km=5.0, duration_s=1800)
+    later = session(start_time="2030-05-01T14:00:00", source="app",
+                    distance_km=9.9, duration_s=1805)
+    assert _same_activity(early, later) == "distinct"
+
+
+def test_mixed_shapes_are_reported_as_an_advisory_not_an_error():
+    """Naive rows are already on disk and are not wrong. Making them an ERROR
+    would leave the record unbuildable from the first converted row until the
+    last - blocking the very migration it would be demanding."""
+    from vitai.schema import timestamp_advisories
+    rows = [(1, session(start_time="2030-05-01T09:00:00")),
+            (2, session(start_time="2030-05-02T09:00:00+02:00"))]
+    advisories = timestamp_advisories("sessions", rows)
+    assert len(advisories) == 1 and "naive" in advisories[0]
+    assert all(validate_record("sessions", r) == [] for _, r in rows), "both legal"
+
+
+def test_a_uniformly_naive_record_has_nothing_to_advise():
+    """It is internally consistent. The mixture is what costs something."""
+    from vitai.schema import timestamp_advisories
+    rows = [(1, session(start_time="2030-05-01T09:00:00")),
+            (2, session(start_time="2030-05-02T09:00:00"))]
+    assert timestamp_advisories("sessions", rows) == []

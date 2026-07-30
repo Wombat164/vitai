@@ -164,3 +164,71 @@ def timing_caveat(timing: dict, rate_kg_week: float) -> str | None:
             said += " Weigh at a consistent time before reading it as progress."
         return said
     return None
+
+
+# --- comparing timestamps that do not share a frame (#38) ----------------------
+#
+# The record holds BOTH shapes and will for a long time. The Polar connector
+# wrote naive local time; the schema's own example shows an offset, so any
+# writer following the documentation produces offset-aware values. The moment
+# both coexist, a direct comparison raises - which means the documentation
+# broke the build, the worst version of this bug because it punishes the
+# correct behaviour.
+#
+# It also blocks its own repair: offsets cannot be backfilled row by row,
+# because from the first converted row until the last, the record would hold
+# both shapes and be unbuildable. The comparison has to tolerate the mixture
+# BEFORE any migration can start.
+
+def parse_time(value: object) -> datetime | None:
+    """An ISO-8601 timestamp, naive or offset-aware, or None if unparseable."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def is_aware(when: datetime | None) -> bool:
+    return when is not None and when.utcoffset() is not None
+
+
+def comparable(a: datetime | None, b: datetime | None) -> tuple[
+        datetime | None, datetime | None, bool]:
+    """Two timestamps, and whether they can honestly be compared as instants.
+
+    Three cases:
+
+    - both aware -> true instants, comparable;
+    - both NAIVE -> they share a frame by construction, so wall-clock order is
+      instant order BETWEEN THEM. Comparable, and this is the whole existing
+      record;
+    - MIXED -> not comparable, and the engine says so rather than inventing
+      the missing offset.
+
+    That last decision is the substantive one, and it goes against the obvious
+    repair of "attach a zone to the naive one". The tempting choices are all
+    wrong in the case that actually occurs:
+
+    - the SYSTEM zone makes the build depend on which machine ran it (CI runs
+      UTC, a laptop does not), breaking determinism outright;
+    - the OTHER value's offset looks clever and fails on the commonest
+      pairing there is. Platforms routinely emit UTC (`...Z`) while a local
+      connector writes naive local time. Lending the UTC row's +00:00 to a
+      naive +02:00 row places it two hours from where it happened, and the
+      error is invisible because the result still looks like a clean instant.
+
+    A misplaced instant is worse than an absent one: it silently merges two
+    activities that were an hour apart, or separates one that two platforms
+    both recorded. So the timestamp test is declined and the caller falls back
+    to the weaker evidence it already has, with the reason reported.
+
+    The real repair is a DECLARED home zone, which G30 already specifies as
+    effective-dated (a relocation changes it from a date forward, and past
+    days keep the zone that applied then). That is a separate change with a
+    config surface and a DST story; guessing one here would foreclose it.
+    """
+    if a is None or b is None:
+        return a, b, False
+    return a, b, is_aware(a) == is_aware(b)

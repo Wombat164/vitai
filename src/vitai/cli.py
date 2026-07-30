@@ -23,7 +23,8 @@ from .config import load_inference_config
 from .inference import append_inferences, backend_from_config, run_inference
 from .jsonl import DataError, load_report, read_lines
 from .safety import banner
-from .schema import KEYS, recorded_at_problems, validate_record
+from .schema import (KEYS, recorded_at_problems, timestamp_advisories,
+                     validate_record)
 
 DATASETS = list(KEYS)
 
@@ -552,6 +553,7 @@ def cmd_infer(args: argparse.Namespace) -> None:
 def cmd_validate(args: argparse.Namespace) -> None:
     root = _root(args)
     problems = 0
+    advisories: list[str] = []
     for name in DATASETS:
         path = root / "data" / f"{name}.jsonl"
         rows, parse_errors = read_lines(path)
@@ -569,10 +571,17 @@ def cmd_validate(args: argparse.Namespace) -> None:
         for p in recorded_at_problems(name, rows):
             print(p)
             problems += 1
+        advisories += timestamp_advisories(name, rows)
+    # Advisories are NOT problems and never fail the build: they describe
+    # rows that are legal but not what new writes should look like. Printed
+    # after the errors so a real failure is not buried under housekeeping.
+    for a in advisories:
+        print(f"ADVISORY: {a}")
     if problems:
         sys.exit(f"{problems} problem(s). Fix by APPENDING corrections "
                  f"(supersedes), never by editing lines.")
-    print("all data lines valid")
+    print("all data lines valid"
+          + (f" ({len(advisories)} advisory/advisories)" if advisories else ""))
 
 
 def cmd_status(args: argparse.Namespace) -> None:

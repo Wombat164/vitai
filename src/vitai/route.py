@@ -43,7 +43,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 
 # --- parameters, each with its source ----------------------------------------
 
@@ -473,6 +473,12 @@ def read_gpx(path) -> list[Fix]:
                 t = datetime.fromisoformat(t_el.text.strip().replace("Z", "+00:00"))
             except ValueError:
                 t = None
+            # GPX 1.1 specifies xsd:dateTime in UTC, so a fix written without
+            # a designator is UTC by the format's own rule - not a guess. It
+            # is attached here rather than left naive so one track containing
+            # both spellings cannot raise on comparison later (#38).
+            if t is not None and t.utcoffset() is None:
+                t = t.replace(tzinfo=UTC)
         out.append(Fix(
             lat=float(e.get("lat")), lon=float(e.get("lon")),
             ele=float(ele_el.text) if ele_el is not None and ele_el.text else None,
