@@ -112,6 +112,20 @@ KEYS: dict[str, list[str]] = {
     # weigh-in in a week with no scale is not a lapse - and the coach uses it
     # to constrain what it asks for. Effective-dated like all policy (P2).
     "context": ["date", "mode", "facilities", "place", "source", "note"],
+    # What the ATHLETE said, in their own words. Deliberately NOT `inferences`,
+    # which is MODEL-inferred and carries a `model` field: filing a first-hand
+    # statement there would launder the athlete's own claim as engine output,
+    # which is P3 inverted. A journal entry is an OBSERVATION of a statement -
+    # that it was said, on a date, is ground truth even when what was said is a
+    # worry, a guess or an aspiration.
+    #
+    # `about` links loosely to a goal slug, a metric name or a body site, so a
+    # worry can be found again from the thing it concerns. `confidence` is how
+    # FIRMLY it was expressed - a passing "maybe I should" is not a decision -
+    # never how likely it is to be true. `status` lets a worry be resolved, or a
+    # grain of a goal be superseded once it becomes a real goal.
+    "journal": ["date", "kind", "text", "about", "source", "confidence",
+                "status", "note"],
 }
 
 SESSION_TYPES = {"run", "gym_a", "gym_b", "walk", "test", "other"}
@@ -153,7 +167,20 @@ ACTIVITY_CLASSES = {"run", "walk", "gym", "impact", "upper_body", "lower_body",
                     "all"}
 
 GOAL_POLICIES = {"monotonic", "guarded"}
-GOAL_STATUSES = {"active", "paused", "achieved", "abandoned"}
+# `proposed` is a GRAIN of a goal: mentioned, not committed. Without it a
+# half-formed intention has nowhere to live except prose, and the coach
+# cannot tell an aspiration from a decision - which matters, because
+# treating a musing as a commitment is how an athlete ends up held to
+# something they never actually chose.
+GOAL_STATUSES = {"proposed", "active", "paused", "achieved", "abandoned"}
+
+# Journal entry kinds. `claim` is the athlete asserting a fact about
+# themselves (checkable against the record); `worry` is a concern worth
+# surfacing later; `idea` is an unformed intention; `preference` shapes what
+# the coach may propose; `question` is something they asked that deserves an
+# answer when the data can give one.
+JOURNAL_KINDS = {"claim", "worry", "idea", "preference", "question", "note"}
+JOURNAL_STATUSES = {"open", "resolved", "superseded", "declined"}
 GOAL_PERIODS = {"none", "weekly", "monthly", "quarterly", "yearly"}
 ON_PERIOD_END = {"reset", "carry", "escalate"}
 CHANGE_KINDS = {"change", "correction"}
@@ -348,6 +375,15 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
         for k in ("statement", "model"):
             if not isinstance(rec.get(k), str) or not rec.get(k):
                 problems.append(f"'{k}' must be a non-empty string")
+    if dataset == "journal":
+        problems += _enum(rec, "kind", JOURNAL_KINDS)
+        problems += _enum(rec, "status", JOURNAL_STATUSES, optional=True)
+        if not isinstance(rec.get("text"), str) or not rec.get("text").strip():
+            problems.append("'text' must be a non-empty string - a journal "
+                            "entry with no words is not an entry")
+        if (c := rec.get("confidence")) is not None:
+            if isinstance(c, bool) or not isinstance(c, _NUMERIC) or not 0 <= c <= 1:
+                problems.append(f"'confidence' is 0-1 or null, got {c!r}")
     problems += _validate_policy(dataset, rec)
     return problems
 

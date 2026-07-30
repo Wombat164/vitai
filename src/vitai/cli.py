@@ -253,6 +253,27 @@ def cmd_safety(args: argparse.Namespace) -> None:
         raise SystemExit(2)
 
 
+def cmd_journal(args: argparse.Namespace) -> None:
+    """What the athlete said, and what is still open."""
+    rows = Vitai(args.root).journal(kind=args.kind, status=args.status,
+                                    about=args.about)
+    if not rows:
+        print("nothing recorded matching that filter")
+        return
+    for r in rows:
+        conf = r.get("confidence")
+        firmness = "" if conf is None else f" [{float(conf):.0%} firm]"
+        about = f" ({r['about']})" if r.get("about") else ""
+        state = r.get("status") or "open"
+        print(f"[{' ' if state == 'open' else 'x'}] {r['date']}  "
+              f"{r['kind']:<10}{about}{firmness}")
+        print(f"      {r['text']}")
+    openw = [r for r in rows if (r.get("status") or "open") == "open"
+             and r.get("kind") == "worry"]
+    if openw:
+        print(f"\n{len(openw)} open worry(ies) - these outrank the rate line.")
+
+
 def cmd_context(args: argparse.Namespace) -> None:
     """The situational mode in force on a date."""
     root = _root(args)
@@ -365,6 +386,8 @@ def main(argv: list[str] | None = None) -> None:
         ("resolve", cmd_resolve, "which source won each contested field, and why"),
         ("safety", cmd_safety, "active escalations and gates (exits 2 if urgent)"),
         ("context", cmd_context, "the situational mode in force on a date"),
+        ("journal", cmd_journal,
+         "what the athlete said: claims, worries, ideas, what is still open"),
         ("infer", cmd_infer, "opt-in: model reads the record, appends validated inferences"),
     ]:
         p = sub.add_parser(name, help=help_)
@@ -388,6 +411,13 @@ def main(argv: list[str] | None = None) -> None:
                            help="emit resolution rows as JSONL")
             p.add_argument("--date", metavar="YYYY-MM-DD",
                            help="only this date")
+        if name == "journal":
+            p.add_argument("--kind", default=None,
+                           help="claim|worry|idea|preference|question|note")
+            p.add_argument("--status", default=None,
+                           help="open|resolved|superseded|declined")
+            p.add_argument("--about", default=None,
+                           help="goal slug, metric or body site")
         if name == "context":
             p.add_argument("--json", action="store_true",
                            help="emit the context line as JSON")
