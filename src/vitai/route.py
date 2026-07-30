@@ -202,10 +202,15 @@ def simplify(points: list[Fix], epsilon_m: float = SIMPLIFY_EPSILON_M) -> list[F
     `epsilon_m` and discards everything collinear from above.
 
     So it is valid for shape: classification, LCSS similarity, start/end,
-    furthest point, bearing. It is valid for DISTANCE, where the error is
-    bounded by epsilon per segment and summing over the simplified vertices is
-    what the prior-art sweep prescribes (the alternative, a raw haversine sum,
-    overestimates because jitter adds phantom length on every sample).
+    furthest point, bearing.
+
+    It is INVALID FOR ANY INTEGRATED QUANTITY - distance as well as elevation.
+    An earlier version of this comment defended distance-on-simplified as what
+    the prior-art sweep prescribes; measurement over 99 real tracks settled it
+    the other way, at 0.9-3.2% short and always negative (#48). RDP cuts
+    corners by construction, so a length summed over its output is
+    systematically short. `analyse()` still reads distance from `used` pending
+    #48; this comment is the invariant, not a description of that line.
 
     It is INVALID for anything vertical. **The discarded points are the hill.**
     A gradual climb is a straight line seen from above, so RDP throws away
@@ -442,10 +447,9 @@ def analyse(points: list[Fix], barometric: bool = False) -> RouteStats:
     if len(used) < 2:
         used = cleaned if len(cleaned) >= 2 else raw
 
-    # Distance sums the SIMPLIFIED vertices, per the prior-art sweep: the
-    # error is bounded by epsilon per segment, while a raw sum overestimates
-    # because jitter adds phantom length on every sample. Elevation cannot
-    # follow it here - see `simplify` for why the two differ.
+    # KNOWN WRONG, tracked in #48: this is short by 0.9-3.2% because RDP cuts
+    # corners. Left in place only so the fix lands with its own measurement
+    # and its own test rather than riding along with a test deletion.
     dist = path_length_m(used)
     timed = [p for p in raw if p.t is not None]
     duration = (timed[-1].t - timed[0].t).total_seconds() if len(timed) >= 2 else None

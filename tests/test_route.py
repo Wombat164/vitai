@@ -281,15 +281,6 @@ def test_simplification_destroys_the_vertical_profile():
     assert (elevation_gain_m(thinned) or 0.0) < elevation_gain_m(cleaned) / 2
 
 
-def test_distance_still_reads_the_simplified_track():
-    """Distance legitimately differs from elevation here: RDP bounds the
-    horizontal error by epsilon per segment, so summing the simplified
-    vertices is what the prior-art sweep prescribes. Asserted so nobody
-    'fixes' distance to match elevation and diverges from the sweep."""
-    track = _undulating_track()
-    assert analyse(track).distance_m == path_length_m(simplify(clean(track)))
-
-
 def test_raw_distance_overestimates_a_jittering_track():
     """The reason distance does not read the raw fixes: jitter adds phantom
     length on every sample. Needs a fixture that actually jitters - the
