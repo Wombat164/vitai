@@ -106,6 +106,8 @@ error - stops being offered, and resolves forward.
 | **ICF** (WHO) | **Reference the framework, vendor nothing** | ICF is the reference classification for activity limitation and informs the shape of the restriction axes. But WHO licenses ICF **on the same terms as ICD** - free to reference, distribution needs formal permission. This is the SNOMED CT situation from #9 again: map outward, never ship. |
 | **SNOMED CT** | **Avoid as content** | Established in #9: non-Affiliates may not distribute its content or derivatives, and this is a public MIT repo anyone may fork. |
 | **HL7 FHIR / openEHR post-coordination** | **Adopt the pattern** | Already adopted for laterality in #9; the restriction axes are the same idea applied to movement. |
+| **Strava `SportType`** | **Adopt 47 of the 50 as the activity axis** | A maintained, consumer-grade taxonomy that covers the field, and the count matched the athlete's request without tuning. Adopted because a 13-value vocabulary put 436 of 1,502 real imported activities (29%) into `other`. The three NOT adopted are `VirtualRun` / `VirtualRide` / `VirtualRow`, which pre-coordinate an activity with a modality - they resolve to the activity, and the modality goes in `setting`. |
+| **Apple HealthKit `HKWorkoutActivityType`** | **Map outward, vendor nothing** | ~80 values and a superset of Strava's, recorded per type as `healthkit` so an Apple Health import maps onto this axis rather than needing its own vocabulary. |
 | **RFC 5545 (iCalendar) VEVENT** | **Adopt the shape and the STATUS values** | The open standard for a dated occurrence: uid, start, summary, location, categories, status. Adopting its shape rather than inventing one means an event can round-trip to a real calendar later, which is where most of these actually live. `tentative \| confirmed \| cancelled` is taken verbatim. |
 | **Friel A/B/C race prioritisation** | **Adopt as a separate axis** | The standard periodisation convention: an A event gets a full taper and the season is built around it, a B event a minimal one, a C event is trained through. Generalises past racing - a wedding is an A fixture, a routine check-up a C - and it is what stops every declared event from demanding a taper. |
 
@@ -124,16 +126,32 @@ Before a vocabulary ships, from `skills/vitai-validate/SKILL.md`:
 
 ## Status
 
-Migrated to registries: **session types** (`session_types.toml`),
-**restrictions** (`restrictions.toml`, five axes) and **events**
-(`events.toml`, two axes: `kind` and `priority`).
+Migrated to registries: **session types** (`session_types.toml`, now the 50
+Strava sport types), **settings** (`settings.toml`), **restrictions**
+(`restrictions.toml`, five axes) and **events** (`events.toml`, two axes:
+`kind` and `priority`).
 
 Still Python sets, with their defects documented above and unfixed:
-`CONTEXT_MODES`, `SETTINGS`, `WEATHERS`, `MEASUREMENT_KINDS`,
-`SESSION_CONTEXTS`, `PROVIDER_TYPES`, `FEELS`. None of them is safety-bearing,
+`CONTEXT_MODES`, `WEATHERS`, `MEASUREMENT_KINDS`, `SESSION_CONTEXTS`,
+`PROVIDER_TYPES`, `FEELS`. None of them is safety-bearing,
 which is why they queued behind the ones that are. They are the next slice.
 
-Three judgement calls recorded rather than hidden:
+**One rule the vendors themselves break.** Polar ships `OTHER_OUTDOOR` and
+`OTHER_INDOOR`; Strava ships the `Virtual*` trio. Both pre-coordinate a
+setting into an activity name, and copying either would size this registry by
+the cross-product rather than by the world - ten activities across three
+settings is thirty tokens, or ten values and one axis. `setting` is the
+second axis, and `other` + `setting` is the catchall the athlete asked for.
+
+Four judgement calls recorded rather than hidden:
+
+- **Coarse values are kept, not retired.** `wintersport`, `sport`, `paddle`
+  and `mobility` predate the expansion and have no single defensible target -
+  `wintersport` is not AlpineSki any more than it is Snowboard. Retiring them
+  would need a mapping nobody can defend, so they stay legal, and an athlete
+  who only knows "some winter sport" can still say so. The registry therefore
+  carries two granularities on one axis, which is hierarchy rather than the
+  mixed-axis defect.
 
 - **`deadline_kind` and `verification` stay Python sets.** Both are complete
   answers to one closed question - "may the athlete move this date" and "who

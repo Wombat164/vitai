@@ -1,122 +1,461 @@
-# Session types - a curated registry (P5), not a Python set.
+# Session types - the ACTIVITY axis, and only the activity axis.
 #
-# WHAT WAS WRONG: this vocabulary shipped `gym_a` and `gym_b` - ONE athlete's
-# programme labels (Strength A / Strength B) - in a public MIT engine. Nobody
-# else has a `gym_a`. Meanwhile cycling, swimming, rowing, hiking, yoga,
-# climbing, skiing and every team and racket sport collapsed to `other`.
+# WHAT WAS WRONG, twice. First (#18) this shipped `gym_a` and `gym_b` - one
+# athlete's programme labels - in a public engine. Then the vocabulary proved
+# too COARSE: importing 1,502 real activities put 436 of them (29%) into
+# `other`, because thirteen broad categories cannot express `Outdoor Bike`,
+# `Elliptical Trainer` or `Running (jogging), 9 mph`.
 #
-# It was written from the examples in front of the author rather than designed
-# as a taxonomy, which is G85 exactly.
+# THE PRIOR ART, and it is not hand-assembled. Strava's `SportType` is exactly
+# 50 values - a maintained, consumer-grade taxonomy that covers the field.
+# Apple HealthKit's `HKWorkoutActivityType` (~80 values) is a superset and is
+# recorded per type as `healthkit`, so an Apple Health import maps outward
+# rather than needing its own vocabulary. The Compendium of Physical
+# Activities remains the academic grounding for energy, cited as `compendium`
+# at major-heading level where the mapping is clean and left BLANK where it is
+# not - guessing a code is worse than shipping none.
 #
-# THE PRIOR ART (docs/vocabularies.md records the sweep):
+# 47 OF THE 50 ARE ADOPTED AS VALUES. Three are not, deliberately:
+# `VirtualRun`, `VirtualRide` and `VirtualRow` pre-coordinate an activity with
+# a modality, which is the exact defect this file exists to avoid. They are
+# expressed as the activity plus `setting = "virtual"` (see settings.toml),
+# and are listed in [retired] so an import naming them still resolves.
 #
-# The Compendium of Physical Activities (Ainsworth et al.) is the reference
-# for classifying physical activity. It uses a 5-digit code: the first two
-# digits are a MAJOR HEADING (bicycling, conditioning, running, water
-# activities, sports, ...), the last three a specific activity, across 600+
-# activities. The major-heading level is the right granularity here - an
-# athlete choosing from a dozen options in a three-minute weekly ritual is a
-# different problem from a researcher coding 605, and solving the second one
-# here would break the first.
+# The same applies to the catchalls the athlete asked for. `outdoor_other` is
+# not an activity - it is `other` plus `setting = "outdoor"`. Polar ships
+# `OTHER_OUTDOOR` and `OTHER_INDOOR` as single tokens and Strava ships the
+# Virtual trio; both pre-coordinate, and copying either would multiply this
+# registry by the size of the setting axis instead of adding one field.
 #
-# `compendium` records the major-heading number where one maps cleanly. Blank
-# means no clean mapping, not "unclassified" - guessing a code is worse than
-# shipping none, the same rule the body-site registry follows for OSIICS.
+# LEGACY COARSE VALUES ARE KEPT, NOT RETIRED. `wintersport`, `sport`, `paddle`
+# and `mobility` predate this expansion and have no single defensible target -
+# `wintersport` is not AlpineSki any more than it is Snowboard. Retiring them
+# would need a mapping nobody can defend, so they stay legal and an athlete
+# who only knows "some winter sport" can still say so.
 #
-# EXTENDING IT: an athlete whose sport is missing should get it added here,
-# not be told to log `other`. That is the whole reason this is a registry -
-# a vocabulary in code can only ever contain what the developer had seen.
+# EXTENDING IT: an athlete-defined activity is a first-class value here, added
+# as a curated entry. It must NEVER be fuzzy-matched into one of the canonical
+# 47 - a matcher that turns "Running (jogging), 9 mph" into `run` will also
+# turn something else into `run` silently, and nobody will find out. Aliases
+# are curated data; nothing guesses at import time.
 #
 # `classes` names the restriction classes a session of this type falls under,
-# which is what gates match against. It lives here rather than hardcoded in
-# safety.py so that adding a sport does not require editing the safety layer.
+# which is what gates match against. It lives here rather than in safety.py so
+# adding a sport does not mean editing the safety layer.
 
-version = 1
+version = 2
+
+# Fields whose values are also accepted spellings (see vocab._index).
+alias_fields = ["strava", "healthkit"]
+
+
+# --- the adopted Strava SportType axis ---------------------------------------
 
 [types.run]
 label = "Run"
+strava = "Run"
+healthkit = "HKWorkoutActivityTypeRunning"
 compendium = 12
 classes = ["run", "impact", "cardio", "lower_body"]
 aliases = ["running", "jog", "jogging", "running (jogging), 9 mph (6.5 min mile) (myfitnesspal)", "running (jogging), 5 mph (12 min mile) (myfitnesspal)", "running (jogging), 6 mph (10 min mile) (myfitnesspal)"]
 
+[types.trail_run]
+label = "Trail run"
+strava = "TrailRun"
+healthkit = "HKWorkoutActivityTypeRunning"
+compendium = 12
+classes = ["run", "impact", "cardio", "lower_body"]
+aliases = ["trail running", "fell run"]
+
 [types.walk]
 label = "Walk"
+strava = "Walk"
+healthkit = "HKWorkoutActivityTypeWalking"
 compendium = 17
 classes = ["walk", "cardio", "lower_body"]
-aliases = ["walking", "hike", "hiking", "ramble", "walking, general (myfitnesspal)"]
+aliases = ["walking", "ramble", "stroll", "walking, general (myfitnesspal)"]
+
+[types.hike]
+label = "Hike"
+strava = "Hike"
+healthkit = "HKWorkoutActivityTypeHiking"
+compendium = 17
+classes = ["walk", "cardio", "lower_body"]
+aliases = ["hiking", "trek", "trekking"]
 
 [types.cycle]
 label = "Cycle"
+strava = "Ride"
+healthkit = "HKWorkoutActivityTypeCycling"
 compendium = 1
 classes = ["cycle", "cardio", "lower_body"]
-aliases = ["bike", "biking", "cycling", "ride", "spin", "turbo", "outdoor bike", "bicycling, 12-14 mph, moderate (cycling, biking, bike riding) (myfitnesspal)", "stationary bike, moderate effort (bicycling, cycling, biking) (myfitnesspal)"]
+aliases = ["bike", "biking", "cycling", "ride", "spin", "turbo", "outdoor bike", "road cycling", "bicycling, 12-14 mph, moderate (cycling, biking, bike riding) (myfitnesspal)", "stationary bike, moderate effort (bicycling, cycling, biking) (myfitnesspal)"]
+
+[types.mountain_bike_ride]
+label = "Mountain bike"
+strava = "MountainBikeRide"
+healthkit = "HKWorkoutActivityTypeCycling"
+compendium = 1
+classes = ["cycle", "cardio", "lower_body"]
+aliases = ["mtb", "mountain biking", "offroad bike"]
+
+[types.gravel_ride]
+label = "Gravel ride"
+strava = "GravelRide"
+healthkit = "HKWorkoutActivityTypeCycling"
+compendium = 1
+classes = ["cycle", "cardio", "lower_body"]
+aliases = ["gravel", "gravel bike"]
+
+[types.ebike_ride]
+label = "E-bike ride"
+strava = "EBikeRide"
+healthkit = "HKWorkoutActivityTypeCycling"
+compendium = 1
+classes = ["cycle", "cardio"]
+aliases = ["ebike", "e-bike", "pedelec"]
+
+[types.emountain_bike_ride]
+label = "E-mountain bike"
+strava = "EMountainBikeRide"
+healthkit = "HKWorkoutActivityTypeCycling"
+compendium = 1
+classes = ["cycle", "cardio"]
+aliases = ["emtb", "e-mtb"]
+
+[types.handcycle]
+label = "Handcycle"
+strava = "Handcycle"
+healthkit = "HKWorkoutActivityTypeHandCycling"
+classes = ["cycle", "cardio", "upper_body"]
+aliases = ["hand cycling", "handbike"]
+
+[types.velomobile]
+label = "Velomobile"
+strava = "Velomobile"
+classes = ["cycle", "cardio"]
+aliases = ["velomobiel"]
+
+[types.wheelchair]
+label = "Wheelchair"
+strava = "Wheelchair"
+healthkit = "HKWorkoutActivityTypeWheelchairRunPace"
+classes = ["cardio", "upper_body"]
+aliases = ["wheelchair push"]
 
 [types.swim]
 label = "Swim"
+strava = "Swim"
+healthkit = "HKWorkoutActivityTypeSwimming"
 compendium = 18
 classes = ["swim", "cardio", "upper_body", "lower_body"]
-aliases = ["swimming", "pool", "swimming laps, freestyle, light/moderate effort (myfitnesspal)"]
+aliases = ["swimming", "lengths", "lane swim", "swimming laps, freestyle, light/moderate effort (myfitnesspal)"]
 
 [types.row]
 label = "Row"
-compendium = 2
+strava = "Rowing"
+healthkit = "HKWorkoutActivityTypeRowing"
+compendium = 15
 classes = ["row", "cardio", "upper_body", "lower_body"]
-aliases = ["rowing", "erg", "ergo"]
+aliases = ["rowing", "erg", "ergo", "concept2"]
 
-[types.strength]
-label = "Strength training"
-compendium = 2
-classes = ["strength", "upper_body", "lower_body"]
-# `gym_a` and `gym_b` were one athlete's programme labels. They resolve here
-# so existing lines keep working and keep meaning what they meant.
-aliases = ["gym", "gym_a", "gym_b", "weights", "lifting", "resistance", "strength training (weight lifting, weight training) (myfitnesspal)"]
-
-[types.mobility]
-label = "Mobility, yoga or stretching"
-compendium = 2
-classes = ["mobility"]
-aliases = ["yoga", "pilates", "stretching", "stretch", "rehab", "physio"]
-
-[types.climb]
-label = "Climbing"
-compendium = 15
-classes = ["climb", "upper_body"]
-aliases = ["climbing", "bouldering", "boulder"]
-
-[types.sport]
-label = "Sport or game"
-compendium = 15
-classes = ["sport", "impact", "cardio"]
-aliases = ["football", "soccer", "tennis", "squash", "basketball", "hockey",
-           "badminton", "padel", "rugby", "cricket", "netball"]
-
-[types.wintersport]
-label = "Winter sport"
-compendium = 19
-classes = ["wintersport", "cardio", "lower_body"]
-aliases = ["ski", "skiing", "snowboard", "snowboarding", "skating", "ice skating"]
-
-[types.paddle]
-label = "Paddle sport"
+[types.canoeing]
+label = "Canoeing"
+strava = "Canoeing"
+healthkit = "HKWorkoutActivityTypePaddleSports"
 compendium = 18
 classes = ["paddle", "cardio", "upper_body"]
-aliases = ["kayak", "kayaking", "canoe", "canoeing", "sup", "paddleboard"]
+aliases = ["canoe"]
 
-[types.test]
-label = "Fitness test or time trial"
-classes = ["run", "impact", "cardio"]
-aliases = ["time trial", "tt", "benchmark"]
+[types.kayaking]
+label = "Kayaking"
+strava = "Kayaking"
+healthkit = "HKWorkoutActivityTypePaddleSports"
+compendium = 18
+classes = ["paddle", "cardio", "upper_body"]
+aliases = ["kayak"]
+
+[types.stand_up_paddling]
+label = "Stand-up paddling"
+strava = "StandUpPaddling"
+healthkit = "HKWorkoutActivityTypePaddleSports"
+compendium = 18
+classes = ["paddle", "upper_body"]
+aliases = ["sup", "paddleboard", "paddle boarding"]
+
+[types.surfing]
+label = "Surfing"
+strava = "Surfing"
+healthkit = "HKWorkoutActivityTypeSurfingSports"
+compendium = 18
+classes = ["sport", "upper_body"]
+aliases = ["surf"]
+
+[types.kitesurf]
+label = "Kitesurf"
+strava = "Kitesurf"
+healthkit = "HKWorkoutActivityTypeSurfingSports"
+compendium = 18
+classes = ["sport", "upper_body"]
+aliases = ["kiteboarding", "kite surfing"]
+
+[types.windsurf]
+label = "Windsurf"
+strava = "Windsurf"
+healthkit = "HKWorkoutActivityTypeSurfingSports"
+compendium = 18
+classes = ["sport", "upper_body"]
+aliases = ["windsurfing"]
+
+[types.sail]
+label = "Sail"
+strava = "Sail"
+healthkit = "HKWorkoutActivityTypeSailing"
+compendium = 18
+classes = ["sport", "upper_body"]
+aliases = ["sailing"]
+
+[types.alpine_ski]
+label = "Alpine ski"
+strava = "AlpineSki"
+healthkit = "HKWorkoutActivityTypeDownhillSkiing"
+compendium = 19
+classes = ["wintersport", "lower_body"]
+aliases = ["downhill ski", "piste"]
+
+[types.backcountry_ski]
+label = "Backcountry ski"
+strava = "BackcountrySki"
+healthkit = "HKWorkoutActivityTypeCrossCountrySkiing"
+compendium = 19
+classes = ["wintersport", "cardio", "lower_body"]
+aliases = ["ski touring", "randonnee"]
+
+[types.nordic_ski]
+label = "Nordic ski"
+strava = "NordicSki"
+healthkit = "HKWorkoutActivityTypeCrossCountrySkiing"
+compendium = 19
+classes = ["wintersport", "cardio"]
+aliases = ["cross country ski", "langlauf"]
+
+[types.roller_ski]
+label = "Roller ski"
+strava = "RollerSki"
+compendium = 19
+classes = ["wintersport", "cardio"]
+aliases = ["rollerski"]
+
+[types.snowboard]
+label = "Snowboard"
+strava = "Snowboard"
+healthkit = "HKWorkoutActivityTypeSnowboarding"
+compendium = 19
+classes = ["wintersport", "lower_body"]
+aliases = ["boarding", "snowboarding"]
+
+[types.snowshoe]
+label = "Snowshoe"
+strava = "Snowshoe"
+healthkit = "HKWorkoutActivityTypeSnowSports"
+compendium = 19
+classes = ["walk", "wintersport", "cardio", "lower_body"]
+aliases = ["snowshoeing"]
+
+[types.ice_skate]
+label = "Ice skate"
+strava = "IceSkate"
+healthkit = "HKWorkoutActivityTypeSkatingSports"
+compendium = 19
+classes = ["wintersport", "cardio", "lower_body"]
+aliases = ["ice skating", "schaatsen"]
+
+[types.inline_skate]
+label = "Inline skate"
+strava = "InlineSkate"
+healthkit = "HKWorkoutActivityTypeSkatingSports"
+classes = ["cardio", "lower_body"]
+aliases = ["rollerblade", "inline skating"]
+
+[types.skateboard]
+label = "Skateboard"
+strava = "Skateboard"
+healthkit = "HKWorkoutActivityTypeSkatingSports"
+classes = ["cardio", "lower_body"]
+aliases = ["skateboarding"]
+
+[types.climb]
+label = "Climb"
+strava = "RockClimbing"
+healthkit = "HKWorkoutActivityTypeClimbing"
+compendium = 5
+classes = ["climb", "upper_body", "strength"]
+aliases = ["climbing", "bouldering", "rock climbing"]
+
+[types.strength]
+label = "Strength"
+strava = "WeightTraining"
+healthkit = "HKWorkoutActivityTypeTraditionalStrengthTraining"
+compendium = 2
+classes = ["strength", "upper_body", "lower_body"]
+aliases = ["weights", "lifting", "gym", "weight training", "resistance", "strength training (weight lifting, weight training) (myfitnesspal)"]
+
+[types.crossfit]
+label = "CrossFit"
+strava = "Crossfit"
+healthkit = "HKWorkoutActivityTypeCrossTraining"
+compendium = 2
+classes = ["strength", "cardio", "impact"]
+aliases = ["cross fit", "wod", "metcon"]
+
+[types.hiit]
+label = "High-intensity intervals"
+strava = "HighIntensityIntervalTraining"
+healthkit = "HKWorkoutActivityTypeHighIntensityIntervalTraining"
+compendium = 2
+classes = ["cardio", "strength", "impact"]
+aliases = ["hiit", "interval training", "tabata"]
+
+[types.elliptical]
+label = "Elliptical"
+strava = "Elliptical"
+healthkit = "HKWorkoutActivityTypeElliptical"
+compendium = 2
+classes = ["cardio", "lower_body"]
+aliases = ["elliptical trainer", "cross trainer", "crosstrainer"]
+
+[types.stair_stepper]
+label = "Stair stepper"
+strava = "StairStepper"
+healthkit = "HKWorkoutActivityTypeStairClimbing"
+compendium = 2
+classes = ["cardio", "lower_body"]
+aliases = ["stairmaster", "step machine", "stair climbing"]
+
+[types.yoga]
+label = "Yoga"
+strava = "Yoga"
+healthkit = "HKWorkoutActivityTypeYoga"
+compendium = 2
+classes = ["mobility"]
+aliases = ["yin", "vinyasa", "hatha"]
+
+[types.pilates]
+label = "Pilates"
+strava = "Pilates"
+healthkit = "HKWorkoutActivityTypePilates"
+compendium = 2
+classes = ["mobility", "strength"]
+aliases = ["reformer"]
+
+[types.golf]
+label = "Golf"
+strava = "Golf"
+healthkit = "HKWorkoutActivityTypeGolf"
+compendium = 15
+classes = ["sport"]
+aliases = ["golfing", "nine holes"]
+
+[types.soccer]
+label = "Football"
+strava = "Soccer"
+healthkit = "HKWorkoutActivityTypeSoccer"
+compendium = 15
+classes = ["sport", "impact", "cardio", "lower_body"]
+aliases = ["football", "voetbal", "five a side"]
+
+[types.tennis]
+label = "Tennis"
+strava = "Tennis"
+healthkit = "HKWorkoutActivityTypeTennis"
+compendium = 15
+classes = ["sport", "impact", "cardio"]
+aliases = []
+
+[types.table_tennis]
+label = "Table tennis"
+strava = "TableTennis"
+healthkit = "HKWorkoutActivityTypeTableTennis"
+compendium = 15
+classes = ["sport"]
+aliases = ["ping pong"]
+
+[types.badminton]
+label = "Badminton"
+strava = "Badminton"
+healthkit = "HKWorkoutActivityTypeBadminton"
+compendium = 15
+classes = ["sport", "impact", "cardio"]
+aliases = []
+
+[types.squash]
+label = "Squash"
+strava = "Squash"
+healthkit = "HKWorkoutActivityTypeSquash"
+compendium = 15
+classes = ["sport", "impact", "cardio"]
+aliases = []
+
+[types.racquetball]
+label = "Racquetball"
+strava = "Racquetball"
+healthkit = "HKWorkoutActivityTypeRacquetball"
+compendium = 15
+classes = ["sport", "impact", "cardio"]
+aliases = []
+
+[types.pickleball]
+label = "Pickleball"
+strava = "Pickleball"
+healthkit = "HKWorkoutActivityTypePickleball"
+compendium = 15
+classes = ["sport", "impact", "cardio"]
+aliases = []
 
 [types.other]
 label = "Other"
+strava = "Workout"
+healthkit = "HKWorkoutActivityTypeOther"
 classes = []
-aliases = []
+aliases = ["workout", "training", "activity", "session"]
 
-# --- retired values -----------------------------------------------------------
-# A value-level retirement, which the key-level KEY_RETIREMENT could not do.
-# These stay LEGAL forever - an old line carrying `gym_a` is history, not an
-# error - but they stop being offered, and the engine reads them forward to
-# their replacement.
+# --- coarse values that predate the expansion, kept because no single
+# --- canonical value is a defensible target for them ------------------------
+
+[types.wintersport]
+label = "Winter sport (unspecified)"
+classes = ["wintersport", "cardio", "lower_body"]
+aliases = ["snow sports", "ski or board", "ski", "skiing", "skating"]
+coarse = true
+
+[types.sport]
+label = "Team or racket sport (unspecified)"
+classes = ["sport", "impact", "cardio"]
+aliases = ["match", "game", "ball sport"]
+coarse = true
+
+[types.paddle]
+label = "Paddle sport (unspecified)"
+classes = ["paddle", "cardio", "upper_body"]
+aliases = ["paddling"]
+coarse = true
+
+[types.mobility]
+label = "Mobility"
+classes = ["mobility"]
+aliases = ["stretch", "stretching", "foam rolling", "rehab"]
+coarse = true
+
+[types.test]
+label = "Fitness test"
+classes = ["cardio", "run", "impact"]
+aliases = ["assessment", "time trial", "benchmark"]
+coarse = true
+
+# --- retired ------------------------------------------------------------------
+# Legal forever - an old line is history, not an error - no longer offered,
+# and resolved forward.
+
 [retired.gym_a]
 maps_to = "strength"
 since_gen = 2
@@ -126,3 +465,33 @@ reason = "one athlete's programme label (Strength A) in a public engine"
 maps_to = "strength"
 since_gen = 2
 reason = "one athlete's programme label (Strength B) in a public engine"
+
+[retired.virtual_run]
+aliases = ["VirtualRun"]
+maps_to = "run"
+since_gen = 3
+reason = "Strava VirtualRun pre-coordinates activity with modality; write run + setting=virtual"
+
+[retired.virtual_ride]
+aliases = ["VirtualRide"]
+maps_to = "cycle"
+since_gen = 3
+reason = "Strava VirtualRide pre-coordinates activity with modality; write cycle + setting=virtual"
+
+[retired.virtual_row]
+aliases = ["VirtualRow"]
+maps_to = "row"
+since_gen = 3
+reason = "Strava VirtualRow pre-coordinates activity with modality; write row + setting=virtual"
+
+[retired.other_outdoor]
+aliases = ["OTHER_OUTDOOR"]
+maps_to = "other"
+since_gen = 3
+reason = "Polar OTHER_OUTDOOR pre-coordinates the catchall with a setting; write other + setting=outdoor"
+
+[retired.other_indoor]
+aliases = ["OTHER_INDOOR"]
+maps_to = "other"
+since_gen = 3
+reason = "Polar OTHER_INDOOR pre-coordinates the catchall with a setting; write other + setting=indoor"
