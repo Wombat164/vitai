@@ -5,6 +5,62 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **Vocabularies are curated registries, not Python sets** (#18, G85).
+  `semantics/session_types.toml` and `semantics/restrictions.toml` join
+  `body_sites.toml`, loaded by a new `vitai.vocab`.
+
+  The root cause, stated plainly: *a vocabulary in code can only be extended
+  by a developer, so it can only ever contain what the developer had seen.*
+  `gym_a` and `gym_b` - one athlete's Strength A and Strength B days - shipped
+  in a public MIT engine, while cycling, swimming, rowing, hiking, yoga,
+  climbing, skiing and every team and racket sport collapsed to `other`.
+- **Restrictions are post-coordinated.** `ACTIVITY_CLASSES` mixed a scope
+  quantifier, a setting, a loading modality, anatomical regions and specific
+  activities in one flat list, and could not express two real clinical gates:
+
+  | The clinician said | The old vocabulary |
+  |---|---|
+  | No loaded lumbar flexion | no value came close |
+  | No loaded hip work, squats still fine | `lower_body` bans the permitted squats |
+
+  Both sat in a live record with `restricts: null` and a RESTRICTION NOT
+  ENFORCEABLE marker, because a wrong gate is worse than an unenforced one -
+  so an athlete with an active injury gate got `no active safety escalations`.
+  A new `restriction` field (gen 3) says it on separate axes:
+  `pattern=hinge region=hip load=loaded`. An absent axis means "any"; a squat
+  is `pattern=squat`, so the hip rule leaves it alone. `region` reuses
+  `body_sites.toml` wholesale, sites and regions and aliases - "lumbar"
+  resolves to `lower_back`.
+- **`Vitai`/`safety` gained `is_movement_gated`** for "may I do a hip thrust
+  today", alongside `is_gated`'s "may I run today".
+- **Session-to-gate-class mapping moved into the registry.** The hardcoded map
+  gave `gym_a` and `gym_b` identical class sets, so the two labels carried no
+  gating information at all - which is its own evidence they were programme
+  names rather than a taxonomy.
+- **A goal can be scoped to `weight`** (folded in from #24): `dataset` accepted
+  only `daily`/`sessions`, so a weight goal - the most common goal in the
+  domain - had nowhere to point.
+- `docs/vocabularies.md` records the rule and the sweep.
+
+### Fixed
+- The rollup counted strength sessions with `startswith("gym")`, which would
+  have silently zeroed the weekly column on any rename. No test covered it;
+  one does now.
+
+### Deliberately not done
+- **`gym_a`/`gym_b` are retired, not deleted.** A value-level retirement
+  (`KEY_RETIREMENT` works on keys, not values): they stay legal forever, stop
+  being offered, and resolve forward to `strength`.
+- **`severity` keeps `red_flag`.** It does mix a magnitude scale with a
+  routing decision, but it is what the safety asymmetry rests on and what the
+  ingest skill instructs writing. Its own change, not a side effect here.
+- **`restricts` survives as a coarse projection**, so no read-model consumer
+  breaks.
+- Seven non-safety vocabularies (`CONTEXT_MODES`, `SETTINGS`, `WEATHERS`,
+  `MEASUREMENT_KINDS`, `SESSION_CONTEXTS`, `PROVIDER_TYPES`, `FEELS`) are
+  still Python sets with their defects documented. Next slice.
+
 Safety layer: the persona guardrail fixtures now hold (issue #12). All eight
 `xfail(strict=True)` specifications flip to passing.
 ### Added

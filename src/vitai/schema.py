@@ -120,7 +120,8 @@ KEYS: dict[str, list[str]] = {
     # `precondition` names a daily check that must PASS before the gate lifts.
     "medical": ["date", "slug", "kind", "title", "body_site", "severity",
                 "status", "resolved_date", "restricts", "provider_type",
-                "source", "note", "expects", "onset_date", "precondition"],
+                "source", "note", "expects", "onset_date", "precondition",
+                "restriction"],
     # The result of a named check, on a day (G28 gate mechanics). A rehab plan
     # says "5 gentle hops before each run; pain in the hip means do not run
     # today" - a gate CONDITIONAL on a test performed that morning. Without
@@ -148,7 +149,16 @@ KEYS: dict[str, list[str]] = {
                 "status", "note"],
 }
 
-SESSION_TYPES = {"run", "gym_a", "gym_b", "walk", "test", "other"}
+# Sourced from semantics/session_types.toml (G85): a curated registry, not a
+# set written from one athlete's examples. Retired values (`gym_a`, `gym_b`)
+# stay legal and resolve forward - see vocab.is_retired / resolve_session_type.
+def _session_types() -> set[str]:
+    from .vocab import registry, retired
+    return set(registry("session_types").get("types") or {}) | set(
+        retired("session_types"))
+
+
+SESSION_TYPES = _session_types()
 INFERENCE_KINDS = {"pattern", "risk", "recommendation", "observation", "question"}
 
 # Generation-2 vocabularies. All are COARSE on purpose: a closed, small set is
@@ -203,8 +213,16 @@ SEVERITIES = {"none", "mild", "moderate", "severe", "red_flag"}
 
 # Activity classes an episode can gate. Closed, so a gate is machine-checkable
 # against a session rather than a sentence someone has to interpret.
-ACTIVITY_CLASSES = {"run", "walk", "gym", "impact", "upper_body", "lower_body",
-                    "all"}
+def _activity_classes() -> set[str]:
+    from .vocab import registry, retired
+    return set(registry("restrictions").get("activity") or {}) | set(
+        retired("restrictions"))
+
+
+ACTIVITY_CLASSES = _activity_classes()
+
+# Datasets a goal may scope its contributing events to.
+GOAL_DATASETS = {"daily", "sessions", "weight", "measurements"}
 
 GOAL_POLICIES = {"monotonic", "guarded"}
 # `proposed` is a GRAIN of a goal: mentioned, not committed. Without it a
@@ -253,7 +271,8 @@ KEY_GENERATION: dict[str, dict[str, int]] = {
                  "route": 2, "place": 2, "with": 2, "context": 2,
                  "planned": 2, "weather": 2},
     "inferences": {"depends_on": 2},
-    "medical": {"expects": 2, "onset_date": 2, "precondition": 2},
+    "medical": {"expects": 2, "onset_date": 2, "precondition": 2,
+                "restriction": 3},
     "achievements": {"occurred_date": 2},
 }
 
@@ -272,6 +291,8 @@ CURRENT_GENERATION: dict[str, int] = {name: 1 for name in KEYS}
 for _ds in ("weight", "daily", "sessions", "inferences", "medical",
             "achievements"):
     CURRENT_GENERATION[_ds] = 2
+# Generation 3 adds the post-coordinated `restriction` spec to medical.
+CURRENT_GENERATION["medical"] = 3
 
 
 def key_generation(dataset: str, key: str) -> int:
@@ -491,10 +512,15 @@ def _validate_medical(rec: dict) -> list[str]:
     if rec.get("status") != "resolved" and rec.get("resolved_date"):
         problems.append("'resolved_date' set but status is not 'resolved'")
 
+    from .vocab import restriction_problems
     for cls in _restriction_classes(rec):
         if cls not in ACTIVITY_CLASSES:
             problems.append(f"unknown activity class {cls!r} in 'restricts' - "
                             f"use one of {sorted(ACTIVITY_CLASSES)}")
+    # The post-coordinated form (G85). `restricts` stays the coarse projection
+    # a consumer already reads; `restriction` says what the clinician actually
+    # said, on separate axes, so "no loaded hip work" can leave squats alone.
+    problems += restriction_problems(rec.get("restriction"))
     for token in _tokens(rec.get("expects")):
         if token not in EXPECTATIONS:
             problems.append(f"unknown expectation {token!r} in 'expects' - "
@@ -601,8 +627,11 @@ def _validate_policy(dataset: str, rec: dict) -> list[str]:
         if not isinstance(rec.get("metric"), str) or not rec.get("metric"):
             problems.append("'metric' must be a non-empty string "
                             f"(a dataset column or {EXTERNAL_METRIC!r})")
-        if (ds := rec.get("dataset")) is not None and ds not in ("daily", "sessions"):
-            problems.append(f"'dataset' scopes to 'daily' or 'sessions', got {ds!r}")
+        # G86/G85: `dataset` used to scope only to daily|sessions, so a WEIGHT
+        # goal - the most common goal in the domain - had nowhere to point.
+        if (ds := rec.get("dataset")) is not None and ds not in GOAL_DATASETS:
+            problems.append(f"'dataset' scopes to one of {sorted(GOAL_DATASETS)}, "
+                            f"got {ds!r}")
         if (st := rec.get("session_type")) is not None and st not in SESSION_TYPES:
             problems.append(f"'session_type' must be one of {sorted(SESSION_TYPES)}, "
                             f"got {st!r}")
