@@ -13,6 +13,7 @@ from datetime import date, datetime, timedelta
 from statistics import mean
 
 from .config import Config, phase_rate_for
+from .vocab import session_classes
 
 
 def _rolling(points: list[tuple[str, float]], window: int = 7) -> list[tuple[str, float | None]]:
@@ -129,7 +130,7 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
             w["runs"] += 1
             if s.get("type") == "run" and s.get("avg_hr"):
                 w["hr"].append(s["avg_hr"])
-        elif str(s.get("type", "")).startswith("gym"):
+        elif "strength" in session_classes(s.get("type")):
             w["gym"] += 1
     if by_week:
         L += ["| Week of | km | Runs | Gym | Avg HR | Easy-cap? |", "|---|---|---|---|---|---|"]

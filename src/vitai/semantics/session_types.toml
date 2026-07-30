@@ -1,0 +1,128 @@
+# Session types - a curated registry (P5), not a Python set.
+#
+# WHAT WAS WRONG: this vocabulary shipped `gym_a` and `gym_b` - ONE athlete's
+# programme labels (Strength A / Strength B) - in a public MIT engine. Nobody
+# else has a `gym_a`. Meanwhile cycling, swimming, rowing, hiking, yoga,
+# climbing, skiing and every team and racket sport collapsed to `other`.
+#
+# It was written from the examples in front of the author rather than designed
+# as a taxonomy, which is G85 exactly.
+#
+# THE PRIOR ART (docs/vocabularies.md records the sweep):
+#
+# The Compendium of Physical Activities (Ainsworth et al.) is the reference
+# for classifying physical activity. It uses a 5-digit code: the first two
+# digits are a MAJOR HEADING (bicycling, conditioning, running, water
+# activities, sports, ...), the last three a specific activity, across 600+
+# activities. The major-heading level is the right granularity here - an
+# athlete choosing from a dozen options in a three-minute weekly ritual is a
+# different problem from a researcher coding 605, and solving the second one
+# here would break the first.
+#
+# `compendium` records the major-heading number where one maps cleanly. Blank
+# means no clean mapping, not "unclassified" - guessing a code is worse than
+# shipping none, the same rule the body-site registry follows for OSIICS.
+#
+# EXTENDING IT: an athlete whose sport is missing should get it added here,
+# not be told to log `other`. That is the whole reason this is a registry -
+# a vocabulary in code can only ever contain what the developer had seen.
+#
+# `classes` names the restriction classes a session of this type falls under,
+# which is what gates match against. It lives here rather than hardcoded in
+# safety.py so that adding a sport does not require editing the safety layer.
+
+version = 1
+
+[types.run]
+label = "Run"
+compendium = 12
+classes = ["run", "impact", "cardio", "lower_body"]
+aliases = ["running", "jog", "jogging"]
+
+[types.walk]
+label = "Walk"
+compendium = 17
+classes = ["walk", "cardio", "lower_body"]
+aliases = ["walking", "hike", "hiking", "ramble"]
+
+[types.cycle]
+label = "Cycle"
+compendium = 1
+classes = ["cycle", "cardio", "lower_body"]
+aliases = ["bike", "biking", "cycling", "ride", "spin", "turbo"]
+
+[types.swim]
+label = "Swim"
+compendium = 18
+classes = ["swim", "cardio", "upper_body", "lower_body"]
+aliases = ["swimming", "pool"]
+
+[types.row]
+label = "Row"
+compendium = 2
+classes = ["row", "cardio", "upper_body", "lower_body"]
+aliases = ["rowing", "erg", "ergo"]
+
+[types.strength]
+label = "Strength training"
+compendium = 2
+classes = ["strength", "upper_body", "lower_body"]
+# `gym_a` and `gym_b` were one athlete's programme labels. They resolve here
+# so existing lines keep working and keep meaning what they meant.
+aliases = ["gym", "gym_a", "gym_b", "weights", "lifting", "resistance"]
+
+[types.mobility]
+label = "Mobility, yoga or stretching"
+compendium = 2
+classes = ["mobility"]
+aliases = ["yoga", "pilates", "stretching", "stretch", "rehab", "physio"]
+
+[types.climb]
+label = "Climbing"
+compendium = 15
+classes = ["climb", "upper_body"]
+aliases = ["climbing", "bouldering", "boulder"]
+
+[types.sport]
+label = "Sport or game"
+compendium = 15
+classes = ["sport", "impact", "cardio"]
+aliases = ["football", "soccer", "tennis", "squash", "basketball", "hockey",
+           "badminton", "padel", "rugby", "cricket", "netball"]
+
+[types.wintersport]
+label = "Winter sport"
+compendium = 19
+classes = ["wintersport", "cardio", "lower_body"]
+aliases = ["ski", "skiing", "snowboard", "snowboarding", "skating"]
+
+[types.paddle]
+label = "Paddle sport"
+compendium = 18
+classes = ["paddle", "cardio", "upper_body"]
+aliases = ["kayak", "kayaking", "canoe", "canoeing", "sup", "paddleboard"]
+
+[types.test]
+label = "Fitness test or time trial"
+classes = ["run", "impact", "cardio"]
+aliases = ["time trial", "tt", "benchmark"]
+
+[types.other]
+label = "Other"
+classes = []
+aliases = []
+
+# --- retired values -----------------------------------------------------------
+# A value-level retirement, which the key-level KEY_RETIREMENT could not do.
+# These stay LEGAL forever - an old line carrying `gym_a` is history, not an
+# error - but they stop being offered, and the engine reads them forward to
+# their replacement.
+[retired.gym_a]
+maps_to = "strength"
+since_gen = 2
+reason = "one athlete's programme label (Strength A) in a public engine"
+
+[retired.gym_b]
+maps_to = "strength"
+since_gen = 2
+reason = "one athlete's programme label (Strength B) in a public engine"

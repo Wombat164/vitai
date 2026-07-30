@@ -141,7 +141,7 @@ def _build(target: Path) -> None:
                 run["location"] = None
             sessions.append(run)
         if dow in (5, 6) and rng.random() < 0.8:            # weekend gym
-            gym = {"date": d, "type": rng.choice(["gym_a", "gym_b"]),
+            gym = {"date": d, "type": "strength",
                    "distance_km": None,
                    "duration_s": int(rng.gauss(3300, 400)),
                    "avg_hr": None, "max_hr": None, "cadence": None,
@@ -336,7 +336,11 @@ def _medical(start: date, end: date) -> list[dict]:
          "source": "athlete",
          "note": "stiff first thing; eases once warm - watching it",
          "onset_date": (end - timedelta(days=6)).isoformat(),
-         "precondition": "hop-test", "expects": None, "_gen": 2},
+         "precondition": "hop-test", "expects": None,
+         # Post-coordinated (G85): impact is the coarse projection, and the
+         # structured spec says what the physio actually said - loaded calf
+         # work is out, everything else on that leg is fine.
+         "restriction": "pattern=jump region=achilles load=loaded", "_gen": 3},
         # A historical episode, entered late: onset years before the entry
         # date, which the record could not express until the split.
         {"date": (end - timedelta(days=1)).isoformat(), "slug": "old-ankle",
@@ -346,7 +350,7 @@ def _medical(start: date, end: date) -> list[dict]:
          "provider_type": "physio", "source": "athlete",
          "note": "recorded from memory while filling in history",
          "onset_date": "2028-03-02", "precondition": None,
-         "expects": None, "_gen": 2},
+         "expects": None, "restriction": None, "_gen": 3},
     ]
 
 
