@@ -21,9 +21,9 @@ from . import __version__
 from .api import Vitai
 from .config import load_inference_config
 from .inference import append_inferences, backend_from_config, run_inference
-from .jsonl import load_report, read_lines
+from .jsonl import DataError, load_report, read_lines
 from .safety import banner
-from .schema import KEYS, validate_record
+from .schema import KEYS, recorded_at_problems, validate_record
 
 DATASETS = list(KEYS)
 
@@ -206,6 +206,27 @@ def cmd_goals(args: argparse.Namespace) -> None:
             why = e.get("reason") or "no reason given"
             print(f"  {e['date']} {e['slug']} loosened "
                   f"{e['before']:g} -> {e['after']:g} after a miss ({why})")
+
+
+def cmd_append(args: argparse.Namespace) -> None:
+    """Append a JSON object to a dataset, with the clocks stamped for you.
+
+    Reads the object from stdin so it composes with the scripts that actually
+    write this record: `jq -n '{...}' | vitai append daily`. The row that was
+    written is echoed back, stamps included, so a script can log exactly what
+    it committed rather than what it intended to.
+    """
+    root = _root(args)
+    try:
+        rec = json.loads(sys.stdin.read())
+    except json.JSONDecodeError as e:
+        sys.exit(f"stdin is not valid JSON: {e}")
+    if not isinstance(rec, dict):
+        sys.exit("expected a single JSON object, one row per invocation")
+    try:
+        print(json.dumps(Vitai(root).append(args.dataset, rec)))
+    except (ValueError, KeyError, DataError) as e:
+        sys.exit(str(e).strip("'"))
 
 
 def cmd_events(args: argparse.Namespace) -> None:
@@ -541,6 +562,13 @@ def cmd_validate(args: argparse.Namespace) -> None:
             for p in validate_record(name, rec):
                 print(f"{name}.jsonl line {n}: {p}")
                 problems += 1
+        # File-level: transaction time must be monotonic and tie-free (#37).
+        # Neither is a property of any single line, so neither can be caught
+        # by validate_record - and monotonicity is the check that actually
+        # detects a hand-authored stamp.
+        for p in recorded_at_problems(name, rows):
+            print(p)
+            problems += 1
     if problems:
         sys.exit(f"{problems} problem(s). Fix by APPENDING corrections "
                  f"(supersedes), never by editing lines.")
@@ -592,6 +620,8 @@ def main(argv: list[str] | None = None) -> None:
         ("status", cmd_status, "one-line state: latest weight, rate, tripwires"),
         ("verdicts", cmd_verdicts, "weekly goal-attainment rows as JSONL (the platform contract)"),
         ("goals", cmd_goals, "active goals: progress, dates, contributions, flagged edits"),
+        ("append", cmd_append,
+         "append one JSON row from stdin, stamping recorded_at and _gen"),
         ("events", cmd_events,
          "dated fixtures the plan is built backwards from (races, scans, dates)"),
         ("resolve", cmd_resolve, "which source won each contested field, and why"),
@@ -645,6 +675,8 @@ def main(argv: list[str] | None = None) -> None:
                            help="reconstruct goals as they stood on this date")
             p.add_argument("--recent", type=int, default=10, metavar="N",
                            help="show the last N per-goal contributions (0 = none)")
+        if name == "append":
+            p.add_argument("dataset", help="which dataset to append to")
         if name == "events":
             p.add_argument("--json", action="store_true",
                            help="emit event rows as JSONL instead of prose")

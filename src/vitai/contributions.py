@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from .clocks import order_key
 from .policy import _event_index, days_between, deadline_of, state
 from .schema import ATTESTED, EXTERNAL, verification_of
 
@@ -302,7 +303,7 @@ def _declaration_dates(goals: list[dict]) -> tuple[dict[str, str], dict[str, str
     """(first-seen, last-seen) date per slug - "set when, last moved when"."""
     first: dict[str, str] = {}
     last: dict[str, str] = {}
-    for r in sorted((r for r in goals if r.get("date")), key=lambda r: r["date"]):
+    for r in sorted((r for r in goals if r.get("date")), key=order_key):
         slug = str(r.get("slug"))
         first.setdefault(slug, r["date"])
         last[slug] = r["date"]

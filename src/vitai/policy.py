@@ -23,6 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
+from .clocks import order_key
 from .schema import IDENTITY_KEY
 
 HARD, SOFT = "hard", "soft"
@@ -82,14 +83,16 @@ class State:
 def _in_force(records: list[dict], dataset: str, on: str) -> dict[str, dict]:
     """Last line per identity whose date is on or before `on`.
 
-    Sorting is by date only: `sorted` is stable, so two lines sharing a date
-    keep file order and the later-appended one wins. That keeps a rebuild
-    byte-identical (working rule 6) without needing a tiebreak field.
+    Ordered by (date, recorded_at) - valid time then transaction time (#37).
+    Sorting was by date alone, which meant two lines sharing a date resolved
+    by FILE POSITION, and a sort, a reformat or a merge could silently change
+    which one won. `sorted` is stable and the key is constant across unstamped
+    rows, so a legacy file still resolves exactly as it did.
     """
     ident = IDENTITY_KEY[dataset]
     out: dict[str, dict] = {}
     for r in sorted((r for r in records if r.get("date") and r["date"] <= on),
-                    key=lambda r: r["date"]):
+                    key=order_key):
         if (slug := r.get(ident)) is not None:
             out[str(slug)] = r
     return out
@@ -127,7 +130,7 @@ def context_on(context: list[dict], on: str | date) -> dict | None:
     live = [c for c in context if c.get("date") and c["date"] <= on_s]
     if not live:
         return None
-    return sorted(live, key=lambda c: c["date"])[-1]
+    return sorted(live, key=order_key)[-1]
 
 
 def has_facility(context: list[dict], on: str | date, facility: str) -> bool | None:
@@ -182,7 +185,7 @@ def _event_index(events: list[dict] | None) -> dict[str, dict]:
     """
     out: dict[str, dict] = {}
     for e in sorted((e for e in (events or []) if e.get("date")),
-                    key=lambda e: e["date"]):
+                    key=order_key):
         if (slug := e.get("slug")) is not None:
             out[str(slug)] = e
     return out
@@ -253,7 +256,7 @@ def _edits(records: list[dict], dataset: str, kind: str,
     """Consecutive-line diffs per identity, oldest first, declaration excluded."""
     ident = IDENTITY_KEY[dataset]
     chains: dict[str, list[dict]] = {}
-    for r in sorted((r for r in records if r.get("date")), key=lambda r: r["date"]):
+    for r in sorted((r for r in records if r.get("date")), key=order_key):
         if (slug := r.get(ident)) is not None:
             chains.setdefault(str(slug), []).append(r)
 
