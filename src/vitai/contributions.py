@@ -31,7 +31,8 @@ from datetime import datetime, timedelta
 
 from .clocks import order_key
 from .policy import _event_index, days_between, deadline_of, state
-from .schema import ATTESTED, EXTERNAL, verification_of
+from .schema import (ATTESTED, EXTERNAL, GOAL_DATASETS, KEYS, MEASURED,
+                     verification_of)
 
 ADVANCES, PARTIAL, UNBUDGETED, NEUTRAL, REGRESSES = (
     "advances", "partial", "unbudgeted", "neutral", "regresses")
@@ -54,6 +55,41 @@ BASELINE_WEEKS = 4
 # KINDS of G62 (quantity | skill | maintenance). Until then the engine says
 # it does not know, which is both true and safe.
 CONTRIBUTING_DATASETS = frozenset({"daily", "sessions"})
+
+# How a goal's scope was arrived at. `dataset` unset is NOT the default - it is
+# UNSTATED, and collapsing the two lets the engine assert something nobody said
+# (the same "absent is not a value" line #35 draws for `recorder`).
+DECLARED, INFERRED, AMBIGUOUS, UNDECLARED = (
+    "declared", "inferred", "ambiguous", "undeclared")
+
+
+def scope_of(goal: dict) -> tuple[str | None, str]:
+    """(dataset this goal draws from, how we know) - inferring where we can.
+
+    A hand-written goal row generally does not set `dataset`; the demo's
+    fixtures did, which is why the #34 guard looked like it worked and the
+    live record still rendered `0/73 (0%)` for an athlete at 83 kg.
+
+    Rather than widen the guard to "unset also counts as unfeedable", the
+    scope is INFERRED from the metric where the metric can only belong to one
+    dataset: a goal in `kg` is a weight goal, and saying so removes the trap
+    instead of papering over it.
+
+    Where a metric names a column in more than one dataset the scope stays
+    AMBIGUOUS and nothing is inferred - `distance_km` is walking on a daily
+    line and running on a session line, which is the whole reason `dataset`
+    exists. Guessing there would quietly count the athlete's commute toward a
+    running goal, which is the failure `_in_scope` was written to prevent.
+    """
+    if (declared := goal.get("dataset")) is not None:
+        return str(declared), DECLARED
+    metric = goal.get("metric")
+    if not isinstance(metric, str) or not metric:
+        return None, UNDECLARED
+    hosts = sorted(ds for ds in GOAL_DATASETS if metric in KEYS.get(ds, ()))
+    if len(hosts) == 1:
+        return hosts[0], INFERRED
+    return None, AMBIGUOUS if hosts else UNDECLARED
 
 
 def _week_key(d: str) -> str:
@@ -260,8 +296,16 @@ def goal_progress(goals: list[dict], thresholds: list[dict], daily: list[dict],
         if not slug:
             continue
         bucket = _period_key(goal.get("period"), on)
-        scope = goal.get("dataset")
-        countable = scope is None or scope in CONTRIBUTING_DATASETS
+        scope, how = scope_of(goal)
+        # A goal is countable only if the engine could ever score it. Three
+        # ways it cannot, and all three previously reported a fabricated 0:
+        # nobody can measure it (attested), another app measures it
+        # (external), or it draws from a dataset the contribution engine does
+        # not iterate. The contract note added in #34 already told consumers
+        # an attested row has no progress - the data disagreed with it.
+        settled_here = verification_of(goal) == MEASURED
+        countable = settled_here and (scope is None
+                                      or scope in CONTRIBUTING_DATASETS)
         counted = sum(c["counted"] for c in contributions
                       if c["goal"] == slug and c["period"] == bucket)
         unbudgeted = sum(c["value"] - c["counted"] for c in contributions
@@ -284,6 +328,8 @@ def goal_progress(goals: list[dict], thresholds: list[dict], daily: list[dict],
             "counted": round(counted, 3) if countable else None,
             "unbudgeted": round(unbudgeted, 3) if countable else None,
             "progress_pct": pct,
+            "dataset": scope,
+            "scope": how,
             "declared": declared.get(slug),
             "last_edited": edited.get(slug),
             "deadline": deadline,

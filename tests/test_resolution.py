@@ -462,7 +462,7 @@ def test_build_projects_the_adjudication_trail(tmp_path):
         assert con.execute(
             "SELECT kcal_out FROM daily").fetchone()[0] == 2443
         assert con.execute(
-            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "7"
+            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "8"
     finally:
         con.close()
 

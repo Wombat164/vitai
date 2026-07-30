@@ -155,7 +155,16 @@ def _fmt_goal(row: dict) -> str:
         # A goal scoped to a dataset the contribution engine cannot read.
         # Saying "0%" here would report a goal it cannot see as a goal going
         # badly, which is the same error as rendering an attested one at 0%.
-        head = f"target {target:g} - progress not counted from this record"
+        # The scope is named so this reads as a limitation of the engine
+        # rather than as a fact about the athlete.
+        where = row.get("dataset") or "an unknown source"
+        via = " (inferred from the metric)" if row.get("scope") == "inferred" else ""
+        # `target` is required on an active measured goal, so it is normally
+        # present here - but a paused one need not have it, and formatting a
+        # null with :g raises rather than degrading.
+        aim = f"target {target:g}" if target is not None else "no target"
+        head = (f"{aim} - not scored here; it is tracked in "
+                f"{where}{via}, which this engine does not count from")
     elif target is None:
         head = f"{counted:g} logged (no target)"
     else:

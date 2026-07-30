@@ -695,3 +695,60 @@ def test_a_daily_scoped_goal_still_counts_normally():
                         [daily("2030-04-02", steps=4000)], [], "2030-04-02")[0]
     assert row["counted"] == 4000
     assert row["progress_pct"] == 40.0
+
+
+# ---- #36: an unstated scope is not the default --------------------------------
+
+def test_a_hand_written_weight_goal_reports_unknown_not_zero():
+    """The shape a real record has - no `dataset` at all. The #34 guard keyed
+    on a DECLARED unfeedable dataset, so the demo was fixed and the live
+    record still rendered `0/73 (0%)` for an athlete at 83 kg."""
+    hand_written = goal(slug="weight-73", metric="kg", target=73,
+                        period="none", on_period_end=None)
+    assert hand_written["dataset"] is None, "the fixture must not over-specify"
+    row = goal_progress([hand_written], [], [], [], "2030-05-01")[0]
+    assert row["counted"] is None
+    assert row["progress_pct"] is None
+
+
+def test_scope_is_inferred_from_the_metric_when_unset():
+    """The fix the operator preferred: remove the trap rather than widen the
+    guard. A goal in `kg` is a weight goal, and saying so is better than
+    treating "unset" as a synonym for "unfeedable"."""
+    row = goal_progress([goal(metric="kg", target=73, period="none",
+                              on_period_end=None)], [], [], [], "2030-05-01")[0]
+    assert row["dataset"] == "weight"
+    assert row["scope"] == "inferred"
+
+
+def test_unset_and_explicitly_declared_scope_stay_distinguishable():
+    """Absent is not a value. Collapsing the two lets the engine assert
+    something nobody said - the same line #35 draws for `recorder`."""
+    unset = goal_progress([goal(metric="steps", dataset=None)], [],
+                          [daily("2030-04-02", steps=4000)], [], "2030-04-02")[0]
+    declared = goal_progress([goal(metric="steps", dataset="daily")], [],
+                             [daily("2030-04-02", steps=4000)], [], "2030-04-02")[0]
+    assert (unset["dataset"], unset["scope"]) == ("daily", "inferred")
+    assert (declared["dataset"], declared["scope"]) == ("daily", "declared")
+    assert unset["counted"] == declared["counted"] == 4000
+
+
+def test_an_ambiguous_metric_infers_nothing():
+    """`distance_km` is walking on a daily line and running on a session line
+    - which is the entire reason `dataset` exists. Guessing would quietly
+    count the athlete's commute toward a running goal, the failure `_in_scope`
+    was written to prevent."""
+    row = goal_progress([goal(metric="distance_km", target=30, dataset=None)],
+                        [], [], [session("2030-04-02", type="run",
+                                         distance_km=5.0)], "2030-04-02")[0]
+    assert row["dataset"] is None
+    assert row["scope"] == "ambiguous"
+    assert row["counted"] == 5.0, "unchanged behaviour: it still counts"
+
+
+def test_an_attested_goal_has_no_scope_to_infer():
+    row = goal_progress([goal(slug="enjoy-running", metric=None, target=None,
+                              period="none", verification="attested")],
+                        [], [], [], "2030-05-01")[0]
+    assert row["scope"] == "undeclared"
+    assert row["counted"] is None
