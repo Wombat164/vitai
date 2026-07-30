@@ -24,6 +24,15 @@ versioning follows [SemVer](https://semver.org/).
 
   The migration is a **read no-op**: absent sorts before present, so a file
   of unstamped rows resolves in exactly the order it always did.
+- **`append_many` / `Vitai.append_many()` and JSONL on `vitai append`'s
+  stdin** (#44). The primitive bulk import actually wants: the file is read
+  once to find where the clock got to, every row is stamped strictly past the
+  one before it, every row is validated before any is written, and the batch
+  lands in a single open. Looping over the single-row form re-parses a growing
+  file per row - 5,425 rows take 0.11 s as a batch against 2.5 s for 1,000 in
+  a loop, and the gap widens with the import. A batch containing one bad row
+  writes nothing at all, rather than leaving a caller to work out how far it
+  got.
 - **`vitai append` / `Vitai.append()`** (#37). The write half of P9, and the
   reason the clock is trustworthy rather than aspirational: every row in this
   record is written by a hand-rolled script, and a field callers must
@@ -61,6 +70,34 @@ versioning follows [SemVer](https://semver.org/).
   will ever be. An attested goal is never scored and never rendered at 0%.
 
 ### Fixed
+- **`recorded_at` is now strictly monotonic, so bulk-appended rows can
+  actually be ordered** (#44). Importing 227 readings through the helper #37
+  added produced **one distinct stamp across all of them** on this machine -
+  a second is an eternity in a write loop, and the monotonicity check admitted
+  equal when equal is the failure case. A tie orders nothing, which was the
+  field's only purpose.
+
+  The stamp is now a hybrid logical clock at microsecond resolution:
+  wall-clock time whenever it has genuinely moved on, otherwise one tick past
+  its predecessor. Under load it drifts microseconds ahead of true time, which
+  is the right trade - an ordering that is occasionally a few microseconds
+  optimistic is strictly better than one that does not exist. A wall clock
+  more than a minute BEHIND the last stamp is refused rather than clamped,
+  because that is a wrong clock rather than a coarse one.
+
+  Bulk import is not an edge case here, it is how rows arrive: every source so
+  far lands as hundreds of rows in a tight loop. It also blocked #37's own
+  migration, since backfilling offsets across 172 session rows is itself a
+  bulk write.
+- **A repeated `recorded_at` is now reported whatever the rows are dated.**
+  The tie check keyed on `(identity, date, recorded_at)`, so a bulk import
+  spanning 227 different dates stamped every row identically and `vitai
+  validate` called the file valid. That narrow check is what let the defect
+  hide. A serial appender cannot write two rows at one instant.
+- **Transaction time is compared as an INSTANT, not as text.** Two stamps
+  written either side of a timezone change were ordered by wall clock, since
+  `+02:00` sorts after `+00:00` as a string regardless of which came first -
+  the #38 mistake, one clock over.
 - **A record holding both naive and offset-aware `start_time` no longer
   crashes the build** (#38). `_same_activity` raised
   `TypeError: can't compare offset-naive and offset-aware datetimes` the

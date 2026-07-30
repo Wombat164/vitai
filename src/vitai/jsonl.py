@@ -32,7 +32,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from .clocks import now_stamp, order_key
+from .clocks import (CLOCK_SKEW_TOLERANCE, now_stamp, order_key,
+                     stamp_instant)
 from .schema import CURRENT_GENERATION, IDENTITY_KEY, KEYS, validate_record
 
 
@@ -51,6 +52,24 @@ def append(data_dir: Path, name: str, rec: dict,
     the only moment it was needed. So the stamping is the API, not a
     convention.
 
+    See `append_many` for the batch form, which is what a bulk import should
+    use: this one re-reads the file to find the clock's high-water mark, so a
+    loop over it is quadratic.
+    """
+    return append_many(data_dir, name, [rec], now=now)[0]
+
+
+def append_many(data_dir: Path, name: str, records: list[dict],
+                now: datetime | None = None) -> list[dict]:
+    """Append many lines in one pass. The primitive bulk import actually wants.
+
+    Bulk is the normal write pattern here - every source so far arrives as
+    hundreds of rows in a tight loop - so the file is read ONCE to find where
+    the clock got to, every row is stamped strictly past the one before it, and
+    the whole batch is written in a single open. Looping over `append` instead
+    re-parses a growing file per row, which is quadratic and gets slow exactly
+    when the import is largest.
+
     What it does, in order:
 
     1. REFUSES a caller-supplied `recorded_at`. Transaction time is the one
@@ -61,48 +80,66 @@ def append(data_dir: Path, name: str, rec: dict,
     2. Fills missing keys with null, honouring "null for unknown, never omit".
     3. Stamps `_gen` to the dataset's current generation, which is the
        convention the schema has documented since G25 and nothing enforced.
-    4. VALIDATES before writing. An append-only file cannot be un-appended,
-       so a bad line must be refused at the door rather than corrected later
-       by a superseding line that should never have been needed.
-    5. Checks the stamp is not older than the last stamped row in the file.
-       Transaction time is monotonic by construction; if it is not, the clock
-       moved backwards and the tie-break it exists to provide is unsound.
+    4. Stamps `recorded_at` STRICTLY past the previous row - including the
+       previous row of this same batch. Not merely "not older": equal is the
+       failure case, because a tie orders nothing, and a write loop hits ties
+       constantly (#44).
+    5. VALIDATES EVERY ROW BEFORE WRITING ANY. An append-only file cannot be
+       un-appended, so a batch with one bad row writes nothing at all rather
+       than leaving a caller to work out how far it got.
     """
     if name not in KEYS:
         raise KeyError(f"unknown dataset {name!r}; one of {sorted(KEYS)}")
-    if "recorded_at" in rec:
-        raise ValueError(
-            "recorded_at is machine-set and must not be supplied - it is the "
-            "one clock in the record that cannot be authored. Remove it and "
-            "let append stamp it.")
-
-    row = {k: rec.get(k) for k in KEYS[name]}
-    if unknown := sorted(set(rec) - set(KEYS[name]) - {"supersedes", "_gen"}):
-        raise ValueError(f"unknown key(s) for {name}: {', '.join(unknown)}")
-    for meta in ("supersedes", "_gen"):
-        if meta in rec:
-            row[meta] = rec[meta]
-    row["_gen"] = row.get("_gen") or CURRENT_GENERATION[name]
-    row["recorded_at"] = now_stamp(now)
-
-    if problems := validate_record(name, row):
-        raise DataError(f"refusing to append an invalid {name} line: "
-                        + "; ".join(problems))
 
     path = data_dir / f"{name}.jsonl"
     existing, _ = read_lines(path)
-    prior = [r.get("recorded_at") for _, r in existing
-             if r.get("recorded_at") is not None]
-    if prior and max(prior) > row["recorded_at"]:
-        raise DataError(
-            f"recorded_at {row['recorded_at']} precedes the last stamped row "
-            f"({max(prior)}) - transaction time must not go backwards, or it "
-            "cannot order anything. Check the system clock.")
+    prior = [i for i in (stamp_instant(r.get("recorded_at"))
+                         for _, r in existing) if i is not None]
+    high_water = max(prior) if prior else None
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8", newline="\n") as fh:
-        fh.write(json.dumps(row) + "\n")
-    return row
+    wall = (now or datetime.now()).astimezone()
+    if high_water is not None and wall < high_water - CLOCK_SKEW_TOLERANCE:
+        raise DataError(
+            f"the system clock reads {wall.isoformat(timespec='seconds')} but "
+            f"{name}.jsonl already holds a row stamped "
+            f"{high_water.isoformat(timespec='seconds')} - transaction time "
+            "must not go backwards, and a gap this large means the clock is "
+            "wrong rather than merely coarse. Fix the clock; appending now "
+            "would bury the problem under stamps that look plausible.")
+
+    rows: list[dict] = []
+    for n, rec in enumerate(records, 1):
+        if "recorded_at" in rec:
+            raise ValueError(
+                "recorded_at is machine-set and must not be supplied - it is "
+                "the one clock in the record that cannot be authored. Remove "
+                "it and let append stamp it.")
+        if unknown := sorted(set(rec) - set(KEYS[name]) - {"supersedes", "_gen"}):
+            raise ValueError(
+                f"unknown key(s) for {name}"
+                + (f" (row {n})" if len(records) > 1 else "")
+                + f": {', '.join(unknown)}")
+        row = {k: rec.get(k) for k in KEYS[name]}
+        for meta in ("supersedes", "_gen"):
+            if meta in rec:
+                row[meta] = rec[meta]
+        row["_gen"] = row.get("_gen") or CURRENT_GENERATION[name]
+        stamp = now_stamp(now, after=high_water)
+        row["recorded_at"] = stamp
+        high_water = stamp_instant(stamp)
+        if problems := validate_record(name, row):
+            raise DataError(
+                f"refusing to append an invalid {name} line"
+                + (f" (row {n} of {len(records)}; nothing was written)"
+                   if len(records) > 1 else "")
+                + ": " + "; ".join(problems))
+        rows.append(row)
+
+    if rows:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8", newline="\n") as fh:
+            fh.write("".join(json.dumps(r) + "\n" for r in rows))
+    return rows
 
 
 def line_key(dataset: str, rec: dict) -> str:

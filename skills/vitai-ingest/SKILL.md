@@ -17,12 +17,15 @@ content repo's `data/`. You are the connector; the contract is the schema.
 2. **Append, never edit.** A correction to an existing line is a NEW line
    with `"supersedes":"<date>/<source>"`. If the athlete says a number was
    wrong, supersede it - do not touch the original.
-3. **Write through `vitai append`, one row per call**, rather than echoing
-   JSON into the file. It stamps `recorded_at` and `_gen`, fills absent keys
-   with null, and refuses an invalid line at the door - an append-only file
-   cannot be un-appended. Never set `recorded_at` yourself; it is the one
-   clock in the record that must not be authored, and `append` rejects a row
-   that carries it.
+3. **Write through `vitai append`**, rather than echoing JSON into the file.
+   It stamps `recorded_at` and `_gen`, fills absent keys with null, and
+   refuses an invalid line at the door - an append-only file cannot be
+   un-appended. Never set `recorded_at` yourself; it is the one clock in the
+   record that must not be authored, and append rejects a row that carries it.
+   For a screenshot or two, pipe one object. For an export, pipe **all the
+   rows as JSONL in one invocation**: the batch path stamps each row distinctly
+   and validates the whole set before writing any of it, so a bad row leaves
+   nothing half-imported.
 4. **Capture the weigh-in TIME when you can see it.** `weight.measured_at`
    is HH:MM local. Body mass swings about a kilogram between morning and
    evening, so a drift from evening to morning weigh-ins manufactures a week
