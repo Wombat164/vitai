@@ -36,6 +36,10 @@ class Config:
     # G7: whether proactive nudges are welcome at all. Default False - a coach
     # that has to be invited to interrupt is the safer default.
     nudge_ok: bool = False
+    # How close a stated value must be to the record before `vitai check`
+    # calls it confirmed. A fraction, not a law: 2% is a starting point, and
+    # an athlete who rounds every number in conversation wants it looser.
+    check_tolerance: float = 0.02
 
 
 def load_inference_config(root: Path) -> dict:
@@ -76,6 +80,7 @@ def load_config(root: Path) -> Config:
         precedence=precedence,
         suppressed_metrics=tuple(str(m) for m in prefs.get("suppressed_metrics", [])),
         nudge_ok=bool(prefs.get("nudge_ok", False)),
+        check_tolerance=float(prefs.get("check_tolerance", 0.02)),
     )
 
 

@@ -5,6 +5,33 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **`vitai check` - adjudicate a stated value against the record** (#15).
+  An LLM coach narrates numbers, and its narration is as untrustworthy a
+  source as any vendor estimate. P1 says sources are claims the engine
+  adjudicates; that rule had never been applied to the coach's own sentences.
+  `check` answers **CONFIRMED / REFUTED / NOT-IN-RECORD** with the values and
+  the delta, and exits 1 on a refutation so a skill can be held to the record
+  mechanically rather than on its honour.
+  - It checks the claim against BOTH the day's total and each individual row,
+    because "I ran 8k" may mean one 8 km run or two 4 km runs - and says which
+    reading makes it true rather than picking one and being confidently wrong.
+  - **NOT-IN-RECORD is a distinct verdict.** Absence cannot refute a claim: a
+    day with nothing logged does not prove the run did not happen, and
+    answering REFUTED there would be the engine overreaching in exactly the
+    way it accuses the model of.
+  - Tolerance is a config value (`[preferences] check_tolerance`, default 2%),
+    not a constant.
+- **`vitai day` / `vitai window` / `vitai ramp`** - read-only factual dumps
+  that exist so a number is never stated from memory. `day` shows what the
+  canonical row is hiding, including claims that were merged away. `window`
+  totals over N **calendar** days, since a window that skipped the empty ones
+  would report a fortnight as a week. `ramp` prints week-on-week volume with
+  its **base-size caveat attached** - a ramp percentage over a one-week base
+  is not a trend, and that maturity signal (G27) is engine-owned rather than
+  something each caller has to remember to add.
+- All four land as CLI **and** `Vitai.*` methods in the same change (P9).
+
 ### Fixed
 - **Resolution no longer false-merges repeated similar activities** (#14).
   Shape-matching - same type, similar duration, similar distance - was being

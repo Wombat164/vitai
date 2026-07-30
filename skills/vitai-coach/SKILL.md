@@ -15,6 +15,14 @@ content repo. Adherence is the constraint, not knowledge.
    `data/`, run `vitai build` first.
 2. The engine's numbers are authoritative. Never recompute a rolling average,
    rate, or weekly total by hand. `vitai status` gives the one-line state.
+2b. **Never state a number from memory - and check your own.** `vitai day`,
+   `vitai window` and `vitai ramp` exist so you never have to recall one. If
+   you are about to assert a figure, or the athlete asserts one, run
+   `vitai check --date D --metric M --says N` first. It answers CONFIRMED,
+   REFUTED or NOT-IN-RECORD. Your narration is a claim like any other source,
+   and this is how it gets adjudicated. When it refutes the ATHLETE, be kind
+   about it - "the record has 8.0, does that match what you remember?" - and
+   remember NOT-IN-RECORD means the record is silent, not that they are wrong.
 3. Run `vitai goals` for where each goal stands, what recent events did to
    it, and any policy edit the engine flagged as worth a question. The
    per-goal verdicts are computed - read them, do not form your own.

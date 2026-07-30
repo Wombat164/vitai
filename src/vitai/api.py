@@ -25,6 +25,7 @@ from .config import Config, load_config
 from .contributions import compute_contributions, goal_progress
 from .db import build_db
 from .jsonl import load
+from . import query
 from .policy import State, context_on, plan_churn, state
 from .report import build_report
 from .resolution import live_inferences, resolve, retractions
@@ -98,6 +99,38 @@ class Vitai:
         """The situational mode in force on a date (G34)."""
         return context_on(self.dataset("context"),
                           on or date.today())
+
+    # --- factual query verbs --------------------------------------------------
+    # A number should never be stated from memory - not by a person, and not by
+    # a model narrating over the record.
+
+    def check(self, on: date | str, metric: str, says: float,
+              type: str | None = None, tolerance: float | None = None) -> dict:
+        """Adjudicate a stated value against the record.
+
+        An LLM's narration is as untrustworthy a source as any vendor
+        estimate, and P1 says sources are claims the engine adjudicates. This
+        applies that rule to the coach's own sentences.
+        """
+        when = on.isoformat() if isinstance(on, date) else str(on)
+        tol = self.config.check_tolerance if tolerance is None else tolerance
+        return query.check(self.canonical(), when, metric, float(says),
+                           type=type, tolerance=tol)
+
+    def day(self, on: date | str) -> dict:
+        """Everything the record holds for one date, merged claims included."""
+        when = on.isoformat() if isinstance(on, date) else str(on)
+        resolved = self.resolution()
+        return query.day(resolved["canonical"], when,
+                         claims=resolved["claims"], gates=self.gates(when))
+
+    def window(self, days: int = 7, on: date | str | None = None) -> dict:
+        """Totals over the last N calendar days, grouped by session type."""
+        return query.window(self.canonical(), days, on=on)
+
+    def ramp(self, type: str = "run", metric: str = "distance_km") -> dict:
+        """Week-on-week volume with its base-size caveat attached (G27)."""
+        return query.ramp(self.canonical(), type=type, metric=metric)
 
     # --- the safety layer (G28) ----------------------------------------------
     # Read straight from the record rather than from resolution: an escalation

@@ -74,6 +74,37 @@ when my app says 2,844" should always have an answer, and the answer is
 per-quantity precedence: the watch measured the burn, the app modelled it,
 and the record holds one of them rather than their sum.
 
+## vitai check
+
+Adjudicate a stated value against the record. **Exits 1 if REFUTED.**
+
+    vitai check --date 2030-06-01 --metric distance_km --type run --says 9
+    -> REFUTED: stated 9, record sum 8.01 (delta -0.99, -12.4%)
+
+An LLM's narration is as untrustworthy a source as any vendor estimate, and
+the engine already adjudicates sources rather than believing them. This
+applies the same rule to the coach's own sentences - including the athlete's
+recollection, which it lets a coach verify kindly ("the record has 8.0 - does
+that match what you remember?") instead of either believing it or
+contradicting it from nowhere.
+
+Three verdicts, and the third matters: **NOT-IN-RECORD** is not REFUTED.
+Absence cannot refute a claim. Tolerance comes from
+`[preferences] check_tolerance` (2% by default).
+
+## vitai day / window / ramp
+
+Read-only dumps, so a number is never stated from memory.
+
+    vitai day --date 2030-06-01     # everything for one date, merged claims included
+    vitai window --days 14          # totals over N CALENDAR days, by session type
+    vitai ramp --type run           # week-on-week volume + its base-size caveat
+
+`ramp` always prints its caveat last: a ramp percentage over a one-week base
+is not a trend, and the engine says so rather than leaving each caller to
+remember. `day` deliberately shows claims that were merged away - the point of
+a factual dump is that it reveals what the canonical row is hiding.
+
 ## vitai safety
 
 Active escalations and gates. **Exits 2 while anything urgent stands**, so a
