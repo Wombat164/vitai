@@ -24,7 +24,11 @@ from .schema import KEYS
 #    `gates` (what is blocked today and why) and `escalations` (deterministic
 #    severity-to-action). A consumer that renders training suggestions MUST
 #    read `gates`, or it will propose activity the record has blocked.
-CONTRACT_VERSION = "4"
+# 5: gate mechanics - `checks` dataset, `onset_date`/`precondition` on
+#    medical, `occurred_date` on achievements, and `status`/`precondition`
+#    columns on `gates`. A consumer reading `gates` MUST now check `status`:
+#    a row with status `cleared` is reported but does NOT block.
+CONTRACT_VERSION = "5"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
@@ -50,7 +54,8 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               # increment 3: the medical layer and the safety outputs
               "title", "body_site", "status", "resolved_date", "restricts",
               "provider_type", "source_kind", "escalation", "level", "trigger",
-              "action"}
+              "action", "onset_date", "precondition", "occurred_date",
+              "result"}
 
 VERDICT_KEYS = ["week", "metric", "value", "target", "verdict", "goal"]
 
@@ -80,7 +85,7 @@ RETRACTION_KEYS = ["date", "kind", "claim_id", "retracted_by", "reason",
 # Increment 3. `gates` is the table a consumer must respect before suggesting
 # any activity; `escalations` is the deterministic severity-to-action output.
 GATE_KEYS = ["date", "source_kind", "slug", "restricts", "reason", "severity",
-             "escalation"]
+             "status", "precondition", "escalation"]
 ESCALATION_KEYS = ["date", "level", "trigger", "detail", "action"]
 
 DERIVED_TABLES: dict[str, list[str]] = {

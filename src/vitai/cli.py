@@ -104,6 +104,7 @@ def cmd_build(args: argparse.Namespace) -> None:
     gates = v.gates(on)
     if gates:
         blocked = sorted({c for g in gates
+                          if g.get("status") != "cleared"
                           for c in str(g["restricts"]).split()})
         print(f"GATED today: {', '.join(blocked)} "
               f"({len(gates)} gate(s)) - see `vitai safety`", file=sys.stderr)
@@ -243,8 +244,18 @@ def cmd_safety(args: argparse.Namespace) -> None:
     if gates and not args.json:
         print("gates in force:")
         for g in gates:
-            print(f"  [{g['severity'] or 'unset'}] {g['slug']}: blocks "
+            state = g.get("status") or "blocked"
+            verb = {"cleared": "LIFTED today for",
+                    "check_not_done": "blocks (check not done)",
+                    "blocked": "blocks"}.get(state, "blocks")
+            print(f"  [{g['severity'] or 'unset'}] {g['slug']}: {verb} "
                   f"{g['restricts']} - {g['reason']}")
+        pending = [g for g in gates if g.get("status") == "check_not_done"]
+        if pending:
+            print("\nchecks not done today:")
+            for g in pending:
+                print(f"  {g['precondition']} - until it is recorded, "
+                      f"{g['restricts']} stays gated")
     elif gates:
         for g in gates:
             print(json.dumps({"kind": "gate", **g}))
