@@ -295,6 +295,99 @@ def cmd_context(args: argparse.Namespace) -> None:
         print(f"  {current['note']}")
 
 
+def cmd_check(args: argparse.Namespace) -> None:
+    """Adjudicate a stated value against the record. Exits 1 if REFUTED.
+
+    The exit code exists so a skill can be held to the record mechanically
+    rather than on its honour.
+    """
+    root = _root(args)
+    result = Vitai(root).check(args.date, args.metric, args.says,
+                               type=args.type, tolerance=args.tolerance)
+    if args.json:
+        print(json.dumps(result))
+    elif result["verdict"] == "NOT-IN-RECORD":
+        print(f"NOT-IN-RECORD: nothing recorded for {args.metric}"
+              f"{' (' + args.type + ')' if args.type else ''} on {args.date}")
+        print("  absence cannot refute a claim - the record simply does not say")
+    else:
+        total, delta = result["sum"], result["delta"]
+        pct = result["delta_pct"]
+        head = (f"{result['verdict']}: stated {args.says:g}, "
+                f"record sum {total:g}")
+        if result["verdict"] == "REFUTED":
+            head += f" (delta {delta:+g}" + (f", {pct:+.1f}%)" if pct else ")")
+        elif result["matched"] and result["matched"] != "single":
+            head += f" - matched {result['matched']}"
+        print(head)
+        for v in result["values"]:
+            label = f"{v['dataset']}" + (f"/{v['type']}" if v["type"] else "")
+            print(f"  {label}: {v['value']:g}"
+                  + (f" [{v['source']}]" if v.get("source") else ""))
+    if result["verdict"] == "REFUTED":
+        raise SystemExit(1)
+
+
+def cmd_day(args: argparse.Namespace) -> None:
+    """Everything the record holds for one date."""
+    out = Vitai(_root(args)).day(args.date)
+    if args.json:
+        print(json.dumps(out))
+        return
+    print(f"# {out['date']}")
+    for name, rows in out["datasets"].items():
+        print(f"\n## {name}")
+        for r in rows:
+            fields = {k: v for k, v in sorted(r.items())
+                      if v is not None and not k.startswith("_")
+                      and k not in ("date",)}
+            print("  " + ", ".join(f"{k}={v}" for k, v in fields.items()))
+    if out["merged_claims"]:
+        print("\n## merged away (not visible in the canonical rows)")
+        for c in out["merged_claims"]:
+            print(f"  {c['claim_id']} -> {c['merged_into']}")
+    if out["gates"]:
+        print("\n## gates")
+        for g in out["gates"]:
+            print(f"  blocks {g['restricts']} - {g['reason']}")
+
+
+def cmd_window(args: argparse.Namespace) -> None:
+    """Totals over the last N calendar days."""
+    out = Vitai(_root(args)).window(args.days, on=args.on)
+    if args.json:
+        print(json.dumps(out))
+        return
+    print(f"{out['from']} to {out['to']} ({out['days']} calendar days, "
+          f"{out['days_logged']} with a daily entry)")
+    if not out["by_type"]:
+        print("  no sessions in the window")
+    for kind, slot in out["by_type"].items():
+        bits = [f"{slot['sessions']} session(s)"]
+        if slot["distance_km"]:
+            bits.append(f"{slot['distance_km']:g} km")
+        if slot["duration_s"]:
+            bits.append(f"{slot['duration_s'] / 60:.0f} min")
+        if slot["kcal"]:
+            bits.append(f"{slot['kcal']:g} kcal")
+        print(f"  {kind}: " + ", ".join(bits))
+
+
+def cmd_ramp(args: argparse.Namespace) -> None:
+    """Week-on-week volume, with the base-size caveat."""
+    out = Vitai(_root(args)).ramp(type=args.type, metric=args.metric)
+    if args.json:
+        print(json.dumps(out))
+        return
+    for wk in out["weeks"]:
+        change = wk.get("change_pct")
+        suffix = f"  ({change:+.1f}%)" if change is not None else ""
+        print(f"  {wk['week']}  {wk['value']:g}{suffix}")
+    # Printed LAST and always: a ramp % over a thin base is not a trend, and
+    # the caveat is the engine's to state rather than the caller's to remember.
+    print(f"\n{out['caveat']} [{out['maturity']}]")
+
+
 def cmd_infer(args: argparse.Namespace) -> None:
     """Opt-in intelligence layer: a model reads the record, validated new
     knowledge is appended to data/inferences.jsonl. Never touches numbers."""
@@ -392,6 +485,10 @@ def main(argv: list[str] | None = None) -> None:
         ("resolve", cmd_resolve, "which source won each contested field, and why"),
         ("safety", cmd_safety, "active escalations and gates (exits 2 if urgent)"),
         ("context", cmd_context, "the situational mode in force on a date"),
+        ("check", cmd_check, "adjudicate a stated value against the record"),
+        ("day", cmd_day, "everything the record holds for one date"),
+        ("window", cmd_window, "totals over the last N calendar days"),
+        ("ramp", cmd_ramp, "week-on-week volume, with its base-size caveat"),
         ("journal", cmd_journal,
          "what the athlete said: claims, worries, ideas, what is still open"),
         ("infer", cmd_infer, "opt-in: model reads the record, appends validated inferences"),
@@ -401,6 +498,28 @@ def main(argv: list[str] | None = None) -> None:
         if name == "infer":
             p.add_argument("--dry-run", action="store_true",
                            help="print validated inferences without appending")
+        if name == "check":
+            p.add_argument("--date", required=True, metavar="YYYY-MM-DD")
+            p.add_argument("--metric", required=True,
+                           help="e.g. distance_km, steps, kcal_in")
+            p.add_argument("--says", required=True, type=float,
+                           help="the value being claimed")
+            p.add_argument("--type", help="scope to one session type, e.g. run")
+            p.add_argument("--tolerance", type=float,
+                           help="override the configured match tolerance")
+            p.add_argument("--json", action="store_true")
+        if name == "day":
+            p.add_argument("--date", required=True, metavar="YYYY-MM-DD")
+            p.add_argument("--json", action="store_true")
+        if name == "window":
+            p.add_argument("--days", type=int, default=7)
+            p.add_argument("--on", metavar="YYYY-MM-DD",
+                           help="the window's last day (default: latest logged)")
+            p.add_argument("--json", action="store_true")
+        if name == "ramp":
+            p.add_argument("--type", default="run", help="session type")
+            p.add_argument("--metric", default="distance_km")
+            p.add_argument("--json", action="store_true")
         if name == "build":
             p.add_argument("--on", metavar="YYYY-MM-DD",
                            help="evaluate gates, escalations and the rollup as "
