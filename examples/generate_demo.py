@@ -212,12 +212,14 @@ def _build(target: Path) -> None:
     goals, thresholds, achievements = _policy(start)
     context, measurements = _situational(start, END)
     medical = _medical(start, END)
+    checks = _checks(END)
 
     for name, rows in (("weight", weight), ("daily", daily),
                        ("sessions", sessions), ("inferences", inferences),
                        ("goals", goals), ("thresholds", thresholds),
                        ("achievements", achievements), ("context", context),
-                       ("measurements", measurements), ("medical", medical)):
+                       ("measurements", measurements), ("medical", medical),
+                       ("checks", checks)):
         (target / "data" / f"{name}.jsonl").write_text(
             _jsonl(rows), encoding="utf-8", newline="\n")
 
@@ -324,13 +326,46 @@ def _medical(start: date, end: date) -> list[dict]:
          "resolved_date": (start + timedelta(days=31)).isoformat(),
          "restricts": None, "provider_type": "physio", "source": "athlete",
          "note": "full sessions with no symptoms for two weeks"},
-        # Still open at the end of the block: the demo always has a live gate.
+        # Still open at the end of the block: the demo always has a live gate,
+        # and this one is CONDITIONAL - the restriction lifts on a day the
+        # morning check passes, and stands on a day nobody ran it.
         {"date": (end - timedelta(days=4)).isoformat(), "slug": "achilles",
          "kind": "symptom", "title": "Right achilles soreness after the long run",
          "body_site": "achilles", "severity": "mild", "status": "monitoring",
          "resolved_date": None, "restricts": "impact", "provider_type": None,
          "source": "athlete",
-         "note": "stiff first thing; eases once warm - watching it"},
+         "note": "stiff first thing; eases once warm - watching it",
+         "onset_date": (end - timedelta(days=6)).isoformat(),
+         "precondition": "hop-test", "expects": None, "_gen": 2},
+        # A historical episode, entered late: onset years before the entry
+        # date, which the record could not express until the split.
+        {"date": (end - timedelta(days=1)).isoformat(), "slug": "old-ankle",
+         "kind": "injury", "title": "Ankle sprain (recalled, pre-record)",
+         "body_site": "ankle", "severity": "none", "status": "resolved",
+         "resolved_date": "2028-05-01", "restricts": None,
+         "provider_type": "physio", "source": "athlete",
+         "note": "recorded from memory while filling in history",
+         "onset_date": "2028-03-02", "precondition": None,
+         "expects": None, "_gen": 2},
+    ]
+
+
+def _checks(end: date) -> list[dict]:
+    """Daily results for the achilles gate's hop test.
+
+    Deliberately incomplete. Two days pass, one fails, and the last day has no
+    entry at all - so the demo renders all three gate states, including the
+    one that matters most: a check nobody did is not a pass.
+    """
+    return [
+        {"date": (end - timedelta(days=3)).isoformat(), "slug": "hop-test",
+         "result": "pass", "value": 5, "source": "athlete",
+         "note": "5 hops, no pain"},
+        {"date": (end - timedelta(days=2)).isoformat(), "slug": "hop-test",
+         "result": "fail", "value": 2, "source": "athlete",
+         "note": "sore by the third hop - walked instead"},
+        {"date": (end - timedelta(days=1)).isoformat(), "slug": "hop-test",
+         "result": "pass", "value": 5, "source": "athlete", "note": None},
     ]
 
 

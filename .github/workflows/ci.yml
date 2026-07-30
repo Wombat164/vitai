@@ -59,7 +59,14 @@ jobs:
         run: |
           grep -q "## Gates" examples/demo/derived/weekly.md
           grep -q "impact blocked" examples/demo/derived/weekly.md
-          vitai safety --root examples/demo --on 2030-06-30 | grep -q "blocks impact"
+          # the 28th is the day the hop test FAILS, so the gate reads plainly
+          # blocked; on the 30th it reads "blocks (check not done)"
+          vitai safety --root examples/demo --on 2030-06-28 | grep -q "blocks impact"
+          # all three precondition states render, including the one that matters:
+          # a check nobody did is not a pass
+          vitai safety --root examples/demo --on 2030-06-30 | grep -q "check not done"
+          vitai safety --root examples/demo --on 2030-06-29 | grep -q "LIFTED today"
+          vitai safety --root examples/demo --on 2030-06-28 | grep -q "hop-test.: fail"
           # the calf episode is resolved and must NOT gate at the end of the block
           test "$(vitai safety --root examples/demo --on 2030-06-30 \
             | grep -c 'calf')" = "0"
