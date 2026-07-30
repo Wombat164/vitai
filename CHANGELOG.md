@@ -61,6 +61,37 @@ versioning follows [SemVer](https://semver.org/).
   will ever be. An attested goal is never scored and never rendered at 0%.
 
 ### Fixed
+- **A record holding both naive and offset-aware `start_time` no longer
+  crashes the build** (#38). `_same_activity` raised
+  `TypeError: can't compare offset-naive and offset-aware datetimes` the
+  moment both shapes coexisted - and the schema's own validator example shows
+  an offset while the Polar connector wrote naive, so **following the
+  documentation broke the engine**. That is the worst version of this bug: it
+  punishes the correct behaviour.
+
+  It also blocked its own repair. Offsets cannot be backfilled row by row,
+  because from the first converted row until the last the record holds both
+  shapes and is unbuildable - so the comparison had to tolerate the mixture
+  before any migration could begin.
+
+  **No offset is guessed.** Two naive values share a frame by construction and
+  stay comparable; two aware values compare as instants across differing
+  offsets; a MIXED pair is declined and reported, and the weaker shape test
+  decides. The obvious repair - lend the aware row's offset to the naive one -
+  fails on the commonest pairing there is, since platforms routinely emit UTC
+  beside a connector writing naive local time, and a `+00:00` lent to a
+  `+02:00` row lands two hours from where it happened while still looking like
+  a clean instant. A misplaced instant is worse than an absent one.
+
+  The undecidable case is reported as `incomparable_timestamps` rather than as
+  a shape-only merge: both rows *have* a `start_time`, and telling the athlete
+  to record one they already have would send them nowhere. `vitai validate`
+  reports a mixed record as an ADVISORY, never an error - those rows are
+  history, not mistakes.
+
+  GPX fix times are now read as UTC when written without a designator, which
+  is what GPX 1.1 specifies rather than a guess, so one track carrying both
+  spellings cannot raise either.
 - **A weight rate no longer prints an actionable verdict it cannot support**
   (#37). When the weigh-in times behind a rate are spread widely enough that
   the diurnal drift alone accounts for it, the rollup reads `NOT READABLE -

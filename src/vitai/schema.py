@@ -13,7 +13,8 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from .clocks import is_stamp, order_key  # noqa: F401  (re-exported for callers)
+from .clocks import (is_aware, is_stamp, order_key,  # noqa: F401
+                     parse_time)
 
 # dataset -> ordered keys (column order for the SQLite read model)
 KEYS: dict[str, list[str]] = {
@@ -459,11 +460,22 @@ def _bad_hhmm(v: object) -> bool:
 
 
 def _bad_time(v: object) -> bool:
-    """An ISO-8601 timestamp, offset optional but strongly preferred.
+    """An ISO-8601 timestamp. Offset-bearing is CANONICAL; naive is legacy.
 
-    The offset is what makes two platforms' claims about the same run
-    comparable across a timezone change (F3's day-boundary rule), so the
-    resolution layer's time-intersect match needs it.
+    Both parse and both are accepted, and the distinction is stated here
+    because the schema being silent about it is what made this dangerous: the
+    validator's own example showed an offset while the record held naive rows
+    from the Polar connector, and comparing the two shapes used to take the
+    build down (#38). A writer following the documentation broke the engine.
+
+    Comparison is now frame-aligned (`clocks.align`), so a mixed record
+    builds. Naive stays LEGAL - an existing line is history, not an error, and
+    offsets cannot be backfilled row by row anyway - but `vitai validate`
+    reports naive timestamps as an advisory so a migration has something to
+    work from. Offset-bearing is what new writes should carry: an offset is
+    what makes an instant comparable across a timezone change, and naive local
+    time is genuinely ambiguous during the autumn DST fold, when 02:30 happens
+    twice and nothing in the value says which.
     """
     if not isinstance(v, str):
         return True
@@ -757,6 +769,35 @@ def _validate_recorded_at(rec: dict) -> list[str]:
                 "offset (e.g. 2026-07-31T14:32:05+02:00), machine-set on "
                 "append and never authored"]
     return []
+
+
+def timestamp_advisories(dataset: str, rows: list[tuple[int, dict]]) -> list[str]:
+    """Naive `start_time` values: legal, but not what new writes should carry.
+
+    An ADVISORY rather than a problem, deliberately. These rows are already on
+    disk and are not wrong - and making them an error would make the record
+    unbuildable from the first converted row until the last, which is the very
+    thing that blocks the migration it would be demanding (#38).
+
+    Reported only where both shapes coexist in one dataset. A record that is
+    uniformly naive is internally consistent and has nothing to act on yet;
+    it is the mixture that costs something, because every comparison across it
+    rests on an assumed offset.
+    """
+    if dataset != "sessions":
+        return []
+    naive = [n for n, r in rows
+             if r.get("start_time") and not is_aware(parse_time(r["start_time"]))]
+    aware = [n for n, r in rows
+             if r.get("start_time") and is_aware(parse_time(r["start_time"]))]
+    if not naive or not aware:
+        return []
+    return [f"{dataset}.jsonl: {len(naive)} start_time value(s) are naive and "
+            f"{len(aware)} carry an offset (first naive: line {naive[0]}). "
+            "Both are legal and the build handles the mixture, but every "
+            "comparison between the two shapes rests on an assumed offset. "
+            "Offset-bearing is canonical - naive local time cannot say which "
+            "02:30 it means on the night the clocks go back"]
 
 
 def recorded_at_problems(dataset: str, rows: list[tuple[int, dict]]) -> list[str]:

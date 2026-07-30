@@ -211,6 +211,19 @@ def _build(target: Path) -> None:
         "setting": "outdoor", "route": "canal-loop", "place": "home",
         "with": "partner", "context": "family", "planned": None,
         "weather": "rain"})
+    # The SAME walk, as a second connector recorded it - with a NAIVE
+    # start_time (#38). This is the shape a legacy connector writes, and until
+    # the fix it took the whole build down the moment it met an offset-bearing
+    # row. The two must resolve to one activity, and the record must say the
+    # offset was assumed rather than quietly claiming two platforms agreed on
+    # an instant.
+    sessions.append({
+        "date": context_day, "type": "walk", "distance_km": 6.38,
+        "duration_s": 4906, "avg_hr": 103, "max_hr": None, "cadence": None,
+        "kcal": 288, "rpe": 2, "note": None, "_gen": 2, "source": "app",
+        "start_time": f"{context_day}T14:05:11", "elevation_m": None,
+        "setting": "outdoor", "route": None, "place": None, "with": None,
+        "context": None, "planned": None, "weather": None})
     for row in daily:
         if row["date"] == context_day:
             row.update({"mood": 9, "feel": "fun", "coverage": "full"})

@@ -122,6 +122,12 @@ the key name. Three datasets record what happened:
 | `data/medical.jsonl` | step in one condition's lifecycle | `slug`, `kind`, `severity`, `status`, `restricts` |
 | `data/events.jsonl` | dated real-world fixture | `slug`, `kind`, `event_date`, `priority`, `immovable` |
 
+`sessions.start_time` should carry a UTC offset. Naive local time is still
+legal - existing rows are history, not mistakes - but two shapes cannot be
+compared as instants, so the engine declines the comparison and says so rather
+than guessing an offset. `vitai validate` reports a mixed record as an
+advisory.
+
 Every dataset also carries **`recorded_at`** - transaction time, stamped by
 `vitai append`, never written by hand. `date` says when something became true
 and may be backdated; `recorded_at` says when the line was written and may
