@@ -336,7 +336,7 @@ def _medical(start: date, end: date) -> list[dict]:
          "source": "athlete",
          "note": "stiff first thing; eases once warm - watching it",
          "onset_date": (end - timedelta(days=6)).isoformat(),
-         "precondition": "hop-test", "_gen": 2},
+         "precondition": "hop-test", "expects": None, "_gen": 2},
         # A historical episode, entered late: onset years before the entry
         # date, which the record could not express until the split.
         {"date": (end - timedelta(days=1)).isoformat(), "slug": "old-ankle",
@@ -345,7 +345,8 @@ def _medical(start: date, end: date) -> list[dict]:
          "resolved_date": "2028-05-01", "restricts": None,
          "provider_type": "physio", "source": "athlete",
          "note": "recorded from memory while filling in history",
-         "onset_date": "2028-03-02", "precondition": None, "_gen": 2},
+         "onset_date": "2028-03-02", "precondition": None,
+         "expects": None, "_gen": 2},
     ]
 
 
