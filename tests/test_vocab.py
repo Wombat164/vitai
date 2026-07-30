@@ -152,11 +152,22 @@ def test_retired_programme_labels_still_resolve():
 
 
 def test_an_athletes_own_words_resolve():
+    """`yoga` and `tennis` used to fold into the coarse `mobility` and
+    `sport`. They are now values in their own right, because the activity
+    axis carries Strava's 50 sport types (#53) - so the expectations change
+    deliberately rather than the vocabulary being bent to fit them.
+
+    The coarse values still exist and still resolve; what changed is that a
+    named activity is no longer flattened into its category.
+    """
     for written, expect in [("cycling", "cycle"), ("bike", "cycle"),
                             ("Swimming", "swim"), ("erg", "row"),
-                            ("yoga", "mobility"), ("bouldering", "climb"),
-                            ("tennis", "sport"), ("weights", "strength")]:
+                            ("yoga", "yoga"), ("bouldering", "climb"),
+                            ("tennis", "tennis"), ("weights", "strength"),
+                            ("some winter sport", None)]:
         assert vocab.resolve_session_type(written) == expect, written
+    # The coarse values are still legal for an athlete who only knows that much.
+    assert vocab.resolve_session_type("wintersport") == "wintersport"
 
 
 def test_session_classes_come_from_the_registry():
@@ -249,3 +260,130 @@ def test_a_weight_goal_can_be_scoped_to_the_weight_dataset():
     assert validate_record("goals", goal) == []
     assert any("dataset" in p for p in validate_record(
         "goals", {**goal, "dataset": "astrology"}))
+
+
+def test_no_session_type_ever_loses_a_restriction_class():
+    """The near-miss that earned this test.
+
+    Regenerating `session_types.toml` for #53 silently dropped `impact` from
+    the coarse `sport`, `run`+`impact` from `test`, and `lower_body` from
+    `swim` and `wintersport`. Every one of those is safety-bearing: an impact
+    gate would have stopped blocking team sport, and nothing in the suite
+    said so except one test that happened to cover `sport`.
+
+    A registry is data, and data can be regenerated. This asserts the
+    property that must survive any regeneration: a type's classes may GROW,
+    never shrink, because shrinking them silently unblocks something a
+    clinician blocked.
+    """
+    baseline = {
+        "run": {"run", "impact", "cardio", "lower_body"},
+        "walk": {"walk", "cardio", "lower_body"},
+        "cycle": {"cycle", "cardio", "lower_body"},
+        "swim": {"swim", "cardio", "upper_body", "lower_body"},
+        "row": {"row", "cardio", "upper_body", "lower_body"},
+        "strength": {"strength", "upper_body", "lower_body"},
+        "climb": {"climb", "upper_body", "strength"},
+        "sport": {"sport", "impact", "cardio"},
+        "wintersport": {"wintersport", "cardio", "lower_body"},
+        "paddle": {"paddle", "cardio", "upper_body"},
+        "mobility": {"mobility"},
+        "test": {"cardio", "run", "impact"},
+    }
+    for slug, must_have in baseline.items():
+        got = session_classes(slug)
+        assert must_have <= got, f"{slug} lost {sorted(must_have - got)}"
+
+
+def test_every_class_a_type_claims_is_a_real_restriction_class():
+    """A class no rule understands is an unenforced gate - the precise harm
+    the restriction rework removed.
+
+    Checked against the REGISTRY's classes, not `safety.session_classes`,
+    which deliberately falls back to the activity's own name so that a gate
+    naming an unrecognised activity directly still bites. That fallback is
+    not a class claim and must not be read as one.
+    """
+    legal = set(vocab.axis_values("activity"))
+    for slug in vocab.session_types():
+        unknown = set(vocab.session_classes(slug)) - legal
+        assert not unknown, f"{slug} claims unknown class(es) {sorted(unknown)}"
+
+
+# ---- #53: the 50 sport types, and setting as its own axis ----------------------
+
+def test_the_activity_axis_carries_stravas_sport_types():
+    """Sourced, not hand-assembled: Strava's `SportType` is exactly 50 values,
+    a maintained consumer-grade taxonomy. 47 are adopted as values here."""
+    types = vocab.registry("session_types")["types"]
+    named = {m["strava"] for m in types.values() if m.get("strava")}
+    assert len(named) == 47
+    for expected in ("Run", "Ride", "Elliptical", "StandUpPaddling",
+                     "HighIntensityIntervalTraining", "Pickleball"):
+        assert expected in named, expected
+
+
+def test_the_three_pre_coordinated_strava_types_are_not_values():
+    """`VirtualRun` bundles an activity with a modality, which is the defect
+    the whole registry exists to avoid. They resolve, and they resolve to the
+    ACTIVITY - the modality belongs in `setting`."""
+    types = vocab.registry("session_types")["types"]
+    named = {m.get("strava") for m in types.values()}
+    for pre in ("VirtualRun", "VirtualRide", "VirtualRow"):
+        assert pre not in named, f"{pre} must not be an activity value"
+    assert vocab.resolve_session_type("VirtualRun") == "run"
+    assert vocab.resolve_session_type("VirtualRide") == "cycle"
+    assert vocab.resolve_session_type("VirtualRow") == "row"
+
+
+def test_the_catchall_is_an_activity_plus_a_setting():
+    """What the athlete asked for, decomposed. `outdoor_other` is not an
+    activity; Polar's OTHER_OUTDOOR resolves to the activity half and the
+    setting is recorded separately."""
+    assert vocab.resolve_session_type("OTHER_OUTDOOR") == "other"
+    assert vocab.resolve_setting("outdoor") == "outdoor"
+
+
+def test_no_value_pre_coordinates_activity_with_setting():
+    """The invariant, asserted rather than trusted: no activity value may
+    carry a setting word, and no setting may carry an activity."""
+    settings = set(vocab.settings()) | {"treadmill", "home"}
+    for slug in vocab.session_types():
+        parts = set(slug.split("_"))
+        assert not (parts & settings), f"{slug} bakes a setting into an activity"
+    for slug in vocab.settings():
+        assert slug not in vocab.session_types(), slug
+
+
+def test_the_names_that_fell_into_other_now_resolve():
+    """436 of 1,502 imported activities landed in `other` (29%). These are
+    the examples the issue named, and they resolve by CURATED ALIAS - nothing
+    fuzzy-matches, so a name nobody mapped still reports as unmapped."""
+    for written, expect in [("Outdoor Bike", "cycle"),
+                            ("Elliptical Trainer", "elliptical"),
+                            ("Sport", "sport"),
+                            ("MountainBikeRide", "mountain_bike_ride"),
+                            ("crosstrainer", "elliptical")]:
+        assert vocab.resolve_session_type(written) == expect, written
+
+
+def test_an_unmapped_name_stays_unmapped():
+    """The discipline that must survive: the importer reports rather than
+    guesses. A matcher that turns 'Running (jogging), 9 mph' into `run` will
+    also turn something else into `run` silently, and nobody will find out."""
+    assert vocab.resolve_session_type("Running (jogging), 9 mph") is None
+    assert vocab.resolve_session_type("Elliptical, High Resistance") is None
+    assert vocab.resolve_session_type("Water Sport") is None
+
+
+def test_a_healthkit_type_maps_outward():
+    """An Apple Health import maps onto this axis rather than needing its own
+    vocabulary. Mapped outward, never vendored."""
+    assert vocab.resolve_session_type("HKWorkoutActivityTypeYoga") == "yoga"
+    assert vocab.resolve_session_type("HKWorkoutActivityTypeElliptical") == "elliptical"
+
+
+def test_a_retired_setting_still_resolves():
+    assert vocab.resolve_setting("treadmill") == "indoor"
+    assert vocab.resolve_setting("home") == "indoor"
+    assert "treadmill" not in vocab.settings(), "legal, no longer offered"

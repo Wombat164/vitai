@@ -1,0 +1,53 @@
+# Setting - WHERE an activity happened, as its own axis.
+#
+# This is the other half of #53, and the half that makes the catchalls
+# possible without multiplying the activity registry.
+#
+# `outdoor_other` is not an activity. It is `activity = other` plus
+# `setting = outdoor` - two axes pre-coordinated into one token. Both vendors
+# do it: Polar ships `OTHER_OUTDOOR` / `OTHER_INDOOR`, Strava ships
+# `VirtualRun` / `VirtualRide` / `VirtualRow` beside `Run` / `Ride` /
+# `Rowing`. Copying either would make this registry the size of the
+# cross-product instead of the size of the world.
+#
+# Ten activities across three settings is thirty pre-coordinated tokens, or
+# ten values and one axis. And post-coordination makes a question like "all my
+# running, indoors or out" expressible, instead of requiring the caller to
+# know every compound name.
+#
+# WHAT WAS WRONG with the Python set this replaces: `SETTINGS` held
+# `{outdoor, indoor, treadmill, home}`, which mixes three different things -
+# a setting, a piece of EQUIPMENT, and a PLACE. `sessions` already has a
+# `place` field, so `home` was answering a question another column owns, and
+# `treadmill` is a machine you run on indoors rather than a setting at all.
+# Both are retired here rather than deleted: an old line carrying either is
+# history, not an error.
+#
+# ABSENT MEANS UNSTATED, not "outdoor". The field is 0% filled today, so
+# reading a null as any particular setting would invent a fact about every
+# session ever recorded.
+
+version = 1
+
+[settings.outdoor]
+label = "Outdoors"
+aliases = ["outside", "open air", "road", "trail", "buiten"]
+
+[settings.indoor]
+label = "Indoors"
+aliases = ["inside", "gym", "studio", "pool", "binnen"]
+
+[settings.virtual]
+label = "Virtual"
+aliases = ["online", "simulated", "zwift", "vr", "smart trainer"]
+note = "a real effort against a simulated course - Strava's Virtual* prefix, decomposed"
+
+[retired.treadmill]
+maps_to = "indoor"
+since_gen = 4
+reason = "a piece of equipment, not a setting; a treadmill is running indoors"
+
+[retired.home]
+maps_to = "indoor"
+since_gen = 4
+reason = "a place, and `sessions.place` already owns that question"

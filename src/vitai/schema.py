@@ -209,7 +209,16 @@ INFERENCE_KINDS = {"pattern", "risk", "recommendation", "observation", "question
 # about the athlete than the free text it replaces.
 FEELS = {"fun", "neutral", "chore"}
 COVERAGES = {"full", "partial", "manual"}
-SETTINGS = {"outdoor", "indoor", "treadmill", "home"}
+# Sourced from semantics/settings.toml (#53): WHERE an activity happened, as
+# its own axis, so `other` + `outdoor` expresses the catchall a vendor would
+# pre-coordinate into `OTHER_OUTDOOR`. Retired values stay legal.
+def _settings() -> set[str]:
+    from .vocab import registry, retired
+    return set(registry("settings").get("settings") or {}) | set(
+        retired("settings"))
+
+
+SETTINGS = _settings()
 SESSION_CONTEXTS = {"commute", "family", "social", "solo", "club"}
 WEATHERS = {"dry", "rain", "hot", "cold", "wind"}
 MEASUREMENT_KINDS = {"body_fat_pct", "waist_cm", "hip_cm", "chest_cm",

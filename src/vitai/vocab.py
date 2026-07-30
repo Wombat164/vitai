@@ -46,6 +46,19 @@ def _normalise(text: object) -> str:
     return " ".join(str(text).replace("_", " ").replace("-", " ").lower().split())
 
 
+def _decamel(text: str) -> str:
+    """`VirtualRun` -> `Virtual Run`, so a vendor's CamelCase token folds onto
+    the same normalised key as its snake_case slug. Not fuzzy matching: it is
+    a spelling rule applied to an exact declared value, and it can only ever
+    map a token onto the entry that already declares it."""
+    out = [text[0]] if text else []
+    for prev, ch in zip(text, text[1:]):
+        if ch.isupper() and not prev.isupper():
+            out.append(" ")
+        out.append(ch)
+    return "".join(out)
+
+
 @lru_cache(maxsize=None)
 def _index(name: str, section: str) -> dict[str, str]:
     """Every accepted spelling in one section -> its canonical slug.
@@ -54,6 +67,12 @@ def _index(name: str, section: str) -> dict[str, str]:
     maps into the section - so an old line resolves without special-casing.
     """
     data = registry(name)
+    # A registry may declare which of its OWN fields are also accepted
+    # spellings. `session_types` names `strava` and `healthkit`, so an import
+    # can hand over the vendor's exact token - `VirtualRun`, `TrailRun` -
+    # without every one of them being restated as an alias by hand, and
+    # without anything fuzzy-matching (#53).
+    alias_fields = data.get("alias_fields") or []
     out: dict[str, str] = {}
     for slug, meta in (data.get(section) or {}).items():
         out.setdefault(_normalise(slug), slug)
@@ -61,10 +80,18 @@ def _index(name: str, section: str) -> dict[str, str]:
             out.setdefault(_normalise(label), slug)
         for alias in (meta or {}).get("aliases", []):
             out.setdefault(_normalise(alias), slug)
+        for field in alias_fields:
+            if spelling := (meta or {}).get(field):
+                out.setdefault(_normalise(_decamel(str(spelling))), slug)
     for old, meta in (data.get("retired") or {}).items():
         target = (meta or {}).get("maps_to")
-        if target in (data.get(section) or {}):
-            out.setdefault(_normalise(old), target)
+        if target not in (data.get(section) or {}):
+            continue
+        out.setdefault(_normalise(old), target)
+        # A retired value needs its spellings too, or a vendor token that was
+        # retired precisely BECAUSE the vendor ships it stops resolving.
+        for alias in (meta or {}).get("aliases", []):
+            out.setdefault(_normalise(alias), target)
     return out
 
 
@@ -74,10 +101,19 @@ def values(name: str, section: str) -> list[str]:
 
 
 def resolve(name: str, section: str, written: object) -> str | None:
-    """Canonical slug for whatever was written, or None if unrecognised."""
+    """Canonical slug for whatever was written, or None if unrecognised.
+
+    Tries the written form and its de-camelled spelling, so a vendor token
+    (`TrailRun`, `StandUpPaddling`) folds onto the same key as the slug that
+    declares it. That is a spelling rule over exact declared values, not a
+    fuzzy match: it can only ever reach an entry that already names it.
+    """
     if written is None or str(written).strip() == "":
         return None
-    return _index(name, section).get(_normalise(written))
+    index = _index(name, section)
+    text = str(written)
+    return (index.get(_normalise(text))
+            or index.get(_normalise(_decamel(text))))
 
 
 def is_value(name: str, section: str, written: object) -> bool:
@@ -147,6 +183,14 @@ def bends_plan(priority: object) -> str | None:
     editing the code that decides what a taper is.
     """
     return meta("events", "priority", priority).get("bends_plan")
+
+
+def settings() -> list[str]:
+    return values("settings", "settings")
+
+
+def resolve_setting(written: object) -> str | None:
+    return resolve("settings", "settings", written)
 
 
 # --- restriction axes ---------------------------------------------------------
