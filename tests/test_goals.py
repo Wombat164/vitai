@@ -431,12 +431,22 @@ def test_cap_and_floor_loosen_in_opposite_directions():
     assert cap[0]["direction"] == LOOSENED, "a raised cap is easier"
 
 
-def test_a_pushed_deadline_counts_as_loosening():
+def test_a_pushed_deadline_is_recorded():
+    """That the deadline moved is a FACT and is always recorded.
+
+    This test used to assert `direction == LOOSENED` as well, on any pushed
+    deadline whatsoever. That assertion encoded a belief the model has since
+    rejected: a date the athlete invented is a direction of travel they may
+    revise at no cost to anyone, and reading it as a retreat accuses them of
+    gaming a commitment nobody else ever held them to (G86). Whether a push
+    reads as a loosening depends on the deadline's HARDNESS, which does not
+    exist yet - the assertion is removed here rather than quietly weakened,
+    and reinstated for hard deadlines when the field lands.
+    """
     goals = [goal(date="2030-04-01", deadline="2030-06-01"),
              goal(date="2030-05-01", deadline="2030-09-01")]
     rows = plan_churn(goals, [])
     assert rows[0]["deadline_pushed"] is True
-    assert rows[0]["direction"] == LOOSENED
 
 
 # ---- determinism --------------------------------------------------------------
