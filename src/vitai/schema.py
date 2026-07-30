@@ -72,11 +72,43 @@ KEYS: dict[str, list[str]] = {
     # because one metric name can mean two things: `distance_km` is walking on
     # a `daily` line and running on a `sessions` line, so an unscoped running
     # goal would quietly count the athlete's commute. Null means "any".
+    #
+    # `deadline_kind` (gen 2) is the difference between a race date and a date
+    # the athlete invented. Without it G20's churn logic flags a legitimately
+    # moved soft deadline as goalpost-moving, which is an accusation about a
+    # commitment nobody else ever held them to (G86). `event` anchors the goal
+    # to a real-world fixture, which makes the deadline hard by derivation -
+    # an organiser's date is not the athlete's to move.
+    #
+    # `verification` says WHO can ever settle this goal: the engine
+    # (`measured`), another app (`external`, the G19 case), or nobody at all
+    # (`attested`). An attested goal - "enjoy running again", "be the parent
+    # who joins in" - has no metric and never will, and G83 found that is
+    # almost always what athletes say they would be sad to lose.
+    #
+    # `change_kind` mirrors `thresholds` (G31): a correction of a mis-entered
+    # line is not the athlete changing their mind, and counting it as churn
+    # manufactures a plan-stability problem that does not exist.
     "goals": ["date", "slug", "title", "metric", "dataset", "session_type",
               "tracker", "target", "policy", "guard_pct", "period",
               "on_period_end", "deadline", "status", "motivator", "rationale",
               "on_success", "on_miss", "accountability", "set_by", "reason",
-              "note"],
+              "note", "event", "deadline_kind", "verification", "change_kind"],
+    # A dated real-world FIXTURE, and the thing a plan is built backwards from
+    # (G86). Distinct from a MILESTONE, which the engine derives as a fraction
+    # of a target: a milestone is a consequence of progress, an event happens
+    # whether the athlete is ready or not.
+    #
+    # `date` is when the line was written (effective-dating, P2, like every
+    # other policy dataset); `event_date` is when the fixture actually falls,
+    # which is usually in the future. Collapsing the two would make a race
+    # declared today invisible to `state()` until the day it happened.
+    #
+    # `immovable` is a property of the EVENT (the organiser sets the date);
+    # `deadline_kind` is a property of a GOAL. They are related but not the
+    # same field - a soft goal may still be anchored to a hard fixture.
+    "events": ["date", "slug", "title", "kind", "event_date", "priority",
+               "immovable", "place", "status", "set_by", "reason", "note"],
     # G14/G20: every threshold is effective-dated, so editing one today can
     # never silently re-score a past week. `change_kind` separates a genuine
     # policy CHANGE from a CORRECTION of a mis-entered number (G31) - only the
@@ -177,7 +209,7 @@ CONTEXT_MODES = {"normal", "vacation", "work", "conference", "weekend",
 # Datasets whose lines are keyed by a stable identity rather than date/source:
 # a supersedes chain runs per slug, and the LAST line for a slug is its head.
 IDENTITY_KEY: dict[str, str] = {"goals": "slug", "thresholds": "key",
-                                "medical": "slug"}
+                                "medical": "slug", "events": "slug"}
 
 # --- the medical layer (increment 3) -----------------------------------------
 # `state` (G57) is a physiological condition rather than an illness -
@@ -243,6 +275,42 @@ GOAL_PERIODS = {"none", "weekly", "monthly", "quarterly", "yearly"}
 ON_PERIOD_END = {"reset", "carry", "escalate"}
 CHANGE_KINDS = {"change", "correction"}
 
+# A deadline is HARD (externally owned - a race, a scan, a wedding) or SOFT
+# (self-imposed, a direction of travel, movable at no cost to anyone). Kept as
+# a closed pair in code rather than a registry because it is not a sample of
+# the author's cases: it is the complete answer to one binary question, "may
+# the athlete move this date". A registry exists so a vocabulary can grow past
+# what the developer imagined; there is no third kind of deadline to discover.
+DEADLINE_KINDS = {"hard", "soft"}
+
+# Who can ever settle a goal. `measured` is the engine, from the record;
+# `external` is another app (G19 - a segment crown, a language streak);
+# `attested` is NOBODY - "I want to enjoy running again" has no metric and
+# never will, and the engine must be able to hold a goal it can never verdict.
+MEASURED, EXTERNAL, ATTESTED = "measured", "external", "attested"
+VERIFICATIONS = {MEASURED, EXTERNAL, ATTESTED}
+
+# Event status, taken verbatim from RFC 5545 (iCalendar) VEVENT STATUS. A
+# TENTATIVE fixture is not something to taper into, and a CANCELLED one must
+# stay on the record rather than vanish - the entry is history either way.
+EVENT_STATUSES = {"tentative", "confirmed", "cancelled"}
+
+
+# Event kinds and priorities are OPEN axes (an athlete will have a fixture we
+# never imagined), so they live in semantics/events.toml - registry, not code.
+def _event_kinds() -> set[str]:
+    from .vocab import registry, retired
+    return set(registry("events").get("kinds") or {}) | set(retired("events"))
+
+
+def _event_priorities() -> set[str]:
+    from .vocab import registry
+    return set(registry("events").get("priority") or {})
+
+
+EVENT_KINDS = _event_kinds()
+EVENT_PRIORITIES = _event_priorities()
+
 # A daily check has three outcomes, and the third is the point: NOT-DONE IS
 # NOT PASS. An athlete who never ran the hop test is not cleared by silence,
 # and a coach should be able to say "you have not done the check today"
@@ -274,6 +342,12 @@ KEY_GENERATION: dict[str, dict[str, int]] = {
     "medical": {"expects": 2, "onset_date": 2, "precondition": 2,
                 "restriction": 3},
     "achievements": {"occurred_date": 2},
+    # G86/G31. The first time `goals` has moved off the founding generation,
+    # so this is the G25 case the whole mechanism exists for: a gen-1 goal
+    # line written before any of these fields existed must keep validating and
+    # must resolve to exactly the same state it did before.
+    "goals": {"event": 2, "deadline_kind": 2, "verification": 2,
+              "change_kind": 2},
 }
 
 # The mirror of KEY_GENERATION: the generation at which a key stopped being
@@ -289,7 +363,7 @@ KEY_RETIREMENT: dict[str, dict[str, int]] = {
 
 CURRENT_GENERATION: dict[str, int] = {name: 1 for name in KEYS}
 for _ds in ("weight", "daily", "sessions", "inferences", "medical",
-            "achievements"):
+            "achievements", "goals"):
     CURRENT_GENERATION[_ds] = 2
 # Generation 3 adds the post-coordinated `restriction` spec to medical.
 CURRENT_GENERATION["medical"] = 3
@@ -624,9 +698,49 @@ def _validate_policy(dataset: str, rec: dict) -> list[str]:
         problems += _enum(rec, "period", GOAL_PERIODS)
         problems += _enum(rec, "on_period_end", ON_PERIOD_END, optional=True)
         problems += _enum(rec, "set_by", AUTHORS, optional=True)
-        if not isinstance(rec.get("metric"), str) or not rec.get("metric"):
+        problems += _enum(rec, "verification", VERIFICATIONS, optional=True)
+        problems += _enum(rec, "deadline_kind", DEADLINE_KINDS, optional=True)
+        problems += _enum(rec, "change_kind", CHANGE_KINDS, optional=True)
+        how = verification_of(rec)
+        # An ATTESTED goal is the one case where a metric is not merely absent
+        # but wrong to have. "I want to enjoy running again" is settled by the
+        # athlete saying so and by nothing else, so a metric on it would be a
+        # promise the engine cannot keep - it would start issuing verdicts on
+        # a proxy nobody agreed was the goal (G86/G83).
+        if how == ATTESTED:
+            for k in ("metric", "target", "dataset", "session_type", "period"):
+                if rec.get(k) not in (None, "", "none"):
+                    problems.append(
+                        f"an attested goal is settled by the athlete's word alone, "
+                        f"so it takes no {k!r} (got {rec.get(k)!r})")
+        elif how == MEASURED and (not isinstance(rec.get("metric"), str)
+                                  or not rec.get("metric")):
+            # Only a MEASURED goal owes a metric. An external one is named by
+            # its `tracker`, and an attested one has no measure at all.
             problems.append("'metric' must be a non-empty string "
-                            f"(a dataset column or {EXTERNAL_METRIC!r})")
+                            f"(a dataset column or {EXTERNAL_METRIC!r}), or set "
+                            f"'verification' to {ATTESTED!r} for a goal nothing "
+                            "can ever measure")
+        # The two ways of saying "another app owns this" must not disagree.
+        if rec.get("verification") == EXTERNAL and rec.get("metric") not in (
+                None, "", EXTERNAL_METRIC):
+            problems.append(f"an external goal's 'metric' is {EXTERNAL_METRIC!r} "
+                            f"or null, got {rec.get('metric')!r}")
+        # A correction says the retired line was never valid policy. Unexplained,
+        # it is indistinguishable from a quiet retreat wearing the right label -
+        # which is the one way this field could be used to launder churn.
+        if rec.get("change_kind") == "correction" and not rec.get("reason"):
+            problems.append("a 'correction' needs a 'reason' - it asserts the "
+                            "previous line never reflected a real intention, and "
+                            "unexplained it cannot be told from a quiet retreat")
+        # Hardness with nothing to be hard about is a field with no referent.
+        if rec.get("deadline_kind") is not None and not (
+                rec.get("deadline") or rec.get("event")):
+            problems.append("'deadline_kind' needs a 'deadline' or an 'event' "
+                            "to qualify")
+        if (ev := rec.get("event")) is not None and (
+                not isinstance(ev, str) or not ev):
+            problems.append("'event' names an events.jsonl slug")
         # G86/G85: `dataset` used to scope only to daily|sessions, so a WEIGHT
         # goal - the most common goal in the domain - had nowhere to point.
         if (ds := rec.get("dataset")) is not None and ds not in GOAL_DATASETS:
@@ -638,10 +752,11 @@ def _validate_policy(dataset: str, rec: dict) -> list[str]:
         # An external goal is tracked elsewhere, so it needs a pointer and
         # cannot carry an engine target; an internal goal needs a target to
         # verdict against. Guard percentage only means something when guarded.
-        if rec.get("metric") == EXTERNAL_METRIC:
+        if how == EXTERNAL:
             if not isinstance(rec.get("tracker"), str) or not rec.get("tracker"):
                 problems.append("an external goal needs 'tracker' (where it lives)")
-        elif rec.get("target") is None and rec.get("status") == "active":
+        elif (how != ATTESTED and rec.get("target") is None
+                and rec.get("status") == "active"):
             problems.append("an active non-external goal needs a numeric 'target'")
         if rec.get("policy") == "guarded" and rec.get("guard_pct") is None:
             problems.append("a guarded goal needs 'guard_pct' (the ramp headroom)")
@@ -669,4 +784,36 @@ def _validate_policy(dataset: str, rec: dict) -> list[str]:
             problems.append("'slug' must name the check, e.g. 'hop-test'")
         problems += _enum(rec, "result", CHECK_RESULTS)
         problems += _enum(rec, "source", AUTHORS, optional=True)
+    if dataset == "events":
+        for k in ("slug", "title"):
+            if not isinstance(rec.get(k), str) or not rec.get(k):
+                problems.append(f"'{k}' must be a non-empty string")
+        problems += _enum(rec, "kind", EVENT_KINDS)
+        problems += _enum(rec, "priority", EVENT_PRIORITIES, optional=True)
+        problems += _enum(rec, "status", EVENT_STATUSES, optional=True)
+        problems += _enum(rec, "set_by", AUTHORS, optional=True)
+        # The whole point of the dataset: a fixture without a date is not a
+        # fixture, and it is what everything else here is planned backwards from.
+        if _bad_date(rec.get("event_date")):
+            problems.append(f"bad event_date {rec.get('event_date')!r} - an event "
+                            "needs the day it actually falls on (ISO-8601)")
+        if (im := rec.get("immovable")) is not None and not isinstance(im, bool):
+            problems.append(f"'immovable' should be true/false/null, got {im!r}")
     return problems
+
+
+def verification_of(goal: dict) -> str:
+    """Who can ever settle this goal - `measured`, `external` or `attested`.
+
+    Read through a helper rather than off the field because `external` was
+    expressed as a sentinel METRIC value (`metric: "external"`) before this
+    field existed. Both spellings stay legal - an old line is history, not an
+    error - and everything downstream asks this question instead of matching
+    on the sentinel, which is how `report.py`'s `startswith("gym")` coupling
+    happened one increment ago.
+    """
+    if (declared := goal.get("verification")) in VERIFICATIONS:
+        return str(declared)
+    if goal.get("metric") == EXTERNAL_METRIC:
+        return EXTERNAL
+    return MEASURED

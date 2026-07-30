@@ -210,6 +210,7 @@ def _build(target: Path) -> None:
     sessions.sort(key=lambda s: (s["date"], s["type"], s.get("source") or ""))
 
     goals, thresholds, achievements = _policy(start)
+    events = _events(start)
     context, measurements = _situational(start, END)
     medical = _medical(start, END)
     checks = _checks(END)
@@ -219,7 +220,7 @@ def _build(target: Path) -> None:
                        ("goals", goals), ("thresholds", thresholds),
                        ("achievements", achievements), ("context", context),
                        ("measurements", measurements), ("medical", medical),
-                       ("checks", checks)):
+                       ("checks", checks), ("events", events)):
         (target / "data" / f"{name}.jsonl").write_text(
             _jsonl(rows), encoding="utf-8", newline="\n")
 
@@ -236,6 +237,47 @@ def _goal(date: str, slug: str, title: str, metric: str, target, policy: str,
            "set_by": "onboard", "reason": None, "note": None}
     rec.update(kw)
     return rec
+
+
+def _goal2(date: str, slug: str, title: str, metric, target, policy: str,
+           **kw) -> dict:
+    """A generation-2 goals line: the G86 fields present, `_gen` stamped.
+
+    The demo keeps BOTH generations in one file on purpose - that is what a
+    real record looks like after a schema moves, and a gen-1 line that still
+    validates is the property G25 exists to protect.
+    """
+    rec = _goal(date, slug, title, metric, target, policy)
+    rec.update({"_gen": 2, "event": None, "deadline_kind": None,
+                "verification": None, "change_kind": None})
+    rec.update(kw)
+    return rec
+
+
+def _event(date: str, slug: str, title: str, kind: str, event_date: str,
+           **kw) -> dict:
+    """An events.jsonl line with every key present (null for unknown)."""
+    rec = {"date": date, "slug": slug, "title": title, "kind": kind,
+           "event_date": event_date, "priority": None, "immovable": True,
+           "place": None, "status": "confirmed", "set_by": "athlete",
+           "reason": None, "note": None}
+    rec.update(kw)
+    return rec
+
+
+def _events(start: date) -> list[dict]:
+    """Two dated fixtures: the one the block is built around, and one that is
+    simply true and constrains it (G86)."""
+    d0 = start.isoformat()
+    return [
+        _event(d0, "autumn-half", "The autumn half marathon", "competition",
+               "2030-09-15", priority="a", place="a river town",
+               note="the date the whole run block is planned backwards from"),
+        _event((start + timedelta(days=30)).isoformat(), "hip-scan",
+               "Hip imaging follow-up", "clinical", "2030-07-10",
+               priority="c", immovable=True,
+               note="booked by the clinic - coarse on purpose, no diagnosis here"),
+    ]
 
 
 def _policy(start: date) -> tuple[list[dict], list[dict], list[dict]]:
@@ -268,6 +310,61 @@ def _policy(start: date) -> tuple[list[dict], list[dict], list[dict]]:
               motivator="Keep the desk job from winning",
               rationale="10k a day, averaged - a floor that survives a bad day",
               on_success="hold", on_miss="reflect"),
+        # --- generation 2 (G86) ------------------------------------------
+        # The run block is anchored to a real fixture. The deadline is the
+        # organiser's date, so it is HARD by derivation rather than by the
+        # athlete re-declaring it.
+        _goal2((start + timedelta(days=45)).isoformat(), "running",
+               "Build to 30 km a week, injury-free", "distance_km", 30,
+               "guarded", guard_pct=0.1, dataset="sessions",
+               session_type="run", event="autumn-half", deadline=None,
+               set_by="athlete",
+               reason="anchoring the block to the race rather than a date I picked",
+               motivator="Finish the autumn half without limping",
+               rationale="10% weekly ramp is the ceiling my hip tolerated last time",
+               on_success="escalate", on_miss="hold"),
+        # A SOFT deadline, and then a move of it. This is the false positive
+        # the increment removes: the date was self-imposed, so revising it is
+        # a change of direction, not a retreat - and the engine must not
+        # accuse anyone of gaming a commitment they invented.
+        _goal2((start + timedelta(days=14)).isoformat(), "weight",
+               "Down to 78 kg, unhurried", "kg", 78, "monotonic",
+               dataset="weight", period="none", on_period_end=None,
+               deadline="2030-10-01", deadline_kind="soft", set_by="athlete",
+               motivator="The hill on the way home stops being an event",
+               rationale="slow enough that the running keeps improving"),
+        _goal2((start + timedelta(days=70)).isoformat(), "weight",
+               "Down to 78 kg, unhurried", "kg", 78, "monotonic",
+               dataset="weight", period="none", on_period_end=None,
+               deadline="2031-02-01", deadline_kind="soft", set_by="athlete",
+               reason="the race block matters more than the scale this year",
+               motivator="The hill on the way home stops being an event",
+               rationale="slow enough that the running keeps improving"),
+        # ATTESTED: no metric, no target, and there never will be one. The
+        # engine holds it, surfaces it and asks about it, and takes the
+        # athlete's word as the only evidence there will ever be (G83).
+        _goal2((start + timedelta(days=14)).isoformat(), "enjoy-running",
+               "Enjoy running again, the way I used to", None, None,
+               "monotonic", verification="attested", period="none",
+               on_period_end=None, dataset=None, set_by="athlete",
+               motivator="The training worked and the enjoying stopped",
+               rationale="nothing measures this and nothing should"),
+        _goal2((start + timedelta(days=48)).isoformat(), "steps",
+               "Walk 77k steps a week", "steps", 7700, "monotonic",
+               dataset="daily", set_by="athlete",
+               motivator="Keep the desk job from winning",
+               rationale="10k a day, averaged - a floor that survives a bad day",
+               on_success="hold", on_miss="reflect"),
+        # A CORRECTION: the earlier line was a mis-entry, not a change of
+        # mind, so it must leave no churn row behind (#26).
+        _goal2((start + timedelta(days=49)).isoformat(), "steps",
+               "Walk 77k steps a week", "steps", 77000, "monotonic",
+               dataset="daily", set_by="athlete", change_kind="correction",
+               supersedes=f"steps@{(start + timedelta(days=48)).isoformat()}",
+               reason="the 7700 on the previous line was a typo for 77000",
+               motivator="Keep the desk job from winning",
+               rationale="10k a day, averaged - a floor that survives a bad day",
+               on_success="hold", on_miss="reflect"),
     ]
     thresholds = [
         {"date": d0, "key": "steps_floor", "value": 9000,

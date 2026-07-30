@@ -18,7 +18,7 @@ from vitai.config import Config, overlay
 from vitai.contributions import compute_contributions, goal_progress
 from vitai.jsonl import heads, load
 from vitai.policy import LOOSENED, TIGHTENED, plan_churn, state
-from vitai.schema import validate_record
+from vitai.schema import validate_record, verification_of
 from vitai.verdicts import compute_verdicts
 
 
@@ -431,12 +431,22 @@ def test_cap_and_floor_loosen_in_opposite_directions():
     assert cap[0]["direction"] == LOOSENED, "a raised cap is easier"
 
 
-def test_a_pushed_deadline_counts_as_loosening():
+def test_a_pushed_deadline_is_recorded():
+    """That the deadline moved is a FACT and is always recorded.
+
+    This test used to assert `direction == LOOSENED` as well, on any pushed
+    deadline whatsoever. That assertion encoded a belief the model has since
+    rejected: a date the athlete invented is a direction of travel they may
+    revise at no cost to anyone, and reading it as a retreat accuses them of
+    gaming a commitment nobody else ever held them to (G86). Whether a push
+    reads as a loosening depends on the deadline's HARDNESS, which does not
+    exist yet - the assertion is removed here rather than quietly weakened,
+    and reinstated for hard deadlines when the field lands.
+    """
     goals = [goal(date="2030-04-01", deadline="2030-06-01"),
              goal(date="2030-05-01", deadline="2030-09-01")]
     rows = plan_churn(goals, [])
     assert rows[0]["deadline_pushed"] is True
-    assert rows[0]["direction"] == LOOSENED
 
 
 # ---- determinism --------------------------------------------------------------
@@ -460,3 +470,228 @@ def test_contributions_are_stable_across_runs():
     first = compute_contributions(goals, [], days, sessions)
     second = compute_contributions(goals, [], days, sessions)
     assert first == second
+
+
+# ---- G86: deadline hardness, and the false accusation it removes --------------
+
+def test_a_pushed_hard_deadline_still_reads_as_a_retreat():
+    """Reinstates the assertion removed in the previous commit, now that
+    hardness exists to justify it. A race date is externally owned, so moving
+    it IS a retreat from something real."""
+    goals = [goal(date="2030-04-01", deadline="2030-06-01", deadline_kind="hard"),
+             goal(date="2030-05-01", deadline="2030-09-01", deadline_kind="hard")]
+    rows = plan_churn(goals, [])
+    assert rows[0]["deadline_pushed"] is True
+    assert rows[0]["direction"] == LOOSENED
+    assert rows[0]["deadline_kind"] == "hard"
+
+
+def test_a_moved_soft_deadline_is_not_goalpost_moving():
+    """THE test for this increment, named for the false positive it kills.
+
+    A self-imposed date is a direction of travel the athlete may revise at no
+    cost to anyone. Flagging it accuses them of gaming a commitment nobody
+    else ever held them to - and the engine was doing exactly that on a live
+    record. The push is still RECORDED; it is only the accusation that goes.
+    """
+    behind = [{"week": "2030-04-22", "metric": "steps", "verdict": "behind"}]
+    goals = [goal(date="2030-04-01", deadline="2030-06-01", deadline_kind="soft"),
+             goal(date="2030-05-01", deadline="2031-03-01", deadline_kind="soft")]
+    row = plan_churn(goals, [], behind)[0]
+    assert row["deadline_pushed"] is True, "the fact is not hidden"
+    assert row["direction"] != LOOSENED
+    assert row["suspicious"] is False
+    assert row["unexplained"] is False
+
+
+def test_unknown_hardness_records_the_push_without_judging_it():
+    """The legacy case: a goal written before the field existed. The engine
+    surfaces the move and says it does not know the hardness, rather than
+    guessing in either direction (the G89 shape: accumulate, surface, do not
+    decide for the athlete)."""
+    behind = [{"week": "2030-04-22", "metric": "steps", "verdict": "behind"}]
+    goals = [goal(date="2030-04-01", deadline="2030-06-01"),
+             goal(date="2030-05-01", deadline="2031-03-01")]
+    row = plan_churn(goals, [], behind)[0]
+    assert row["deadline_pushed"] is True
+    assert row["deadline_kind"] is None
+    assert row["suspicious"] is False
+
+
+def test_a_loosened_target_is_still_flagged_whatever_the_deadline_says():
+    """Hardness must not become a way to launder a genuine retreat: the
+    TARGET check is independent and still fires."""
+    behind = [{"week": "2030-04-22", "metric": "steps", "verdict": "behind"}]
+    goals = [goal(date="2030-04-01", target=12000, deadline_kind="soft",
+                  deadline="2030-06-01"),
+             goal(date="2030-05-01", target=8000, deadline_kind="soft",
+                  deadline="2031-03-01")]
+    row = plan_churn(goals, [], behind)[0]
+    assert row["direction"] == LOOSENED
+    assert row["suspicious"] is True
+
+
+def test_a_goal_anchored_to_a_race_inherits_a_hard_deadline():
+    events = [{"date": "2030-01-01", "slug": "spring-10k", "title": "Spring 10k",
+               "kind": "competition", "event_date": "2030-06-01", "priority": "a",
+               "immovable": True, "place": None, "status": "confirmed",
+               "set_by": "athlete", "reason": None, "note": None}]
+    goals = [goal(date="2030-04-01", event="spring-10k", deadline=None),
+             goal(date="2030-05-01", event="spring-10k", deadline="2030-09-01")]
+    rows = plan_churn(goals, [], events=events)
+    # The anchor pins the deadline to the fixture, so the goal's own later
+    # date does not quietly move it: the organiser owns that day.
+    assert rows[0]["deadline_pushed"] is False
+    assert rows[0]["deadline_kind"] == "hard"
+
+
+def test_goal_progress_carries_the_countdown_to_a_hard_date():
+    events = [{"date": "2030-01-01", "slug": "spring-10k", "title": "Spring 10k",
+               "kind": "competition", "event_date": "2030-06-01", "priority": "a",
+               "immovable": True, "place": None, "status": "confirmed",
+               "set_by": "athlete", "reason": None, "note": None}]
+    goals = [goal(date="2030-04-01", event="spring-10k", deadline=None)]
+    row = goal_progress(goals, [], [], [], "2030-05-22", events=events)[0]
+    assert row["deadline"] == "2030-06-01"
+    assert row["deadline_kind"] == "hard"
+    assert row["days_to_deadline"] == 10
+    assert row["event"] == "spring-10k"
+
+
+# ---- G86: attested-only goals --------------------------------------------------
+
+def test_an_attested_goal_validates_with_no_metric():
+    """"I want to enjoy running again" has no measure and never will. The
+    schema required one, so the thing athletes say they most value had
+    nowhere to live at all (G83)."""
+    attested = goal(slug="enjoy-running", metric=None, target=None,
+                    period="none", verification="attested",
+                    title="Enjoy running again")
+    assert validate_record("goals", attested) == []
+
+
+def test_an_attested_goal_refuses_a_metric():
+    """A metric on an attested goal is a promise the engine cannot keep: it
+    would start issuing verdicts on a proxy nobody agreed was the goal."""
+    problems = validate_record("goals", goal(
+        slug="enjoy-running", metric="steps", target=None, period="none",
+        verification="attested"))
+    assert any("attested" in p and "metric" in p for p in problems)
+
+
+def test_an_attested_goal_never_receives_a_verdict():
+    attested = goal(slug="enjoy-running", metric=None, target=None, period="none",
+                    verification="attested")
+    measured = goal(slug="steps", metric="steps", target=10000)
+    contributions, milestones = compute_contributions(
+        [attested, measured], [], [daily("2030-04-02", steps=11000)], [])
+    assert {c["goal"] for c in contributions} == {"steps"}
+    assert all(m["goal"] != "enjoy-running" for m in milestones)
+
+
+def test_an_attested_goal_is_still_surfaced():
+    """Never verdicted is not the same as never mentioned: the engine holds
+    it, shows it, and takes the athlete's word as the only evidence."""
+    attested = goal(slug="enjoy-running", metric=None, target=None, period="none",
+                    verification="attested")
+    rows = goal_progress([attested], [], [], [], "2030-05-01")
+    assert [r["slug"] for r in rows] == ["enjoy-running"]
+    assert rows[0]["verification"] == "attested"
+    assert rows[0]["target"] is None and rows[0]["progress_pct"] is None
+
+
+def test_external_goals_keep_working_through_the_old_sentinel():
+    """`metric: "external"` predates the `verification` field. An old line is
+    history, not an error, and must resolve to the same behaviour."""
+    old = goal(slug="crown", metric="external", target=None, tracker="a segment app")
+    assert validate_record("goals", old) == []
+    assert verification_of(old) == "external"
+    new = goal(slug="crown", metric=None, target=None, tracker="a segment app",
+               verification="external")
+    assert validate_record("goals", new) == []
+    assert verification_of(new) == "external"
+
+
+# ---- #26: a correction is not a change of mind ---------------------------------
+
+def test_a_corrected_goal_line_is_not_churn():
+    """The exact case that surfaced this: a deadline pushed, then superseded
+    as a correction because the commitment had never actually moved. The
+    retired line stays on disk; it must leave no suspicious-churn row."""
+    goals = [goal(date="2030-04-01", deadline="2030-06-01", deadline_kind="hard"),
+             goal(date="2030-05-01", deadline="2031-03-01", deadline_kind="hard",
+                  change_kind="correction",
+                  reason="the deadline never moved - the earlier line was a probe")]
+    assert plan_churn(goals, []) == []
+
+
+def test_an_unmarked_goal_edit_is_still_churn():
+    goals = [goal(date="2030-04-01", target=12000),
+             goal(date="2030-05-01", target=8000)]
+    assert len(plan_churn(goals, [])) == 1
+
+
+def test_a_correction_must_say_why():
+    """Unexplained, a correction cannot be told from a quiet retreat wearing
+    the right label - the one way this field could launder churn."""
+    problems = validate_record("goals", goal(change_kind="correction"))
+    assert any("reason" in p for p in problems)
+    assert validate_record("goals", goal(change_kind="correction",
+                                         reason="mis-typed target")) == []
+
+
+# ---- G25: the goals dataset moving to generation 2 -----------------------------
+
+def test_a_gen1_goal_line_still_validates_after_the_bump():
+    """`goals` moved off the founding generation for the first time here, so
+    this is the case the whole generation mechanism exists for: a line written
+    before any of the new fields existed is not missing them."""
+    gen1 = goal()
+    for new_key in ("event", "deadline_kind", "verification", "change_kind"):
+        gen1.pop(new_key, None)
+    assert validate_record("goals", gen1) == []
+
+
+def test_a_gen1_goal_line_resolves_identically_after_the_bump():
+    """History stability, asserted on the VALUES rather than on the suite
+    staying green: the same gen-1 line must produce the same state, the same
+    progress and the same churn as it did before the fields existed."""
+    gen1 = goal(date="2030-04-01", target=10000)
+    edited = goal(date="2030-05-01", target=12000)
+    assert state([gen1, edited], [], "2030-04-15").goal("steps")["target"] == 10000
+    assert state([gen1, edited], [], "2030-05-15").goal("steps")["target"] == 12000
+
+    rows = goal_progress([gen1], [], [daily("2030-04-02", steps=4000)], [],
+                         "2030-04-02")
+    assert rows[0]["counted"] == 4000
+    assert rows[0]["progress_pct"] == 40.0
+    assert rows[0]["deadline"] is None
+    assert rows[0]["deadline_kind"] is None
+    assert rows[0]["verification"] == "measured"
+
+    churn = plan_churn([gen1, edited], [])
+    assert len(churn) == 1
+    assert churn[0]["direction"] == TIGHTENED
+
+
+def test_a_goal_the_engine_cannot_feed_reports_unknown_not_zero():
+    """`GOAL_DATASETS` widened to allow a weight goal (#18), but nothing
+    iterates the weight dataset here, so it rendered as 0/78 (0%).
+
+    Telling an athlete who has lost 3 kg that they are at 0% of their weight
+    goal is the G69 harm in a new place: a number that reads as total failure
+    because of a convention the reader cannot see. Unknown is the truth.
+    """
+    weight_goal = goal(slug="weight", metric="kg", target=78, dataset="weight",
+                       period="none", on_period_end=None)
+    row = goal_progress([weight_goal], [], [], [], "2030-05-01")[0]
+    assert row["counted"] is None
+    assert row["progress_pct"] is None
+    assert row["target"] == 78, "the target is still known and still shown"
+
+
+def test_a_daily_scoped_goal_still_counts_normally():
+    row = goal_progress([goal(dataset="daily")], [],
+                        [daily("2030-04-02", steps=4000)], [], "2030-04-02")[0]
+    assert row["counted"] == 4000
+    assert row["progress_pct"] == 40.0

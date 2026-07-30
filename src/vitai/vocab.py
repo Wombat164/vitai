@@ -120,6 +120,35 @@ def session_classes(written: object) -> set[str]:
     return set(meta("session_types", "types", written).get("classes") or [])
 
 
+# --- events -------------------------------------------------------------------
+
+def event_kinds() -> list[str]:
+    return values("events", "kinds")
+
+
+def resolve_event_kind(written: object) -> str | None:
+    return resolve("events", "kinds", written)
+
+
+def event_priorities() -> list[str]:
+    return values("events", "priority")
+
+
+def resolve_event_priority(written: object) -> str | None:
+    return resolve("events", "priority", written)
+
+
+def bends_plan(priority: object) -> str | None:
+    """What an event of this priority licenses the planner to do.
+
+    Friel's A/B/C: an A event gets a full taper and the season is built around
+    it, a B event a minimal one, a C event is trained through. Declared in the
+    registry rather than in the planner so adding an event class does not mean
+    editing the code that decides what a taper is.
+    """
+    return meta("events", "priority", priority).get("bends_plan")
+
+
 # --- restriction axes ---------------------------------------------------------
 
 AXES = ("pattern", "region", "load", "plane", "activity")

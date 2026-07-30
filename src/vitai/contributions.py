@@ -29,8 +29,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from .policy import state
-from .schema import EXTERNAL_METRIC
+from .policy import _event_index, days_between, deadline_of, state
+from .schema import ATTESTED, EXTERNAL, verification_of
 
 ADVANCES, PARTIAL, UNBUDGETED, NEUTRAL, REGRESSES = (
     "advances", "partial", "unbudgeted", "neutral", "regresses")
@@ -40,6 +40,19 @@ MILESTONE_FRACTIONS = (0.25, 0.5, 0.75, 1.0)
 
 # Calendar weeks of history used as the ramp baseline for a guarded goal.
 BASELINE_WEEKS = 4
+
+# The datasets an event can arrive from. A goal scoped OUTSIDE these cannot be
+# fed by the contribution engine at all - `weight` and `measurements` became
+# legal goal scopes in #27, but nothing iterates them here, and a goal the
+# engine cannot feed must report UNKNOWN progress rather than zero.
+#
+# The distinction is not cosmetic: 0% reads as total failure, and telling an
+# athlete who has lost 3 kg that they are at 0% of their weight goal is the
+# G69 harm in a new place. Reaching a target from a starting point is an
+# APPROACH, not an accumulation, and modelling it properly needs the goal
+# KINDS of G62 (quantity | skill | maintenance). Until then the engine says
+# it does not know, which is both true and safe.
+CONTRIBUTING_DATASETS = frozenset({"daily", "sessions"})
 
 
 def _week_key(d: str) -> str:
@@ -132,9 +145,13 @@ def compute_contributions(goals: list[dict], thresholds: list[dict],
         in_force = state(goals, thresholds, when)
         for goal in in_force.active_goals():
             slug, metric = goal.get("slug"), goal.get("metric")
-            if not slug or not metric or metric == EXTERNAL_METRIC:
+            if not slug or not metric or verification_of(goal) in (
+                    EXTERNAL, ATTESTED):
                 # An external goal lives in another app; vitai tracks and
                 # reinforces it but cannot verdict it from this record (G19).
+                # An ATTESTED goal has no measure at all and never will - the
+                # engine holds it, surfaces it and asks about it, and takes the
+                # athlete's word as the only evidence there will ever be (G86).
                 continue
             if not _in_scope(goal, dataset, rec):
                 continue
@@ -222,7 +239,8 @@ def _milestones(goal: dict, slug: str, when: str, bucket: str,
 
 
 def goal_progress(goals: list[dict], thresholds: list[dict], daily: list[dict],
-                  sessions: list[dict], on: str) -> list[dict]:
+                  sessions: list[dict], on: str,
+                  events: list[dict] | None = None) -> list[dict]:
     """Per-goal standing as of `on`: counted progress in the current period.
 
     This is what `vitai goals` renders and what a dashboard reads. Progress is
@@ -233,6 +251,7 @@ def goal_progress(goals: list[dict], thresholds: list[dict], daily: list[dict],
                                                       sessions)
     in_force = state(goals, thresholds, on)
     declared, edited = _declaration_dates(goals)
+    index = _event_index(events)
 
     rows: list[dict] = []
     for goal in in_force.goals:
@@ -240,14 +259,18 @@ def goal_progress(goals: list[dict], thresholds: list[dict], daily: list[dict],
         if not slug:
             continue
         bucket = _period_key(goal.get("period"), on)
+        scope = goal.get("dataset")
+        countable = scope is None or scope in CONTRIBUTING_DATASETS
         counted = sum(c["counted"] for c in contributions
                       if c["goal"] == slug and c["period"] == bucket)
         unbudgeted = sum(c["value"] - c["counted"] for c in contributions
                          if c["goal"] == slug and c["period"] == bucket)
         target = goal.get("target")
         pct = None
-        if isinstance(target, (int, float)) and not isinstance(target, bool) and target:
+        if (countable and isinstance(target, (int, float))
+                and not isinstance(target, bool) and target):
             pct = round(100.0 * counted / float(target), 1)
+        deadline, hardness, anchor = deadline_of(goal, index)
         rows.append({
             "slug": slug,
             "title": goal.get("title"),
@@ -257,12 +280,16 @@ def goal_progress(goals: list[dict], thresholds: list[dict], daily: list[dict],
             "period": goal.get("period"),
             "bucket": bucket,
             "target": target,
-            "counted": round(counted, 3),
-            "unbudgeted": round(unbudgeted, 3),
+            "counted": round(counted, 3) if countable else None,
+            "unbudgeted": round(unbudgeted, 3) if countable else None,
             "progress_pct": pct,
             "declared": declared.get(slug),
             "last_edited": edited.get(slug),
-            "deadline": goal.get("deadline"),
+            "deadline": deadline,
+            "deadline_kind": hardness,
+            "days_to_deadline": days_between(on, deadline),
+            "event": anchor,
+            "verification": verification_of(goal),
             "motivator": goal.get("motivator"),
             "tracker": goal.get("tracker"),
             "milestones": sum(1 for m in milestones

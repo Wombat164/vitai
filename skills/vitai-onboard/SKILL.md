@@ -51,11 +51,24 @@ plan they will follow, not the best plan.
    - `period` + `on_period_end` for recurring containers ("8 gym visits a
      month"), and `on_success`/`on_miss` for what a made or missed period
      means next time - never punishment;
-   - `deadline` and `accountability` where the athlete named them.
-   Goals need not be fitness goals, and need not be measurable here: one the
-   athlete tracks in another app is `metric: "external"` plus a `tracker`.
-   vitai will reinforce and ask about it without inventing a verdict.
-7. **Fill the content repo's `CLAUDE.md`**: settled decisions (with
+   - `deadline` and `accountability` where the athlete named them, plus
+     `deadline_kind`: `hard` where somebody else owns the date (a race, a
+     scan, a wedding) and `soft` where the athlete invented it. Ask which -
+     it is one question and it decides whether moving the date later reads
+     as a retreat or as a change of direction.
+   - `verification`: `measured` (default, the engine settles it), `external`
+     (another app does - `tracker` plus a null `metric`), or `attested` -
+     NOTHING settles it, ever, so it takes no metric and no target. Ask for
+     an attested one explicitly: asked what they would want to look back on
+     in five years, athletes name an identity or a relationship, never a
+     number, and a model holding only targets cannot hear the answer.
+7. **Write `data/events.jsonl`** for any dated fixture named: a race, a scan,
+   a wedding, a holiday. An event is what a plan is built backwards FROM, and
+   is not a milestone (the engine derives those). Set `immovable` where the
+   date is not theirs to move, and `priority` `a`/`b`/`c` for how much the
+   plan bends - an A fixture gets a taper, a C is trained through. A goal
+   anchored to an event by slug inherits a hard deadline.
+8. **Fill the content repo's `CLAUDE.md`**: settled decisions (with
    evidence), how this athlete works, standing sensitivities. This file is
    what makes session two as good as session one.
 8. **Seed `data/`** with the observations that founded the plan (append,

@@ -28,7 +28,16 @@ from .schema import KEYS
 #    medical, `occurred_date` on achievements, and `status`/`precondition`
 #    columns on `gates`. A consumer reading `gates` MUST now check `status`:
 #    a row with status `cleared` is reported but does NOT block.
-CONTRACT_VERSION = "5"
+# 6: goals (G86/#26) - the `events` dataset (dated real-world fixtures a plan
+#    is built backwards from), `deadline_kind`/`event`/`verification`/
+#    `change_kind` on goals, and `deadline_kind` on `plan_churn`. TWO changes
+#    a consumer must act on: a `goal_progress` row with `verification` of
+#    `attested` has no metric, no target and no progress and MUST NOT be
+#    rendered as 0% - it is a goal nothing can ever measure, not a goal going
+#    badly; and a `plan_churn` row is only a retreat from a deadline when
+#    `deadline_kind` is `hard`, so a consumer that reads `deadline_pushed`
+#    alone will accuse the athlete of gaming a date they invented.
+CONTRACT_VERSION = "6"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
@@ -55,7 +64,10 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               "title", "body_site", "status", "resolved_date", "restricts",
               "provider_type", "source_kind", "escalation", "level", "trigger",
               "action", "onset_date", "precondition", "occurred_date",
-              "result"}
+              "result",
+              # G86: events, and the goal fields that anchor to them.
+              "event_date", "priority", "event", "deadline_kind",
+              "verification"}
 
 VERDICT_KEYS = ["week", "metric", "value", "target", "verdict", "goal"]
 
@@ -64,12 +76,13 @@ CONTRIBUTION_KEYS = ["date", "goal", "metric", "dataset", "period", "value",
                      "counted", "contribution", "headroom"]
 MILESTONE_KEYS = ["date", "goal", "period", "fraction", "value", "target", "label"]
 CHURN_KEYS = ["date", "slug", "kind", "metric", "edit_no", "before", "after",
-              "direction", "deadline_pushed", "reason", "set_by", "suspicious",
-              "unexplained"]
+              "direction", "deadline_pushed", "deadline_kind", "reason",
+              "set_by", "suspicious", "unexplained"]
 PROGRESS_KEYS = ["slug", "title", "metric", "policy", "status", "period",
                  "bucket", "target", "counted", "unbudgeted", "progress_pct",
-                 "declared", "last_edited", "deadline", "motivator", "tracker",
-                 "milestones"]
+                 "declared", "last_edited", "deadline", "deadline_kind",
+                 "days_to_deadline", "event", "verification", "motivator",
+                 "tracker", "milestones"]
 
 # Increment 2: the adjudication trail. Primary dataset tables hold CANONICAL
 # rows; these say where those rows came from and what was overruled.

@@ -26,7 +26,8 @@ from .contributions import compute_contributions, goal_progress
 from .db import build_db
 from .jsonl import load
 from . import query
-from .policy import State, context_on, plan_churn, state
+from .policy import (State, context_on, days_between, events_on, plan_churn,
+                     state)
 from .report import build_report
 from .resolution import live_inferences, resolve, retractions
 from .safety import (
@@ -245,7 +246,8 @@ class Vitai:
         return build_report(self.config, d["weight"], d["daily"],
                             d["sessions"], today=today,
                             gates=self.gates(on),
-                            escalations=self.urgent(on))
+                            escalations=self.urgent(on),
+                            events=self.events(on))
 
     def state(self, on: date | str) -> State:
         """The goals and thresholds in force on a date - as-of reconstruction.
@@ -261,7 +263,21 @@ class Vitai:
         d = self.datasets()
         on = (today or date.today()).isoformat()
         return goal_progress(d["goals"], d["thresholds"], d["daily"],
-                             d["sessions"], on)
+                             d["sessions"], on, events=d["events"])
+
+    def events(self, on: date | str | None = None) -> list[dict]:
+        """Dated real-world fixtures known on a date, soonest first (G86).
+
+        An event is what a plan is built backwards FROM - a race, a scan, a
+        wedding - as distinct from a milestone, which the engine derives from
+        progress already made. `days_away` is derived here rather than stored,
+        and goes negative once the fixture has passed.
+        """
+        d = self.datasets()
+        when = on.isoformat() if isinstance(on, date) else (on or
+                                                            date.today().isoformat())
+        return [dict(e, days_away=days_between(when, e.get("event_date")))
+                for e in events_on(d["events"], when)]
 
     def contributions(self) -> list[dict]:
         """Every event judged against every goal it touched (G18 fan-out)."""
@@ -278,7 +294,8 @@ class Vitai:
     def churn(self, today: date | None = None) -> list[dict]:
         """Policy edits, with the loosening-after-a-miss flag (G20)."""
         d = self.datasets()
-        return plan_churn(d["goals"], d["thresholds"], self.verdicts(today=today))
+        return plan_churn(d["goals"], d["thresholds"], self.verdicts(today=today),
+                          events=d["events"])
 
     def _derivations(self, resolved: dict,
                      today: date | None = None) -> dict[str, list[dict]]:
@@ -294,9 +311,11 @@ class Vitai:
             "verdicts": verdicts,
             "contributions": contributions,
             "milestones": milestones,
-            "plan_churn": plan_churn(d["goals"], d["thresholds"], verdicts),
+            "plan_churn": plan_churn(d["goals"], d["thresholds"], verdicts,
+                                     events=d["events"]),
             "goal_progress": goal_progress(d["goals"], d["thresholds"],
-                                           d["daily"], d["sessions"], on),
+                                           d["daily"], d["sessions"], on,
+                                           events=d["events"]),
             "claims": resolved["claims"],
             "resolution": resolved["explanations"],
             "justifications": resolved["justifications"],
@@ -329,7 +348,8 @@ class Vitai:
             build_report(self.config, d["weight"], d["daily"], d["sessions"],
                          today=today, gates=derivations["gates"],
                          escalations=urgent_now(derivations["escalations"],
-                                                on=today or date.today())),
+                                                on=today or date.today()),
+                         events=self.events(today or date.today())),
             encoding="utf-8", newline="\n")
         return db
 
