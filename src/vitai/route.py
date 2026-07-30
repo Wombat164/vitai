@@ -193,7 +193,31 @@ def _perp_distance_m(p: Fix, a: Fix, b: Fix) -> float:
 
 def simplify(points: list[Fix], epsilon_m: float = SIMPLIFY_EPSILON_M) -> list[Fix]:
     """Ramer-Douglas-Peucker (1973). Iterative, so a long track cannot blow the
-    recursion limit."""
+    recursion limit.
+
+    WHAT THIS OUTPUT IS FOR, and what it is NOT for.
+
+    RDP measures deviation in PLAN VIEW - `_perp_distance_m` is horizontal
+    only. It keeps the points that preserve the path's horizontal shape within
+    `epsilon_m` and discards everything collinear from above.
+
+    So it is valid for shape: classification, LCSS similarity, start/end,
+    furthest point, bearing. It is valid for DISTANCE, where the error is
+    bounded by epsilon per segment and summing over the simplified vertices is
+    what the prior-art sweep prescribes (the alternative, a raw haversine sum,
+    overestimates because jitter adds phantom length on every sample).
+
+    It is INVALID for anything vertical. **The discarded points are the hill.**
+    A gradual climb is a straight line seen from above, so RDP throws away
+    exactly the samples that carry the vertical profile - and it did: 77 of 99
+    real device tracks reported exactly 0 m of gain, including two 16 km runs
+    (#42). Worse, `elevation_gain_m` smooths over a window measured in POINTS,
+    calibrated against a track at native sampling density; on a track thinned
+    to 4% of its samples that same window spans kilometres and flattens every
+    real undulation below the climb threshold.
+
+    Pass `clean()` output to any vertical quantity, never this.
+    """
     if len(points) < 3:
         return list(points)
     keep = [False] * len(points)
@@ -245,6 +269,11 @@ def elevation_gain_m(points: list[Fix], barometric: bool = False) -> float | Non
     Raw per-point elevation deltas are never summed: GPS vertical error is
     roughly +/-15 m, so a naive sum reports enormous phantom ascent on flat
     ground. Returns None when the track carries no elevation at all.
+
+    Give this `clean()` output, NOT `simplify()` output. The smoothing window
+    is measured in POINTS and is calibrated against a track at native sampling
+    density; on a simplified track the same window spans kilometres and
+    flattens the profile to nothing (#42).
     """
     eles = [p.ele for p in points if p.ele is not None]
     if len(eles) < 2:
@@ -413,6 +442,10 @@ def analyse(points: list[Fix], barometric: bool = False) -> RouteStats:
     if len(used) < 2:
         used = cleaned if len(cleaned) >= 2 else raw
 
+    # Distance sums the SIMPLIFIED vertices, per the prior-art sweep: the
+    # error is bounded by epsilon per segment, while a raw sum overestimates
+    # because jitter adds phantom length on every sample. Elevation cannot
+    # follow it here - see `simplify` for why the two differ.
     dist = path_length_m(used)
     timed = [p for p in raw if p.t is not None]
     duration = (timed[-1].t - timed[0].t).total_seconds() if len(timed) >= 2 else None
@@ -427,7 +460,9 @@ def analyse(points: list[Fix], barometric: bool = False) -> RouteStats:
         points_raw=len(raw), points_used=len(used),
         distance_m=dist, distance_raw_m=path_length_m(raw),
         duration_s=duration, moving_s=moving,
-        elevation_gain_m=elevation_gain_m(used, barometric),
+        # NOT `used`: RDP is a horizontal simplification and discards exactly
+        # the samples that carry the vertical profile (#42). See `simplify`.
+        elevation_gain_m=elevation_gain_m(cleaned, barometric),
         start=(home.lat, home.lon), end=(used[-1].lat, used[-1].lon),
         start_end_gap_m=haversine_m(used[0], used[-1]),
         furthest_m=haversine_m(home, furthest),
