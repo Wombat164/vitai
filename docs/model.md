@@ -116,7 +116,7 @@ these; nothing else exists.
    safety/privacy-critical: consent ledger, access-scope, suppression prefs -
    NOT markdown pages (the redteam's "prose still hiding where data is needed").
 
-## Part 3 - The consolidating gaps (G24-G84)
+## Part 3 - The consolidating gaps (G24-G85)
 
 Each folds several redteam findings and fills a symmetry hole in a principle.
 
@@ -891,6 +891,36 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   Plus the honest refusal: two hours of pints a week are "the only two hours I'm
   not being useful to somebody... I'm not sure I want it squared." A conflict may
   be correctly left unresolved.
+
+- **G85 Genericise before encoding: one axis per vocabulary, registry not
+  code** (P5/P8/artifact-3). CRITICAL as a PROCESS gap - it is the failure mode
+  that produced several of the others, and it has now been caught twice.
+  Closed vocabularies were written from ONE athlete's examples rather than
+  designed as taxonomies, so they mix orthogonal axes and cannot express cases
+  that were not in front of the author. The evidence:
+  - `SESSION_TYPES` ships `gym_a` and `gym_b` - one person's programme labels -
+    in a public engine, while cycling, swimming, rowing, climbing and every
+    team sport collapse to `other`;
+  - `ACTIVITY_CLASSES` mixes a scope quantifier, a setting, a loading modality,
+    anatomical regions and specific activities in one flat list, and could not
+    express either of two real clinical gates;
+  - `CONTEXT_MODES` mixes weather, health, calendar, employment state and
+    social; `SEVERITIES` mixes a magnitude scale with a routing decision
+    (`red_flag`); `SETTINGS` contains a piece of equipment; `WEATHERS` cannot
+    say "cold and raining"; `MEASUREMENT_KINDS` bakes units into value names.
+  **The rule:** one axis per vocabulary; POST-coordinate rather than
+  pre-coordinate (the `body_sites` pattern - the one vocabulary that got a
+  prior-art sweep, and the only one without this defect); ground every
+  vocabulary in real prior art before writing it (Compendium of Physical
+  Activities for activities, ICF for activity limitations, FHIR value sets for
+  provider roles); and put it in `semantics/*.toml` as a curated registry
+  (artifact kind 3), never a Python `set`.
+  **The structural reason this keeps happening:** a vocabulary in CODE can only
+  be extended by a developer, so it can only ever contain what the developer
+  had seen. A vocabulary in the REGISTRY can be extended by the athlete, which
+  is also exactly what G78 requires. Same fix, two problems.
+  Tracked in issue #18. See also G78 (athlete-defined metrics) - the general
+  form of the same mistake, found by asking eight athletes what they count.
 
 ## The frame: a guardrailed world model (belief-state, not a learned net)
 
