@@ -148,8 +148,31 @@ def test_two_rows_claiming_the_same_instant_are_an_error():
     same = "2030-04-01T09:00:00+02:00"
     rows = [(1, goal(target=1, recorded_at=same)),
             (2, goal(target=2, recorded_at=same))]
-    assert any("same date and recorded_at" in p
+    assert any("same instant" in p
                for p in recorded_at_problems("goals", rows))
+
+
+def test_a_repeated_stamp_is_reported_even_on_different_dates():
+    """The narrow same-date check is what let the real defect hide: a bulk
+    import stamped 227 rows on 227 different dates identically, and validate
+    called the file valid (#44). A serial appender cannot write two rows at
+    one instant, whatever they are dated."""
+    same = "2030-04-01T09:00:00+02:00"
+    rows = [(1, goal(date="2030-04-01", recorded_at=same)),
+            (2, goal(date="2030-05-01", recorded_at=same))]
+    assert any("same instant" in p
+               for p in recorded_at_problems("goals", rows))
+
+
+def test_stamps_are_compared_as_instants_not_as_text():
+    """Two rows written either side of a flight. As strings `+02:00` sorts
+    after `+00:00`; as instants the Brussels one came first."""
+    rows = [(1, goal(recorded_at="2030-04-01T11:00:00+02:00")),   # 09:00Z
+            (2, goal(recorded_at="2030-04-01T10:00:00+00:00"))]   # 10:00Z
+    assert recorded_at_problems("goals", rows) == [], "in order by instant"
+    backwards = [(1, goal(recorded_at="2030-04-01T10:00:00+00:00")),
+                 (2, goal(recorded_at="2030-04-01T11:00:00+02:00"))]
+    assert any("precedes" in p for p in recorded_at_problems("goals", backwards))
 
 
 # ---- the append boundary --------------------------------------------------------
@@ -460,3 +483,147 @@ def test_a_uniformly_naive_record_has_nothing_to_advise():
     rows = [(1, session(start_time="2030-05-01T09:00:00")),
             (2, session(start_time="2030-05-02T09:00:00"))]
     assert timestamp_advisories("sessions", rows) == []
+
+
+# ---- #44: a clock that ties orders nothing --------------------------------------
+
+def test_a_thousand_appends_yield_a_thousand_distinct_stamps(tmp_path):
+    """The reported defect: 227 bulk-imported rows got 4 distinct values. On
+    this machine it was worse - all 227 shared ONE stamp, because a second is
+    an eternity in a write loop and the comparison admitted equal."""
+    from datetime import date as _date, timedelta as _td
+    root = repo(tmp_path)
+    for i in range(1000):
+        append(root / "data", "weight",
+               {"date": (_date(2030, 1, 1) + _td(days=i)).isoformat(),
+                "kg": 80.0 - i * 0.001, "source": "scale"})
+    stamps = [r["recorded_at"] for r in load(root / "data", "weight")]
+    assert len(stamps) == 1000
+    assert len(set(stamps)) == 1000, "every row must be orderable against every other"
+
+
+def test_stamps_are_strictly_increasing_never_merely_non_decreasing(tmp_path):
+    from datetime import date as _date, timedelta as _td
+    from vitai.clocks import stamp_instant
+    root = repo(tmp_path)
+    for i in range(200):
+        append(root / "data", "weight",
+               {"date": (_date(2030, 1, 1) + _td(days=i)).isoformat(),
+                "kg": 80.0, "source": "scale"})
+    instants = [stamp_instant(r["recorded_at"])
+                for r in load(root / "data", "weight")]
+    assert all(b > a for a, b in zip(instants, instants[1:]))
+
+
+def test_the_serialised_stamp_carries_microseconds(tmp_path):
+    """A second-resolution format cannot satisfy the test above even in
+    principle, so the resolution is asserted directly rather than left to be
+    inferred from a loop that happens to be slow enough."""
+    root = repo(tmp_path)
+    row = append(root / "data", "weight",
+                 {"date": "2030-05-01", "kg": 79.4, "source": "scale"})
+    assert "." in row["recorded_at"].split("+")[0].split("-")[-1]
+    seconds_field = row["recorded_at"].split("T")[1].split("+")[0]
+    assert len(seconds_field.split(".")[1]) == 6
+
+
+def test_wall_clock_is_used_whenever_it_has_moved_on(tmp_path):
+    """The logical clock only steps in to break a tie. Where real time has
+    advanced, the stamp is the truth and not an accumulating fiction."""
+    from datetime import datetime as _dt
+    root = repo(tmp_path)
+    first = append(root / "data", "weight",
+                   {"date": "2030-05-01", "kg": 79.4, "source": "scale"},
+                   now=_dt(2030, 5, 1, 9, 0, 0))
+    second = append(root / "data", "weight",
+                    {"date": "2030-05-02", "kg": 79.2, "source": "scale"},
+                    now=_dt(2030, 5, 1, 10, 0, 0))
+    assert first["recorded_at"].startswith("2030-05-01T09:00:00")
+    assert second["recorded_at"].startswith("2030-05-01T10:00:00")
+
+
+def test_a_tie_is_broken_by_one_tick_not_by_a_second(tmp_path):
+    """Two rows written at the same wall-clock instant still order, and the
+    stamp stays within a microsecond of the truth rather than inventing a
+    later second."""
+    from datetime import datetime as _dt
+    from vitai.clocks import stamp_instant
+    root = repo(tmp_path)
+    at = _dt(2030, 5, 1, 9, 0, 0)
+    a = append(root / "data", "weight",
+               {"date": "2030-05-01", "kg": 79.4, "source": "scale"}, now=at)
+    b = append(root / "data", "weight",
+               {"date": "2030-05-02", "kg": 79.2, "source": "scale"}, now=at)
+    ia, ib = stamp_instant(a["recorded_at"]), stamp_instant(b["recorded_at"])
+    assert ib > ia
+    assert (ib - ia).total_seconds() < 0.001
+
+
+def test_a_validate_run_after_a_bulk_append_is_clean(tmp_path, capsys):
+    """End to end, because the symptom was `validate` reporting 24 problems
+    about rows the engine's own helper had written."""
+    from datetime import date as _date, timedelta as _td
+    from vitai.cli import main
+    root = repo(tmp_path)
+    Vitai(root).append_many("weight", [
+        {"date": (_date(2030, 1, 1) + _td(days=i)).isoformat(),
+         "kg": 80.0 - i * 0.01, "source": "scale"} for i in range(227)])
+    main(["validate", "--root", str(root)])
+    out = capsys.readouterr().out
+    assert "all data lines valid" in out
+    assert "same instant" not in out
+
+
+# ---- #44: the batch primitive bulk import needs ---------------------------------
+
+def test_append_many_stamps_every_row_distinctly(tmp_path):
+    from datetime import date as _date, timedelta as _td
+    root = repo(tmp_path)
+    rows = Vitai(root).append_many("weight", [
+        {"date": (_date(2030, 1, 1) + _td(days=i)).isoformat(),
+         "kg": 80.0, "source": "scale"} for i in range(2000)])
+    assert len({r["recorded_at"] for r in rows}) == 2000
+
+
+def test_a_batch_with_one_bad_row_writes_nothing(tmp_path):
+    """An append-only file cannot be un-appended, so a partial batch would
+    leave the caller to work out how far it got."""
+    root = repo(tmp_path)
+    with pytest.raises(DataError, match="nothing was written"):
+        Vitai(root).append_many("weight", [
+            {"date": "2030-05-01", "kg": 79.4, "source": "scale"},
+            {"date": "the second of May", "kg": 79.2, "source": "scale"},
+        ])
+    assert load(root / "data", "weight") == []
+
+
+def test_a_batch_continues_the_clock_from_what_is_already_on_disk(tmp_path):
+    """The file is the clock's memory, so two separate imports cannot collide
+    even if they start within the same second."""
+    from vitai.clocks import stamp_instant
+    root = repo(tmp_path)
+    first = Vitai(root).append_many(
+        "weight", [{"date": "2030-05-01", "kg": 79.4, "source": "scale"}])
+    second = Vitai(root).append_many(
+        "weight", [{"date": "2030-05-02", "kg": 79.2, "source": "scale"}])
+    assert stamp_instant(second[0]["recorded_at"]) > stamp_instant(
+        first[0]["recorded_at"])
+
+
+def test_the_cli_accepts_jsonl_so_a_bulk_import_is_one_invocation(tmp_path, capsys):
+    import sys
+    from io import StringIO
+    from vitai.cli import main
+    root = repo(tmp_path)
+    capsys.readouterr()                      # discard `init`'s own output
+    payload = "\n".join(json.dumps(
+        {"date": f"2030-05-{i + 1:02d}", "kg": 80.0 - i * 0.1, "source": "scale"})
+        for i in range(5))
+    sys.stdin = StringIO(payload)
+    try:
+        main(["append", "weight", "--root", str(root)])
+    finally:
+        sys.stdin = sys.__stdin__
+    echoed = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert len(echoed) == 5
+    assert len({r["recorded_at"] for r in echoed}) == 5

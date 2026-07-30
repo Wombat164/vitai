@@ -40,7 +40,7 @@ demonstrably written later.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 # Body mass swings on the order of a kilogram between morning-fasted and
 # evening across a normal day. This is an ORDER-OF-MAGNITUDE anchor from the
@@ -61,14 +61,65 @@ WAKING_HOURS = 12.0
 WIDE_SPREAD_H = 2.0
 
 
-def now_stamp(now: datetime | None = None) -> str:
-    """Transaction time: ISO 8601, seconds, with an EXPLICIT offset.
+# The smallest step a stamp can take. Microseconds are the finest resolution
+# `datetime` carries, and the serialised form must show them or the increment
+# would be invisible in the file.
+TICK = timedelta(microseconds=1)
 
-    The offset is not decoration. A bare local timestamp is unorderable
-    against one written in another timezone, and this record travels - the
-    athlete logs from home, from a hotel and from a race weekend.
+# How far the wall clock may sit BEHIND the last stamp before appending is
+# refused rather than clamped. Sub-second overlap is the normal case in a
+# write loop and is what the logical clock exists to absorb silently. A
+# minute is different in kind: it means the system clock is wrong, and
+# clamping thousands of rows past a wrong clock would bury the problem under
+# stamps that look fine and carry a false wall time.
+#
+# An operational choice, not a published threshold - stated so it can be
+# argued with rather than discovered.
+CLOCK_SKEW_TOLERANCE = timedelta(seconds=60)
+
+
+def now_stamp(now: datetime | None = None,
+              after: datetime | None = None) -> str:
+    """Transaction time: ISO 8601, MICROSECONDS, with an EXPLICIT offset.
+
+    A HYBRID LOGICAL CLOCK, not a reading of the wall clock (#44). Wall time
+    is used whenever it has actually moved on; otherwise the stamp is one tick
+    past `after`, so a stamp is STRICTLY greater than its predecessor.
+
+    Second resolution and a non-strict comparison are what broke this: a loop
+    importing 227 weight readings produced ONE distinct value across all of
+    them, because a second is an eternity in a write loop and "not older than"
+    admits equal. Equal is the failure case - a tie is precisely the thing
+    that makes the field useless, since ordering was the only reason for it.
+
+    Bulk import is not an edge case here, it is how rows actually arrive:
+    every source so far lands as hundreds of rows in a tight loop. A clock
+    that only works when writes are a second apart does not work.
+
+    Under load this drifts microseconds ahead of true time, which is the right
+    trade. An ordering that is occasionally a few microseconds optimistic is
+    strictly better than one that does not exist.
+
+    The offset is not decoration either. A bare local timestamp is unorderable
+    against one written elsewhere, and this record travels - the athlete logs
+    from home, from a hotel and from a race weekend.
     """
-    return (now or datetime.now()).astimezone().isoformat(timespec="seconds")
+    when = (now or datetime.now()).astimezone()
+    if after is not None and when <= after:
+        when = after + TICK
+    return when.isoformat(timespec="microseconds")
+
+
+def stamp_instant(value: object) -> datetime | None:
+    """A `recorded_at` as an INSTANT, for comparing rather than string-matching.
+
+    Two stamps written either side of a flight carry different offsets, and
+    comparing them as text orders them by wall clock instead of by when they
+    happened - the #38 mistake, one clock over. `+02:00` sorts after `+00:00`
+    as a string no matter which came first.
+    """
+    when = parse_time(value)
+    return when if is_aware(when) else None
 
 
 def is_stamp(value: object) -> bool:
@@ -81,6 +132,13 @@ def is_stamp(value: object) -> bool:
         return False
 
 
+# Sorts before every real instant, for rows with no transaction time. Only
+# ever compared against other absent rows (the boolean above it separates the
+# two groups), so its value is arbitrary - it exists to keep the tuple
+# comparable rather than to mean anything.
+_NO_INSTANT = datetime.min.replace(tzinfo=UTC)
+
+
 def order_key(rec: dict) -> tuple:
     """(valid time, has-transaction-time, transaction time) - the sort key.
 
@@ -88,9 +146,14 @@ def order_key(rec: dict) -> tuple:
     before `True`, so an unstamped legacy row precedes a stamped one on the
     same date, and a file of entirely unstamped rows keeps file order under a
     stable sort.
+
+    The third is an INSTANT, not the raw string. Comparing stamps as text
+    orders two rows written either side of a timezone change by wall clock
+    rather than by when they were written.
     """
     stamp = rec.get("recorded_at")
-    return (str(rec.get("date") or ""), stamp is not None, str(stamp or ""))
+    return (str(rec.get("date") or ""), stamp is not None,
+            stamp_instant(stamp) or _NO_INSTANT)
 
 
 def _minutes(hhmm: object) -> int | None:

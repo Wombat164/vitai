@@ -129,7 +129,9 @@ than guessing an offset. `vitai validate` reports a mixed record as an
 advisory.
 
 Every dataset also carries **`recorded_at`** - transaction time, stamped by
-`vitai append`, never written by hand. `date` says when something became true
+`vitai append` (pipe JSONL to import in bulk), never written by hand. It is a
+hybrid logical clock at microsecond resolution, so a thousand rows written in
+one loop still order against each other. `date` says when something became true
 and may be backdated; `recorded_at` says when the line was written and may
 not. Together they order two rows that share a date, which file position used
 to do by accident.

@@ -24,7 +24,7 @@ from pathlib import Path
 from .config import Config, load_config
 from .contributions import compute_contributions, goal_progress
 from .db import build_db
-from .jsonl import append, load
+from .jsonl import append, append_many, load
 from . import query
 from .policy import (State, context_on, days_between, events_on, plan_churn,
                      state)
@@ -61,6 +61,15 @@ class Vitai:
         append-only file cannot be un-appended.
         """
         return append(self.root / "data", name, record)
+
+    def append_many(self, name: str, records: list[dict]) -> list[dict]:
+        """Append many rows in one pass - what a bulk import should call.
+
+        Reads the file once, stamps each row strictly past the one before it,
+        validates every row before writing any, and writes in a single open.
+        Looping over `append` re-parses a growing file per row.
+        """
+        return append_many(self.root / "data", name, records)
 
     def dataset(self, name: str) -> list[dict]:
         if name not in KEYS:

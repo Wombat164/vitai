@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from .clocks import (is_aware, is_stamp, order_key,  # noqa: F401
-                     parse_time)
+                     parse_time, stamp_instant)
 
 # dataset -> ordered keys (column order for the SQLite read model)
 KEYS: dict[str, list[str]] = {
@@ -809,34 +809,40 @@ def recorded_at_problems(dataset: str, rows: list[tuple[int, dict]]) -> list[str
     hand-authored stamp, since a human writing a plausible-looking value will
     almost never land it in the right place in the sequence.
 
-    An exact tie between two stamped rows sharing an identity and a date is
-    reported rather than silently broken: the whole point of the field is that
-    ordering comes from data, and two rows claiming the same instant means the
-    data cannot answer. Unstamped rows never tie - they legitimately share the
-    "absent" key, which is what keeps the migration a read no-op.
+    Any REPEATED stamp is reported, not only one shared by two rows on the same
+    date. That narrower check is what let the real defect hide: a bulk import
+    of 227 readings on 227 different dates stamped every row identically, and
+    `validate` said the file was fine, because no two ties shared a date (#44).
+    A serial appender cannot write two rows at one instant - a repeat means
+    the clock is not doing its job, whatever the rows are dated.
+
+    Comparison is by INSTANT rather than by text throughout: two stamps
+    written either side of a timezone change are ordered by when they happened,
+    not by how their offsets happen to sort as strings.
+
+    Unstamped rows never tie - they legitimately share the "absent" key, which
+    is what keeps the migration a read no-op.
     """
     problems: list[str] = []
-    stamped = [(n, r) for n, r in rows if r.get("recorded_at") is not None]
-    for (pn, prev), (n, cur) in zip(stamped, stamped[1:]):
-        if str(cur["recorded_at"]) < str(prev["recorded_at"]):
+    stamped = [(n, r, i) for n, r in rows
+               if (i := stamp_instant(r.get("recorded_at"))) is not None]
+    for (pn, prev, pi), (n, _cur, ci) in zip(stamped, stamped[1:]):
+        if ci < pi:
             problems.append(
                 f"{dataset}.jsonl line {n}: recorded_at "
-                f"{cur['recorded_at']!r} precedes line {pn}'s "
+                f"{_cur['recorded_at']!r} precedes line {pn}'s "
                 f"{prev['recorded_at']!r} - transaction time is monotonic by "
                 "construction, so an out-of-order stamp means the line was "
                 "hand-written or the clock moved")
-    ident = IDENTITY_KEY.get(dataset)
-    seen: dict[tuple, int] = {}
-    for n, r in stamped:
-        key = (r.get(ident) if ident else r.get("source"), r.get("date"),
-               r.get("recorded_at"))
-        if (first := seen.get(key)) is not None:
+    seen: dict[datetime, int] = {}
+    for n, r, i in stamped:
+        if (first := seen.get(i)) is not None:
             problems.append(
-                f"{dataset}.jsonl line {n}: same date and recorded_at as line "
-                f"{first} - two rows claiming the same instant cannot be "
-                "ordered from the data, which is the one thing this field is "
-                "for")
-        seen[key] = n
+                f"{dataset}.jsonl line {n}: recorded_at {r['recorded_at']!r} "
+                f"is the same instant as line {first} - two rows cannot have "
+                "been written at once, and a repeated stamp orders nothing, "
+                "which is the only thing this field is for")
+        seen.setdefault(i, n)
     return problems
 
 

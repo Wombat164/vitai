@@ -212,20 +212,32 @@ def cmd_goals(args: argparse.Namespace) -> None:
 def cmd_append(args: argparse.Namespace) -> None:
     """Append a JSON object to a dataset, with the clocks stamped for you.
 
-    Reads the object from stdin so it composes with the scripts that actually
-    write this record: `jq -n '{...}' | vitai append daily`. The row that was
-    written is echoed back, stamps included, so a script can log exactly what
-    it committed rather than what it intended to.
+    Reads JSONL from stdin - one object per line - so it composes with the
+    scripts that actually write this record, and so a bulk import is one
+    invocation rather than one per row. A single object on its own is the
+    same thing with one line.
+
+    The rows written are echoed back, stamps included, so a script can log
+    exactly what it committed rather than what it intended to. Nothing is
+    written unless every row validates.
     """
     root = _root(args)
+    recs = []
+    for n, line in enumerate(sys.stdin.read().splitlines(), 1):
+        if not (line := line.strip()) or line.startswith("//"):
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError as e:
+            sys.exit(f"stdin line {n} is not valid JSON: {e}")
+        if not isinstance(rec, dict):
+            sys.exit(f"stdin line {n}: expected a JSON object per line")
+        recs.append(rec)
+    if not recs:
+        sys.exit("nothing on stdin - expected one JSON object per line")
     try:
-        rec = json.loads(sys.stdin.read())
-    except json.JSONDecodeError as e:
-        sys.exit(f"stdin is not valid JSON: {e}")
-    if not isinstance(rec, dict):
-        sys.exit("expected a single JSON object, one row per invocation")
-    try:
-        print(json.dumps(Vitai(root).append(args.dataset, rec)))
+        for row in Vitai(root).append_many(args.dataset, recs):
+            print(json.dumps(row))
     except (ValueError, KeyError, DataError) as e:
         sys.exit(str(e).strip("'"))
 
@@ -630,7 +642,7 @@ def main(argv: list[str] | None = None) -> None:
         ("verdicts", cmd_verdicts, "weekly goal-attainment rows as JSONL (the platform contract)"),
         ("goals", cmd_goals, "active goals: progress, dates, contributions, flagged edits"),
         ("append", cmd_append,
-         "append one JSON row from stdin, stamping recorded_at and _gen"),
+         "append JSONL rows from stdin, stamping recorded_at and _gen"),
         ("events", cmd_events,
          "dated fixtures the plan is built backwards from (races, scans, dates)"),
         ("resolve", cmd_resolve, "which source won each contested field, and why"),
