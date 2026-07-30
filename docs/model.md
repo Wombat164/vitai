@@ -116,7 +116,7 @@ these; nothing else exists.
    safety/privacy-critical: consent ledger, access-scope, suppression prefs -
    NOT markdown pages (the redteam's "prose still hiding where data is needed").
 
-## Part 3 - The consolidating gaps (G24-G86)
+## Part 3 - The consolidating gaps (G24-G87)
 
 Each folds several redteam findings and fills a symmetry hole in a principle.
 
@@ -919,6 +919,24 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   be extended by a developer, so it can only ever contain what the developer
   had seen. A vocabulary in the REGISTRY can be extended by the athlete, which
   is also exactly what G78 requires. Same fix, two problems.
+  **The same rule applies to ALGORITHMS, not only vocabularies** (extended
+  2026-07-30 after the operator caught it a second time). Route analysis was
+  hand-rolled in throwaway scripts: a raw haversine sum over 1,467 GPS points
+  (which systematically OVERESTIMATES - jitter adds phantom length on every
+  sample, and the resulting 1.50 km was reported against a watch odometer of
+  1.39 km as if the watch were the odd one out); a 38-metre grid-cell overlap
+  ratio invented on the spot to decide "is this the same route", when the real
+  problem has named solutions with published thresholds (discrete Frechet, DTW,
+  LCSS, or map-matching to an OSM edge sequence); and an eyeballed judgement
+  that 115 m of elevation gain was noise, which was right by luck rather than
+  by a DEM correction with a minimum-climb threshold. The one component that
+  behaved well - stop detection - was the one grounded in prior art (CB-SMoT).
+  **Rule: before implementing an analysis, find the named algorithm and the
+  maintained library. A hand-rolled metric with no published threshold cannot
+  be defended, cannot be tuned, and cannot be told apart from a bug.** And
+  scratchpad scripts are not an implementation: an analysis the coach relies on
+  ships as versioned code with tests and a CLI+API surface (P9), or it is not
+  reproducible and its numbers are not evidence.
   Tracked in issue #18. See also G78 (athlete-defined metrics) - the general
   form of the same mistake, found by asking eight athletes what they count.
 
@@ -960,6 +978,51 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   Found while capturing a real goal, which also surfaced a G85 instance: goal
   `dataset` scopes only to `daily`|`sessions`, so a WEIGHT goal - the most
   common goal in the domain - cannot be scoped to the weight dataset.
+
+- **G87 Egress masking for location and habit** (P8/G32/G35). HIGH. The record
+  is personal and local-first, so the risk is EGRESS, not storage. What leaves
+  the machine is governed by ONE toggle, and the design has four parts the
+  literature makes non-obvious:
+  - **The endpoints are the asset, not the route.** Golle and Partridge
+    (Pervasive 2009) found the median anonymity set for a known home/work pair
+    at census-block granularity is ONE - two coarse points re-identify most
+    people, no trajectory required. Standard home-detection clusters stay
+    points at trip START and END, which is where every run begins: the front
+    door. So masking is endpoint-weighted - heavy on the first and last
+    100-200 m, light or absent in the interior, which keeps route matching
+    working (it needs only 10-50 m precision).
+  - **A stable pseudo-anchor, NEVER a fresh random draw per export.** The
+    obvious design - "replace home with a random point within r" - fails to a
+    trivial averaging attack: N exports with independent noise let an observer
+    average back to the true centre, and accuracy improves as sqrt(N). The
+    offset must be DETERMINISTIC per place (a keyed hash of the place id), so
+    the same anchor is emitted every time and repetition reveals nothing.
+    Geo-indistinguishability (planar Laplace, Andres et al. 2013) is the
+    principled alternative but needs a privacy budget tracked across queries;
+    a fixed pseudo-anchor is the cheap version that survives repetition.
+  - **Radius must exceed building scale.** 100 m is roughly a block and is
+    likely too tight; the offline-geocoding sweep put street-block redaction at
+    H3 res8-9 (~150-450 m) or geohash 6-7. Configurable, with the honest
+    trade stated: tighter is more useful and less private.
+  - **Spatial cloaking (k-anonymity) does NOT apply here.** It hides a person
+    among k others, and a single-user record has no population to hide in - k
+    degenerates to 1. This is exactly the 2018 Strava heatmap failure:
+    aggregation is not anonymisation where the local population is near zero.
+  **Temporary anchors count, and are arguably worse.** A holiday flat is a home
+  for that fortnight, and publishing it also announces that the real home is
+  empty. Any place the athlete sleeps gets anchor treatment, not just the
+  registered address.
+  **HABIT is its own leak, and geometry masking does not cover it.** Recurring
+  routes at recurring times reveal when a house is empty - "runs 21:30 Tue,
+  Thu, Sat from the same anchor" is a schedule, and a schedule egresses even
+  when every coordinate is masked. Timing needs coarsening or suppression on
+  the same toggle.
+  **The toggle is a hard boundary, not a rendering preference.** The unmasked
+  value must be structurally unable to cross - one function, one place, tested
+  - rather than depending on every call site remembering to mask. And the fact
+  that the athlete may already have given this data to vendors is not a reason
+  for this engine to add another copy: each egress is a separate decision
+  (consent-per-consumer, G32).
 
 ## The frame: a guardrailed world model (belief-state, not a learned net)
 
