@@ -37,25 +37,25 @@ version = 1
 label = "Run"
 compendium = 12
 classes = ["run", "impact", "cardio", "lower_body"]
-aliases = ["running", "jog", "jogging"]
+aliases = ["running", "jog", "jogging", "running (jogging), 9 mph (6.5 min mile) (myfitnesspal)", "running (jogging), 5 mph (12 min mile) (myfitnesspal)", "running (jogging), 6 mph (10 min mile) (myfitnesspal)"]
 
 [types.walk]
 label = "Walk"
 compendium = 17
 classes = ["walk", "cardio", "lower_body"]
-aliases = ["walking", "hike", "hiking", "ramble"]
+aliases = ["walking", "hike", "hiking", "ramble", "walking, general (myfitnesspal)"]
 
 [types.cycle]
 label = "Cycle"
 compendium = 1
 classes = ["cycle", "cardio", "lower_body"]
-aliases = ["bike", "biking", "cycling", "ride", "spin", "turbo"]
+aliases = ["bike", "biking", "cycling", "ride", "spin", "turbo", "outdoor bike", "bicycling, 12-14 mph, moderate (cycling, biking, bike riding) (myfitnesspal)", "stationary bike, moderate effort (bicycling, cycling, biking) (myfitnesspal)"]
 
 [types.swim]
 label = "Swim"
 compendium = 18
 classes = ["swim", "cardio", "upper_body", "lower_body"]
-aliases = ["swimming", "pool"]
+aliases = ["swimming", "pool", "swimming laps, freestyle, light/moderate effort (myfitnesspal)"]
 
 [types.row]
 label = "Row"
@@ -69,7 +69,7 @@ compendium = 2
 classes = ["strength", "upper_body", "lower_body"]
 # `gym_a` and `gym_b` were one athlete's programme labels. They resolve here
 # so existing lines keep working and keep meaning what they meant.
-aliases = ["gym", "gym_a", "gym_b", "weights", "lifting", "resistance"]
+aliases = ["gym", "gym_a", "gym_b", "weights", "lifting", "resistance", "strength training (weight lifting, weight training) (myfitnesspal)"]
 
 [types.mobility]
 label = "Mobility, yoga or stretching"
@@ -94,7 +94,7 @@ aliases = ["football", "soccer", "tennis", "squash", "basketball", "hockey",
 label = "Winter sport"
 compendium = 19
 classes = ["wintersport", "cardio", "lower_body"]
-aliases = ["ski", "skiing", "snowboard", "snowboarding", "skating"]
+aliases = ["ski", "skiing", "snowboard", "snowboarding", "skating", "ice skating"]
 
 [types.paddle]
 label = "Paddle sport"
