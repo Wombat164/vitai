@@ -665,7 +665,11 @@ def _read_all(root: Path) -> dict[str, str]:
     return {p.name: p.read_text(encoding="utf-8")
             for p in sorted(root.rglob("*"))
             if p.is_file() and "derived" not in p.parts
-            and p.suffix in (".jsonl", ".toml")}
+            # Tracks included (#64): the personal gate permits coordinates in
+            # `examples/demo/tracks/` on the grounds that they are the
+            # generator's own output, and that grounds is only true if they
+            # are actually compared. They were not.
+            and p.suffix in (".jsonl", ".toml", ".gpx", ".tcx")}
 
 
 def main() -> int:
@@ -674,7 +678,12 @@ def main() -> int:
         _build(tmp)
         want, got = _read_all(tmp), _read_all(DEMO)
         # compare only the generated inputs (vitai.toml + data/), not derived/
-        keys = {k for k in want} | {k for k in got if k.endswith((".jsonl", ".toml"))}
+        # Tracks are included (#64): the personal gate permits coordinates in
+        # `examples/demo/tracks/` on the grounds that they are the generator's
+        # output, and that grounds is only true if they are actually compared.
+        keys = {k for k in want} | {
+            k for k in got
+            if k.endswith((".jsonl", ".toml", ".gpx", ".tcx", ".fit"))}
         drift = [k for k in sorted(keys) if want.get(k) != got.get(k)]
         if drift:
             print(f"demo data DRIFTED from generator: {drift}", file=sys.stderr)
