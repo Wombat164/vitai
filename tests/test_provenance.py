@@ -14,6 +14,9 @@ noisy one, which is exactly backwards from how the output read.
 
 import json
 
+import pytest
+
+from vitai import vocab
 from vitai.api import Vitai
 from vitai.cli import main
 from vitai.provenance import (describe, hops, independent_witnesses,
@@ -230,3 +233,143 @@ def test_a_real_relay_chain_reads_as_derived_in_transit():
     assert trust_ceiling(weight(
         origin="aria-scale",
         path="fitbit-app>fitbit-api>mfp-api>mfp-export")) == "derived-in-transit"
+
+
+# ---- #79: the source catalog ----------------------------------------------------
+
+def test_the_catalog_normalises_spellings():
+    """Its job is that `Polar Pacer Pro`, `polar-pacer-pro` and `PacerPro` are
+    one thing - a NORMALIZER, not a constraint."""
+    from vitai.provenance import resolve_source
+    for written in ("Polar Pacer Pro", "polar-pacer-pro", "polar", "PACER PRO"):
+        assert resolve_source(written) == "polar-watch", written
+    assert resolve_source("PM5") == "concept2-pm"
+    assert resolve_source("crosstrainer") == "elliptical-console"
+
+
+def test_an_uncatalogued_source_resolves_rather_than_erroring():
+    """The G85 failure is a CLOSED vocabulary that makes a stranger's device
+    unrepresentable. Unrecognised lands in `other`, never an error."""
+    from vitai.provenance import resolve_source
+    assert resolve_source("some-machine-nobody-catalogued") == "other"
+    assert resolve_source(None) == "unknown"
+    assert resolve_source("") == "unknown"
+
+
+def test_other_carries_a_kind_rather_than_multiplying_the_catalog():
+    """`session_types.toml` refused `outdoor_other` because it pre-coordinates
+    two axes. Same rule: there is no `other-console` or `other-wearable`."""
+    from vitai.provenance import resolve_source, source_kind
+    assert source_kind("scale") == "scale"
+    assert resolve_source("scale") == "other", "a kind name is not an instrument"
+    assert source_kind("some rower console") in {"unknown", "gym_console"}
+    catalogued = set(vocab.sources())
+    assert not [s for s in catalogued if s.startswith("other-")]
+
+
+def test_a_private_source_name_never_needs_to_appear_here():
+    """A source named for someone's own spreadsheet or their own gym resolves
+    to `other`, which is what the catchall is for. A public registry must not
+    carry a private name, and the checks work on the KIND, so nothing is lost.
+    """
+    from vitai.provenance import impossible_claims, resolve_source
+    assert resolve_source("someones-personal-sheet") == "other"
+    assert impossible_claims({"source": "someones-personal-sheet",
+                              "steps": 9000}, ["steps"]) == []
+
+
+def test_a_scale_cannot_observe_distance():
+    """What earns this registry its keep. Not a resolution tie - a tie is two
+    instruments disagreeing, and this is one instrument claiming something it
+    has no sensor for."""
+    from vitai.provenance import impossible_claims
+    scale = {"source": "fitbit aria", "kg": 80.0, "steps": 9000,
+             "distance_km": 4.2}
+    assert set(impossible_claims(scale, ["kg", "steps", "distance_km"])) == {
+        "steps", "distance_km"}
+
+
+def test_a_console_cannot_observe_sleep():
+    from vitai.provenance import impossible_claims
+    console = {"source": "PM5", "sleep_h": 7.5, "distance_km": 3.1}
+    assert impossible_claims(console, ["sleep_h", "distance_km"]) == ["sleep_h"]
+
+
+def test_a_watch_claiming_steps_is_fine():
+    from vitai.provenance import impossible_claims
+    watch = {"source": "polar", "steps": 9000, "distance_km": 4.2}
+    assert impossible_claims(watch, ["steps", "distance_km"]) == []
+
+
+def test_a_registry_gap_never_becomes_an_accusation():
+    from vitai.provenance import impossible_claims
+    assert impossible_claims({"source": "acme-thing", "steps": 1},
+                             ["steps"]) == []
+
+
+@pytest.mark.parametrize("rec,fields", [
+    ({"source": "manual", "rhr": 52}, ["rhr"]),
+    ({"source": "oura", "kcal_out": 2400}, ["kcal_out"]),
+    ({"source": "fitbit", "kg": 80.0}, ["kg"]),
+    ({"source": "mfp", "steps": 9000}, ["steps"]),
+])
+def test_a_deny_list_does_not_accuse_realistic_rows(rec, fields):
+    """This was first written as a per-instrument WHITELIST of what each
+    device can observe, and every one of these was flagged by it.
+
+    An Oura ring does report calories. A hand-typed row can carry a heart
+    rate the athlete read off a watch. A relaying app carries whatever it
+    received. Watch models differ in what they record. A whitelist turns each
+    omission into a false accusation against a real row; a deny list turns it
+    into silence.
+    """
+    from vitai.provenance import impossible_claims
+    assert impossible_claims(rec, fields) == []
+
+
+def test_the_catalog_implies_no_precedence():
+    """Which instrument to believe is a local judgement and stays in config:
+    a figure stated in chat outranks a vendor channel in one record and would
+    not in another."""
+    entries = vocab.registry("sources")["sources"]
+    for slug, entry in entries.items():
+        assert "rank" not in entry and "precedence" not in entry, slug
+
+
+def test_every_catalogued_kind_is_a_declared_kind():
+    kinds = set(vocab.source_kinds()) | {"unknown"}
+    for slug, entry in vocab.registry("sources")["sources"].items():
+        assert entry["kind"] in kinds, f"{slug}: {entry['kind']}"
+
+
+def test_every_denied_field_is_a_real_schema_field():
+    """A `cannot` entry naming a column that does not exist would make the
+    check silently unenforceable."""
+    from vitai.schema import KEYS
+    real = {f for keys in KEYS.values() for f in keys}
+    for kind, entry in vocab.registry("sources")["kinds"].items():
+        for f in entry.get("cannot") or []:
+            assert f in real, f"{kind} denies {f!r}, which is not a field"
+
+
+def test_ordinary_source_strings_resolve_without_a_migration():
+    """Acceptance: an existing record keeps working. Every spelling here is a
+    generic one - a public registry's tests must not name somebody's actual
+    equipment or their personal files any more than the registry may.
+    """
+    from vitai.provenance import resolve_source, source_kind
+    expected = {
+        "polar": "polar-watch",
+        "crosstrainer": "elliptical-console",
+        "fitbit-aria": "fitbit-scale",
+        "mfp-export": "myfitnesspal",
+        "strava-export": "strava",
+        "manual": "athlete",
+        "stated-in-chat": "athlete",
+    }
+    for written, slug in expected.items():
+        assert resolve_source(written) == slug, written
+    # An uncatalogued instrument still resolves, and still gets no kind it
+    # cannot justify.
+    assert resolve_source("a-machine-in-someones-gym") == "other"
+    assert source_kind("a-machine-in-someones-gym") == "unknown"

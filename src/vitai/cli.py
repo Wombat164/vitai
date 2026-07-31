@@ -23,7 +23,8 @@ from .config import load_inference_config
 from .inference import append_inferences, backend_from_config, run_inference
 from .jsonl import DataError, load_report, read_lines
 from .safety import banner
-from .schema import (KEYS, recorded_at_problems, supersedes_problems,
+from .schema import (KEYS, impossible_claim_problems,
+                     recorded_at_problems, supersedes_problems,
                      timestamp_advisories, validate_record)
 
 DATASETS = list(KEYS)
@@ -613,6 +614,9 @@ def cmd_validate(args: argparse.Namespace) -> None:
         # by validate_record - and monotonicity is the check that actually
         # detects a hand-authored stamp.
         for p in recorded_at_problems(name, rows):
+            print(p)
+            problems += 1
+        for p in impossible_claim_problems(name, rows):
             print(p)
             problems += 1
         for p in supersedes_problems(name, rows):
