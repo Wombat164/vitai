@@ -67,7 +67,18 @@ from .schema import KEYS
 #    `resolution` row carries `independent`, which is false when the two
 #    values are one measurement seen at two points on one pipe - that spread
 #    measures pipeline fidelity and must never be read as agreement.
-CONTRACT_VERSION = "10"
+# 11: the artifact store (#80) - an `artifacts` manifest table (one row per
+#    kept file: hash, media type, size, why it was kept) and an `artifact`
+#    reference on weight, daily, sessions and measurements, so the evidence a
+#    value was read FROM survives alongside the value. Two things a consumer
+#    must not get wrong. A reference is a content address (`sha256:...`), not
+#    a path, so it cannot drift from the row citing it - and resolving one to
+#    bytes is a LOCAL lookup: the manifest travels in the read model, the
+#    artifacts do not, and nothing in this contract authorises transmitting
+#    one. And REMOVED IS NOT MISSING: an artifact the athlete deleted leaves a
+#    tombstone with a reason, and a consumer that renders that as broken
+#    evidence has turned a retention decision into a data-loss alarm.
+CONTRACT_VERSION = "11"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
@@ -107,7 +118,12 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               "event_date", "priority", "event", "deadline_kind",
               "verification",
               # #37: the three clocks
-              "recorded_at", "measured_at"}
+              "recorded_at", "measured_at",
+              # #80: the artifact store. `sha256` and `artifact` MUST be TEXT
+              # for the same reason `activity_id` is - a content address is an
+              # opaque token, and REAL affinity would mangle one silently.
+              # `bytes` stays numeric so a consumer can sum held storage.
+              "sha256", "artifact", "media_type", "captured_at"}
 
 VERDICT_KEYS = ["week", "metric", "value", "target", "verdict", "goal"]
 

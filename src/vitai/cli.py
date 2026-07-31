@@ -373,6 +373,82 @@ def cmd_safety(args: argparse.Namespace) -> None:
         raise SystemExit(2)
 
 
+def _why_absent(ref: str, rows: list[dict]) -> str:
+    """Deleted, lost, or never here - three different facts, said plainly."""
+    from .artifacts import live_manifest, removed_refs
+    if ref in removed_refs(rows):
+        removal = [r for r in rows if r.get("sha256") == ref and r.get("removed")]
+        why = (removal[-1].get("reason") or "no reason recorded") if removal else ""
+        return f"the athlete deleted it ({why}). The value it backed stands"
+    if ref in live_manifest(rows):
+        return ("the manifest holds it and the store does not, so the bytes "
+                "were lost rather than deleted. Adding the same artifact "
+                "again repairs it")
+    return "no manifest row has ever mentioned this hash"
+
+
+def cmd_artifact(args: argparse.Namespace) -> None:
+    """Keep, retrieve and check the evidence a value was read from (#80)."""
+    from .artifacts import faults, is_reference, live_manifest
+    root = _root(args)
+    v = Vitai(root)
+    rows = v.dataset("artifacts")
+
+    if args.action == "ls":
+        held = live_manifest(rows)
+        wanted = [r for r in held.values()
+                  if not args.date or r.get("date") == args.date]
+        if not wanted:
+            print("no artifacts held" + (f" for {args.date}" if args.date else ""))
+            return
+        for r in sorted(wanted, key=lambda r: str(r.get("date") or "")):
+            # `is not None`, not truthiness: an empty artifact is exactly what
+            # a truncated capture looks like, and printing it as "size
+            # unknown" hides the one number that would say so.
+            size = ("size unknown" if r.get("bytes") is None
+                    else f"{r['bytes']:,} bytes")
+            print(f"{r['sha256'][:19]}...  {r.get('date')}  "
+                  f"{r.get('media_type') or '?'}  {size}"
+                  + (f"  {r['note']}" if r.get("note") else ""))
+        return
+
+    if args.action == "get":
+        if not is_reference(args.ref):
+            sys.exit(f"{args.ref!r} is not a content address. An artifact is "
+                     f"addressed by 'sha256:<64 lowercase hex>' and never by "
+                     "a path - see `vitai artifact ls`")
+        if not args.out:
+            sys.exit("`vitai artifact get` needs --out. An artifact is "
+                     "personal data, so where it lands is not something this "
+                     "command should guess")
+        payload = v.artifacts.get(args.ref)
+        if payload is None:
+            # Answered here rather than pointing at `verify`, which has
+            # nothing to say about a hash no row mentions.
+            sys.exit(f"{args.ref[:19]}... is not in the store: "
+                     + _why_absent(args.ref, rows))
+        Path(args.out).write_bytes(payload)
+        print(f"wrote {len(payload):,} bytes to {args.out}")
+        return
+
+    findings = v.verify_artifacts()
+    held = len(live_manifest(rows))
+    if not findings:
+        print(f"{held} artifact(s), all present and intact")
+        return
+    for f in findings:
+        print(f"{f['kind'].upper():17} {f['ref'][:19]}...  {f['detail']}")
+    # Only a claim the evidence can no longer back is a failure. A deliberate
+    # removal, an orphan and a not-yet-cited artifact all get printed and none
+    # of them exits non-zero: see FAULTS in artifacts.py for why.
+    broken = faults(findings)
+    if not broken:
+        print(f"{held} artifact(s), all present and intact; "
+              f"{len(findings)} note(s) above")
+        return
+    sys.exit(f"{len(broken)} artifact(s) can no longer back the values citing them")
+
+
 def cmd_route(args: argparse.Namespace) -> None:
     """Tier-1 geometry for a GPS track, with the parameters that produced it."""
     from .route import compass
@@ -695,6 +771,8 @@ def main(argv: list[str] | None = None) -> None:
         ("day", cmd_day, "everything the record holds for one date"),
         ("window", cmd_window, "totals over the last N calendar days"),
         ("ramp", cmd_ramp, "week-on-week volume, with its base-size caveat"),
+        ("artifact", cmd_artifact,
+         "keep, retrieve and check the evidence a value was read from"),
         ("route", cmd_route,
          "deterministic geometry for a GPS track (distance, shape, stops)"),
         ("journal", cmd_journal,
@@ -751,6 +829,16 @@ def main(argv: list[str] | None = None) -> None:
                            help="emit resolution rows as JSONL")
             p.add_argument("--date", metavar="YYYY-MM-DD",
                            help="only this date")
+        if name == "artifact":
+            p.add_argument("action", choices=("ls", "get", "verify"))
+            p.add_argument("ref", nargs="?", help="sha256:<64 hex>")
+            # No default on purpose. A default lands personal bytes in
+            # whatever directory the command was run from, which for anyone
+            # developing vitai is a checkout of this PUBLIC repo. Naming the
+            # destination is one word and it is the athlete's decision.
+            p.add_argument("--out", metavar="PATH",
+                           help="where `get` writes the bytes (required)")
+            p.add_argument("--date", metavar="YYYY-MM-DD")
         if name == "route":
             p.add_argument("gpx", nargs="?",
                            help="path to a .gpx track (or use --session)")

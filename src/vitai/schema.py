@@ -15,6 +15,7 @@ from datetime import date, datetime
 
 from .clocks import (is_aware, is_stamp, order_key,  # noqa: F401
                      parse_time, stamp_instant)
+from .artifacts import is_reference
 from .provenance import problems as provenance_problems
 
 # dataset -> ordered keys (column order for the SQLite read model)
@@ -36,7 +37,7 @@ KEYS: dict[str, list[str]] = {
     # rate could not be checked.
     "weight": ["date", "kg", "source", "note", "body_fat_pct",
                "kg_lo", "kg_hi", "body_fat_lo", "body_fat_hi", "measured_at",
-               "recorded_at", "origin", "path", "origin_evidence"],
+               "recorded_at", "origin", "path", "origin_evidence", "artifact"],
     # `hip_pain` is RETIRED at generation 2 in favour of `pain` + `pain_site`:
     # the hip was this record's founding injury, but a record that can only
     # describe one joint cannot describe a second one. Old lines keep it and
@@ -49,7 +50,7 @@ KEYS: dict[str, list[str]] = {
               "protein_g", "sleep_h", "rhr", "hip_pain", "alcohol", "note",
               "source", "mood", "feel", "coverage", "pain", "pain_site",
               "pain_side", "recorded_at", "origin", "path",
-              "origin_evidence"],
+              "origin_evidence", "artifact"],
     # `location` is RETIRED at generation 2, split into `place` (coarse, and
     # deliberately coarse - "home"/"work"/a travel slug, never an address) and
     # `route` (a personal slug the athlete names). Free text could not be
@@ -76,7 +77,7 @@ KEYS: dict[str, list[str]] = {
                  "cadence", "kcal", "location", "rpe", "note",
                  "source", "start_time", "elevation_m", "setting", "route",
                  "place", "with", "context", "planned", "weather", "recorded_at",
-                 "track", "activity_id", "activity_source"],
+                 "track", "activity_id", "activity_source", "artifact"],
     # Third data tier: MODEL-INFERRED knowledge. Append-only like everything
     # else, but carries provenance (model, evidence, confidence) because it is
     # neither ground truth (observed) nor rebuildable (derived). The engine
@@ -163,7 +164,7 @@ KEYS: dict[str, list[str]] = {
     # single point. `body_fat_pct` measured BY the scale already rides the
     # `weight` line (gen-2, G36/G37); this dataset is for the other instruments.
     "measurements": ["date", "kind", "value", "source", "note", "recorded_at",
-                     "origin", "path", "origin_evidence"],
+                     "origin", "path", "origin_evidence", "artifact"],
     # --- increment 3: the medical layer (G11) ------------------------------
     # One condition's whole lifecycle shares a `slug`: onset, the visit, the
     # restriction, the resolution. Appending a line advances the episode; the
@@ -211,6 +212,18 @@ KEYS: dict[str, list[str]] = {
     # FIRMLY it was expressed - a passing "maybe I should" is not a decision -
     # never how likely it is to be true. `status` lets a worry be resolved, or a
     # grain of a goal be superseded once it becomes a real goal.
+    # The manifest for the content-addressed artifact store (#80). Its own
+    # dataset rather than a column, because ONE artifact backs SEVERAL rows -
+    # a single console photograph carries distance, pace, power and stroke
+    # rate - so the reference is many-to-one.
+    #
+    # `removed` is a TOMBSTONE. The store is append-only, so a deletion cannot
+    # rewrite the observation that cites an artifact and should not want to:
+    # appending "the athlete deleted this" keeps a retention decision
+    # distinguishable from data loss, which are completely different facts.
+    "artifacts": ["date", "sha256", "media_type", "bytes", "captured_at",
+                  "origin", "kind", "note", "removed", "reason",
+                  "recorded_at"],
     "journal": ["date", "kind", "text", "about", "source", "confidence",
                 "status", "note", "recorded_at"],
 }
@@ -445,6 +458,11 @@ for _ds in ("weight", "daily", "sessions", "measurements"):
     for _k in ("origin", "path", "origin_evidence"):
         KEY_GENERATION.setdefault(_ds, {})[_k] = CURRENT_GENERATION[_ds]
 
+# --- the artifact reference (#80) ---------------------------------------------
+for _ds in ("weight", "daily", "sessions", "measurements"):
+    CURRENT_GENERATION[_ds] += 1
+    KEY_GENERATION[_ds]["artifact"] = CURRENT_GENERATION[_ds]
+
 
 def key_generation(dataset: str, key: str) -> int:
     """Generation a key was introduced in (1 = founding)."""
@@ -585,6 +603,11 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
             problems.append(f"'alcohol' should be true/false/null, got {a!r}")
     if dataset in ("weight", "daily", "sessions", "measurements"):
         problems += provenance_problems(rec)
+        if (ref := rec.get("artifact")) is not None and not is_reference(ref):
+            problems.append(
+                f"'artifact' is a content address like "
+                f"'sha256:<64 hex>', got {ref!r} - a filename would drift "
+                "from the row that cites it, which is why this is a hash")
     if dataset == "sessions":
         problems += _validate_track(rec)
     if dataset == "sessions" and rec.get("type") not in SESSION_TYPES:
@@ -1078,6 +1101,19 @@ def _validate_policy(dataset: str, rec: dict) -> list[str]:
         problems += _enum(rec, "source", AUTHORS)
         if (od := rec.get("occurred_date")) is not None and _bad_date(od):
             problems.append(f"bad occurred_date {od!r} (ISO-8601 YYYY-MM-DD)")
+    if dataset == "artifacts":
+        if not is_reference(rec.get("sha256")):
+            problems.append(f"'sha256' is a content address like "
+                            f"'sha256:<64 hex>', got {rec.get('sha256')!r}")
+        if (n := rec.get("bytes")) is not None and (
+                not isinstance(n, int) or isinstance(n, bool) or n < 0):
+            problems.append(f"'bytes' is a non-negative integer, got {n!r}")
+        if (rm := rec.get("removed")) is not None and not isinstance(rm, bool):
+            problems.append(f"'removed' should be true/false/null, got {rm!r}")
+        if rec.get("removed") and not rec.get("reason"):
+            problems.append("a removal needs a 'reason' - deleting evidence is "
+                            "a decision worth recording, and it is what "
+                            "distinguishes it from data loss")
     if dataset == "checks":
         if not isinstance(rec.get("slug"), str) or not rec.get("slug"):
             problems.append("'slug' must name the check, e.g. 'hop-test'")

@@ -71,6 +71,80 @@ class Vitai:
         """
         return append_many(self.root / "data", name, records)
 
+    @property
+    def artifacts(self):
+        """The content-addressed store behind this record (#80).
+
+        Local directory by default; the backend sits behind an interface
+        because where binaries live is an operator decision about a private
+        record, not an engine decision.
+        """
+        from .artifacts import DirectoryStore
+        return DirectoryStore(self.root / "artifacts")
+
+    def add_artifact(self, payload: bytes, media_type: str,
+                     **fields) -> dict:
+        """Store bytes and append their manifest row. Idempotent by content.
+
+        Idempotent against what is HELD, not against every row ever written.
+        A previously removed artifact that comes back is a new retention
+        decision and gets its own row - reading the tombstone as "already
+        there" would put the bytes back on disk while the manifest still said
+        deleted, which is the one state the athlete cannot see and did not ask
+        for.
+        """
+        from .artifacts import digest, live_manifest
+        if not isinstance(payload, (bytes, bytearray)):
+            raise TypeError(
+                "an artifact is bytes - read the file rather than passing its "
+                f"name or contents as text (got {type(payload).__name__})")
+        payload = bytes(payload)
+        ref = digest(payload)
+        held = live_manifest(self.dataset("artifacts"))
+        if ref in held:
+            # Storing again is what repairs a lost or corrupted artifact, so
+            # it happens even when the row is already there. `put` is by
+            # content, so this cannot write the wrong bytes to an address.
+            self.artifacts.put(payload)
+            return held[ref]
+        # The row is appended BEFORE the bytes land, so a manifest row that
+        # fails validation cannot leave personal bytes on disk that nothing in
+        # the record points at. The reverse order fails towards an invisible
+        # orphan; this order fails towards a `missing` finding that says so and
+        # that adding the same artifact again repairs.
+        row = self.append("artifacts", {
+            "sha256": ref, "media_type": media_type,
+            "bytes": len(payload), **fields})
+        self.artifacts.put(payload)
+        return row
+
+    def remove_artifact(self, ref: str, reason: str,
+                        on: date | str | None = None) -> dict:
+        """TOMBSTONE the manifest row and drop the bytes.
+
+        The citing observation is left alone: it is append-only, and
+        rewriting it would lose the fact that a value once had evidence. The
+        tombstone is what makes "the athlete deleted this" readable as a
+        retention decision rather than as data loss.
+
+        In that order. Dropping first and appending second means a tombstone
+        that fails validation - a bad date, a missing reason - leaves the bytes
+        gone with nothing recording why, and the record then reports permanent
+        data loss for what was a deliberate deletion. Recording the decision
+        first is recoverable; destroying the evidence first is not.
+        """
+        when = on.isoformat() if isinstance(on, date) else (
+            on or date.today().isoformat())
+        row = self.append("artifacts", {"date": when, "sha256": ref,
+                                        "removed": True, "reason": reason})
+        self.artifacts.drop(ref)
+        return row
+
+    def verify_artifacts(self) -> list[dict]:
+        """Fixity and referential integrity, in both directions."""
+        from .artifacts import verify
+        return verify(self.artifacts, self.datasets())
+
     def dataset(self, name: str) -> list[dict]:
         if name not in KEYS:
             raise KeyError(f"unknown dataset {name!r}; one of {sorted(KEYS)}")

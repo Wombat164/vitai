@@ -6,6 +6,44 @@ versioning follows [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **A content-addressed artifact store** (#80). The evidence behind a value
+  was discarded the moment it was read: an athlete photographs a gym console,
+  a model reads the numbers off it, the numbers enter the record and the
+  photograph is stored nowhere. So the richest single-instrument reading in a
+  record was also the only one that could never be re-checked - and `#79`'s
+  capture axis can say a value was *transcribed* without anything being able
+  to say transcribed *from what*.
+
+  `data/artifacts.jsonl` is a manifest (hash, media type, size, why it was
+  kept); `artifact` on `weight`, `daily`, `sessions` and `measurements` cites
+  a row in it. The reference is a content address (`sha256:...`) rather than a
+  path, so it cannot drift from the row citing it, a filename is a validation
+  error, and storing the same bytes twice stores one copy. One artifact can
+  back several rows, which is why the manifest is its own dataset rather than
+  a column - a console photograph carries distance, pace, power and stroke
+  rate at once.
+
+  `vitai artifact ls | get | verify`. `verify` checks both directions: PREMIS
+  fixity (the stored bytes must hash to their own address) and referential
+  integrity (a value whose evidence is gone). It fails on a promise the record
+  is no longer keeping - and `not_erased`, an artifact the manifest says was
+  deleted whose bytes are still on disk, is one of them: the athlete has no
+  other way to find out. An orphan, a not-yet-cited artifact and a deliberate
+  deletion are printed and do not fail a build, because a check that cries
+  wolf over disk hygiene teaches the athlete to ignore the one finding that
+  matters. `artifact get` requires `--out`: where personal bytes land is not
+  something a default should guess.
+
+  **Removed is not missing.** Deleting an artifact appends a tombstone with a
+  reason rather than rewriting the row that cites it: a retention decision and
+  a data loss are completely different facts and the record has to keep them
+  apart. A removal without a reason is a validation error.
+
+  The backend is behind an interface and the default is a local directory. The
+  mechanism is public; the artifacts are personal data. Nothing here uploads,
+  syncs or attaches - storing an artifact is not consent to transmit it - and
+  no artifact, manifest row or hash of a real one appears in this repository,
+  including in the tests, where the bytes are synthetic.
 - **`track`, `activity_id` and `activity_source` on `sessions`** (#43). The
   link from a session to the file that recorded it lived in a prose note and
   was recovered by regex - unqueryable, unvalidatable, and silently broken by
