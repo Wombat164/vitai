@@ -67,7 +67,14 @@ from .schema import KEYS
 #    `resolution` row carries `independent`, which is false when the two
 #    values are one measurement seen at two points on one pipe - that spread
 #    measures pipeline fidelity and must never be read as agreement.
-CONTRACT_VERSION = "10"
+# 11: was it measured at all (#49, #88) - `modelled` on the observation
+#     datasets names the FIELDS on a row that are model outputs rather than
+#     observations, and `type_source` on `sessions` says how a categorical
+#     label was assigned. A consumer summing a column MUST check `modelled`:
+#     an inflated estimate reaching a deficit reads ON TARGET while the scale
+#     goes up. A `type` carrying `vendor-classified` is a third-party model's
+#     guess, not something the athlete or a device asserted.
+CONTRACT_VERSION = "11"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
@@ -96,7 +103,8 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               "action", "onset_date", "precondition", "occurred_date",
               "result",
               # #35/#51: the provenance chain.
-              "origin", "path", "origin_evidence", "trust", "chain", "compares",
+              "origin", "path", "origin_evidence", "trust", "chain",
+              "compares", "modelled", "type_source",
               "scope",
               # #43. `activity_id` MUST be TEXT: a REAL-affinity column
               # converts "9914203377" to a float, which destroys leading

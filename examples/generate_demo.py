@@ -285,6 +285,25 @@ def _build(target: Path) -> None:
         "recorded_at": f"{independent_day}T21:31:00+02:00", "origin": "athlete",
         "path": None, "origin_evidence": "written on a kitchen notepad"})
 
+    # A vendor-CLASSIFIED session (#88) and a MODELLED burn (#49) on the same
+    # day. Neither is wrong to hold - what was wrong is that nothing said so:
+    # a classifier's guess sat beside the athlete's own assertions under one
+    # `type` column, and an estimated burn looked exactly like a measured one.
+    guessed_day = (END - timedelta(days=12)).isoformat()
+    sessions.append({
+        "date": guessed_day, "type": "walk", "distance_km": 2.1,
+        "duration_s": 1500, "avg_hr": 96, "max_hr": None, "cadence": None,
+        "kcal": 95, "location": None, "rpe": None, "note": None, "_gen": 6,
+        "source": "app", "start_time": f"{guessed_day}T12:40:00+02:00",
+        "elevation_m": None, "setting": "outdoor", "route": None,
+        "place": None, "with": None, "context": None, "planned": None,
+        "weather": None, "recorded_at": f"{guessed_day}T21:40:00+02:00",
+        "track": None, "activity_id": None, "activity_source": None,
+        "modelled": None, "type_source": "vendor-classified"})
+    for row in daily:
+        if row["date"] == guessed_day and row.get("kcal_out") is not None:
+            row["modelled"] = "kcal_out"
+
     # A two-source day: the calorie app disagrees with the watch about burn,
     # and owns intake the watch never sees. Field-wise precedence takes the
     # best witness per quantity - it does not add 2,443 to 2,844.

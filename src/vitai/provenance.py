@@ -155,6 +155,71 @@ def shares_origin(a: dict, b: dict) -> bool:
             and origin_of(a) == origin_of(b))
 
 
+# --- was it MEASURED at all? (#49, #88) ---------------------------------------
+#
+# The orthogonal question to origin and capture. Those say WHICH instrument and
+# HOW it reached us; this says whether the number was ever observed.
+#
+# A model output arriving in a field whose name and type imply measurement is
+# invisible by construction: `kcal_out: 1728` on two different dates is BMR
+# modelling, because the tracker was not worn - and nothing downstream can
+# tell. Five separate instances turned up in ONE import, which is what makes
+# it a rule rather than three patches.
+#
+# The harm is specific and not tidiness. An inflated burn reaching a deficit
+# makes the arithmetic read ON TARGET while the scale goes up, and the athlete
+# is told to hold a plan that is not working. Labelling it in a note is not
+# enforcement: prose is not a thing code can check.
+#
+# `modelled` is a flat list of the FIELDS on this row that are model outputs,
+# because the distinction is per-field - one row can carry a measured step
+# count and an estimated burn.
+
+# How a CATEGORICAL label was arrived at (#88). Not the same question as
+# `capture`: a vendor classifier is not an acquisition method, it is an
+# inference over sensor data nobody outside the vendor ever sees. In one live
+# record 1,093 of 1,502 session types were a classifier's guess and the record
+# could not tell them from the 409 the athlete asserted.
+TYPE_SOURCES = ("athlete-stated", "device-recorded", "vendor-classified",
+                "engine-inferred")
+
+
+def modelled_fields(rec: dict) -> set[str]:
+    """Fields on this row that are model outputs rather than observations."""
+    written = rec.get("modelled")
+    if not written or not str(written).strip():
+        return set()
+    return {f.strip() for f in str(written).replace(",", " ").split() if f.strip()}
+
+
+def is_modelled(rec: dict, field: str) -> bool:
+    return field in modelled_fields(rec)
+
+
+def type_source(rec: dict) -> str | None:
+    """How this row's categorical `type` was assigned, if stated."""
+    written = rec.get("type_source")
+    return str(written) if written else None
+
+
+def value_kind_problems(rec: dict, keys: list[str]) -> list[str]:
+    """Validation for the two ways a row can say a value was not observed."""
+    out: list[str] = []
+    for f in sorted(modelled_fields(rec)):
+        if f == "modelled":
+            out.append("'modelled' cannot name itself")
+        elif f not in keys:
+            out.append(f"'modelled' names {f!r}, which is not a field on this "
+                       "dataset")
+    if (t := rec.get("type_source")) is not None and str(t) not in TYPE_SOURCES:
+        out.append(f"'type_source' is one of {', '.join(TYPE_SOURCES)}, "
+                   f"got {t!r}")
+    if rec.get("type_source") is not None and rec.get("type") is None:
+        out.append("'type_source' says how a type was assigned, so it needs "
+                   "a 'type'")
+    return out
+
+
 def trust_ceiling(rec: dict) -> str:
     """`device-measured` | `derived-in-transit` | `unknown-transit`.
 

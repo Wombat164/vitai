@@ -29,7 +29,7 @@ def session(date="2030-05-01", type="run", distance_km=5.0, source="watch",
            "setting": None, "route": None, "place": None, "with": None,
            "context": None, "planned": None, "weather": None,
            "recorded_at": None, "track": None, "activity_id": None,
-           "activity_source": None,
+           "activity_source": None, "modelled": None, "type_source": None,
            "_gen": gen or CURRENT_GENERATION["sessions"]}
     rec.update(kw)
     return rec

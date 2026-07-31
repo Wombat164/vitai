@@ -6,6 +6,28 @@ versioning follows [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **A value can say it was never measured** (#49, #88). The orthogonal
+  question to origin and capture: those say which instrument and how it
+  reached us, this says whether the number was observed at all.
+
+  A model output arriving in a field whose name and type imply measurement is
+  invisible by construction. `kcal_out: 1728` on two different dates is BMR
+  modelling because the tracker was not worn - and **five separate instances
+  turned up in one import**, which is what makes it a rule rather than three
+  patches. `modelled` names the FIELDS on a row that are model outputs,
+  because the distinction is per-field: one row can carry a measured step
+  count and an estimated burn.
+
+  The same defect applies to a categorical label. **1,093 of 1,502 session
+  types in one live record were a vendor classifier's guess**, and nothing
+  distinguished them from the 409 the athlete asserted - so any analysis
+  grouping by `type` was silently mixing attestations with model output at
+  unknown confidence. `type_source` records how a label was arrived at.
+
+  A RED-S screen run on an estimated burn now **declares its basis** rather
+  than declining. Refusing would remove a false positive by creating a
+  silence, for every athlete whose tracker models their burn - which is most
+  of them - and in that tier silence is the dangerous direction.
 - **`track`, `activity_id` and `activity_source` on `sessions`** (#43). The
   link from a session to the file that recorded it lived in a prose note and
   was recovered by regex - unqueryable, unvalidatable, and silently broken by

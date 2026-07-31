@@ -16,6 +16,7 @@ from datetime import date, datetime
 from .clocks import (is_aware, is_stamp, order_key,  # noqa: F401
                      parse_time, stamp_instant)
 from .provenance import problems as provenance_problems
+from .provenance import value_kind_problems
 
 # dataset -> ordered keys (column order for the SQLite read model)
 KEYS: dict[str, list[str]] = {
@@ -36,7 +37,7 @@ KEYS: dict[str, list[str]] = {
     # rate could not be checked.
     "weight": ["date", "kg", "source", "note", "body_fat_pct",
                "kg_lo", "kg_hi", "body_fat_lo", "body_fat_hi", "measured_at",
-               "recorded_at", "origin", "path", "origin_evidence"],
+               "recorded_at", "origin", "path", "origin_evidence", "modelled"],
     # `hip_pain` is RETIRED at generation 2 in favour of `pain` + `pain_site`:
     # the hip was this record's founding injury, but a record that can only
     # describe one joint cannot describe a second one. Old lines keep it and
@@ -49,7 +50,7 @@ KEYS: dict[str, list[str]] = {
               "protein_g", "sleep_h", "rhr", "hip_pain", "alcohol", "note",
               "source", "mood", "feel", "coverage", "pain", "pain_site",
               "pain_side", "recorded_at", "origin", "path",
-              "origin_evidence"],
+              "origin_evidence", "modelled"],
     # `location` is RETIRED at generation 2, split into `place` (coarse, and
     # deliberately coarse - "home"/"work"/a travel slug, never an address) and
     # `route` (a personal slug the athlete names). Free text could not be
@@ -76,7 +77,8 @@ KEYS: dict[str, list[str]] = {
                  "cadence", "kcal", "location", "rpe", "note",
                  "source", "start_time", "elevation_m", "setting", "route",
                  "place", "with", "context", "planned", "weather", "recorded_at",
-                 "track", "activity_id", "activity_source"],
+                 "track", "activity_id", "activity_source",
+                 "modelled", "type_source"],
     # Third data tier: MODEL-INFERRED knowledge. Append-only like everything
     # else, but carries provenance (model, evidence, confidence) because it is
     # neither ground truth (observed) nor rebuildable (derived). The engine
@@ -163,7 +165,7 @@ KEYS: dict[str, list[str]] = {
     # single point. `body_fat_pct` measured BY the scale already rides the
     # `weight` line (gen-2, G36/G37); this dataset is for the other instruments.
     "measurements": ["date", "kind", "value", "source", "note", "recorded_at",
-                     "origin", "path", "origin_evidence"],
+                     "origin", "path", "origin_evidence", "modelled"],
     # --- increment 3: the medical layer (G11) ------------------------------
     # One condition's whole lifecycle shares a `slug`: onset, the visit, the
     # restriction, the resolution. Appending a line advances the episode; the
@@ -445,6 +447,16 @@ for _ds in ("weight", "daily", "sessions", "measurements"):
     for _k in ("origin", "path", "origin_evidence"):
         KEY_GENERATION.setdefault(_ds, {})[_k] = CURRENT_GENERATION[_ds]
 
+# --- was it measured at all? (#49, #88) ---------------------------------------
+# `modelled` names the fields on a row that are model outputs; `type_source`
+# says how a categorical label was assigned. Both answer "was this observed",
+# which origin and capture do not.
+for _ds in ("weight", "daily", "sessions", "measurements"):
+    CURRENT_GENERATION[_ds] += 1
+    _new = ["modelled"] + (["type_source"] if _ds == "sessions" else [])
+    for _k in _new:
+        KEY_GENERATION[_ds][_k] = CURRENT_GENERATION[_ds]
+
 
 def key_generation(dataset: str, key: str) -> int:
     """Generation a key was introduced in (1 = founding)."""
@@ -585,6 +597,7 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
             problems.append(f"'alcohol' should be true/false/null, got {a!r}")
     if dataset in ("weight", "daily", "sessions", "measurements"):
         problems += provenance_problems(rec)
+        problems += value_kind_problems(rec, KEYS[dataset])
     if dataset == "sessions":
         problems += _validate_track(rec)
     if dataset == "sessions" and rec.get("type") not in SESSION_TYPES:

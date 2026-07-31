@@ -457,7 +457,7 @@ def test_build_projects_the_safety_tables(tmp_path):
             "SELECT trigger FROM escalations WHERE level='emergency'"
         ).fetchone()[0] == "cardiac"
         assert con.execute(
-            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "10"
+            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "11"
     finally:
         con.close()
 
@@ -1110,3 +1110,37 @@ def test_ea_does_not_clear_a_hold_when_the_exercise_term_is_incomplete():
     rows = escalations(injury, starved, body, unpriced, on=date(2030, 5, 14))
     assert any(e["level"] == HOLD for e in rows), (
         "an incomplete exercise term must not read as a clean bill of health")
+
+
+def test_a_modelled_burn_declares_itself_rather_than_being_dropped():
+    """#49's harm is an inflated estimate reaching a deficit and reading ON
+    TARGET while the scale goes up. But REFUSING to screen when the burn is
+    estimated silences RED-S detection for every athlete whose tracker models
+    their burn, which is most of them - removing a false positive by creating
+    a silence, in the tier where silence is the dangerous direction.
+
+    So it states the basis, which is what #37 and #68 already established.
+    """
+    starved = _fortnight(kcal_in=1200, kcal_out=3600)
+    modelled = [dict(r, modelled="kcal_out") for r in starved]
+    body = [weight(f"2030-05-{d:02d}", 55.0) for d in range(1, 15)]
+    training = [session(f"2030-05-{d:02d}", type="run", duration_s=5400,
+                        kcal=900) for d in range(1, 15)]
+    injury = [medical("2030-05-02", slug="tib", kind="injury",
+                      title="Tibial stress reaction", body_site="shin")]
+    rows = escalations(injury, modelled, body, training, on=date(2030, 5, 14))
+    held = [e for e in rows if e["level"] == HOLD]
+    assert held, "an estimated burn must not silence the screen"
+    assert "MODELLED on 14 of 14 days" in held[0]["detail"]
+
+
+def test_a_measured_burn_carries_no_caveat():
+    starved = _fortnight(kcal_in=1200, kcal_out=3600)
+    body = [weight(f"2030-05-{d:02d}", 55.0) for d in range(1, 15)]
+    training = [session(f"2030-05-{d:02d}", type="run", duration_s=5400,
+                        kcal=900) for d in range(1, 15)]
+    injury = [medical("2030-05-02", slug="tib", kind="injury",
+                      title="Tibial stress reaction", body_site="shin")]
+    held = [e for e in escalations(injury, starved, body, training,
+                                   on=date(2030, 5, 14)) if e["level"] == HOLD]
+    assert held and "MODELLED" not in held[0]["detail"]

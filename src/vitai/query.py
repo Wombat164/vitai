@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
+from .provenance import is_modelled
+
 CONFIRMED, REFUTED, NOT_IN_RECORD = "CONFIRMED", "REFUTED", "NOT-IN-RECORD"
 
 # Where a metric can be found. A metric on `sessions` is per-activity and can
@@ -68,12 +70,19 @@ def collect(datasets: dict[str, list[dict]], on: str, metric: str,
             if type and rec.get("type") != type:
                 continue
             out.append({"dataset": "sessions", "type": rec.get("type"),
-                        "source": rec.get("source"), "value": float(rec[metric])})
+                        "source": rec.get("source"),
+                        "modelled": is_modelled(rec, metric),
+                        "value": float(rec[metric])})
     if metric in DAILY_METRICS and not type:
         for rec in datasets.get("daily") or []:
             if str(rec.get("date")) == on and _numeric(rec.get(metric)):
                 out.append({"dataset": "daily", "type": None,
                             "source": rec.get("source"),
+                            # Carried, not filtered (#49). A caller asking
+                            # what the record holds should SEE the estimate
+                            # and be told it is one; silently dropping it
+                            # would answer a different question.
+                            "modelled": is_modelled(rec, metric),
                             "value": float(rec[metric])})
     return out
 

@@ -230,3 +230,47 @@ def test_a_real_relay_chain_reads_as_derived_in_transit():
     assert trust_ceiling(weight(
         origin="aria-scale",
         path="fitbit-app>fitbit-api>mfp-api>mfp-export")) == "derived-in-transit"
+
+
+# ---- #49/#88: was it measured at all? ------------------------------------------
+
+def test_modelled_names_fields_not_the_whole_row():
+    """The distinction is per-field: one row can carry a measured step count
+    and an estimated burn."""
+    from vitai.provenance import is_modelled, modelled_fields
+    row = {"modelled": "kcal_out rhr", "kcal_out": 1728, "rhr": 0, "steps": 9000}
+    assert modelled_fields(row) == {"kcal_out", "rhr"}
+    assert is_modelled(row, "kcal_out") is True
+    assert is_modelled(row, "steps") is False
+
+
+def test_an_unannotated_row_claims_nothing():
+    from vitai.provenance import modelled_fields
+    assert modelled_fields({"kcal_out": 1728}) == set()
+
+
+def test_modelled_must_name_real_fields():
+    """A typo would make the declaration silently unenforceable - the field
+    would keep being treated as measured."""
+    from vitai.provenance import value_kind_problems
+    assert any("not a field" in p for p in
+               value_kind_problems({"modelled": "kcal_ou"}, ["kcal_out"]))
+    assert value_kind_problems({"modelled": "kcal_out"}, ["kcal_out"]) == []
+
+
+def test_a_categorical_label_can_say_how_it_was_assigned():
+    """1,093 of 1,502 session types in one live record were a classifier's
+    guess, and the record could not tell them from the 409 the athlete
+    asserted (#88)."""
+    from vitai.provenance import TYPE_SOURCES, type_source, value_kind_problems
+    assert "vendor-classified" in TYPE_SOURCES
+    assert type_source({"type_source": "vendor-classified"}) == "vendor-classified"
+    assert type_source({}) is None
+    assert any("type_source" in p for p in
+               value_kind_problems({"type_source": "guessed", "type": "run"}, []))
+
+
+def test_a_type_source_needs_a_type():
+    from vitai.provenance import value_kind_problems
+    assert any("needs a 'type'" in p for p in
+               value_kind_problems({"type_source": "vendor-classified"}, []))
