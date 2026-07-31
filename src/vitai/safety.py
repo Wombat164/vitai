@@ -841,14 +841,24 @@ def energy_availability(daily: list[dict], weight: list[dict],
     ffm = _fat_free_mass(weight, end) if window else None
     if len(intakes) < RED_S_MIN_DAYS or not ffm:
         return None, {}
-    exercise = sum(float(s["kcal"]) for s in sessions
-                   if _numeric(s.get("kcal")) and _as_date(s.get("date"))
-                   and start <= _as_date(s["date"]) <= end)
+    in_window = [s for s in sessions
+                 if _as_date(s.get("date"))
+                 and start <= _as_date(s["date"]) <= end]
+    exercise = sum(float(s["kcal"]) for s in in_window if _numeric(s.get("kcal")))
+    # A session logged with a duration but NO energy cost drops silently out
+    # of the exercise term, and EA is intake MINUS exercise - so a record that
+    # logs how long but not how hard reads as a healthy EA when the true one
+    # may be far below the threshold. That is not a computed answer, it is an
+    # incomplete one wearing the shape of an answer, and clearing a hold on it
+    # is under-triage of the tier that matters most.
+    unpriced = [s for s in in_window
+                if _numeric(s.get("duration_s")) and not _numeric(s.get("kcal"))]
     mean_intake = sum(intakes) / len(intakes)
     per_day_exercise = exercise / RED_S_WINDOW_DAYS
     ea = (mean_intake - per_day_exercise) / ffm
     return ea, {"intake": mean_intake, "exercise": per_day_exercise,
-                "ffm": ffm, "end": end.isoformat()}
+                "ffm": ffm, "end": end.isoformat(),
+                "unpriced_sessions": len(unpriced)}
 
 
 def _asserted(notes: list[str], phrases: tuple[str, ...],
@@ -922,8 +932,14 @@ def _corroborating_markers(daily: list[dict], weight: list[dict],
               if _within(m)]
     if _asserted(notes, AMENORRHOEA_PHRASES, AMENORRHOEA_EXCLUDES):
         markers.append("menstrual function reported absent")
+    # `str(m.get("body_site"))` yields the string "None" for a null site,
+    # which is TRUTHY - so the body-site guard passed for every medical row
+    # that omitted a site, and the marker collapsed to "stress" in the title.
+    # A line reading "Work stress flare-up" became bone-stress injury history
+    # and held a healthy athlete's training (#67).
     if _asserted(notes, BONE_STRESS_PHRASES) or any(
-            str(m.get("body_site")) and "stress" in str(m.get("title", "")).lower()
+            (m.get("body_site") or "")
+            and "stress" in str(m.get("title") or "").lower()
             for m in medical):
         markers.append("bone-stress injury history")
     return markers
@@ -952,8 +968,17 @@ def _red_s(daily: list[dict], weight: list[dict], sessions: list[dict],
     markers = _corroborating_markers(daily, weight, medical, start, end)
     ea, terms = energy_availability(daily, weight, sessions)
 
-    if ea is not None and ea < EA_LOW_THRESHOLD:
-        if not markers:
+    # EA only CLEARS a hold when it is dependable. It is not dependable when
+    # sessions in the window carry a duration but no energy cost: those drop
+    # out of the exercise term and inflate EA, so a genuinely underfuelled
+    # athlete who logs how long but not how hard would read as healthy.
+    dependable = ea is not None and not terms.get("unpriced_sessions")
+    if dependable:
+        # ENERGY AVAILABILITY ANSWERED, so the fallback below must not run
+        # (#67). It was conditioned on falling through rather than on EA being
+        # unavailable, so a healthy EA plus a large measured deficit still
+        # produced a hold - a hold on an athlete who is eating enough.
+        if ea >= EA_LOW_THRESHOLD or not markers:
             return []
         return [_escalation(
             end.isoformat(), HOLD, "clinical_hold",
@@ -961,8 +986,9 @@ def _red_s(daily: list[dict], weight: list[dict], sessions: list[dict],
             f"{EA_LOW_THRESHOLD:.0f}), {per_week:.0f} min/week of training, "
             f"and: {'; '.join(markers)}")]
 
-    # No body-composition read: fall back to energy balance, which cannot see
-    # the weight-stable presentation but is better than screening nothing.
+    # NO body-composition read at all: fall back to energy balance, which
+    # cannot see the weight-stable presentation but is better than screening
+    # nothing. Reached only when EA is genuinely unavailable.
     balances = [float(r["kcal_in"]) - float(r["kcal_out"]) for r in window
                 if _numeric(r.get("kcal_in")) and _numeric(r.get("kcal_out"))]
     if len(balances) < RED_S_MIN_DAYS:

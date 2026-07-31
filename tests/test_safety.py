@@ -996,3 +996,117 @@ def test_lifting_suppresses_the_no_resistance_clause():
     said_without = " ".join(e["detail"] for e in without)
     assert "no resistance training" not in said_with
     assert "no resistance training" in said_without
+# ---- #67: the hold tier must not fire on a healthy athlete ---------------------
+
+def _fortnight(**kw):
+    return [daily(f"2030-05-{d:02d}", **kw) for d in range(1, 15)]
+
+
+def test_a_healthy_energy_availability_suppresses_the_balance_fallback():
+    """The fallback is documented as covering "no body-composition read". It
+    ran whenever the EA branch did not RETURN - including when EA had been
+    computed and was fine - so a large measured deficit held an athlete who
+    is eating enough (#67).
+
+    The hold tier stops training. An engine that halts a healthy athlete gets
+    overridden, and once overridden the tier is dead for the case it exists
+    for - which is the real cost, not the false alarm.
+    """
+    fed = _fortnight(kcal_in=2500, kcal_out=3600)
+    body = [weight(f"2030-05-{d:02d}", 75.0, body_fat_pct=20.0)
+            for d in range(1, 15)]
+    training = [session(f"2030-05-{d:02d}", type="run", duration_s=3600,
+                        kcal=700) for d in range(1, 15)]
+    stress_note = [medical("2030-05-02", slug="work", kind="symptom",
+                           title="Work stress flare-up", body_site=None)]
+    rows = escalations(stress_note, fed, body, training, on=date(2030, 5, 14))
+    assert [e for e in rows if e["level"] == HOLD] == []
+
+
+def test_a_genuine_red_s_presentation_still_holds():
+    """The guard must not silence the case the tier exists for."""
+    starved = _fortnight(kcal_in=1200, kcal_out=3600)
+    body = [weight(f"2030-05-{d:02d}", 55.0, body_fat_pct=14.0)
+            for d in range(1, 15)]
+    training = [session(f"2030-05-{d:02d}", type="run", duration_s=5400,
+                        kcal=900) for d in range(1, 15)]
+    injury = [medical("2030-05-02", slug="tib", kind="injury",
+                      title="Tibial stress reaction", body_site="shin")]
+    rows = escalations(injury, starved, body, training, on=date(2030, 5, 14))
+    assert any(e["level"] == HOLD for e in rows)
+
+
+def test_a_null_body_site_does_not_make_every_stress_a_bone_stress():
+    """`str(None)` is the string "None", which is truthy - so the body-site
+    guard passed for every medical row that omitted a site, and the marker
+    collapsed to "stress" in the title."""
+    from vitai.safety import _corroborating_markers
+    body = [weight(f"2030-05-{d:02d}", 75.0) for d in range(1, 15)]
+    days = _fortnight()
+    work = [medical("2030-05-02", slug="work", kind="symptom",
+                    title="Work stress flare-up", body_site=None)]
+    assert _corroborating_markers(days, body, work, date(2030, 5, 1),
+                                  date(2030, 5, 14)) == []
+
+
+def test_a_real_bone_stress_injury_is_still_a_marker():
+    from vitai.safety import _corroborating_markers
+    body = [weight(f"2030-05-{d:02d}", 75.0) for d in range(1, 15)]
+    real = [medical("2030-05-02", slug="tib", kind="injury",
+                    title="Tibial stress reaction", body_site="shin")]
+    assert "bone-stress injury history" in _corroborating_markers(
+        _fortnight(), body, real, date(2030, 5, 1), date(2030, 5, 14))
+
+
+def test_the_balance_fallback_still_runs_without_a_composition_read():
+    """It exists because a record with no body-fat reading would otherwise be
+    screened for nothing at all."""
+    starved = _fortnight(kcal_in=1200, kcal_out=3600)
+    no_composition = [weight(f"2030-05-{d:02d}", 55.0) for d in range(1, 15)]
+    training = [session(f"2030-05-{d:02d}", type="run", duration_s=5400,
+                        kcal=900) for d in range(1, 15)]
+    injury = [medical("2030-05-02", slug="tib", kind="injury",
+                      title="Tibial stress reaction", body_site="shin")]
+    rows = escalations(injury, starved, no_composition, training,
+                       on=date(2030, 5, 14))
+    assert any(e["level"] == HOLD and "energy balance" in e["detail"]
+               for e in rows)
+
+
+def test_a_healthy_ea_with_a_real_marker_still_clears():
+    """This is the test that catches a revert of the EA-branch fix on its own.
+
+    The earlier fixtures could not: with the body-site bug also fixed, the
+    marker vanished and the fallback returned empty for that reason instead.
+    A genuine marker plus a genuinely healthy EA is the shape that separates
+    the two fixes.
+    """
+    fed = _fortnight(kcal_in=2500, kcal_out=3600)
+    body = [weight(f"2030-05-{d:02d}", 75.0, body_fat_pct=20.0)
+            for d in range(1, 15)]
+    priced = [session(f"2030-05-{d:02d}", type="run", duration_s=3600,
+                      kcal=700) for d in range(1, 15)]
+    injury = [medical("2030-05-02", slug="tib", kind="injury",
+                      title="Tibial stress reaction", body_site="shin")]
+    rows = escalations(injury, fed, body, priced, on=date(2030, 5, 14))
+    assert [e for e in rows if e["level"] == HOLD] == []
+
+
+def test_ea_does_not_clear_a_hold_when_the_exercise_term_is_incomplete():
+    """A session logged with a duration but no energy cost drops out of the
+    exercise term, so EA reads healthy when the true one may be far below.
+
+    The first version of the #67 fix cleared on any computable EA, which
+    silently stopped holding an athlete who logs how long but not how hard -
+    under-triage introduced while fixing over-triage.
+    """
+    starved = _fortnight(kcal_in=1600, kcal_out=3600)
+    body = [weight(f"2030-05-{d:02d}", 55.0, body_fat_pct=14.0)
+            for d in range(1, 15)]
+    unpriced = [session(f"2030-05-{d:02d}", type="run", duration_s=5400)
+                for d in range(1, 15)]
+    injury = [medical("2030-05-02", slug="tib", kind="injury",
+                      title="Tibial stress reaction", body_site="shin")]
+    rows = escalations(injury, starved, body, unpriced, on=date(2030, 5, 14))
+    assert any(e["level"] == HOLD for e in rows), (
+        "an incomplete exercise term must not read as a clean bill of health")
