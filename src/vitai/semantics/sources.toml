@@ -81,7 +81,13 @@ version = 1
 
 [kinds.watch]
 label = "Wrist-worn wearable"
-aliases = ["wearable", "smartwatch", "fitness tracker", "band"]
+aliases = ["wearable", "smartwatch", "fitness tracker", "band", "wristband"]
+# Wristbands (Charge, Whoop) are deliberately NOT a separate kind. They differ
+# from watches in what they HAVE - many lack GPS, most now lack an altimeter -
+# but a deny list may only hold what is confidently true of EVERY instrument
+# of the kind, and some wristbands have both. Splitting them would produce a
+# kind with an empty `cannot`, which is the same as not splitting them.
+# A ring is different: see [kinds.ring].
 
 [kinds.phone]
 label = "Phone"
@@ -102,6 +108,17 @@ aliases = ["bathroom scale", "weighing scale", "smart scale"]
 # It has no GPS, no accelerometer worth the name, and no altimeter. Note HR is
 # NOT here: some connected scales genuinely measure it.
 cannot = ["distance_km", "steps", "cadence", "elevation_m"]
+
+[kinds.ring]
+label = "Finger-worn ring"
+aliases = ["smart ring"]
+# The one wearable kind that can be denied things confidently. A ring sits on
+# a finger, so there is no arm swing to derive cadence from and no wrist
+# platform for GPS or a barometer - no shipping smart ring has either. Steps
+# are NOT denied: rings do estimate them, less well than a wrist, but they
+# report them and denying a value a device genuinely emits would make a
+# registry gap into an accusation.
+cannot = ["distance_km", "cadence", "elevation_m"]
 
 [kinds.head_mounted]
 label = "Head-mounted device"
@@ -169,7 +186,7 @@ note = "no display; strap-only"
 
 [sources.oura-ring]
 label = "Oura ring"
-kind = "watch"
+kind = "ring"
 role = "device"
 aliases = ["oura"]
 note = "sleep and recovery; not a training device"
