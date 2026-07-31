@@ -15,6 +15,7 @@ from datetime import date, datetime
 
 from .clocks import (is_aware, is_stamp, order_key,  # noqa: F401
                      parse_time, stamp_instant)
+from .provenance import capture_problems
 from .provenance import problems as provenance_problems
 
 # dataset -> ordered keys (column order for the SQLite read model)
@@ -36,7 +37,8 @@ KEYS: dict[str, list[str]] = {
     # rate could not be checked.
     "weight": ["date", "kg", "source", "note", "body_fat_pct",
                "kg_lo", "kg_hi", "body_fat_lo", "body_fat_hi", "measured_at",
-               "recorded_at", "origin", "path", "origin_evidence"],
+               "recorded_at", "origin", "path", "origin_evidence",
+               "capture", "read_by"],
     # `hip_pain` is RETIRED at generation 2 in favour of `pain` + `pain_site`:
     # the hip was this record's founding injury, but a record that can only
     # describe one joint cannot describe a second one. Old lines keep it and
@@ -49,7 +51,7 @@ KEYS: dict[str, list[str]] = {
               "protein_g", "sleep_h", "rhr", "hip_pain", "alcohol", "note",
               "source", "mood", "feel", "coverage", "pain", "pain_site",
               "pain_side", "recorded_at", "origin", "path",
-              "origin_evidence"],
+              "origin_evidence", "capture", "read_by"],
     # `location` is RETIRED at generation 2, split into `place` (coarse, and
     # deliberately coarse - "home"/"work"/a travel slug, never an address) and
     # `route` (a personal slug the athlete names). Free text could not be
@@ -76,7 +78,8 @@ KEYS: dict[str, list[str]] = {
                  "cadence", "kcal", "location", "rpe", "note",
                  "source", "start_time", "elevation_m", "setting", "route",
                  "place", "with", "context", "planned", "weather", "recorded_at",
-                 "track", "activity_id", "activity_source"],
+                 "track", "activity_id", "activity_source",
+                 "origin", "path", "origin_evidence", "capture", "read_by"],
     # Third data tier: MODEL-INFERRED knowledge. Append-only like everything
     # else, but carries provenance (model, evidence, confidence) because it is
     # neither ground truth (observed) nor rebuildable (derived). The engine
@@ -163,7 +166,7 @@ KEYS: dict[str, list[str]] = {
     # single point. `body_fat_pct` measured BY the scale already rides the
     # `weight` line (gen-2, G36/G37); this dataset is for the other instruments.
     "measurements": ["date", "kind", "value", "source", "note", "recorded_at",
-                     "origin", "path", "origin_evidence"],
+                     "origin", "path", "origin_evidence", "capture", "read_by"],
     # --- increment 3: the medical layer (G11) ------------------------------
     # One condition's whole lifecycle shares a `slug`: onset, the visit, the
     # restriction, the resolution. Appending a line advances the episode; the
@@ -445,6 +448,28 @@ for _ds in ("weight", "daily", "sessions", "measurements"):
     for _k in ("origin", "path", "origin_evidence"):
         KEY_GENERATION.setdefault(_ds, {})[_k] = CURRENT_GENERATION[_ds]
 
+# --- how a value was acquired (#77/#78) ---------------------------------------
+# `capture` is a property of the ACQUISITION EVENT rather than of the chain: a
+# photo-read and a BLE-read of one console on one evening are two claims with
+# one origin and two captures.
+#
+# `sessions` gains `origin`/`path`/`origin_evidence` as COLUMNS here: #51
+# registered their generations for sessions but never added them to `KEYS`,
+# and sessions is exactly where multi-instrument claims collide.
+#
+# Critically, sessions ADVANCES to a new generation rather than reusing the
+# one #51 already consumed. It was already at that generation, so a row an
+# existing deployment had appended and stamped with it would suddenly owe
+# five keys it cannot have - the exact G25 time bomb the mechanism exists to
+# defuse, arriving through a restructuring rather than a new field.
+for _ds in ("weight", "daily", "sessions", "measurements"):
+    CURRENT_GENERATION[_ds] += 1
+    _new = ["capture", "read_by"]
+    if _ds == "sessions":
+        _new += ["origin", "path", "origin_evidence"]
+    for _k in _new:
+        KEY_GENERATION[_ds][_k] = CURRENT_GENERATION[_ds]
+
 
 def key_generation(dataset: str, key: str) -> int:
     """Generation a key was introduced in (1 = founding)."""
@@ -585,6 +610,7 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
             problems.append(f"'alcohol' should be true/false/null, got {a!r}")
     if dataset in ("weight", "daily", "sessions", "measurements"):
         problems += provenance_problems(rec)
+        problems += capture_problems(rec)
     if dataset == "sessions":
         problems += _validate_track(rec)
     if dataset == "sessions" and rec.get("type") not in SESSION_TYPES:

@@ -67,7 +67,14 @@ from .schema import KEYS
 #    `resolution` row carries `independent`, which is false when the two
 #    values are one measurement seen at two points on one pipe - that spread
 #    measures pipeline fidelity and must never be read as agreement.
-CONTRACT_VERSION = "10"
+# 11: the acquisition axis (#77/#78) - `capture` (how a value was acquired)
+#     and `read_by` (who did the reading, where one happened) on the
+#     observation datasets, plus `origin`/`path`/`origin_evidence` finally
+#     reaching `sessions`. `provenance.trust` gains a `transcribed` level: a
+#     photograph of a console read by a model is an inference over an
+#     artifact, not a reading of an instrument, and MUST NOT be rendered as
+#     device-measured.
+CONTRACT_VERSION = "11"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
@@ -97,6 +104,7 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               "result",
               # #35/#51: the provenance chain.
               "origin", "path", "origin_evidence", "trust", "chain", "compares",
+              "capture", "read_by",
               "scope",
               # #43. `activity_id` MUST be TEXT: a REAL-affinity column
               # converts "9914203377" to a float, which destroys leading

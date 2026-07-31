@@ -13,7 +13,7 @@ pain_gate = 3
 # The watch measures burn; the calorie app only models it. The app owns
 # intake, which the watch never sees at all.
 [resolution]
-source_order = ["scale", "watch", "app"]
+source_order = ["scale", "gym-console", "watch", "app"]
 
 [resolution.precedence]
 kcal_out = ["watch", "app"]

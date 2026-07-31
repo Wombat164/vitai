@@ -39,13 +39,19 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from .clocks import comparable, is_aware, parse_time, stamp_instant
-from .provenance import (describe, distinct_origins, independent_witnesses,
-                         shares_origin, trust_ceiling)
+from .provenance import (TRUST_ORDER, describe, distinct_origins,
+                         independent_witnesses, shares_origin, trust_ceiling)
 
 from .schema import KEYS
 
-# Weakest LAST, so `max` over this order takes the least trustworthy hop.
-TRUST_ORDER = ("device-measured", "derived-in-transit", "unknown-transit")
+# One definition, in provenance.py, so the ladder cannot drift between the
+# module that produces a level and the module that ranks it.
+#
+# `transcribed` sits below a vendor re-derivation on purpose: a hop that
+# rounds or recomputes introduces a BOUNDED error, while a misread digit is
+# unbounded - 3.1 and 31 differ by an order of magnitude and look equally
+# plausible on a console. What could redeem it is the artifact, which is
+# re-readable where a vendor's current model is not; storing that is #80.
 
 # Datasets that carry competing observations. Policy datasets (goals,
 # thresholds, context, achievements) are not claims about a measurement and
