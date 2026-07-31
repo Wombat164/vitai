@@ -57,7 +57,17 @@ from .schema import KEYS
 #    session previously lacked, so a correction can name one of two runs on a
 #    day instead of retiring both. It is TEXT and must never be read as a
 #    number: leading zeros and ids past 2^53 both occur.
-CONTRACT_VERSION = "9"
+# 10: provenance as a CHAIN (#35/#51) - `origin` (what observed reality),
+#    `path` (the ordered hops it travelled) and `origin_evidence` on the
+#    observation datasets, plus a `provenance` table carrying, per resolved
+#    row, how many INDEPENDENT instruments observed it and what the journey
+#    could have done to it. TWO things a consumer must change: `witnesses` on
+#    `justifications` and `explanations` now counts distinct ORIGINS rather
+#    than rows, so N platforms carrying one device's file is 1; and a
+#    `resolution` row carries `independent`, which is false when the two
+#    values are one measurement seen at two points on one pipe - that spread
+#    measures pipeline fidelity and must never be read as agreement.
+CONTRACT_VERSION = "10"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
@@ -85,6 +95,8 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               "provider_type", "source_kind", "escalation", "level", "trigger",
               "action", "onset_date", "precondition", "occurred_date",
               "result",
+              # #35/#51: the provenance chain.
+              "origin", "path", "origin_evidence", "trust", "chain", "compares",
               "scope",
               # #43. `activity_id` MUST be TEXT: a REAL-affinity column
               # converts "9914203377" to a float, which destroys leading
@@ -118,9 +130,10 @@ PROGRESS_KEYS = ["slug", "title", "metric", "policy", "status", "period",
 CLAIM_KEYS = ["claim_id", "dataset", "date", "source", "kind", "merged_into",
               "retracted"]
 RESOLUTION_KEYS = ["date", "dataset", "field", "chosen_source", "chosen_value",
-                   "over_source", "over_value", "witnesses", "reason", "disagreed"]
+                   "over_source", "over_value", "witnesses", "reason",
+                   "disagreed", "independent", "compares"]
 JUSTIFICATION_KEYS = ["date", "dataset", "field", "claim_id", "source", "tier",
-                      "quantity_class", "witnesses"]
+                      "quantity_class", "witnesses", "origin", "trust"]
 CONSERVATION_KEYS = ["date", "kind", "detail", "severity"]
 RETRACTION_KEYS = ["date", "kind", "claim_id", "retracted_by", "reason",
                    "cascaded_from"]
@@ -130,7 +143,11 @@ GATE_KEYS = ["date", "source_kind", "slug", "restricts", "reason", "severity",
              "status", "precondition", "escalation"]
 ESCALATION_KEYS = ["date", "level", "trigger", "detail", "action"]
 
+PROVENANCE_KEYS = ["date", "dataset", "origin", "independent_sources",
+                   "trust", "chain"]
+
 DERIVED_TABLES: dict[str, list[str]] = {
+    "provenance": PROVENANCE_KEYS,
     "verdicts": VERDICT_KEYS,
     "contributions": CONTRIBUTION_KEYS,
     "milestones": MILESTONE_KEYS,

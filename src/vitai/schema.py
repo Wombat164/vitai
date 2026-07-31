@@ -15,6 +15,7 @@ from datetime import date, datetime
 
 from .clocks import (is_aware, is_stamp, order_key,  # noqa: F401
                      parse_time, stamp_instant)
+from .provenance import problems as provenance_problems
 
 # dataset -> ordered keys (column order for the SQLite read model)
 KEYS: dict[str, list[str]] = {
@@ -34,7 +35,8 @@ KEYS: dict[str, list[str]] = {
     # absent - the engine never infers a probable weigh-in time, it says the
     # rate could not be checked.
     "weight": ["date", "kg", "source", "note", "body_fat_pct",
-               "kg_lo", "kg_hi", "body_fat_lo", "body_fat_hi", "measured_at", "recorded_at"],
+               "kg_lo", "kg_hi", "body_fat_lo", "body_fat_hi", "measured_at",
+               "recorded_at", "origin", "path", "origin_evidence"],
     # `hip_pain` is RETIRED at generation 2 in favour of `pain` + `pain_site`:
     # the hip was this record's founding injury, but a record that can only
     # describe one joint cannot describe a second one. Old lines keep it and
@@ -46,7 +48,8 @@ KEYS: dict[str, list[str]] = {
     "daily": ["date", "steps", "distance_km", "active_min", "kcal_out", "kcal_in",
               "protein_g", "sleep_h", "rhr", "hip_pain", "alcohol", "note",
               "source", "mood", "feel", "coverage", "pain", "pain_site",
-              "pain_side", "recorded_at"],
+              "pain_side", "recorded_at", "origin", "path",
+              "origin_evidence"],
     # `location` is RETIRED at generation 2, split into `place` (coarse, and
     # deliberately coarse - "home"/"work"/a travel slug, never an address) and
     # `route` (a personal slug the athlete names). Free text could not be
@@ -159,7 +162,8 @@ KEYS: dict[str, list[str]] = {
     # like weight, are read as TENDENCIES over a sparse trend - never as a
     # single point. `body_fat_pct` measured BY the scale already rides the
     # `weight` line (gen-2, G36/G37); this dataset is for the other instruments.
-    "measurements": ["date", "kind", "value", "source", "note", "recorded_at"],
+    "measurements": ["date", "kind", "value", "source", "note", "recorded_at",
+                     "origin", "path", "origin_evidence"],
     # --- increment 3: the medical layer (G11) ------------------------------
     # One condition's whole lifecycle shares a `slug`: onset, the visit, the
     # restriction, the resolution. Appending a line advances the episode; the
@@ -427,6 +431,20 @@ CURRENT_GENERATION["sessions"] += 1
 for _k in ("track", "activity_id", "activity_source"):
     KEY_GENERATION["sessions"][_k] = CURRENT_GENERATION["sessions"]
 
+# --- provenance as a chain (#35/#51) -------------------------------------------
+# `origin` is what observed reality and `path` is the ordered hops it
+# travelled; the existing `source` remains the TERMINUS, how it entered this
+# record. `source` was being asked to answer all three, which is how
+# `fitbit-api+mfp-export` came to read as two sources agreeing when
+# MyFitnessPal had received those weights from Fitbit.
+#
+# Registered AFTER the block above, so `sessions` lands one generation past
+# the track fields rather than sharing theirs.
+for _ds in ("weight", "daily", "sessions", "measurements"):
+    CURRENT_GENERATION[_ds] += 1
+    for _k in ("origin", "path", "origin_evidence"):
+        KEY_GENERATION.setdefault(_ds, {})[_k] = CURRENT_GENERATION[_ds]
+
 
 def key_generation(dataset: str, key: str) -> int:
     """Generation a key was introduced in (1 = founding)."""
@@ -565,6 +583,8 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
     if dataset == "daily" and (a := rec.get("alcohol")) is not None:
         if not isinstance(a, bool):
             problems.append(f"'alcohol' should be true/false/null, got {a!r}")
+    if dataset in ("weight", "daily", "sessions", "measurements"):
+        problems += provenance_problems(rec)
     if dataset == "sessions":
         problems += _validate_track(rec)
     if dataset == "sessions" and rec.get("type") not in SESSION_TYPES:

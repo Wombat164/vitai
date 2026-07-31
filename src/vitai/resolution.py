@@ -39,8 +39,13 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from .clocks import comparable, is_aware, parse_time
+from .provenance import (describe, distinct_origins, independent_witnesses,
+                         shares_origin, trust_ceiling)
 
 from .schema import KEYS
+
+# Weakest LAST, so `max` over this order takes the least trustworthy hop.
+TRUST_ORDER = ("device-measured", "derived-in-transit", "unknown-transit")
 
 # Datasets that carry competing observations. Policy datasets (goals,
 # thresholds, context, achievements) are not claims about a measurement and
@@ -84,7 +89,12 @@ UNKNOWN_SOURCE = "unknown"
 # not quantities, so they are not adjudicated and never explained - reporting
 # that "watch beat app on the date field" is noise that buries the one line
 # the athlete actually wanted to read.
-NON_QUANTITY_FIELDS = {"date", "source"}
+# Provenance describes where a value came FROM; it is not a competing claim
+# about the world, so it never resolves by the precedence ladder (#35/#51).
+# Left in, `origin` and `path` were being reported as contested fields whose
+# sources "disagreed" - which is true and meaningless: of course two chains
+# differ, that is what makes them two chains.
+NON_QUANTITY_FIELDS = {"date", "source", "origin", "path", "origin_evidence"}
 
 
 def claim_id(dataset: str, rec: dict, ordinal: int = 0) -> str:
@@ -149,6 +159,34 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
         contributors = sorted({str(rec.get("source") or UNKNOWN_SOURCE)
                                for _, rec in claims})
         canonical["source"] = "+".join(contributors)
+    # `source` above lists the CHANNELS a value arrived by, and the `+` reads
+    # as a union of independent sources - which is precisely the error (#51).
+    # These say what it actually was: how many distinct instruments observed
+    # it, and how much the journey could have changed it.
+    if "origin" in KEYS[dataset]:
+        recs = [rec for _, rec in claims]
+        origins = sorted(distinct_origins(recs))
+        canonical["origin"] = origins[0] if len(origins) == 1 else (
+            "+".join(origins) if origins else None)
+        # A merged row has as many paths as it had claims, so there is no
+        # single one to record. The full set lives in `provenance.chain`;
+        # putting one of them here would assert a journey this value did not
+        # solely take.
+        single = recs[0] if len(recs) == 1 else None
+        canonical["path"] = single.get("path") if single else None
+        canonical["origin_evidence"] = (single.get("origin_evidence")
+                                        if single else None)
+        canonical["_provenance"] = {
+            "independent_sources": independent_witnesses(recs),
+            # Trust is bounded by the WEAKEST hop, not by the origin: a
+            # device-measured weight that passed through a vendor which
+            # rounds or re-derives is no longer device-measured (#51).
+            # max over this order, not min: the ceiling is the LEAST
+            # trustworthy hop any contributing claim passed through.
+            "trust": max((trust_ceiling(r) for r in recs),
+                         key=TRUST_ORDER.index),
+            "chain": "; ".join(sorted({describe(r) for r in recs})),
+        }
 
     for field in KEYS[dataset]:
         if field in NON_QUANTITY_FIELDS:
@@ -161,13 +199,21 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
         witnesses.sort(key=lambda w: _rank(w[1].get("source"), ladder))
         winner_id, winner = witnesses[0]
         canonical[field] = winner[field]
+        # `witnesses` counts INDEPENDENT ORIGINS, not rows (#35/#51). Five
+        # rows carrying one watch's reading through five platforms are one
+        # witness, and reporting five is the false confidence this exists to
+        # prevent - independent instruments corroborate, a sync pipeline does
+        # not.
+        witness_recs = [rec for _, rec in witnesses]
         justifications.append({
             "field": field,
             "claim_id": winner_id,
             "source": winner.get("source") or UNKNOWN_SOURCE,
             "tier": "observed",
             "quantity_class": QUANTITY_CLASS.get(dataset, "measured_flow"),
-            "witnesses": len(witnesses),
+            "witnesses": independent_witnesses(witness_recs),
+            "origin": winner.get("origin"),
+            "trust": trust_ceiling(winner),
         })
         if len(witnesses) > 1:
             loser_id, loser = witnesses[1]
@@ -179,9 +225,16 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
                 "chosen_value": winner[field],
                 "over_source": loser.get("source") or UNKNOWN_SOURCE,
                 "over_value": loser[field],
-                "witnesses": len(witnesses),
+                "witnesses": independent_witnesses(witness_recs),
                 "reason": _why(winner.get("source"), loser.get("source"), ladder),
                 "disagreed": _disagrees(winner[field], loser[field]),
+                # Same origin means these are one measurement seen at two
+                # points on one pipe. The spread then measures PIPELINE
+                # FIDELITY, not truth - worth reporting, never worth counting
+                # as validation (#51).
+                "independent": not shares_origin(winner, loser),
+                "compares": ("pipeline fidelity" if shares_origin(winner, loser)
+                             else "independent observations"),
             })
     return canonical, justifications, explanations
 
@@ -393,6 +446,21 @@ def _cluster_sessions(claims: list[tuple[str, dict]]) -> tuple[list[list[tuple[s
         for cluster in clusters:
             head = cluster[0][1]
             verdict = _same_activity(head, rec)
+            if verdict == MATCH and shares_origin(head, rec):
+                # One reading seen at two points on one pipe. It still merges
+                # - it IS one activity - but the record must not let that
+                # read as two platforms agreeing, which is the whole of #35.
+                notes.append({
+                    "date": rec.get("date"),
+                    "kind": "relayed_not_corroborated",
+                    "detail": (
+                        f"{rec.get('source') or UNKNOWN_SOURCE} and "
+                        f"{head.get('source') or UNKNOWN_SOURCE} both carry "
+                        f"the same {rec.get('origin')} recording of this "
+                        f"{kind}. Merged as one activity, and counted as ONE "
+                        "observation - a sync pipeline is not a second witness"),
+                    "severity": "info",
+                })
             if verdict != DISTINCT and _frames_differ(head, rec):
                 # #38: both rows HAVE a timestamp, and it could not be used.
                 # Without this the pair looks like an ordinary shape-only
@@ -459,6 +527,7 @@ def resolve(datasets: dict[str, list[dict]],
     explanations: list[dict] = []
     justifications: list[dict] = []
     tripwires: list[dict] = []
+    provenance: list[dict] = []
 
     for dataset in RESOLVED_DATASETS:
         rows = datasets.get(dataset) or []
@@ -498,6 +567,9 @@ def resolve(datasets: dict[str, list[dict]],
                 merged, just, expl = _merge_fields(dataset, group, precedence,
                                                    source_order)
                 merged = _carry_meta(merged, group, dataset)
+                if (chain := merged.pop("_provenance", None)) is not None:
+                    provenance.append({"dataset": dataset, "date": when,
+                                       "origin": merged.get("origin"), **chain})
                 resolved.append(merged)
                 explanations += expl
                 for j in just:
@@ -521,10 +593,12 @@ def resolve(datasets: dict[str, list[dict]],
     explanations.sort(key=lambda e: (e["date"] or "", e["dataset"], e["field"]))
     justifications.sort(key=lambda j: (j["date"] or "", j["dataset"], j["field"]))
     claims_out.sort(key=lambda c: (c["date"], c["dataset"], c["claim_id"]))
+    provenance.sort(key=lambda r: (r["date"] or "", r["dataset"],
+                                   str(r.get("origin") or "")))
 
     return {"canonical": canonical, "claims": claims_out,
             "explanations": explanations, "justifications": justifications,
-            "tripwires": tripwires}
+            "tripwires": tripwires, "provenance": provenance}
 
 
 def canonical_daily(rec: dict) -> dict:
