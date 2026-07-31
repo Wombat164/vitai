@@ -890,6 +890,40 @@ def timestamp_advisories(dataset: str, rows: list[tuple[int, dict]]) -> list[str
             "02:30 it means on the night the clocks go back"]
 
 
+def unranked_source_problems(dataset: str, rows: list[tuple[int, dict]],
+                             known: set[str]) -> list[str]:
+    """Source terms the precedence ladder has never heard of (#73).
+
+    An unranked term sorts LAST, below every configured source, and nothing
+    says so. That is almost always a typo or a term missing from config
+    rather than a deliberate demotion to worst-in-the-record - and it cost a
+    real day: `context.jsonl` wrote `source: "stated-in-chat"`, the daily
+    ladder had never heard of it, and a 20,336-step day resolved its energy
+    burn to a vendor's figure over the athlete's own. That day flipped from a
+    reported surplus to a deficit.
+
+    Cheap and deterministic: it needs only the data and the config, and it
+    catches the mistake at the door rather than after a rebuild.
+    """
+    if not known or dataset not in RESOLVED_BY_SOURCE:
+        return []
+    seen: dict[str, int] = {}
+    for n, r in rows:
+        if (src := r.get("source")) and str(src) not in known:
+            seen.setdefault(str(src), n)
+    return [f"{dataset}.jsonl line {n}: source {src!r} is not in the "
+            "precedence ladder, so every value on this line sorts below every "
+            "configured source. Add it to [resolution] source_order - putting "
+            "it LAST is how you say 'trust this least' deliberately - or fix "
+            "the spelling"
+            for src, n in sorted(seen.items())]
+
+
+# Datasets whose rows compete by source. Policy datasets carry a `source` too,
+# but it records authorship rather than entering a precedence contest.
+RESOLVED_BY_SOURCE = ("weight", "daily", "sessions", "measurements")
+
+
 def supersedes_problems(dataset: str, rows: list[tuple[int, dict]]) -> list[str]:
     """A correction that cannot say WHICH line it corrects (#43).
 

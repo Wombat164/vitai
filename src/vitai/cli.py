@@ -24,7 +24,8 @@ from .inference import append_inferences, backend_from_config, run_inference
 from .jsonl import DataError, load_report, read_lines
 from .safety import banner
 from .schema import (KEYS, recorded_at_problems, supersedes_problems,
-                     timestamp_advisories, validate_record)
+                     timestamp_advisories, unranked_source_problems,
+                     validate_record)
 
 DATASETS = list(KEYS)
 
@@ -598,6 +599,9 @@ def cmd_validate(args: argparse.Namespace) -> None:
     root = _root(args)
     problems = 0
     advisories: list[str] = []
+    cfg = Vitai(root).config
+    ranked = set(cfg.source_order) | {
+        s for ladder in cfg.precedence.values() for s in ladder}
     for name in DATASETS:
         path = root / "data" / f"{name}.jsonl"
         rows, parse_errors = read_lines(path)
@@ -613,6 +617,9 @@ def cmd_validate(args: argparse.Namespace) -> None:
         # by validate_record - and monotonicity is the check that actually
         # detects a hand-authored stamp.
         for p in recorded_at_problems(name, rows):
+            print(p)
+            problems += 1
+        for p in unranked_source_problems(name, rows, ranked):
             print(p)
             problems += 1
         for p in supersedes_problems(name, rows):

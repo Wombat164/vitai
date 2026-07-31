@@ -55,13 +55,23 @@ TOML = (
     "# Which source wins which quantity when two of them describe one day.\n"
     "# The watch measures burn; the calorie app only models it. The app owns\n"
     "# intake, which the watch never sees at all.\n"
+    "#\n"
+    "# EVERY source that appears in the data is listed (#73). A term the\n"
+    "# ladder has never heard of sorts LAST - below every configured source -\n"
+    "# and nothing used to say so. `hand` is here for the sharpest reason:\n"
+    "# it is the athlete writing a number down, and an unranked first-hand\n"
+    "# reading losing to a relayed vendor figure is the ladder inverted at\n"
+    "# exactly the point it exists for.\n"
     "[resolution]\n"
-    'source_order = ["scale", "watch", "app"]\n\n'
+    'source_order = ["dexa", "tape", "scale", "hand", "watch", '
+    '"vendor-api", "vendor-export", "app"]\n\n'
     "[resolution.precedence]\n"
     'kcal_out = ["watch", "app"]\n'
     'kcal_in = ["app"]\n'
     'protein_g = ["app"]\n'
     'steps = ["watch", "app"]\n'
+    '# A tape measure and a DEXA scan are both anchors; the scan wins.\n'
+    'value = ["dexa", "tape"]\n'
 )
 
 
