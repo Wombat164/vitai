@@ -16,9 +16,10 @@ import json
 
 from vitai.api import Vitai
 from vitai.cli import main
-from vitai.provenance import (describe, hops, independent_witnesses,
-                              is_independent, may_mutate, role_of,
-                              shares_origin, trust_ceiling)
+from vitai.provenance import (capture_of, capture_problems, describe,
+                              has_artifact, hops, independent_witnesses,
+                              is_independent, may_mutate, may_transcribe,
+                              role_of, shares_origin, trust_ceiling)
 from vitai.schema import validate_record
 
 
@@ -230,3 +231,160 @@ def test_a_real_relay_chain_reads_as_derived_in_transit():
     assert trust_ceiling(weight(
         origin="aria-scale",
         path="fitbit-app>fitbit-api>mfp-api>mfp-export")) == "derived-in-transit"
+
+
+# ---- #77/#78: how a value was acquired -----------------------------------------
+
+def test_capture_resolves_through_the_registry_with_aliases():
+    assert capture_of({"capture": "photo"}) == "photo"
+    assert capture_of({"capture": "screenshot"}) == "photo"
+    assert capture_of({"capture": "bluetooth"}) == "ble"
+    assert capture_of({"capture": "stated-in-chat"}) == "narrative"
+
+
+def test_an_unrecognised_capture_lands_in_unknown():
+    """A capture method nobody here imagined is a gap in the registry, not a
+    fault in the athlete's record - and `unknown` already assumes the costly
+    side of both properties."""
+    assert capture_of({"capture": "telepathy"}) == "unknown"
+    assert may_transcribe({"capture": "telepathy"}) is True
+    assert has_artifact({"capture": "telepathy"}) is False
+
+
+def test_the_ordering_is_not_a_quality_ranking():
+    """`ble` has no human in the loop and no durable artifact; `photo` has a
+    reader in the loop but the evidence SURVIVES and can be re-read. Two
+    different virtues, and a query must be able to ask for either."""
+    assert may_transcribe({"capture": "ble"}) is False
+    assert has_artifact({"capture": "ble"}) is False
+    assert may_transcribe({"capture": "photo"}) is True
+    assert has_artifact({"capture": "photo"}) is True
+
+
+def test_a_transcribing_capture_must_say_who_read_it():
+    """A photo read by nobody is an unattributed reading; a photo read by a
+    MODEL is an inference over an artifact rather than a measurement, which
+    is the whole reason the field exists."""
+    assert any("read_by" in p for p in capture_problems({"capture": "photo"}))
+    assert capture_problems({"capture": "photo", "read_by": "model"}) == []
+    assert any("read_by" in p for p in
+               capture_problems({"capture": "photo", "read_by": "the cat"}))
+
+
+def test_a_non_transcribing_capture_needs_no_reader():
+    assert capture_problems({"capture": "ble"}) == []
+    assert capture_problems({"capture": "connector"}) == []
+
+
+def test_a_transcription_is_not_device_measured():
+    """The acquisition bounds the value just as a hop does. The origin is
+    still the console; what changes is what can be claimed about the number.
+    """
+    console = {"origin": "gym-console", "path": None}
+    assert trust_ceiling(console) == "device-measured"
+    assert trust_ceiling({**console, "capture": "ble"}) == "device-measured"
+    assert trust_ceiling({**console, "capture": "photo",
+                          "read_by": "model"}) == "transcribed"
+    assert trust_ceiling({**console, "capture": "narrative",
+                          "read_by": "athlete"}) == "transcribed"
+
+
+def test_absent_capture_changes_nothing():
+    """No importer is required to set it, and guessing it for a record's
+    history would manufacture provenance - the thing this line of work
+    exists to prevent."""
+    console = {"origin": "gym-console", "path": None}
+    assert "capture" not in console
+    assert trust_ceiling(console) == "device-measured"
+
+
+def test_sessions_finally_carry_the_chain():
+    """`origin`/`path`/`origin_evidence` landed on weight, daily and
+    measurements in #51 and were never extended to sessions - which is
+    exactly where multi-instrument claims collide."""
+    from vitai.schema import KEYS
+    for key in ("origin", "path", "origin_evidence", "capture", "read_by"):
+        assert key in KEYS["sessions"], key
+
+
+def test_one_origin_two_acquisitions_are_two_claims():
+    """A photo-read and a BLE-read of one console on one evening share an
+    origin and a path, and differ only in capture. That is why capture is a
+    field rather than another hop."""
+    photo = {"origin": "gym-console", "path": None, "capture": "photo",
+             "read_by": "model"}
+    link = {"origin": "gym-console", "path": None, "capture": "ble"}
+    assert shares_origin(photo, link) is True
+    assert capture_of(photo) != capture_of(link)
+    assert trust_ceiling(photo) != trust_ceiling(link)
+
+
+def test_a_transcription_cannot_mask_a_worse_condition():
+    """Returning "transcribed" early let it hide a weaker signal: a photo
+    with no origin at all, or a chain containing a hop nobody recognises,
+    claimed more than the row deserved - this module's own weakest-link rule
+    used against itself."""
+    assert trust_ceiling({"capture": "photo", "read_by": "model"}) == (
+        "unknown-transit"), "no origin is worse than a transcription"
+    assert trust_ceiling({"origin": "gym-console", "path": "acme-widget",
+                          "capture": "photo", "read_by": "model"}) == (
+        "unknown-transit"), "an unrecognised hop is worse than a transcription"
+
+
+def test_a_reader_needs_something_to_have_read():
+    """The mirror of "a path needs an origin to have travelled from"."""
+    assert any("capture" in p for p in capture_problems({"read_by": "model"}))
+
+
+def test_a_row_at_the_previous_generation_still_validates():
+    """The G25 property, stated as what it protects rather than as generation
+    arithmetic.
+
+    #51 had already consumed a generation for `sessions` without adding the
+    columns, so an existing deployment's `append` was stamping rows with it.
+    Reusing that number would have made every one of those rows owe five keys
+    it cannot have - the time bomb, arriving through a restructuring rather
+    than through a new field.
+
+    Anchored to the generation the CAPTURE FIELDS landed on rather than to
+    `CURRENT_GENERATION`, which moves every time any later change adds a
+    field. Pinned to a moving target, this test breaks on the next unrelated
+    increment and says nothing about the property it is here to protect.
+    """
+    from vitai.schema import KEYS, key_generation, validate_record
+    landed = key_generation("sessions", "capture")
+    row = {k: None for k in KEYS["sessions"]
+           if key_generation("sessions", k) < landed}
+    row.update({"date": "2030-05-01", "type": "run", "_gen": landed - 1})
+    assert validate_record("sessions", row) == [], (
+        "a row stamped at the generation before this change must not "
+        "suddenly owe the fields this change adds")
+
+
+def test_every_generation_a_deployment_could_have_stamped_still_validates():
+    """The G25 property in general, over every dataset and every generation.
+
+    A row carries `_gen`, so a row stamped at generation N owes exactly the
+    keys introduced at or before N. Any change that reuses a generation
+    instead of advancing one breaks this for a row already on disk somewhere,
+    which is the whole failure mode - and unlike a test naming one increment's
+    fields, this cannot go out of date.
+    """
+    from vitai.schema import (CURRENT_GENERATION, KEYS, key_generation,
+                              validate_record)
+    seed = {"sessions": {"type": "run"}, "measurements": {"kind": "waist_cm", "value": 84.0},
+            "daily": {}, "weight": {}}
+    for ds, fields in seed.items():
+        for gen in range(1, CURRENT_GENERATION[ds] + 1):
+            row = {k: None for k in KEYS[ds] if key_generation(ds, k) <= gen}
+            row.update({"date": "2030-05-01", "_gen": gen, **fields})
+            assert validate_record(ds, row) == [], (ds, gen,
+                                                    validate_record(ds, row))
+
+
+def test_the_capture_fields_share_one_generation_of_their_own():
+    from vitai.schema import key_generation
+    landed = key_generation("sessions", "capture")
+    for k in ("read_by", "origin", "path", "origin_evidence"):
+        assert key_generation("sessions", k) == landed, k
+    assert key_generation("sessions", "track") < landed

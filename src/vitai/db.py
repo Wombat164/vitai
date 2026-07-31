@@ -67,18 +67,34 @@ from .schema import KEYS
 #    `resolution` row carries `independent`, which is false when the two
 #    values are one measurement seen at two points on one pipe - that spread
 #    measures pipeline fidelity and must never be read as agreement.
-# 11: the artifact store (#80) - an `artifacts` manifest table (one row per
-#    kept file: hash, media type, size, why it was kept) and an `artifact`
-#    reference on weight, daily, sessions and measurements, so the evidence a
-#    value was read FROM survives alongside the value. Two things a consumer
-#    must not get wrong. A reference is a content address (`sha256:...`), not
-#    a path, so it cannot drift from the row citing it - and resolving one to
-#    bytes is a LOCAL lookup: the manifest travels in the read model, the
-#    artifacts do not, and nothing in this contract authorises transmitting
-#    one. And REMOVED IS NOT MISSING: an artifact the athlete deleted leaves a
-#    tombstone with a reason, and a consumer that renders that as broken
-#    evidence has turned a retention decision into a data-loss alarm.
-CONTRACT_VERSION = "11"
+# 11: the acquisition axis (#77/#78) - `capture` (how a value was acquired)
+#     and `read_by` (who did the reading, where one happened) on the
+#     observation datasets, plus `origin`/`path`/`origin_evidence` finally
+#     reaching `sessions`. `provenance.trust` gains a `transcribed` level: a
+#     photograph of a console read by a model is an inference over an
+#     artifact, not a reading of an instrument, and MUST NOT be rendered as
+#     device-measured.
+#     ALSO 11, shipped in the same build: resolution audit (#73). It was
+#     briefly numbered 12 here, but no database ever emitted a 12 - the two
+#     changes merged within an hour of each other and both went out under 11,
+#     so a consumer gating on 11 gets both. Renumbered to say what shipped
+#     rather than what was intended. `resolution` gains `discarded` (every
+#     claim that lost, not only the runner-up) and `unattributed_loser`, and a
+#     `unattributed_claim_lost` tripwire. A consumer showing a canonical value
+#     can now say what it beat; before this, a resolved value had no way to
+#     say it had beaten anything at all.
+# 12: the artifact store (#80) - an `artifacts` manifest table (one row per
+#     kept file: hash, media type, size, why it was kept) and an `artifact`
+#     reference on weight, daily, sessions and measurements, so the evidence a
+#     value was read FROM survives alongside the value. Two things a consumer
+#     must not get wrong. A reference is a content address (`sha256:...`), not
+#     a path, so it cannot drift from the row citing it - and resolving one to
+#     bytes is a LOCAL lookup: the manifest travels in the read model, the
+#     artifacts do not, and nothing in this contract authorises transmitting
+#     one. And REMOVED IS NOT MISSING: an artifact the athlete deleted leaves a
+#     tombstone with a reason, and a consumer that renders that as broken
+#     evidence has turned a retention decision into a data-loss alarm.
+CONTRACT_VERSION = "12"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
@@ -108,6 +124,8 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               "result",
               # #35/#51: the provenance chain.
               "origin", "path", "origin_evidence", "trust", "chain", "compares",
+              "capture", "read_by",
+              "discarded",
               "scope",
               # #43. `activity_id` MUST be TEXT: a REAL-affinity column
               # converts "9914203377" to a float, which destroys leading
@@ -147,7 +165,8 @@ CLAIM_KEYS = ["claim_id", "dataset", "date", "source", "kind", "merged_into",
               "retracted"]
 RESOLUTION_KEYS = ["date", "dataset", "field", "chosen_source", "chosen_value",
                    "over_source", "over_value", "witnesses", "reason",
-                   "disagreed", "independent", "compares"]
+                   "disagreed", "independent", "compares", "discarded",
+                   "unattributed_loser"]
 JUSTIFICATION_KEYS = ["date", "dataset", "field", "claim_id", "source", "tier",
                       "quantity_class", "witnesses", "origin", "trust"]
 CONSERVATION_KEYS = ["date", "kind", "detail", "severity"]

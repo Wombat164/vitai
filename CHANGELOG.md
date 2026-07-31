@@ -44,6 +44,34 @@ versioning follows [SemVer](https://semver.org/).
   syncs or attaches - storing an artifact is not consent to transmit it - and
   no artifact, manifest row or hash of a real one appears in this repository,
   including in the tests, where the bytes are synthetic.
+- **A capture axis: how a value was acquired** (#77, #78). Three questions
+  were answered by one string and two of them had no field at all: what
+  observed it (`origin`, shipped in #51), HOW it got here, and what evidence
+  survives (#80, still to come).
+
+  The athlete's framing is the issue: *"me telling narratively what the rower
+  said is different from me taking a picture of it, or having a Bluetooth
+  connection and seeing the data that way, or the app importing it through a
+  connector."* Those four share ONE origin - the same console showing the same
+  number - and have completely different error modes. So `capture` is a
+  property of the ACQUISITION EVENT rather than of the chain: a photo-read and
+  a BLE-read of one console on one evening are two claims with one origin and
+  two captures.
+
+  **The ordering is not a quality ranking.** `ble` has no reader in the loop
+  and no durable artifact; `photo` has a reader in the loop but the evidence
+  survives and can be re-read. Different virtues, and a query can ask for
+  either. Grounded in FHIR `Observation.method`, which is deliberately
+  separate from `Observation.device` and `Observation.performer`.
+
+  `trust_ceiling` gains a `transcribed` level, taken as the weakest of the
+  acquisition and the chain: a photograph of a console read by a model is an
+  inference over an artifact, not a reading of an instrument, and must not
+  present as device-measured.
+- **`sessions` finally carries the provenance chain.** `origin`, `path` and
+  `origin_evidence` landed on `weight`, `daily` and `measurements` in #51 and
+  were never extended - and sessions is exactly where multi-instrument claims
+  collide.
 - **`track`, `activity_id` and `activity_source` on `sessions`** (#43). The
   link from a session to the file that recorded it lived in a prose note and
   was recovered by regex - unqueryable, unvalidatable, and silently broken by
@@ -127,6 +155,30 @@ versioning follows [SemVer](https://semver.org/).
   will ever be. An attested goal is never scored and never rendered at 0%.
 
 ### Fixed
+- **An unattributed row lost every contest it entered, silently** (#73). A
+  row with no `source` ranks last in the precedence ladder - right for
+  genuinely unknown provenance, wrong for the commonest cause, which is a
+  writer that forgot to stamp it.
+
+  **The asymmetry is the point.** A vendor channel always stamps itself,
+  because a machine wrote it. A hand-entered figure, a chat-stated number, a
+  note typed on a phone are the rows a human forgets - and they are exactly
+  the rows the ladder is written to rank ABOVE vendor channels. So the
+  omission inverted the ladder precisely where it matters, twice in one live
+  session, both times worth over 1,000 kcal/day.
+
+  Three things now report it. `vitai validate` flags a source term present in
+  data but absent from the ladder, catching the cheaper instance at the door -
+  and it found five in this repo's own demo on its first run, including a
+  first-hand `hand` reading sorted below two relayed vendor channels.
+  Resolution records EVERY discarded claim rather than only the runner-up, so
+  a resolved value can say what it beat. And an `unattributed_claim_lost`
+  tripwire fires when a claim carrying no source was discarded with a
+  different value.
+
+  **Ranking is deliberately unchanged.** Whether unattributed should sort
+  last at all is a real question, and changing it silently would be its own
+  inversion; what was unacceptable was that it happened with no trace.
 - **`recorded_at` is now strictly monotonic, so bulk-appended rows can
   actually be ordered** (#44). Importing 227 readings through the helper #37
   added produced **one distinct stamp across all of them** on this machine -
