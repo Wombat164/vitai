@@ -293,7 +293,11 @@ def test_raw_distance_overestimates_a_jittering_track():
                    lon=LON0 + rng.gauss(0, 2.0 / 70_000), ele=None, t=None)
                for i in range(2000)]
     stats = analyse(jittery)
-    assert stats.distance_raw_m > stats.distance_m * 1.2
+    # A smaller margin than when this compared against the SIMPLIFIED track:
+    # `cleaned` keeps the real path and only drops sub-noise wobble, so the
+    # gap here is the phantom length alone rather than that plus RDP's
+    # corner-cutting. 6% on this fixture (#48).
+    assert stats.distance_raw_m > stats.distance_derived_m * 1.03
 
 
 def test_a_flat_track_reports_small_but_real_gain_never_exactly_zero():
@@ -309,3 +313,156 @@ def test_a_track_with_no_elevation_still_reports_none():
     flat = [Fix(lat=51.0 + i * 0.0001, lon=3.0, ele=None, t=None)
             for i in range(50)]
     assert analyse(flat).elevation_gain_m is None
+
+
+# ---- #48: the device measured it; we derive ------------------------------------
+
+def _tcx(points, with_distance=True):
+    """A minimal TCX. `points` is [(lat, lon, ele, cumulative_m)]."""
+    body = []
+    for i, (lat, lon, ele, dist) in enumerate(points):
+        d = f"<DistanceMeters>{dist}</DistanceMeters>" if with_distance else ""
+        body.append(
+            f'<Trackpoint><Time>2030-05-01T09:{i // 60:02d}:{i % 60:02d}Z</Time>'
+            f"<Position><LatitudeDegrees>{lat}</LatitudeDegrees>"
+            f"<LongitudeDegrees>{lon}</LongitudeDegrees></Position>"
+            f"<AltitudeMeters>{ele}</AltitudeMeters>{d}</Trackpoint>")
+    return ('<?xml version="1.0"?><TrainingCenterDatabase '
+            'xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2">'
+            "<Activities><Activity><Lap><Track>"
+            + "".join(body) + "</Track></Lap></Activity></Activities>"
+            "</TrainingCenterDatabase>")
+
+
+def _straight(n=200, step=0.00009):
+    return [(round(LAT0 + i * step, 6), LON0, 10.0, round(i * 10.0, 1))
+            for i in range(n)]
+
+
+def test_the_device_distance_is_the_observation(tmp_path):
+    """The watch's fused figure is a measurement; a haversine sum over
+    sampled fixes is a derivation. The engine was overriding the first with
+    the second and calling the result its own."""
+    from vitai.route import read_tcx
+    f = tmp_path / "a.tcx"
+    f.write_text(_tcx(_straight()), encoding="utf-8")
+    stats = analyse(read_tcx(f))
+    assert stats.distance_source == "device"
+    assert stats.device_distance_m == 1990.0
+    assert stats.distance_m == 1990.0
+
+
+def test_our_figure_survives_beside_the_devices(tmp_path):
+    """Kept as a cross-check, not discarded. Neither method is reliably
+    better per activity - they disagree, and the disagreement is information
+    about that track: sampling gaps, tree cover, tunnels, a stopped watch."""
+    from vitai.route import read_tcx
+    f = tmp_path / "a.tcx"
+    f.write_text(_tcx(_straight()), encoding="utf-8")
+    stats = analyse(read_tcx(f))
+    assert stats.distance_derived_m > 0
+    assert stats.distance_derived_m != stats.device_distance_m
+    assert stats.distance_disagreement_pct is not None
+
+
+def test_a_file_with_no_device_figure_says_the_number_is_derived(tmp_path):
+    """GPX generally carries none, and then ours is the only answer - which
+    the output must say rather than implying a measurement."""
+    from vitai.route import read_track
+    f = tmp_path / "a.tcx"
+    f.write_text(_tcx(_straight(), with_distance=False), encoding="utf-8")
+    stats = analyse(read_track(f))
+    assert stats.distance_source == "derived"
+    assert stats.device_distance_m is None
+    assert stats.distance_disagreement_pct is None
+
+
+def test_a_positionless_point_still_advances_the_device_counter(tmp_path):
+    """Indoor and tunnel points have no coordinates but do advance the
+    device's total. Dropping them would silently shorten it."""
+    from vitai.route import read_tcx
+    body = ('<?xml version="1.0"?><TrainingCenterDatabase '
+            'xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2">'
+            "<Activities><Activity><Lap><Track>"
+            '<Trackpoint><Position><LatitudeDegrees>51.0</LatitudeDegrees>'
+            "<LongitudeDegrees>3.0</LongitudeDegrees></Position>"
+            "<DistanceMeters>100</DistanceMeters></Trackpoint>"
+            "<Trackpoint><DistanceMeters>500</DistanceMeters></Trackpoint>"
+            "</Track></Lap></Activity></Activities></TrainingCenterDatabase>")
+    f = tmp_path / "a.tcx"
+    f.write_text(body, encoding="utf-8")
+    fixes = read_tcx(f)
+    assert len(fixes) == 2
+    stats = analyse(fixes)
+    assert stats.device_distance_m == 500.0
+    assert stats.points_raw == 1, "the positionless point is not geometry"
+
+
+def test_distance_is_integrated_over_the_cleaned_track():
+    """The #42 invariant, now applied to distance too: RDP cuts corners, so a
+    length over its output is systematically short (0.9-3.2%, always
+    negative). Pins it so the two cannot drift apart again."""
+    track = _undulating_track()
+    assert analyse(track).distance_derived_m == path_length_m(clean(track))
+
+
+def test_a_file_spanning_days_is_flagged_as_not_one_activity():
+    """One archived file spans EIGHT DAYS and 15.7 km, and was matched to a
+    9.195 km session. `analyse` will happily produce a shape and a bearing for
+    it. Whatever it is, it is not one run."""
+    from datetime import timedelta as _td
+    start = datetime(2030, 5, 1, 9, 0, tzinfo=UTC)
+    pts = [Fix(lat=LAT0 + i * 0.00002, lon=LON0, ele=None,
+               t=start + _td(hours=i * 8)) for i in range(24)]
+    stats = analyse(pts)
+    assert stats.suspect, "an eight-day file must not read as one session"
+    assert any("too slow to be one continuous activity" in r
+               for r in stats.suspect)
+    assert any("gap between consecutive fixes" in r for r in stats.suspect)
+
+
+def test_an_ordinary_outing_is_not_flagged():
+    """A loose guard, not a pace judgement: a genuinely slow walk with long
+    stops must not trip it."""
+    from datetime import timedelta as _td
+    start = datetime(2030, 5, 1, 9, 0, tzinfo=UTC)
+    pts = [Fix(lat=LAT0 + i * 0.00005, lon=LON0, ele=None,
+               t=start + _td(seconds=i * 30)) for i in range(240)]
+    assert analyse(pts).suspect == []
+
+
+def test_a_lap_resetting_distance_counter_is_accumulated(tmp_path):
+    """Some devices and converters restart `DistanceMeters` each lap. Taking
+    the largest reading there returns only the longest lap and silently
+    under-reports the whole activity."""
+    from vitai.route import device_distance_m, read_tcx
+    laps = [(LAT0, LON0, 10.0, d) for d in (0, 400, 800)] + \
+           [(LAT0, LON0, 10.0, d) for d in (0, 300, 600)]
+    f = tmp_path / "a.tcx"
+    f.write_text(_tcx(laps), encoding="utf-8")
+    assert device_distance_m(read_tcx(f)) == 1400.0
+
+
+def test_a_cumulative_counter_is_unaffected_by_the_reset_rule():
+    """A file with no decreases must read exactly as it always did."""
+    from vitai.route import device_distance_m
+    rising = [Fix(lat=LAT0, lon=LON0, dist=d) for d in (0, 500, 900, 900)]
+    assert device_distance_m(rising) == 900.0
+
+
+def test_a_dead_device_counter_is_not_treated_as_a_measurement():
+    """Zero beside a real recorded track is a broken counter, not a walk of
+    no distance. Reporting it would show 0.00 km for a real outing."""
+    pts = [Fix(lat=LAT0 + i * 0.0001, lon=LON0, dist=0.0) for i in range(50)]
+    stats = analyse(pts)
+    assert stats.distance_source == "derived"
+    assert stats.distance_m > 0
+    assert any("counter looks dead" in r for r in stats.suspect)
+
+
+def test_a_genuinely_stationary_track_still_reads_as_the_device_said():
+    """The one case where zero is the truth: nothing moved, and both agree."""
+    pts = [Fix(lat=LAT0, lon=LON0, dist=0.0) for _ in range(10)]
+    stats = analyse(pts)
+    assert stats.distance_source == "device"
+    assert stats.suspect == []

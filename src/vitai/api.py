@@ -123,15 +123,15 @@ class Vitai:
         return retractions(self.datasets())
 
     def route(self, gpx_path, barometric: bool = False):
-        """Deterministic tier-1 geometry for one GPS track (G40).
+        """Deterministic tier-1 geometry for one GPS or TCX track (G40).
 
         Same track in, same numbers out - and each carries the parameter that
         produced it, in `.params`. Never compute route geometry outside this
         call: an improvised script is not reproducible and its numbers are not
         evidence (G85 extended to algorithms).
         """
-        from .route import analyse, read_gpx
-        return analyse(read_gpx(gpx_path), barometric=barometric)
+        from .route import analyse, read_track
+        return analyse(read_track(gpx_path), barometric=barometric)
 
     def sessions_with_tracks(self) -> list[dict]:
         """Sessions that name a stored track, soonest first (#43)."""
@@ -170,8 +170,8 @@ class Vitai:
     def same_route(self, gpx_a, gpx_b):
         """(verdict, similarity) for two tracks - ordering-aware LCSS, so a
         route and its reverse are not confused (the defect of grid overlap)."""
-        from .route import read_gpx, same_route as _same
-        return _same(read_gpx(gpx_a), read_gpx(gpx_b))
+        from .route import read_track, same_route as _same
+        return _same(read_track(gpx_a), read_track(gpx_b))
 
     def journal(self, kind: str | None = None, status: str | None = None,
                 about: str | None = None) -> list[dict]:

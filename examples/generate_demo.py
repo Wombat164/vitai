@@ -216,7 +216,7 @@ def _build(target: Path) -> None:
         "setting": "outdoor", "route": "canal-loop", "place": "home",
         "with": "partner", "context": "family", "planned": None,
         "weather": "rain", "_gen": 4, "recorded_at": None,
-        "track": "tracks/canal-loop-2030-06-16.gpx",
+        "track": "tracks/canal-loop-2030-06-16.tcx",
         "activity_id": "9914203377", "activity_source": "watch"})
     # A stored track, linked from the session as DATA rather than recovered
     # by regex from a prose note (#43). Repo-relative, so the demo rebuilds
@@ -225,6 +225,13 @@ def _build(target: Path) -> None:
     tracks.mkdir(exist_ok=True)
     (tracks / "canal-loop-2030-06-16.gpx").write_text(
         _demo_gpx(context_day), encoding="utf-8", newline="\n")
+    # The same walk as the watch recorded it, in TCX - which carries the
+    # device's OWN distance (#48). That figure is an observation; the
+    # haversine sum the engine derives from the coordinates is a derivation,
+    # and the two disagreeing is information about the track rather than an
+    # error to smooth away.
+    (tracks / "canal-loop-2030-06-16.tcx").write_text(
+        _demo_tcx(context_day), encoding="utf-8", newline="\n")
 
     # The SAME walk, as a second connector recorded it - with a NAIVE
     # start_time (#38). This is the shape a legacy connector writes, and until
@@ -338,6 +345,35 @@ def _demo_gpx(day: str) -> str:
             " <trk><name>canal-loop</name><trkseg>\n"
             f"{body}\n"
             " </trkseg></trk>\n</gpx>\n")
+
+
+def _demo_tcx(day: str) -> str:
+    """The same track as `_demo_gpx`, with the device's cumulative distance.
+
+    The device's total is deliberately a little under the sum of the
+    coordinates, which is what a watch that fuses GPS with an accelerometer
+    actually reports on a curving path.
+    """
+    import math
+    pts, n = [], 240
+    for i in range(n):
+        leg = i if i < n // 2 else n - 1 - i
+        travelled = round(i * 11.2, 1)
+        pts.append(
+            f'<Trackpoint><Time>{day}T14:{5 + i // 6:02d}:{(i * 10) % 60:02d}Z</Time>'
+            f"<Position><LatitudeDegrees>{51.2100 + leg * 0.00010:.5f}"
+            "</LatitudeDegrees><LongitudeDegrees>"
+            f"{3.2200 + 0.0016 * math.sin(leg * math.pi / (n // 2)):.5f}"
+            "</LongitudeDegrees></Position>"
+            f"<AltitudeMeters>{4.0 + leg * 0.55:.1f}</AltitudeMeters>"
+            f"<DistanceMeters>{travelled}</DistanceMeters></Trackpoint>")
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            "<TrainingCenterDatabase "
+            'xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2">\n'
+            " <Activities><Activity Sport=\"Walking\"><Lap><Track>\n"
+            + "\n".join(f"  {p}" for p in pts)
+            + "\n </Track></Lap></Activity></Activities>\n"
+            "</TrainingCenterDatabase>\n")
 
 
 def _goal(date: str, slug: str, title: str, metric: str, target, policy: str,
