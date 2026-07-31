@@ -237,14 +237,30 @@ def test_report_tripwires_disabled_without_config():
     assert "Nothing firing." in out
 
 
+def _pain_day(date, score):
+    return {"date": date, "steps": None, "distance_km": None,
+            "active_min": None, "kcal_out": None, "kcal_in": None,
+            "protein_g": None, "sleep_h": None, "rhr": None, "hip_pain": score,
+            "alcohol": None, "note": None}
+
+
 def test_report_pain_gate_fires():
+    """Dated INSIDE the window. This fixture used to sit 27 days before
+    `TODAY` and fired anyway, because the tripwire took the last seven rows
+    that happened to carry pain rather than the last seven days (#68)."""
     cfg = Config(pain_gate=3)
-    daily = [{"date": "2030-05-05", "steps": None, "distance_km": None,
-              "active_min": None, "kcal_out": None, "kcal_in": None,
-              "protein_g": None, "sleep_h": None, "rhr": None, "hip_pain": 6,
-              "alcohol": None, "note": None}]
-    out = build_report(cfg, [], daily, [], today=TODAY)
+    out = build_report(cfg, [], [_pain_day("2030-05-30", 6)], [], today=TODAY)
     assert "gate fired" in out
+
+
+def test_report_pain_gate_does_not_fire_on_a_stale_reading():
+    """A pain score from four weeks ago is not a fact about this week. The
+    persistent case is what `medical` gates are for; this tripwire reports
+    RECENT pain, and reporting an old reading as current is the same defect
+    as a 170-day rate."""
+    cfg = Config(pain_gate=3)
+    out = build_report(cfg, [], [_pain_day("2030-05-05", 6)], [], today=TODAY)
+    assert "gate fired" not in out
 
 
 def test_report_deterministic():
@@ -498,3 +514,101 @@ def test_journal_reads_back_through_the_api(tmp_path):
     assert len(v.journal(about="knee")) == 1
     # a resolved worry is not an open one
     assert [r["text"] for r in v.open_worries()] == ["knee twinge"]
+
+
+# ---- #68: a span is not a week, and a slice is not a window --------------------
+
+def _kg(date, kg):
+    return {"date": date, "kg": kg, "source": "scale", "note": None}
+
+
+def test_a_rate_across_a_multi_month_hole_is_refused():
+    """Live: the rollup printed "gaining 0.28 kg/week" from two readings 170
+    days apart, to an athlete in a cut - who would reasonably conclude the cut
+    had failed. The right output is not a different number, it is a refusal
+    that says why."""
+    weights = [_kg("2026-02-07", 82.0), _kg("2026-07-27", 82.5)]
+    out = build_report(Config(), weights, [], [], today=date(2026, 7, 27))
+    assert "NOT READABLE" in out
+    assert "170 days apart" in out
+    for word in ("gaining", "losing"):
+        assert f"**Rate:** {word}" not in out
+
+
+def test_a_rate_over_a_real_week_is_unqualified():
+    weights = [_kg(f"2026-07-{d:02d}", 83.0 - 0.05 * d) for d in range(14, 28)]
+    out = build_report(Config(), weights, [], [], today=date(2026, 7, 27))
+    assert "**Rate:** losing" in out
+    assert "NOT READABLE" not in out
+    assert "thin sample" not in out
+
+
+def test_a_stretched_but_usable_span_declares_itself():
+    """G27's maturity signal, applied to the line the athlete actually reads
+    rather than only to `ramp`."""
+    weights = [_kg("2026-07-16", 83.0), _kg("2026-07-27", 82.5)]
+    out = build_report(Config(), weights, [], [], today=date(2026, 7, 27))
+    assert "over 11 days" in out and "thin sample" in out
+
+
+def test_step_average_is_a_calendar_window_not_a_row_slice():
+    """With three step rows in eighteen months, "the last 14 logged days"
+    spanned January 2025 to July 2026 and printed as a current average."""
+    daily = [{"date": d, "steps": s, "distance_km": None, "active_min": None,
+              "kcal_out": None, "kcal_in": None, "protein_g": None,
+              "sleep_h": None, "rhr": None, "hip_pain": None, "alcohol": None,
+              "note": None}
+             for d, s in [("2025-01-10", 20000), ("2025-06-02", 18000),
+                          ("2026-07-26", 4000)]]
+    out = build_report(Config(), [], daily, [], today=date(2026, 7, 27))
+    assert "4,000/day average" in out, "only the in-window row may count"
+    assert "3 days logged in total" in out, "the total is still the total"
+
+
+def test_an_empty_window_says_so_rather_than_averaging_old_rows():
+    daily = [{"date": "2025-01-10", "steps": 20000, "distance_km": None,
+              "active_min": None, "kcal_out": None, "kcal_in": None,
+              "protein_g": None, "sleep_h": None, "rhr": None,
+              "hip_pain": None, "alcohol": None, "note": None}]
+    out = build_report(Config(), [], daily, [], today=date(2026, 7, 27))
+    assert "nothing logged in the last 14 days" in out
+    assert "20,000" not in out
+
+
+def test_a_stale_rhr_does_not_raise_a_current_tripwire():
+    old = [{"date": f"2025-01-{d:02d}", "steps": None, "distance_km": None,
+            "active_min": None, "kcal_out": None, "kcal_in": None,
+            "protein_g": None, "sleep_h": None, "rhr": 70, "hip_pain": None,
+            "alcohol": None, "note": None} for d in range(1, 5)]
+    out = build_report(Config(rhr_baseline=50), [], old, [],
+                       today=date(2026, 7, 27))
+    assert "Resting HR" not in out
+
+
+def test_an_unresolved_pain_reading_does_not_go_silent():
+    """A calendar window is right for "is this current", and wrong as a way
+    to make an unresolved reading disappear. Someone who logs pain only when
+    it happens would have had an 8/10 vanish on day eight with no trace."""
+    out = build_report(Config(pain_gate=3), [], [_pain_day("2030-05-05", 8)],
+                       [], today=TODAY)
+    assert "gate fired" not in out, "27 days ago is not a current gate"
+    assert "last logged 27 days ago" in out
+    assert "never recorded as resolved" in out
+
+
+def test_a_row_dated_after_the_report_is_reported_not_dropped():
+    """A device with a skewed clock writing tomorrow's date would have taken
+    a reading out of every window it belongs to, silently."""
+    future = _pain_day("2030-06-05", 8)
+    out = build_report(Config(pain_gate=3), [], [future], [], today=TODAY)
+    assert "check the source's clock" in out
+
+
+def test_an_unparseable_date_is_reported_not_dropped():
+    out = build_report(Config(rhr_baseline=50), [],
+                       [{"date": "not-a-date", "steps": None,
+                         "distance_km": None, "active_min": None,
+                         "kcal_out": None, "kcal_in": None, "protein_g": None,
+                         "sleep_h": None, "rhr": 70, "hip_pain": None,
+                         "alcohol": None, "note": None}], [], today=TODAY)
+    assert "cannot read" in out
