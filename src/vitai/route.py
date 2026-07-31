@@ -108,11 +108,20 @@ EARTH_R_M = 6371008.8
 
 @dataclass(frozen=True)
 class Fix:
-    """One GPS fix. `ele` and `t` may be absent; nothing here requires them."""
+    """One GPS fix. `ele`, `t` and `dist` may be absent; nothing requires them.
+
+    `dist` is the DEVICE's own cumulative distance at this point, where the
+    file carries one (TCX `DistanceMeters`). It is an OBSERVATION - the
+    watch's fused GPS and accelerometer figure - as distinct from the
+    haversine sum this module DERIVES from the coordinates. Different
+    epistemic classes, and the engine was overriding the first with the
+    second and calling the result its own (#48).
+    """
     lat: float
     lon: float
     ele: float | None = None
     t: datetime | None = None
+    dist: float | None = None
 
 
 @dataclass
@@ -127,7 +136,16 @@ class Stop:
 class RouteStats:
     points_raw: int
     points_used: int
+    # `distance_m` is the best available figure: the DEVICE's where the file
+    # carries one, otherwise ours. `distance_source` says which, because a
+    # consumer that cannot tell an observation from a derivation will treat
+    # them as interchangeable, and across 78 real tracks they ranged from
+    # 8.5% short to 19.8% long of each other.
     distance_m: float
+    distance_source: str
+    distance_derived_m: float
+    device_distance_m: float | None
+    distance_disagreement_pct: float | None
     distance_raw_m: float
     duration_s: float | None
     moving_s: float | None
@@ -141,6 +159,10 @@ class RouteStats:
     shape: str
     retrace_similarity: float
     stops: list[Stop] = field(default_factory=list)
+    # Reasons this file may not be a single activity. Empty is the normal
+    # case; a non-empty list means the geometry below was computed anyway and
+    # should not be read as one session (#48).
+    suspect: list[str] = field(default_factory=list)
     params: dict = field(default_factory=dict)
 
 
@@ -442,15 +464,30 @@ def classify_shape(points: list[Fix]) -> tuple[str, float]:
 def analyse(points: list[Fix], barometric: bool = False) -> RouteStats:
     """Everything tier-1 about a track, deterministically."""
     raw = list(points)
+    device = device_distance_m(raw)
+    # Positionless fixes (indoors, a tunnel) carry the device's counter but
+    # no coordinates. They are read for the distance above and excluded from
+    # everything geometric, where a NaN would poison every calculation.
+    raw = [p for p in raw if p.lat == p.lat and p.lon == p.lon]
     cleaned = clean(raw)
     used = simplify(cleaned)
     if len(used) < 2:
         used = cleaned if len(cleaned) >= 2 else raw
 
-    # KNOWN WRONG, tracked in #48: this is short by 0.9-3.2% because RDP cuts
-    # corners. Left in place only so the fix lands with its own measurement
-    # and its own test rather than riding along with a test deletion.
-    dist = path_length_m(used)
+    # NOT `used`: RDP cuts corners by construction, so integrating length
+    # over its output is systematically short - measured at 0.9-3.2% across
+    # real tracks, always negative (#48). `cleaned` has the implausible jumps
+    # and the sub-noise wobble already removed, which is the filtering a
+    # length actually needs.
+    derived = path_length_m(cleaned)
+    # A device total of exactly zero beside a real derived distance is a dead
+    # counter, not a measurement of nothing. Treating it as the observation
+    # would report 0.00 km for a real walk, with the disagreement silenced -
+    # so it is not usable, and the file says why.
+    usable = device is not None and (device > 0 or derived == 0)
+    dist = device if usable else derived
+    gap = (round((derived - device) / device * 100.0, 2)
+           if usable and device else None)
     timed = [p for p in raw if p.t is not None]
     duration = (timed[-1].t - timed[0].t).total_seconds() if len(timed) >= 2 else None
     stops = find_stops(cleaned)
@@ -462,7 +499,12 @@ def analyse(points: list[Fix], barometric: bool = False) -> RouteStats:
 
     return RouteStats(
         points_raw=len(raw), points_used=len(used),
-        distance_m=dist, distance_raw_m=path_length_m(raw),
+        distance_m=dist,
+        distance_source="device" if usable else "derived",
+        distance_derived_m=derived,
+        device_distance_m=device,
+        distance_disagreement_pct=gap,
+        distance_raw_m=path_length_m(raw),
         duration_s=duration, moving_s=moving,
         # NOT `used`: RDP is a horizontal simplification and discards exactly
         # the samples that carry the vertical profile (#42). See `simplify`.
@@ -473,6 +515,11 @@ def analyse(points: list[Fix], barometric: bool = False) -> RouteStats:
         furthest_at=(furthest.lat, furthest.lon),
         bearing_deg=bearing_deg(home, furthest) if haversine_m(home, furthest) > 1 else None,
         shape=shape, retrace_similarity=retrace, stops=stops,
+        suspect=implausible(raw, dist, duration)
+        + ([] if device is None or usable else
+           [f"the device reports {device:.0f} m against {derived:.0f} m of "
+            "recorded track - its distance counter looks dead, so the derived "
+            "figure is used instead"]),
         params={
             "max_plausible_ms": MAX_PLAUSIBLE_MS, "min_step_m": MIN_STEP_M,
             "simplify_epsilon_m": SIMPLIFY_EPSILON_M,
@@ -488,8 +535,143 @@ def analyse(points: list[Fix], barometric: bool = False) -> RouteStats:
 
 # --- GPX ingestion (stdlib only) ---------------------------------------------
 
+_TCX_NS = {"t": "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"}
 _GPX_NS = {"g": "http://www.topografix.com/GPX/1/1",
            "g0": "http://www.topografix.com/GPX/1/0"}
+
+
+def read_tcx(path) -> list[Fix]:
+    """Track points from a TCX file, INCLUDING the device's own distance.
+
+    TCX is where the observation lives: `DistanceMeters` on each trackpoint is
+    the watch's fused GPS-and-accelerometer figure, and a vendor's ledger is
+    usually that number passed through unchanged. GPX carries no equivalent,
+    which is why a GPX-only engine had no choice but to derive - and then
+    presented the derivation as though it were the measurement (#48).
+
+    A trackpoint without a position is kept ONLY if it carries a distance:
+    indoor and tunnel points have no coordinates but still advance the
+    device's counter, and dropping them would silently shorten its total.
+    """
+    import xml.etree.ElementTree as ET
+    root = ET.parse(str(path)).getroot()
+    out: list[Fix] = []
+    for e in root.findall(".//t:Trackpoint", _TCX_NS):
+        pos = e.find("t:Position", _TCX_NS)
+        lat_el = pos.find("t:LatitudeDegrees", _TCX_NS) if pos is not None else None
+        lon_el = pos.find("t:LongitudeDegrees", _TCX_NS) if pos is not None else None
+        dist_el = e.find("t:DistanceMeters", _TCX_NS)
+        dist = _number(dist_el)
+        if lat_el is None or lon_el is None:
+            if dist is not None:
+                out.append(Fix(lat=float("nan"), lon=float("nan"), dist=dist))
+            continue
+        ele_el = e.find("t:AltitudeMeters", _TCX_NS)
+        t_el = e.find("t:Time", _TCX_NS)
+        t = None
+        if t_el is not None and t_el.text:
+            try:
+                t = datetime.fromisoformat(t_el.text.strip().replace("Z", "+00:00"))
+            except ValueError:
+                t = None
+            if t is not None and t.utcoffset() is None:
+                t = t.replace(tzinfo=UTC)
+        out.append(Fix(lat=float(lat_el.text), lon=float(lon_el.text),
+                       ele=_number(ele_el), t=t, dist=dist))
+    return out
+
+
+def _number(el) -> float | None:
+    if el is None or not (el.text or "").strip():
+        return None
+    try:
+        return float(el.text.strip())
+    except ValueError:
+        return None
+
+
+def read_track(path) -> list[Fix]:
+    """Read a track by extension - .tcx keeps the device's distance, .gpx has
+    none to keep."""
+    return (read_tcx(path) if str(path).lower().endswith(".tcx")
+            else read_gpx(path))
+
+
+def device_distance_m(points: list[Fix]) -> float | None:
+    """The device's own total distance, where the file carried one (#48).
+
+    Not simply `max()`. `DistanceMeters` is cumulative across the file in most
+    exports, but some devices and converters RESET it per lap - and taking the
+    largest reading there returns only the longest lap, silently
+    under-reporting the whole activity by however many laps preceded it.
+
+    So the counter is walked in order and a DECREASE is read as a reset: the
+    run so far is banked and accumulation continues. A cumulative file has no
+    decreases and is unaffected, which makes this safe for the common case
+    and correct for the other one.
+
+    Within a segment the largest reading is used rather than the last, since a
+    track can end on a point the device wrote before its counter caught up.
+
+    Returns None when no point carries a distance - GPX generally does not -
+    and the caller then reports its own figure as the derivation it is, rather
+    than presenting a derivation where an observation was expected.
+    """
+    seen = [p.dist for p in points if p.dist is not None]
+    if not seen:
+        return None
+    banked, high = 0.0, seen[0]
+    for value in seen[1:]:
+        if value < high:            # counter reset: bank the lap and restart
+            banked += high
+            high = value
+        else:
+            high = max(high, value)
+    return banked + high
+
+
+# A track spanning far longer than its distance can account for is not one
+# activity. Walking pace is roughly 1.4 m/s, so a file averaging far below
+# that over many hours is a container - several outings, or a device left
+# running - rather than a session. Deliberately loose: this is a "that cannot
+# be one activity" guard, not a pace judgement, and a genuinely slow outing
+# with long stops must not trip it.
+IMPLAUSIBLE_MEAN_SPEED_MS = 0.15
+IMPLAUSIBLE_SPAN_S = 6 * 3600
+MAX_PLAUSIBLE_GAP_S = 3 * 3600
+
+
+def implausible(points: list[Fix], distance_m: float,
+                duration_s: float | None) -> list[str]:
+    """Reasons this file is probably not a single activity (#48).
+
+    One archived file spans EIGHT DAYS of wall clock and 15.7 km, and was
+    matched to a 9.195 km session. `analyse` will happily produce a shape, a
+    bearing and stops for it. Whatever it is, it is not one run, and the
+    honest output says so rather than describing it as one.
+
+    Reported, never fixed: the engine cannot know which parts were which
+    activity, and splitting on a guess would invent sessions.
+    """
+    out: list[str] = []
+    if duration_s and duration_s > IMPLAUSIBLE_SPAN_S:
+        mean = distance_m / duration_s if duration_s else 0.0
+        if mean < IMPLAUSIBLE_MEAN_SPEED_MS:
+            out.append(
+                f"spans {duration_s / 3600:.1f} h for {distance_m / 1000:.2f} km "
+                f"({mean:.2f} m/s average) - too slow to be one continuous "
+                "activity; this file probably holds several, or a device left "
+                "running")
+    timed = [p.t for p in points if p.t is not None]
+    if len(timed) >= 2:
+        biggest = max((b - a).total_seconds()
+                      for a, b in zip(timed, timed[1:]))
+        if biggest > MAX_PLAUSIBLE_GAP_S:
+            out.append(
+                f"contains a {biggest / 3600:.1f} h gap between consecutive "
+                "fixes - the geometry either side may belong to different "
+                "activities")
+    return out
 
 
 def read_gpx(path) -> list[Fix]:

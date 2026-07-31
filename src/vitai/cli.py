@@ -395,9 +395,24 @@ def cmd_route(args: argparse.Namespace) -> None:
         import dataclasses
         print(json.dumps(dataclasses.asdict(s), default=str))
         return
+    if s.suspect:
+        # #48: a file spanning eight days is not one activity. Say so before
+        # the numbers, not after - the geometry below is still computed, and
+        # a reader who has already absorbed it will not un-absorb it.
+        print("THIS MAY NOT BE ONE ACTIVITY:")
+        for reason in s.suspect:
+            print(f"  - {reason}")
+        print()
     km = s.distance_m / 1000
-    print(f"{km:.2f} km  ({s.points_used} of {s.points_raw} fixes used after "
-          f"cleaning; raw sum would read {s.distance_raw_m / 1000:.2f} km)")
+    if s.distance_source == "device":
+        gap = (f"; ours derives {s.distance_derived_m / 1000:.2f} km, "
+               f"{s.distance_disagreement_pct:+.1f}%"
+               if s.distance_disagreement_pct is not None else "")
+        print(f"{km:.2f} km  (the device's own figure{gap})")
+    else:
+        print(f"{km:.2f} km  (derived here - no device figure in this file; "
+              f"{s.points_used} of {s.points_raw} fixes used after cleaning, "
+              f"raw sum would read {s.distance_raw_m / 1000:.2f} km)")
     if s.duration_s:
         mins = s.duration_s / 60
         print(f"{mins:.0f} min" + (f"  ({mins / km:.1f} min/km)" if km else ""))
