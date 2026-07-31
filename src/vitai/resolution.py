@@ -224,6 +224,14 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
         })
         if len(witnesses) > 1:
             loser_id, loser = witnesses[1]
+            # EVERY discarded claim, not only the runner-up (#73). A resolved
+            # value had no way to say what it beat, so an unattributed row
+            # losing a contest it should have won left no trace anywhere -
+            # the only way either live instance was found was reading the raw
+            # JSONL by hand.
+            discarded = "; ".join(
+                f"{rec.get('source') or UNKNOWN_SOURCE}={rec[field]}"
+                for _, rec in witnesses[1:])
             explanations.append({
                 "date": winner.get("date"),
                 "dataset": dataset,
@@ -242,6 +250,25 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
                 "independent": not shares_origin(winner, loser),
                 "compares": ("pipeline fidelity" if shares_origin(winner, loser)
                              else "independent observations"),
+                "discarded": discarded,
+                # The signature of #73: a row with no source lost to a ranked
+                # one. An unattributed row is USUALLY a writer omission rather
+                # than genuinely doubtful provenance, and the sources that go
+                # unattributed are the first-hand ones - a hand-entered
+                # figure, a chat-stated number, a note typed on a phone -
+                # which are exactly the rows the ladder ranks ABOVE vendor
+                # channels. So the omission inverts the ladder precisely where
+                # it matters most.
+                # Tested against the WINNER, over every discard, and on
+                # exact inequality rather than the 10% disagreement
+                # tolerance. Both matter: `disagreed` compares the winner
+                # with the runner-up only, so a third unattributed claim
+                # differing wildly went unnoticed; and 10% of a day's burn is
+                # ~300 kcal, which is enough to flip a surplus into a deficit
+                # while counting as agreement.
+                "unattributed_loser": any(
+                    not rec.get("source") and rec[field] != winner[field]
+                    for _, rec in witnesses[1:]),
             })
     return canonical, justifications, explanations
 
@@ -623,6 +650,7 @@ def resolve(datasets: dict[str, list[dict]],
     for name in KEYS:
         canonical.setdefault(name, list(datasets.get(name) or []))
 
+    tripwires += _unattributed_losses(explanations)
     tripwires += _conservation(canonical["daily"], canonical["sessions"])
     tripwires += [t for t in _contradictions(explanations)]
     tripwires.sort(key=lambda t: (t["date"] or "", t["kind"], t["detail"]))
@@ -765,6 +793,36 @@ def _conservation(daily: list[dict], sessions: list[dict]) -> list[dict]:
                 "severity": "investigate",
             })
     return out
+
+
+def _unattributed_losses(explanations: list[dict]) -> list[dict]:
+    """A row with no source lost a contest, which is almost always an
+    omission rather than a judgement (#73).
+
+    Ranking an unattributed row last is a strong assertion - stronger than the
+    evidence supports, because the commonest cause of a missing `source` is a
+    writer that forgot rather than provenance nobody can establish. And the
+    writers that forget are the first-hand ones, so the omission demotes the
+    claims the ladder exists to promote.
+
+    Reported, not corrected. Whether unattributed should rank last at all is a
+    real question and changing it silently would be its own inversion; what
+    was unacceptable was that it happened with no trace anywhere.
+    """
+    for e in explanations:
+        if e.get("unattributed_loser"):
+            yield {
+                "date": e["date"],
+                "kind": "unattributed_claim_lost",
+                "detail": (
+                    f"{e['dataset']}.{e['field']}: kept "
+                    f"{e['chosen_source']}={e['chosen_value']} and discarded "
+                    f"{e['discarded']} - a discarded claim carries no source, "
+                    "so it ranked last by default. If that row has a source, "
+                    "stamp it: an unattributed row loses every contest it "
+                    "enters"),
+                "severity": "review",
+            }
 
 
 def _contradictions(explanations: list[dict]) -> list[dict]:

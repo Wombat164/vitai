@@ -612,3 +612,35 @@ def test_an_unparseable_date_is_reported_not_dropped():
                          "sleep_h": None, "rhr": 70, "hip_pain": None,
                          "alcohol": None, "note": None}], [], today=TODAY)
     assert "cannot read" in out
+
+
+def test_an_unranked_source_term_is_a_validation_finding(tmp_path):
+    """The second live instance: `context.jsonl` wrote `source:
+    "stated-in-chat"`, the daily ladder had never heard of it, so it fell to
+    last place and a 20,336-step day resolved its burn to a vendor's figure
+    over the athlete's own. That day flipped from a reported surplus to a
+    deficit.
+
+    An unranked term is almost always a typo or a term missing from config,
+    not a deliberate demotion to worst-in-the-record.
+    """
+    from vitai.schema import unranked_source_problems
+    rows = [(1, {"date": "2026-07-28", "kg": 80.0, "source": "stated-in-chat"}),
+            (2, {"date": "2026-07-29", "kg": 79.9, "source": "scale"})]
+    found = unranked_source_problems("weight", rows, {"scale", "watch"})
+    assert len(found) == 1
+    assert "stated-in-chat" in found[0] and "sorts below" in found[0]
+
+
+def test_a_ranked_source_is_not_a_finding():
+    from vitai.schema import unranked_source_problems
+    rows = [(1, {"date": "2026-07-28", "kg": 80.0, "source": "scale"})]
+    assert unranked_source_problems("weight", rows, {"scale"}) == []
+
+
+def test_no_ladder_configured_means_no_finding():
+    """An unconfigured record is not misconfigured - it has simply not made
+    the choice yet, and shouting at it on every line would be noise."""
+    from vitai.schema import unranked_source_problems
+    rows = [(1, {"date": "2026-07-28", "kg": 80.0, "source": "anything"})]
+    assert unranked_source_problems("weight", rows, set()) == []

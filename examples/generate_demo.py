@@ -55,13 +55,23 @@ TOML = (
     "# Which source wins which quantity when two of them describe one day.\n"
     "# The watch measures burn; the calorie app only models it. The app owns\n"
     "# intake, which the watch never sees at all.\n"
+    "#\n"
+    "# EVERY source that appears in the data is listed (#73). A term the\n"
+    "# ladder has never heard of sorts LAST - below every configured source -\n"
+    "# and nothing used to say so. `hand` is here for the sharpest reason:\n"
+    "# it is the athlete writing a number down, and an unranked first-hand\n"
+    "# reading losing to a relayed vendor figure is the ladder inverted at\n"
+    "# exactly the point it exists for.\n"
     "[resolution]\n"
-    'source_order = ["scale", "gym-console", "watch", "app"]\n\n'
+    'source_order = ["dexa", "tape", "scale", "hand", "watch", '
+    '"gym-console", "vendor-api", "vendor-export", "app"]\n\n'
     "[resolution.precedence]\n"
     'kcal_out = ["watch", "app"]\n'
     'kcal_in = ["app"]\n'
     'protein_g = ["app"]\n'
     'steps = ["watch", "app"]\n'
+    '# A tape measure and a DEXA scan are both anchors; the scan wins.\n'
+    'value = ["dexa", "tape"]\n'
 )
 
 
@@ -688,7 +698,11 @@ def _read_all(root: Path) -> dict[str, str]:
     return {p.name: p.read_text(encoding="utf-8")
             for p in sorted(root.rglob("*"))
             if p.is_file() and "derived" not in p.parts
-            and p.suffix in (".jsonl", ".toml")}
+            # Tracks included (#64): the personal gate permits coordinates in
+            # `examples/demo/tracks/` on the grounds that they are the
+            # generator's own output, and that grounds is only true if they
+            # are actually compared. They were not.
+            and p.suffix in (".jsonl", ".toml", ".gpx", ".tcx")}
 
 
 def main() -> int:
@@ -697,7 +711,12 @@ def main() -> int:
         _build(tmp)
         want, got = _read_all(tmp), _read_all(DEMO)
         # compare only the generated inputs (vitai.toml + data/), not derived/
-        keys = {k for k in want} | {k for k in got if k.endswith((".jsonl", ".toml"))}
+        # Tracks are included (#64): the personal gate permits coordinates in
+        # `examples/demo/tracks/` on the grounds that they are the generator's
+        # output, and that grounds is only true if they are actually compared.
+        keys = {k for k in want} | {
+            k for k in got
+            if k.endswith((".jsonl", ".toml", ".gpx", ".tcx", ".fit"))}
         drift = [k for k in sorted(keys) if want.get(k) != got.get(k)]
         if drift:
             print(f"demo data DRIFTED from generator: {drift}", file=sys.stderr)

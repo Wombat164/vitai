@@ -117,6 +117,30 @@ versioning follows [SemVer](https://semver.org/).
   will ever be. An attested goal is never scored and never rendered at 0%.
 
 ### Fixed
+- **An unattributed row lost every contest it entered, silently** (#73). A
+  row with no `source` ranks last in the precedence ladder - right for
+  genuinely unknown provenance, wrong for the commonest cause, which is a
+  writer that forgot to stamp it.
+
+  **The asymmetry is the point.** A vendor channel always stamps itself,
+  because a machine wrote it. A hand-entered figure, a chat-stated number, a
+  note typed on a phone are the rows a human forgets - and they are exactly
+  the rows the ladder is written to rank ABOVE vendor channels. So the
+  omission inverted the ladder precisely where it matters, twice in one live
+  session, both times worth over 1,000 kcal/day.
+
+  Three things now report it. `vitai validate` flags a source term present in
+  data but absent from the ladder, catching the cheaper instance at the door -
+  and it found five in this repo's own demo on its first run, including a
+  first-hand `hand` reading sorted below two relayed vendor channels.
+  Resolution records EVERY discarded claim rather than only the runner-up, so
+  a resolved value can say what it beat. And an `unattributed_claim_lost`
+  tripwire fires when a claim carrying no source was discarded with a
+  different value.
+
+  **Ranking is deliberately unchanged.** Whether unattributed should sort
+  last at all is a real question, and changing it silently would be its own
+  inversion; what was unacceptable was that it happened with no trace.
 - **`recorded_at` is now strictly monotonic, so bulk-appended rows can
   actually be ordered** (#44). Importing 227 readings through the helper #37
   added produced **one distinct stamp across all of them** on this machine -

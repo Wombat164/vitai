@@ -74,6 +74,11 @@ from .schema import KEYS
 #     photograph of a console read by a model is an inference over an
 #     artifact, not a reading of an instrument, and MUST NOT be rendered as
 #     device-measured.
+# 12: resolution audit (#73) - `resolution` gains `discarded` (every claim
+#     that lost, not only the runner-up) and `unattributed_loser`, and a new
+#     `unattributed_claim_lost` tripwire. A consumer showing a canonical value
+#     can now say what it beat; before this, a resolved value had no way to
+#     say it had beaten anything at all.
 CONTRACT_VERSION = "11"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
@@ -105,6 +110,7 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               # #35/#51: the provenance chain.
               "origin", "path", "origin_evidence", "trust", "chain", "compares",
               "capture", "read_by",
+              "discarded",
               "scope",
               # #43. `activity_id` MUST be TEXT: a REAL-affinity column
               # converts "9914203377" to a float, which destroys leading
@@ -139,7 +145,8 @@ CLAIM_KEYS = ["claim_id", "dataset", "date", "source", "kind", "merged_into",
               "retracted"]
 RESOLUTION_KEYS = ["date", "dataset", "field", "chosen_source", "chosen_value",
                    "over_source", "over_value", "witnesses", "reason",
-                   "disagreed", "independent", "compares"]
+                   "disagreed", "independent", "compares", "discarded",
+                   "unattributed_loser"]
 JUSTIFICATION_KEYS = ["date", "dataset", "field", "claim_id", "source", "tier",
                       "quantity_class", "witnesses", "origin", "trust"]
 CONSERVATION_KEYS = ["date", "kind", "detail", "severity"]
