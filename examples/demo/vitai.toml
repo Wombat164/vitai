@@ -12,11 +12,20 @@ pain_gate = 3
 # Which source wins which quantity when two of them describe one day.
 # The watch measures burn; the calorie app only models it. The app owns
 # intake, which the watch never sees at all.
+#
+# EVERY source that appears in the data is listed (#73). A term the
+# ladder has never heard of sorts LAST - below every configured source -
+# and nothing used to say so. `hand` is here for the sharpest reason:
+# it is the athlete writing a number down, and an unranked first-hand
+# reading losing to a relayed vendor figure is the ladder inverted at
+# exactly the point it exists for.
 [resolution]
-source_order = ["scale", "watch", "app"]
+source_order = ["dexa", "tape", "scale", "hand", "watch", "vendor-api", "vendor-export", "app"]
 
 [resolution.precedence]
 kcal_out = ["watch", "app"]
 kcal_in = ["app"]
 protein_g = ["app"]
 steps = ["watch", "app"]
+# A tape measure and a DEXA scan are both anchors; the scan wins.
+value = ["dexa", "tape"]
