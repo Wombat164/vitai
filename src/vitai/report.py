@@ -17,6 +17,59 @@ from .config import Config, phase_rate_for
 from .vocab import session_classes
 
 
+# Beyond this, two readings are not a week apart and no weekly rate exists
+# between them - the engine refuses rather than dividing a five-month drift by
+# seven (#68). Twice the nominal window: a fortnight's gap still reads as a
+# rate, a month's does not.
+MAX_RATE_SPAN_DAYS = 14
+
+# Above this the rate is computed but SAYS it is thin, which is G27's maturity
+# signal applied to the line the athlete actually reads.
+COLD_SPAN_DAYS = 9
+
+
+def within_days(rows: list[dict], today: date, days: int,
+                field: str) -> list[dict]:
+    """Rows carrying `field`, within `days` CALENDAR days of `today` (G30).
+
+    An entry-count slice is not a window. `steps[-7:]` means "the last seven
+    rows that happen to have steps", and with three step rows in eighteen
+    months that spanned January 2025 to July 2026 and printed as a current
+    average (#68). G30 is tagged SHIPPED for calendar-day windows; the fix
+    reached the weight rolling average and not the tripwire section.
+    """
+    first = today - timedelta(days=days - 1)
+    out = []
+    for r in rows:
+        if r.get(field) is None:
+            continue
+        when = _as_day(r.get("date"))
+        if when is not None and first <= when <= today:
+            out.append(r)
+    return out
+
+
+def unreadable_dates(rows: list[dict], today: date, field: str) -> int:
+    """Rows carrying `field` that no window can see: dated after `today`, or
+    unparseable.
+
+    A calendar window silently drops both, and silence is the wrong direction
+    for a tripwire. A device with a skewed clock writing tomorrow's date would
+    have taken a pain reading out of every window it belongs to, and nobody
+    would have known. As-of correctness is kept - a report never reads rows
+    dated after its own date - but the fact that rows were skipped is stated.
+    """
+    return sum(1 for r in rows if r.get(field) is not None
+               and ((when := _as_day(r.get("date"))) is None or when > today))
+
+
+def _as_day(value: object) -> date | None:
+    try:
+        return datetime.fromisoformat(str(value)).date()
+    except (TypeError, ValueError):
+        return None
+
+
 def _rolling(points: list[tuple[str, float]], window: int = 7) -> list[tuple[str, float | None]]:
     """Trailing mean over a CALENDAR-DAY window (G30/G27): each point averages
     values dated within the last `window` days, NOT the last `window` list
@@ -84,7 +137,19 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                            if datetime.fromisoformat(d).date() <= week_ago and v is not None),
                           default=None)
             days = (last_day - anchor0).days if anchor0 else 0
-            if days:
+            if days > MAX_RATE_SPAN_DAYS:
+                # A span this long is not a weekly rate, it is two readings
+                # with a hole between them (#68). The live case printed
+                # "gaining 0.28 kg/week" from readings 170 days apart, to an
+                # athlete in a cut - who would reasonably conclude the cut
+                # had failed. The right output is not a different number, it
+                # is a refusal that says why.
+                L += ["", f"**Rate:** NOT READABLE - the two readings behind "
+                          f"this are {days} days apart, so there is no week "
+                          "to compute a weekly rate over.",
+                      "", "> Weigh in a few times over a fortnight and this "
+                          "line comes back."]
+            elif days:
                 rate = (v0 - v1) / days * 7
                 target = phase_rate_for(cfg, v1)
                 # G69: never render a bare signed quantity whose plain reading
@@ -112,17 +177,24 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                 # exactly that.
                 unreadable = (timing["known"] and not timing["unknown"]
                               and timing["drift_kg"] >= abs(rate))
+                # G27: a thin sample owes doubt. `ramp` already caveats its
+                # base size; the rate line - the number actually read every
+                # week - did not.
+                span = (f" over {days} days" if days != 7 else "")
+                if days > COLD_SPAN_DAYS:
+                    span += ", a thin sample"
                 if target is not None:
                     verdict = ("NOT READABLE - weigh-in times vary too much"
                                if unreadable
                                else "ON TARGET" if abs(rate - target) <= 0.25
                                else "FAST - raise intake" if rate > target
                                else "SLOW - check logging")
-                    L += ["", f"**Rate:** {phrase} (target: losing "
+                    L += ["", f"**Rate:** {phrase}{span} (target: losing "
                               f"{target:.2f} kg/week) - **{verdict}**",
                           "", "> Judge on this line, never a single morning."]
                 else:
-                    L += ["", f"**Rate:** {phrase} (no phase targets configured)"]
+                    L += ["", f"**Rate:** {phrase}{span} "
+                              "(no phase targets configured)"]
                 # #37: a rate read across weigh-ins taken at different times
                 # of day is partly reporting the clock. Body mass swings about
                 # a kilogram between morning-fasted and evening, so an
@@ -139,14 +211,23 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
     # the rollup should be about.
     step_days = [(d["date"], d["steps"]) for d in daily
                  if d.get("steps") is not None]
+    recent = [(r["date"], r["steps"])
+              for r in within_days(daily, today, 14, "steps")]
     if step_days:
-        recent = step_days[-14:]
-        avg = mean(s for _, s in recent)
-        best = max(recent, key=lambda p: p[1])
-        L += ["", "## Steps", "",
-              f"- {avg:,.0f}/day average over the last {len(recent)} logged days",
-              f"- best day {best[1]:,} on {best[0]}",
-              f"- {len(step_days)} days logged in total"]
+        L += ["", "## Steps", ""]
+        if recent:
+            avg = mean(s for _, s in recent)
+            best = max(recent, key=lambda p: p[1])
+            L += [f"- {avg:,.0f}/day average over the last 14 days "
+                  f"({len(recent)} logged)",
+                  f"- best day {best[1]:,} on {best[0]}"]
+        else:
+            # Nothing in the window is a fact worth stating. Averaging
+            # whatever rows exist instead - which is what the entry-count
+            # slice did - printed a figure spanning January 2025 to July 2026
+            # as a current average (#68).
+            L.append("- nothing logged in the last 14 days")
+        L.append(f"- {len(step_days)} days logged in total")
 
     L += ["", "## Training by week", ""]
     by_week: dict[str, dict] = defaultdict(lambda: {"km": 0.0, "runs": 0, "gym": 0, "hr": []})
@@ -176,35 +257,58 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
     L += ["", "## Tripwires", ""]
     alerts: list[str] = []
     if cfg.rhr_baseline is not None:
-        rhrs = [(d["date"], d["rhr"]) for d in daily if d.get("rhr")]
+        rhrs = [(r["date"], r["rhr"]) for r in within_days(daily, today, 7, "rhr")]
         if len(rhrs) >= 3:
-            recent = mean(v for _, v in rhrs[-7:])
+            recent = mean(v for _, v in rhrs)
             if recent > cfg.rhr_baseline + 5:
                 alerts.append(f"**Resting HR {recent:.0f}** - more than 5 over "
                               f"baseline {cfg.rhr_baseline}")
     if cfg.pain_gate is not None:
         # Reads `pain` after the gen-2 generalization, falling back to the
         # retired `hip_pain` so an older record still trips its own gate.
-        scored = [(d.get("pain") if d.get("pain") is not None else d.get("hip_pain"),
-                   d.get("pain_site") or "hip")
-                  for d in daily
-                  if d.get("pain") is not None or d.get("hip_pain") is not None][-7:]
+        def _pain_of(d: dict):
+            return d.get("pain") if d.get("pain") is not None else d.get("hip_pain")
+
+        logged = [d for d in daily if _pain_of(d) is not None
+                  and _as_day(d.get("date"))]
+        painful = [d for d in logged
+                   if today - timedelta(days=6) <= _as_day(d["date"]) <= today]
+        scored = [(_pain_of(d), d.get("pain_site") or "hip") for d in painful]
         if scored and max(p for p, _ in scored) > cfg.pain_gate:
             worst, site = max(scored, key=lambda s: s[0])
             alerts.append(f"**Pain {worst}/10 at {site}** - gate fired: "
                           "no loaded work at that site")
+        elif not scored and logged:
+            # A calendar window is right for "is this current", and wrong as a
+            # way to make an unresolved reading disappear. Someone who logs
+            # pain only when it happens would have had a 8/10 go silent on day
+            # eight with no trace. Say when it last was instead - that is not
+            # a current gate, and it does not pretend to be.
+            last = max(logged, key=lambda d: _as_day(d["date"]))
+            if (score := _pain_of(last)) > cfg.pain_gate:
+                ago = (today - _as_day(last["date"])).days
+                alerts.append(
+                    f"Pain {score}/10 at {last.get('pain_site') or 'hip'} was "
+                    f"last logged {ago} days ago and nothing since - not a "
+                    "current gate, but it was never recorded as resolved")
     if cfg.sleep_floor_h is not None:
-        sleeps = [d["sleep_h"] for d in daily if d.get("sleep_h")][-7:]
+        sleeps = [r["sleep_h"] for r in within_days(daily, today, 7, "sleep_h")]
         if sleeps and mean(sleeps) < cfg.sleep_floor_h:
             alerts.append(f"**Sleep {mean(sleeps):.1f}h avg** - under the "
                           f"{cfg.sleep_floor_h:.0f}h floor")
     if cfg.steps_floor is not None:
-        steps = [d["steps"] for d in daily if d.get("steps")][-7:]
+        steps = [r["steps"] for r in within_days(daily, today, 7, "steps")]
         if steps:
             avg = mean(steps)
             met = avg >= cfg.steps_floor
             verdict = "floor met" if met else f"below the {cfg.steps_floor:,} floor"
             alerts.append(f"Steps {avg:,.0f}/day avg - {verdict}")
+    skipped = sum(unreadable_dates(daily, today, f)
+                  for f in ("rhr", "sleep_h", "steps", "pain", "hip_pain"))
+    if skipped:
+        alerts.append(f"{skipped} row(s) carry a date this report cannot read "
+                      "or that falls after it - check the source's clock; they "
+                      "were not counted above")
     L += [f"- {a}" for a in alerts] or ["- Nothing firing."]
 
     # Gates outrank tripwires and sit above them in the reader's eye for a
