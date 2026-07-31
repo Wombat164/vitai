@@ -38,7 +38,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from .clocks import comparable, is_aware, parse_time
+from .clocks import comparable, is_aware, parse_time, stamp_instant
 from .provenance import (describe, distinct_origins, independent_witnesses,
                          shares_origin, trust_ceiling)
 
@@ -196,7 +196,8 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
             canonical[field] = None
             continue
         ladder = _ladder(field, precedence, default)
-        witnesses.sort(key=lambda w: _rank(w[1].get("source"), ladder))
+        witnesses.sort(key=lambda w: (_rank(w[1].get("source"), ladder),
+                                      *_recency(w[1])))
         winner_id, winner = witnesses[0]
         canonical[field] = winner[field]
         # `witnesses` counts INDEPENDENT ORIGINS, not rows (#35/#51). Five
@@ -239,8 +240,37 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
     return canonical, justifications, explanations
 
 
+def _recency(rec: dict) -> tuple[int, float]:
+    """Sort key fragment putting the LATEST-WRITTEN claim first (#70).
+
+    Precedence decides between DIFFERENT sources. It cannot decide between two
+    claims from the SAME source - they tie - and a stable sort then left the
+    first line of the file winning forever. Which meant the correction path
+    was dead for its commonest shape: a correction almost always comes from
+    the same source as the thing it corrects, because a vendor re-exports, an
+    importer re-runs, or a log is completed later.
+
+    The live case: a food log exported at breakfast said 1,354 kcal; the same
+    log exported the next morning, after dinner was entered, said 3,091. Both
+    claims are in the record correctly, the later one carrying a later
+    `recorded_at` - and the record kept asserting 1,354, a 1,700 kcal error
+    feeding straight into deficit arithmetic.
+
+    An unstamped claim sorts LAST, so any stamped claim beats it, and among
+    unstamped claims the stable sort preserves file order - which is exactly
+    what a legacy record does today.
+    """
+    when = stamp_instant(rec.get("recorded_at"))
+    return (1, 0.0) if when is None else (0, -when.timestamp())
+
+
 def _why(winner: object, loser: object, ladder: tuple[str, ...]) -> str:
     w, ll = str(winner or UNKNOWN_SOURCE), str(loser or UNKNOWN_SOURCE)
+    # Same source on both sides means precedence decided nothing - recency
+    # did. Saying "mfp-export outranks mfp-export" is false, and it is false
+    # in the audit trail, which is the one place the record explains itself.
+    if w == ll:
+        return f"same source; the later-written {w} claim supersedes the earlier"
     if w in ladder and ll not in ladder:
         return f"{w} is ranked for this quantity, {ll} is not"
     if w in ladder and ll in ladder:
@@ -732,8 +762,16 @@ def _conservation(daily: list[dict], sessions: list[dict]) -> list[dict]:
 
 
 def _contradictions(explanations: list[dict]) -> list[dict]:
-    """High-precedence sources disagreeing beyond tolerance is worth saying."""
+    """High-precedence sources disagreeing beyond tolerance is worth saying.
+
+    A CORRECTION is not a disagreement (#70). Two claims from one source are
+    the same instrument twice, and the later one supersedes the earlier - so
+    raising "mfp-export says 3091, mfp-export says 1354" reports the
+    correction mechanism working as a fault.
+    """
     for e in explanations:
+        if e.get("chosen_source") == e.get("over_source"):
+            continue
         if e.get("disagreed") and _numeric(e.get("chosen_value")) \
                 and _numeric(e.get("over_value")):
             yield {
