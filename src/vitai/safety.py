@@ -170,16 +170,49 @@ SYNCOPE_PHRASES = ("blacked out", "black out", "blackout", "passed out",
                    "fainted", "syncope", "lost consciousness")
 AMENORRHOEA_PHRASES = ("period still absent", "periods stopped",
                        "period stopped", "no period", "periods have stopped",
-                       "amenorrh", "missed period")
+                       "not had a period", "haven't had a period",
+                       "hasn't had a period", "amenorrh", "missed period")
+
+# `no period` reports absence of MENSTRUATION; "no period pains" reports
+# absence of PAIN, and matched too (#66). The negation guard cannot help,
+# because the denial sits inside the trigger - what distinguishes them is the
+# word that FOLLOWS. Dropping the phrase instead would have lost "no period",
+# "no period this month", "no period yet" and "still no period", which is
+# under-triage in a marker that gates a clinical hold.
+AMENORRHOEA_EXCLUDES = ("pain", "cramp", "discomfort", "symptom", "bleed")
 BONE_STRESS_PHRASES = ("stress fracture", "stress fractures",
                        "stress reaction", "bone stress")
 PROSE_TRIGGERS = {"cardiac": CARDIAC_PHRASES, "syncope": SYNCOPE_PHRASES}
 
-# A phrase preceded by one of these is a denial, not a report. Five lines of
-# guard rather than none, because escalating "no chest pain" to an emergency
-# is exactly the crying-wolf that teaches people to ignore the alarm.
+# A phrase preceded by one of these is a denial, not a report. The guard
+# exists because escalating "no chest pain" to an emergency is exactly the
+# crying-wolf that teaches people to ignore the alarm.
 NEGATIONS = ("no ", "not ", "never ", "without ", "denies ", "wasn't ",
              "was not ", "didn't ", "did not ")
+
+# Where a negation STOPS applying. A denial governs its clause and no further,
+# which is the NegEx/ConText scoping rule this project already cites - and the
+# whole of #66: a 24-character proximity window read "not sure why but chest
+# pain" as a denial of chest pain, when the "not" governs "sure why".
+#
+# `but` is the important one and the reason the third fixture was the worst
+# miss: "no chest pain at rest, but chest pain going up the stairs" is a
+# textbook exertional-angina presentation, and the more precisely an athlete
+# described it, the more certain the engine was to miss it.
+# NOT a comma. A comma in clinical prose coordinates a LIST that the negation
+# continues to govern - "denies dizziness, chest pain" denies both - which is
+# also the NegEx rule: scope is terminated by conjunctions like `but`, not by
+# commas. Treating a comma as a break made every coordinated denial escalate.
+CLAUSE_BREAKS = (" but ", " though ", " although ", " however ", ";", ":",
+                 " - ", ".")
+
+# The clause rule alone is not enough in the other direction. With no break in
+# a long sentence the lead runs back to the start, so ANY earlier negation
+# suppresses a real report: "did not sleep well and woke with chest pain" was
+# escalated by the old proximity window and silenced by clause scoping alone.
+# A negation must therefore be BOTH in the same clause AND near - which is the
+# NegEx shape, where scope is a small token window terminated by a conjunction.
+NEGATION_WINDOW = 24
 
 # --- RED-S / low energy availability -----------------------------------------
 # The syndrome a tool that coaches deficits can itself cause, which is why it
@@ -542,24 +575,66 @@ def _red_flag_sites(medical: list[dict], daily: list[dict]) -> list[dict]:
 
 
 def _negated(text: str, index: int) -> bool:
-    """Is the phrase at `index` preceded by a denial within a short window?"""
-    lead = text[max(0, index - 24):index]
-    return any(neg in lead for neg in NEGATIONS)
+    """Is the phrase at `index` denied by a negation IN ITS OWN CLAUSE?
+
+    Scoped, not proximate (#66). The proximity version asked only whether a
+    negation token appeared within 24 characters, which is not a question
+    about meaning: in "not sure why but chest pain on the stairs" the "not"
+    governs "sure why", and the symptom that follows is being reported, not
+    denied. That is the ordinary register of someone reporting something they
+    would rather not have.
+
+    So the lead text is cut at the last clause break before the phrase, and
+    only what remains can deny it.
+    """
+    lead = text[:index]
+    # Only breaks actually PRESENT may move the cut. A `rfind` miss returns
+    # -1, and adding the break's length to that silently advanced the cut past
+    # the negation - which made every denial escalate.
+    cut = max((at + len(b) for b in CLAUSE_BREAKS
+               if (at := lead.rfind(b)) >= 0), default=0)
+    scope = lead[max(cut, index - NEGATION_WINDOW):]
+    # Punctuation becomes space before matching. The negation tokens carry a
+    # trailing space so they cannot match inside a word ("nose", "notes"), and
+    # that also meant "no, chest pain" never matched "no " - a denial written
+    # with a comma read as a report.
+    scope = "".join(" " if c in ",;:-()\"'/" else c for c in scope) + " "
+    return any(neg in scope for neg in NEGATIONS)
 
 
 def scan_prose(text: str | None) -> list[str]:
-    """Red-flag triggers named by a free-text note. Deterministic, additive."""
+    """Red-flag triggers named by a free-text note. Deterministic, additive.
+
+    EVERY occurrence is examined, not the first (#66). A phrase denied once
+    and asserted later is asserted - "no chest pain at rest, but chest pain
+    going up the stairs" is a report, and stopping at the denied instance
+    made the engine miss it precisely because it was well described.
+
+    The default is asymmetric on purpose: ambiguity resolves toward
+    escalation. A false alarm costs a conversation; a miss costs the thing
+    this tier exists for.
+    """
     if not text:
         return []
     low = str(text).lower()
     found: list[str] = []
     for trigger, phrases in PROSE_TRIGGERS.items():
-        for phrase in phrases:
-            idx = low.find(phrase)
-            if idx >= 0 and not _negated(low, idx):
-                found.append(trigger)
-                break
+        asserted = any(
+            not _negated(low, idx)
+            for phrase in phrases
+            for idx in _occurrences(low, phrase))
+        if asserted:
+            found.append(trigger)
     return found
+
+
+def _occurrences(text: str, phrase: str) -> list[int]:
+    """Every index at which `phrase` appears, not merely the first."""
+    out, at = [], text.find(phrase)
+    while at >= 0:
+        out.append(at)
+        at = text.find(phrase, at + 1)
+    return out
 
 
 def _prose_symptoms(daily: list[dict], sessions: list[dict],
@@ -635,7 +710,18 @@ def _intake_and_protein_floors(daily: list[dict], weight: list[dict],
         per_kg = (sum(proteins) / len(proteins)) / kg
         if per_kg < PROTEIN_FLOOR_G_PER_KG:
             loss = _loss_pct_per_week(weight, start, end) or 0.0
-            resistance = any(str(s.get("type", "")).startswith("gym")
+            # Projected through the REGISTRY, not string-prefixed (#63).
+            # `startswith("gym")` counted only `gym_a` and `gym_b` - the two
+            # labels retired precisely because they were one athlete's
+            # programme names - so the canonical `strength`, `crossfit` and
+            # `pilates` never matched, and the escalation asserted "with no
+            # resistance training" to an athlete who had lifted that week.
+            #
+            # False safety text is corrosive in the one module whose job is to
+            # be believed: an athlete who knows they lifted learns the
+            # warnings do not read their record. And migrating to the correct
+            # vocabulary made the text MORE wrong, which is backwards.
+            resistance = any("strength" in session_classes(s.get("type"))
                              for s in sessions
                              if _as_date(s.get("date"))
                              and start <= _as_date(s["date"]) <= end)
@@ -765,6 +851,27 @@ def energy_availability(daily: list[dict], weight: list[dict],
                 "ffm": ffm, "end": end.isoformat()}
 
 
+def _asserted(notes: list[str], phrases: tuple[str, ...],
+              excludes: tuple[str, ...] = ()) -> bool:
+    """Is any phrase ASSERTED - not merely present - in these notes? (#66)
+
+    The same clause-scoped negation the prose net uses, applied where it was
+    missing entirely. `excludes` handles the case negation cannot: a phrase
+    whose meaning is decided by the word AFTER it, where the denial is part
+    of the trigger rather than in front of it.
+    """
+    for note in notes:
+        low = str(note).lower()
+        for phrase in phrases:
+            for idx in _occurrences(low, phrase):
+                tail = low[idx + len(phrase):idx + len(phrase) + 14]
+                if any(x in tail for x in excludes):
+                    continue
+                if not _negated(low, idx):
+                    return True
+    return False
+
+
 def _corroborating_markers(daily: list[dict], weight: list[dict],
                            medical: list[dict], start: date,
                            end: date) -> list[str]:
@@ -792,12 +899,30 @@ def _corroborating_markers(daily: list[dict], weight: list[dict],
         if drift >= 5.0:
             markers.append(f"resting heart rate drifted +{drift:.0f}")
 
-    prose = " ".join(str(r.get("note") or "") for r in daily).lower()
-    prose += " " + " ".join(f"{m.get('title')} {m.get('note')}".lower()
-                            for m in medical)
-    if any(p in prose for p in AMENORRHOEA_PHRASES):
+    # Negation-guarded, and bounded by `end` rather than by the analysis
+    # window (#66).
+    #
+    # The first attempt at this restricted markers to the RED-S window itself,
+    # which is UNDER-TRIAGE: amenorrhoea and a bone-stress history are
+    # persistent conditions, they gate the hold entirely, and a report from
+    # last month would have aged out of the thing it is evidence for. An
+    # expiry may still be right, but choosing one needs clinical grounding
+    # this does not have, so it is deliberately not invented here.
+    #
+    # `end` IS respected: a note written after the date under examination
+    # cannot corroborate it, or an as-of reconstruction sees the future. An
+    # undated note is kept rather than dropped - losing evidence is the
+    # dangerous direction in this module.
+    def _within(rec: dict) -> bool:
+        when = _as_date(rec.get("date"))
+        return when is None or when <= end
+
+    notes = [str(r.get("note") or "") for r in daily if _within(r)]
+    notes += [f"{m.get('title')} {m.get('note')}" for m in medical
+              if _within(m)]
+    if _asserted(notes, AMENORRHOEA_PHRASES, AMENORRHOEA_EXCLUDES):
         markers.append("menstrual function reported absent")
-    if any(p in prose for p in BONE_STRESS_PHRASES) or any(
+    if _asserted(notes, BONE_STRESS_PHRASES) or any(
             str(m.get("body_site")) and "stress" in str(m.get("title", "")).lower()
             for m in medical):
         markers.append("bone-stress injury history")

@@ -24,9 +24,10 @@ from vitai.cli import main
 from vitai.config import Config
 from vitai.report import build_report
 from vitai.safety import (
-    EMERGENCY, HOLD, PAIN_ABSOLUTE, RHR_ABSOLUTE_MAX, RHR_ABSOLUTE_MIN, URGENT,
-    active_episodes, banner, energy_availability, escalations, gates_on,
-    is_gated, is_open, episodes_on, urgent_now,
+    AMENORRHOEA_EXCLUDES, AMENORRHOEA_PHRASES, EMERGENCY, HOLD, PAIN_ABSOLUTE, RHR_ABSOLUTE_MAX,
+    RHR_ABSOLUTE_MIN, URGENT, _asserted, active_episodes, banner,
+    energy_availability, escalations, gates_on, is_gated, is_open,
+    episodes_on, scan_prose, session_classes, urgent_now,
 )
 from vitai.schema import validate_record
 
@@ -51,6 +52,14 @@ def daily(date="2030-05-01", **kw):
            "rhr": None, "alcohol": None, "note": None, "source": "watch",
            "mood": None, "feel": None, "coverage": None, "pain": None,
            "pain_site": None, "pain_side": None, "_gen": 2}
+    rec.update(kw)
+    return rec
+
+
+def weight(date, kg, **kw):
+    rec = {"date": date, "kg": kg, "source": "scale", "note": None,
+           "body_fat_pct": None, "kg_lo": None, "kg_hi": None,
+           "body_fat_lo": None, "body_fat_hi": None, "_gen": 2}
     rec.update(kw)
     return rec
 
@@ -855,3 +864,135 @@ def test_the_api_lists_what_has_not_been_checked_today(tmp_path):
 
     write(root / "data" / "checks.jsonl", [check(result="pass")])
     assert Vitai(root).pending_checks("2030-05-10") == []
+
+
+# ---- #66: the prose net and the register frightened people use -----------------
+
+HEDGED_REPORTS = [
+    "not sure why but chest pain on the stairs again",
+    "wasn't expecting it: chest pain mid-run",
+    "no chest pain at rest, but chest pain going up the stairs",
+]
+
+
+@pytest.mark.parametrize("note", HEDGED_REPORTS)
+def test_a_hedged_report_still_escalates(note):
+    """Verbatim from the issue. The net exists because "frightened people do
+    not fill in a pain_site field" - and it was defeated by the exact register
+    frightened people use.
+
+    The third is the worst: no pain at rest, pain on exertion is a textbook
+    presentation, and scanning only the FIRST occurrence meant the more
+    precisely an athlete described exertional angina, the more certain the
+    miss.
+    """
+    assert "cardiac" in scan_prose(note), note
+
+
+def test_a_negation_governs_its_clause_not_a_character_window():
+    """"not sure why but chest pain" - the "not" governs "sure why". A
+    24-character proximity window cannot tell those apart, because proximity
+    is not a question about meaning."""
+    assert scan_prose("not sure why but chest pain") == ["cardiac"]
+    assert scan_prose("not chest pain") == []
+
+
+def test_a_denial_is_still_a_denial():
+    """The guard must survive the fix, or the alarm gets ignored - which is
+    the failure mode the negation check was written for."""
+    for denied in ("no chest pain", "denies chest pain", "never had chest pain",
+                   "no chest pain and no dizziness",
+                   "felt great, no chest pain at all"):
+        assert scan_prose(denied) == [], denied
+
+
+def test_every_occurrence_is_examined_not_the_first():
+    """A phrase denied once and asserted later is asserted."""
+    assert "cardiac" in scan_prose(
+        "no chest pain warming up. chest pain on the second hill.")
+
+
+def test_a_marker_phrase_is_negation_guarded_too():
+    """`_corroborating_markers` scanned all history with no negation guard at
+    all, and no window - a marker once matched was permanent."""
+    assert _asserted(["periods stopped months ago"], AMENORRHOEA_PHRASES) is True
+    assert _asserted(["no amenorrhoea"], AMENORRHOEA_PHRASES) is False
+
+
+def test_a_trigger_phrase_whose_meaning_turns_on_the_next_word():
+    """`no period` reports absent MENSTRUATION; "no period pains" reports
+    absent PAIN, and matched too. Negation cannot help - the denial is inside
+    the trigger - so what distinguishes them is the word that FOLLOWS.
+
+    Dropping the phrase was the first fix and it was under-triage: it lost
+    "no period", "no period this month", "no period yet" and "still no
+    period", in a marker that gates a clinical hold.
+    """
+    for false_alarm in ("no period pains", "no period cramps",
+                        "no period discomfort"):
+        assert _asserted([false_alarm], AMENORRHOEA_PHRASES,
+                         AMENORRHOEA_EXCLUDES) is False, false_alarm
+    for real in ("no period", "no period this month", "no period yet",
+                 "still no period", "no periods since March",
+                 "haven't had a period in months"):
+        assert _asserted([real], AMENORRHOEA_PHRASES,
+                         AMENORRHOEA_EXCLUDES) is True, real
+
+
+def test_a_persistent_marker_does_not_age_out_of_the_window_it_gates():
+    """Amenorrhoea and a bone-stress history are persistent, and they gate
+    the RED-S hold entirely. Restricting markers to the analysis window meant
+    a report from last month aged out of the thing it is evidence for."""
+    from vitai.safety import _corroborating_markers
+    old_note = daily("2030-01-05", note="periods stopped months ago")
+    days = [old_note] + [daily(f"2030-05-{d:02d}") for d in range(1, 15)]
+    weights = [weight(f"2030-05-{d:02d}", 55.0) for d in range(1, 15)]
+    markers = _corroborating_markers(days, weights, [], date(2030, 5, 1),
+                                     date(2030, 5, 14))
+    assert "menstrual function reported absent" in markers
+
+
+def test_a_marker_written_after_the_date_under_examination_is_not_used():
+    """`end` is still respected: a note from next month cannot corroborate
+    today, or an as-of reconstruction sees the future."""
+    from vitai.safety import _corroborating_markers
+    future = daily("2030-09-01", note="periods stopped months ago")
+    days = [future] + [daily(f"2030-05-{d:02d}") for d in range(1, 15)]
+    weights = [weight(f"2030-05-{d:02d}", 55.0) for d in range(1, 15)]
+    markers = _corroborating_markers(days, weights, [], date(2030, 5, 1),
+                                     date(2030, 5, 14))
+    assert markers == []
+
+
+# ---- #63: resistance training, via the registry -------------------------------
+
+def test_the_canonical_strength_type_counts_as_resistance():
+    """`startswith("gym")` counted only the two labels retired precisely
+    because they were one athlete's programme names. Everyone on the public
+    vocabulary was asserted to do no resistance work, always."""
+    for lifting in ("strength", "crossfit", "pilates", "gym_a", "gym_b"):
+        assert "strength" in session_classes(lifting), lifting
+    for not_lifting in ("run", "walk", "swim", "cycle"):
+        assert "strength" not in session_classes(not_lifting), not_lifting
+
+
+def test_a_retired_and_a_current_label_behave_identically():
+    """They are the same thing under two names, and the safety layer must not
+    be able to tell them apart."""
+    assert session_classes("gym_a") == session_classes("strength")
+
+
+def test_lifting_suppresses_the_no_resistance_clause():
+    """The false statement about the athlete's own record: an escalation that
+    read "with no resistance training" to someone who had lifted that week."""
+    days = [daily(f"2030-05-{d:02d}", kcal_in=1500, protein_g=40)
+            for d in range(1, 15)]
+    weights = [weight(f"2030-05-{d:02d}", 80.0 - d * 0.12) for d in range(1, 15)]
+    lifted = [session("2030-05-10", type="strength")]
+    with_lifting = escalations([], days, weights, lifted,
+                               on=date(2030, 5, 14))
+    without = escalations([], days, weights, [], on=date(2030, 5, 14))
+    said_with = " ".join(e["detail"] for e in with_lifting)
+    said_without = " ".join(e["detail"] for e in without)
+    assert "no resistance training" not in said_with
+    assert "no resistance training" in said_without
