@@ -64,7 +64,7 @@ TOML = (
     "# exactly the point it exists for.\n"
     "[resolution]\n"
     'source_order = ["dexa", "tape", "scale", "hand", "watch", '
-    '"vendor-api", "vendor-export", "app"]\n\n'
+    '"gym-console", "vendor-api", "vendor-export", "app"]\n\n'
     "[resolution.precedence]\n"
     'kcal_out = ["watch", "app"]\n'
     'kcal_in = ["app"]\n'
@@ -294,6 +294,29 @@ def _build(target: Path) -> None:
         "body_fat_lo": None, "body_fat_hi": None, "measured_at": "07:40",
         "recorded_at": f"{independent_day}T21:31:00+02:00", "origin": "athlete",
         "path": None, "origin_evidence": "written on a kitchen notepad"})
+
+    # THE ACQUISITION CASE (#77/#78). A gym console is an independent
+    # instrument the record almost never has - and the richest single reading
+    # in a real record turned out to be its least verifiable, because it came
+    # from a photograph of a console read by a model in a chat window, and
+    # the photograph was never stored.
+    #
+    # Same origin, two acquisitions, two different error modes: the machine's
+    # own link, and a picture of its display. `capture` is what separates
+    # them; `origin` and `path` cannot, because both share those.
+    console_day = (END - timedelta(days=9)).isoformat()
+    sessions.append({
+        "date": console_day, "type": "row", "distance_km": 3.1,
+        "duration_s": 906, "avg_hr": None, "max_hr": None, "cadence": 25,
+        "kcal": 148, "location": None, "rpe": 6, "note": None, "_gen": 6,
+        "source": "gym-console", "start_time": f"{console_day}T19:40:00+02:00",
+        "elevation_m": None, "setting": "indoor", "route": None,
+        "place": "gym", "with": None, "context": "solo", "planned": None,
+        "weather": None, "recorded_at": f"{console_day}T21:05:00+02:00",
+        "track": None, "activity_id": None, "activity_source": None,
+        "origin": "gym-console", "path": None,
+        "origin_evidence": "the console's own display",
+        "capture": "photo", "read_by": "model"})
 
     # A two-source day: the calorie app disagrees with the watch about burn,
     # and owns intake the watch never sees. Field-wise precedence takes the

@@ -67,7 +67,14 @@ from .schema import KEYS
 #    `resolution` row carries `independent`, which is false when the two
 #    values are one measurement seen at two points on one pipe - that spread
 #    measures pipeline fidelity and must never be read as agreement.
-# 11: resolution audit (#73) - `resolution` gains `discarded` (every claim
+# 11: the acquisition axis (#77/#78) - `capture` (how a value was acquired)
+#     and `read_by` (who did the reading, where one happened) on the
+#     observation datasets, plus `origin`/`path`/`origin_evidence` finally
+#     reaching `sessions`. `provenance.trust` gains a `transcribed` level: a
+#     photograph of a console read by a model is an inference over an
+#     artifact, not a reading of an instrument, and MUST NOT be rendered as
+#     device-measured.
+# 12: resolution audit (#73) - `resolution` gains `discarded` (every claim
 #     that lost, not only the runner-up) and `unattributed_loser`, and a new
 #     `unattributed_claim_lost` tripwire. A consumer showing a canonical value
 #     can now say what it beat; before this, a resolved value had no way to
@@ -102,6 +109,7 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               "result",
               # #35/#51: the provenance chain.
               "origin", "path", "origin_evidence", "trust", "chain", "compares",
+              "capture", "read_by",
               "discarded",
               "scope",
               # #43. `activity_id` MUST be TEXT: a REAL-affinity column

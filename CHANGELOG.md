@@ -6,6 +6,34 @@ versioning follows [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **A capture axis: how a value was acquired** (#77, #78). Three questions
+  were answered by one string and two of them had no field at all: what
+  observed it (`origin`, shipped in #51), HOW it got here, and what evidence
+  survives (#80, still to come).
+
+  The athlete's framing is the issue: *"me telling narratively what the rower
+  said is different from me taking a picture of it, or having a Bluetooth
+  connection and seeing the data that way, or the app importing it through a
+  connector."* Those four share ONE origin - the same console showing the same
+  number - and have completely different error modes. So `capture` is a
+  property of the ACQUISITION EVENT rather than of the chain: a photo-read and
+  a BLE-read of one console on one evening are two claims with one origin and
+  two captures.
+
+  **The ordering is not a quality ranking.** `ble` has no reader in the loop
+  and no durable artifact; `photo` has a reader in the loop but the evidence
+  survives and can be re-read. Different virtues, and a query can ask for
+  either. Grounded in FHIR `Observation.method`, which is deliberately
+  separate from `Observation.device` and `Observation.performer`.
+
+  `trust_ceiling` gains a `transcribed` level, taken as the weakest of the
+  acquisition and the chain: a photograph of a console read by a model is an
+  inference over an artifact, not a reading of an instrument, and must not
+  present as device-measured.
+- **`sessions` finally carries the provenance chain.** `origin`, `path` and
+  `origin_evidence` landed on `weight`, `daily` and `measurements` in #51 and
+  were never extended - and sessions is exactly where multi-instrument claims
+  collide.
 - **`track`, `activity_id` and `activity_source` on `sessions`** (#43). The
   link from a session to the file that recorded it lived in a prose note and
   was recovered by regex - unqueryable, unvalidatable, and silently broken by

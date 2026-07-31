@@ -20,7 +20,7 @@ pain_gate = 3
 # reading losing to a relayed vendor figure is the ladder inverted at
 # exactly the point it exists for.
 [resolution]
-source_order = ["dexa", "tape", "scale", "hand", "watch", "vendor-api", "vendor-export", "app"]
+source_order = ["dexa", "tape", "scale", "hand", "watch", "gym-console", "vendor-api", "vendor-export", "app"]
 
 [resolution.precedence]
 kcal_out = ["watch", "app"]
