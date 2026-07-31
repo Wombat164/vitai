@@ -564,3 +564,112 @@ def test_start_time_resolves_a_routine_positively():
     assert len(out["canonical"]["sessions"]) == 3
     assert not [t for t in out["tripwires"]
                 if t["kind"] == "repeated_activity_kept"]
+
+
+# ---- #70: a correction from the same source must win ---------------------------
+
+def _log(kcal, stamp, date="2026-07-30", source="mfp-export"):
+    return {"date": date, "steps": None, "distance_km": None, "active_min": None,
+            "kcal_out": None, "kcal_in": kcal, "protein_g": None, "sleep_h": None,
+            "rhr": None, "hip_pain": None, "alcohol": None, "note": None,
+            "source": source, "mood": None, "feel": None, "coverage": None,
+            "pain": None, "pain_site": None, "pain_side": None,
+            "recorded_at": stamp, "_gen": 3}
+
+
+def test_a_later_claim_from_the_same_source_wins():
+    """The live shape, verbatim. A food log exported at breakfast said 1,354
+    kcal; the same log exported next morning, after dinner was entered, said
+    3,091. Precedence cannot separate them - they share a source - so the
+    first line of the file won forever, and the record asserted 1,354.
+
+    A correction almost always comes from the SAME source as the thing it
+    corrects: a vendor re-exports, an importer re-runs, a log is completed
+    later. So this was the correction path dead for its commonest shape.
+    """
+    rows = [_log(1354, "2026-07-31T09:40:00+02:00"),
+            _log(3091, "2026-07-31T09:47:00+02:00")]
+    assert resolve({"daily": rows})["canonical"]["daily"][0]["kcal_in"] == 3091
+
+
+def test_file_order_cannot_change_what_the_record_asserts():
+    """#37's stated acceptance criterion, which was false for same-source
+    claims: "sorting, reformatting or merging the file cannot change what the
+    record asserts". Asserted directly, on every permutation."""
+    from itertools import permutations
+    rows = [_log(1354, "2026-07-31T09:40:00+02:00"),
+            _log(3091, "2026-07-31T09:47:00+02:00"),
+            _log(2200, "2026-07-31T09:45:00+02:00")]
+    answers = {resolve({"daily": list(order)})["canonical"]["daily"][0]["kcal_in"]
+               for order in permutations(rows)}
+    assert answers == {3091}, "every ordering must agree"
+
+
+def test_a_shuffled_record_resolves_identically():
+    """The round-trip #37 asked for and did not get. Shuffling the whole file
+    must be a no-op on every canonical value, not just on one field."""
+    import random
+    rows = [_log(1300 + i * 37, f"2026-07-31T09:{40 + i:02d}:00+02:00",
+                 date=f"2026-07-{10 + i % 5:02d}")
+            for i in range(20)]
+    straight = resolve({"daily": rows})["canonical"]["daily"]
+    shuffled = list(rows)
+    random.Random(4).shuffle(shuffled)
+    assert resolve({"daily": shuffled})["canonical"]["daily"] == straight
+
+
+def test_an_unstamped_record_resolves_exactly_as_it_did():
+    """Legacy behaviour is preserved: with no transaction time to order by,
+    the first line still wins and a migration is a read no-op."""
+    rows = [_log(1354, None), _log(3091, None)]
+    assert resolve({"daily": rows})["canonical"]["daily"][0]["kcal_in"] == 1354
+
+
+def test_a_stamped_claim_beats_an_unstamped_one():
+    """A stamped row was demonstrably written later than one that predates
+    the field - the rule #37 established for `heads()`, applied here."""
+    rows = [_log(1354, None), _log(3091, "2026-07-31T09:47:00+02:00")]
+    assert resolve({"daily": rows})["canonical"]["daily"][0]["kcal_in"] == 3091
+    assert resolve({"daily": list(reversed(rows))}
+                   )["canonical"]["daily"][0]["kcal_in"] == 3091
+
+
+def test_precedence_still_outranks_recency():
+    """Recency breaks a TIE; it does not overrule the ladder. A later claim
+    from a lower-ranked source must not beat an earlier one from the scale."""
+    ladder = {"kcal_in": ("app", "watch")}
+    rows = [_log(2000, "2026-07-31T09:40:00+02:00", source="app"),
+            _log(9999, "2026-07-31T09:47:00+02:00", source="watch")]
+    got = resolve({"daily": rows}, precedence=ladder)["canonical"]["daily"][0]
+    assert got["kcal_in"] == 2000
+
+
+def test_a_correction_is_explained_as_one_not_as_precedence():
+    """The audit trail is the one place the record explains itself, so it
+    must not say "mfp-export outranks mfp-export" - precedence decided
+    nothing there, recency did."""
+    rows = [_log(1354, "2026-07-31T09:40:00+02:00"),
+            _log(3091, "2026-07-31T09:47:00+02:00")]
+    said = [e["reason"] for e in resolve({"daily": rows})["explanations"]
+            if e["field"] == "kcal_in"]
+    assert said and "supersedes the earlier" in said[0]
+    assert "outranks" not in said[0]
+
+
+def test_a_correction_does_not_raise_a_source_disagreement():
+    """Two claims from one source are the same instrument twice. Reporting
+    them as disagreeing sources reports the correction mechanism working as
+    a fault - and would have put a permanent tripwire on every corrected day.
+    """
+    rows = [_log(1354, "2026-07-31T09:40:00+02:00"),
+            _log(3091, "2026-07-31T09:47:00+02:00")]
+    kinds = [t["kind"] for t in resolve({"daily": rows})["tripwires"]]
+    assert "source_disagreement" not in kinds
+
+
+def test_two_different_sources_disagreeing_is_still_reported():
+    """The guard must not silence the case the tripwire exists for."""
+    rows = [_log(1354, "2026-07-31T09:40:00+02:00", source="app"),
+            _log(3091, "2026-07-31T09:47:00+02:00", source="watch")]
+    kinds = [t["kind"] for t in resolve({"daily": rows})["tripwires"]]
+    assert "source_disagreement" in kinds
