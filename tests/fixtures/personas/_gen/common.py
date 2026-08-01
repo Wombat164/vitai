@@ -48,7 +48,7 @@ AUTHORED_AGAINST_CONTRACT = "15"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "weight": 7, "daily": 7, "sessions": 8, "inferences": 3, "goals": 3,
     "events": 2, "thresholds": 2, "achievements": 3, "measurements": 6,
-    "sets": 2, "meals": 2, "medical": 4, "checks": 2, "context": 2,
+    "sets": 3, "meals": 2, "medical": 4, "checks": 2, "context": 2,
     "artifacts": 2, "journal": 2,
 }
 
