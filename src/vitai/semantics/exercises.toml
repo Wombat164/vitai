@@ -1021,3 +1021,44 @@ region = ["thigh", "hip"]
 load = "loaded"
 plane = "sagittal"
 source = "curated"
+
+# --- machine cardio, whose CONFIGURATION is the point (#99) --------------------
+# #59: "a strength block is a list of sets, a machine session is one
+# configuration". These are here so a crosstrainer at resistance level 15 is a
+# `sets` row - one dataset owning configured effort for both strength and
+# machine cardio - rather than a second model. `sessions` stays
+# cardio-summary-shaped and gains nothing.
+#
+# `load` is deliberately absent on all three: the resistance is the machine's
+# own ordinal, not a mass, so a restriction keyed on load ABSTAINS until the
+# set says.
+#
+# A TREADMILL IS NOT HERE. Running on one is a `run` session with a gradient,
+# already expressible; adding it as an exercise would fork the same activity
+# across two datasets. Nor is a stationary bike: cycling is knee and hip
+# extension under load, and calling it `extension` would put it under any
+# "no loaded knee extension" restriction, which is a wider claim than the
+# pattern axis can currently defend. It abstains until something asks.
+[exercises.crosstrainer]
+label = "Crosstrainer"
+aliases = ["elliptical", "cross trainer", "elliptical trainer", "x-trainer"]
+pattern = "gait"
+region = ["thigh", "hip", "calf"]
+plane = "sagittal"
+source = "curated"
+
+[exercises.stair-climber]
+label = "Stair climber"
+aliases = ["stairmaster", "stepmill", "stair machine"]
+pattern = "gait"
+region = ["thigh", "hip", "calf"]
+plane = "sagittal"
+source = "curated"
+
+[exercises.rowing-erg]
+label = "Rowing machine"
+aliases = ["ergometer", "rower", "concept2", "erg", "rowing machine"]
+pattern = ["hinge", "pull"]
+region = ["thigh", "hip", "upper_back"]
+plane = "sagittal"
+source = "curated"

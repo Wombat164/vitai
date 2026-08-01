@@ -272,6 +272,19 @@ def day_disagreements(meal_rows: list[dict], daily_rows: list[dict]) -> list[dic
 def problems(rec: dict) -> list[str]:
     """Validation for one meal item."""
     out: list[str] = []
+    if not str(rec.get("meal") or "").strip():
+        # REQUIRED, for the same reason `set_index` is on `sets`. `item` is
+        # required and this was not, so two items of the same name on one
+        # date - two coffees, or one ingredient in two unnamed snacks - shared
+        # an identity, and a `supersedes` naming either was ambiguous. A row
+        # nobody can name is a row nobody can correct.
+        #
+        # It costs one word. An unnamed snack is `meal: "snack"`, which is
+        # what the athlete would say anyway.
+        out.append("'meal' names which meal this item belongs to - 'lunch', "
+                   "'snack'. It is required because it is half of the row's "
+                   "identity: without it two items of the same name on one "
+                   "date cannot be told apart, so neither can be corrected")
     if not str(rec.get("item") or "").strip():
         out.append("'item' names the ingredient - the unit of estimate is the "
                    "ingredient, never the dish, because a dish-level number "

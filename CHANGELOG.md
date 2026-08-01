@@ -42,6 +42,12 @@ versioning follows [SemVer](https://semver.org/).
   here say `source = "curated"`. Nothing from wger, whose exercise data is
   CC-BY-SA. Lateral raises and hip abduction/adduction are deliberately absent
   until #58 adds the patterns that describe them.
+- **`meal` is required on a meal item.** `item` was required and `meal` was
+  not, so two items of the same name on one date - two coffees, or one
+  ingredient in two unnamed snacks - shared an identity, and a `supersedes`
+  naming either was ambiguous. Required now for the same reason `set_index` is
+  on `sets`: a row nobody can name is a row nobody can correct. It costs one
+  word, and an unnamed snack is `meal: "snack"`.
 - **An itemised meal estimate, with a range that never collapses** (#96). A
   photograph of a meal produces an ITEMISED estimate, never one confident
   number. Every app that does photo estimation hands back a total, and the

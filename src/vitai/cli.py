@@ -519,7 +519,9 @@ def _set_line(row: dict) -> str:
     elif row.get("rpe") is not None:
         effort = f", RPE {row['rpe']:g}"
     return (f"{row.get('date')} {row.get('exercise')}: {reps}{load}"
-            f"{ended}{effort}{tail}")
+            f"{_config(row)}{ended}{effort}{tail}")
+
+
 def cmd_meals(args: argparse.Namespace) -> None:
     """Itemised meal estimates (#96): never a bare number."""
     v = Vitai(_root(args))
@@ -583,6 +585,34 @@ def _item_line(row: dict) -> str:
     kcal = (f"{energy[0]:.0f}-{energy[2]:.0f}" if energy[2] > energy[0]
             else f"{energy[1]:.0f}")
     return f"{row.get('item')}: {span}, {kcal} kcal{where}"
+
+
+def _config(row: dict) -> str:
+    """How the set was configured (#99), said the way the athlete would.
+
+    A machine-scoped number NEVER prints without its machine - `level 15` on
+    its own is the confident wrong answer #60 was filed about, and the
+    rendering is where a reader would pick it up.
+    """
+    from .modifiers import CATEGORICAL, MACHINE_SCOPED
+    def number(value: object) -> str:
+        # `validate` reports a modifier of the wrong type but does not stop
+        # the file loading, so `:g` on a string raised and took down the whole
+        # listing. A bool is worse than a crash: `True` formatted as an
+        # ordinal prints "level 1", which is a plausible wrong answer.
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return f"{value!r} (not a number)"
+        return f"{value:g}"
+
+    bits = [str(row[axis]) for axis in CATEGORICAL if row.get(axis)]
+    if row.get("angle_deg") is not None:
+        bits.append(f"{number(row['angle_deg'])} deg")
+    for field in MACHINE_SCOPED:
+        if row.get(field) is None:
+            continue
+        where = row.get("machine") or "an unnamed machine"
+        bits.append(f"{field.replace('_', ' ')} {number(row[field])} on {where}")
+    return f", {', '.join(bits)}" if bits else ""
 
 
 def cmd_route(args: argparse.Namespace) -> None:

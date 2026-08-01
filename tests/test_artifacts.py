@@ -480,6 +480,14 @@ def test_the_contract_constant_is_assigned_exactly_once():
     read 11, 12, an assignment, half of 11 again, then 13. Python took the
     last one and every test passed - which is exactly why this is asserted
     rather than left to reading.
+
+    IT HAS FIRED ON EVERY MERGE SINCE. Four for four at the time of writing,
+    across #92, #104, #96 and #99, each time on a different pair of branches.
+    Recorded here because this reads like a test guarding something that
+    obviously cannot happen, and the next person to find it should know it
+    has never once been idle. The duplicate is not a rare accident: it is
+    what a union resolver does to two edits that both end a comment block
+    with an assignment.
     """
     from pathlib import Path as _P
     source = (_P(__file__).resolve().parents[1] / "src" / "vitai"

@@ -182,7 +182,11 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               "failure", "side", "tempo", "session_start",
 # #96: the itemised meal estimate. The per-100 g figures and the
               # gram range stay numeric; only the labels are TEXT.
-              "meal", "item", "food_table"}
+              "meal", "item", "food_table",
+# #99: the categorical modifier axes. The parametric ones stay
+              # numeric - including the machine-scoped ordinals, which ARE
+              # numbers, just not comparable ones.
+              "equipment", "angle_class"}
 
 VERDICT_KEYS = ["week", "metric", "value", "target", "verdict", "goal"]
 

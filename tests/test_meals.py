@@ -426,26 +426,37 @@ def test_the_date_filter_scopes_the_day_comparison_too(tmp_path, capsys):
 
 # ---- one identity renderer, adopted rather than re-implemented -----------------------
 
-def test_a_snack_logged_without_a_meal_name_can_still_be_corrected(tmp_path):
-    """`item` is required and `meal` is not, so an item logged without a meal
-    name got a key from `line_key` and was DROPPED by `heads` - a correction
-    naming it matched nothing and failed silently.
+def test_an_unnamed_snack_is_rejected_rather_than_left_uncorrectable():
+    """`item` was required and `meal` was not, so two items of the same name
+    on one date - two coffees, or one ingredient in two unnamed snacks -
+    shared an identity, and a `supersedes` naming either was ambiguous.
 
-    Narrower than the sets case, since most items carry a meal, but live the
-    moment anything logs a snack.
+    Required now, for the same reason `set_index` is on `sets`: a row nobody
+    can name is a row nobody can correct. It costs one word, and an unnamed
+    snack is `meal: "snack"`, which is what the athlete would say anyway.
     """
+    orphan = {**item("olives", 32, kcal_100g=145), "meal": None}
+    assert any("'meal'" in p and "identity" in p
+               for p in validate_record("meals", orphan))
+    assert validate_record("meals", item("olives", 32, kcal_100g=145)) == []
+
+
+def test_a_snack_is_correctable_item_by_item(tmp_path):
+    """The end-to-end shape: two items in one snack, correcting one leaves
+    the other alone."""
     from vitai.jsonl import heads, identity_of, line_key
-    snack = {"date": "2030-05-01", "meal": None, "item": "olives",
-             "grams": 32, "kcal_100g": 145, "food_table": "usda"}
+    snack = {"date": "2030-05-01", "meal": "snack", "item": "olives",
+             "grams": 32, "grams_lo": 28, "grams_hi": 36,
+             "kcal_100g": 145, "food_table": "usda"}
     assert line_key("meals", snack) == f"{identity_of('meals', snack)}@2030-05-01"
     assert list(heads([snack], "meals")) == [identity_of("meals", snack)]
 
     root = repo(tmp_path)
     v = Vitai(root)
-    for row in ({**snack, "item": "olives"}, {**snack, "item": "tomato",
-                                              "grams": 70, "kcal_100g": 18}):
+    for row in (snack, {**snack, "item": "tomato", "grams": 70,
+                        "grams_lo": 60, "grams_hi": 80, "kcal_100g": 18}):
         v.append("meals", row)
-    v.append("meals", {**snack, "grams": 40,
+    v.append("meals", {**snack, "grams": 40, "grams_lo": 36, "grams_hi": 44,
                        "supersedes": line_key("meals", snack)})
     live = v.dataset("meals")
     assert sorted(r["item"] for r in live) == ["olives", "tomato"], (
