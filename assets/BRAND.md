@@ -74,6 +74,16 @@ vendor can take away.
 - **goalden** - reserved name for the game layer (casual F2P where the only
   pay2win currency is your real, engine-verified goal attainment). Teaser
   lines banked for later: "Earn it by living it." / "The grind is outside."
+- **loadline** - the client application: browsers on desktop, Capacitor on
+  Android and iOS. A CLIENT of vitai, never a replacement; the engine stays
+  general and MIT, and other clients could exist. Always lowercase in prose.
+
+  Load is the central word in training (training load, load management,
+  progressive overload), and a loadline is the mark on a hull showing the
+  maximum safe loading depth. So it names both the quantity the engine
+  computes and the limit it declines to program past. Chosen from gym and
+  nautical vocabulary on purpose: a name that never invites a medical reading
+  is a name that never has to answer for one.
 
 ## The mark (master: `vitai-mark.svg`)
 
