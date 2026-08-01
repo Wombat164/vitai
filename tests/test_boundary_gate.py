@@ -164,6 +164,13 @@ def test_the_gate_covers_the_surface_that_matters():
     assert {"README.md", "docs", "skills", "src", "wiki"} <= covered
 
 
+def test_the_brand_document_is_scanned():
+    """Marketing copy is the most purpose-asserting prose a project writes,
+    and it was outside the surface while README.md was inside it."""
+    scanned = {p.relative_to(ROOT).as_posix() for p in gate.files()}
+    assert "assets/BRAND.md" in scanned
+
+
 def test_the_templates_are_scanned():
     """`vitai init` stamps them into every athlete's private record, so a
     directive there propagates rather than sitting in one repo."""

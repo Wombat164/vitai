@@ -52,8 +52,13 @@ ROOT = Path(__file__).resolve().parents[1]
 # `CHANGELOG.md` is deliberately absent - it is history, and rewriting what a
 # release said in order to satisfy a lint written afterwards is falsifying a
 # record rather than fixing a claim.
+# `assets/` holds the brand document, which is marketing copy and therefore
+# the most purpose-asserting prose the project will ever write - the sentence
+# a reader meets before any of the engineering. It was outside the surface
+# while README.md was inside it, which is the wrong way round.
 SURFACE = ("README.md", "SECURITY.md", "ARCHITECTURE.md", "CONTRIBUTING.md",
-           "pyproject.toml", "docs", "wiki", "skills", "src", "examples")
+           "pyproject.toml", "assets", "docs", "wiki", "skills", "src",
+           "examples")
 
 SUFFIXES = {".md", ".py", ".toml", ".txt", ".rst", ".yml", ".yaml", ".json"}
 
