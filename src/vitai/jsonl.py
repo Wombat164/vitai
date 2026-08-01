@@ -233,19 +233,57 @@ def read_lines(path: Path) -> tuple[list[tuple[int, dict]], list[str]]:
     return out, errors
 
 
-def load(data_dir: Path, name: str) -> list[dict]:
+def known_by(rec: dict, cutoff: datetime) -> bool:
+    """Was this line already written at `cutoff`? Transaction-time only.
+
+    THE KNOWLEDGE QUESTION, and it is not the valid-time one. `date` says when
+    something became true and is legitimately backdated; `recorded_at` says
+    when the line was written and is machine-set and monotonic. A context line
+    appended in April about a February event is valid-time February and
+    transaction-time April, so a reconstruction of what was known in March must
+    exclude it while still placing it in February once it arrives.
+
+    An UNSTAMPED line always survives a cutoff, following the same rule the
+    clocks canon uses for ordering: absent sorts before present. A legacy line
+    has no transaction time because it predates the clock, not because it was
+    written later, and dropping it would empty a legacy corpus rather than
+    reconstruct it.
+    """
+    stamp = stamp_instant(rec.get("recorded_at"))
+    return stamp is None or stamp <= cutoff
+
+
+def load(data_dir: Path, name: str,
+         as_of: datetime | None = None) -> list[dict]:
     """Records from <data_dir>/<name>.jsonl with supersedes applied.
 
     Malformed lines are QUARANTINED (dropped) so a build proceeds from the
     good rows; use `load_report` if you need to know what was quarantined.
+
+    `as_of` reconstructs what the record contained at an instant. See
+    `load_report`.
     """
-    records, _ = load_report(data_dir, name)
+    records, _ = load_report(data_dir, name, as_of=as_of)
     return records
 
 
-def load_report(data_dir: Path, name: str) -> tuple[list[dict], list[str]]:
-    """Like `load`, but also returns the parse errors that were quarantined."""
+def load_report(data_dir: Path, name: str,
+                as_of: datetime | None = None) -> tuple[list[dict], list[str]]:
+    """Like `load`, but also returns the parse errors that were quarantined.
+
+    `as_of` is a KNOWLEDGE CUTOFF: only lines written at or before that
+    instant are returned, so the result is what the record said then rather
+    than what it says now with hindsight applied.
+
+    THE FILTER RUNS BEFORE THE SUPERSEDES WALK, and the order is the whole
+    correctness argument. A correction written after the cutoff had not been
+    made yet, so it must not retire the line it corrects: filtering afterwards
+    would apply a future retraction to a past reconstruction and produce a
+    state the record never held.
+    """
     rows, errors = read_lines(data_dir / f"{name}.jsonl")
+    if as_of is not None:
+        rows = [(i, r) for i, r in rows if known_by(r, as_of)]
     # Walk backwards so a line can only be superseded by a LATER one. This
     # matters for the identity datasets, where a same-day correction shares its
     # slug and date with the line it replaces and would otherwise supersede

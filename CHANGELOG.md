@@ -6,6 +6,33 @@ versioning follows [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **A knowledge cutoff: what the record said THEN** (#130). `Vitai(root,
+  as_of=...)` and `load(..., as_of=...)` reconstruct the record at an instant,
+  using only lines whose `recorded_at` precedes it.
+
+  `clocks.py` promised exactly this in its own docstring, telling "what the
+  record said on 30 July, as we understood it then" apart from "as we
+  understand it now". The record was bitemporal in STORAGE and unitemporal in
+  EVALUATION: `recorded_at` was stamped rigorously, refused from callers and
+  monotonic by construction, and every single use of it was writing it or
+  ordering by it. Nothing ever filtered on it.
+
+  It is not the question `goals_in_force(date)` answers. That is valid time,
+  which goals APPLIED on a date using everything known now. This is
+  transaction time: what was KNOWN then. A month of degraded data whose cause
+  is filed six weeks later reads unexplained under a cutoff inside those weeks
+  and explained after, which is the difference between judging a decision and
+  judging it with hindsight.
+
+  **The filter runs before the supersedes walk**, and that order is the whole
+  correctness argument: a correction written after the cutoff had not been
+  made yet, so applying it would produce a state the record never held.
+
+  An unstamped line survives every cutoff, following the clocks canon's own
+  rule that absent sorts before present: a legacy line lacks a transaction
+  time because it predates the clock, not because it was written later. A
+  naive `as_of` is refused, because a cutoff read in the local zone returns
+  different records on different machines.
 - **An exercise registry, and restrictions that can finally see a set** (#98,
   increment 2 of #59). Two defects, one registry.
 
