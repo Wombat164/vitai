@@ -5,6 +5,40 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Transport, custody and cipher as engine interfaces, with a conformance
+  suite** (#108). `vitai conform --transport X --custody Y`. The suite is the
+  deliverable, not the prose: a written contract produces implementations that
+  mostly work and fail strangely; a suite produces implementations that either
+  pass or do not.
+
+  **The bundled implementations run it as ordinary implementations.** That is
+  the test of whether the layering is real - every layered architecture that
+  failed did so because the first-party version quietly used a capability the
+  interface never exposed. A third party's implementation is resolved by
+  dotted path and handed to the same suite.
+
+  Three transports (directory, memory, mirror) and two custody backends (file,
+  environment), because an interface with one implementation is a refactor
+  waiting to happen - and the one that catches a hidden assumption is the one
+  shaped least like the first.
+
+  **Backup is not a subsystem.** A second transport configured for retention
+  IS the backup, and restore is `list()` plus `get()`. That falls out of
+  #105's append-only blob set rather than being designed.
+
+  **The engine ships no cipher, and that is a refusal rather than a gap.** The
+  standard library has no authenticated encryption, and hand-rolling one is
+  how this goes wrong - so `Cipher` is a contract with no bundled
+  implementation and `plan_upload` REFUSES to hand a transport anything
+  unsealed. Blob ids are derived by HMAC under the record's own key, so the
+  mapping from a filename is not computable by whoever holds the blobs, and
+  sizes are padded to powers of two (#106).
+
+  The restore drill is an engine capability: given a custody backend and a
+  transport, put the record through and get it back. The failure mode is not
+  "never stored the key" but "believed they stored it".
+
 ## [0.3.0] - 2026-08-01
 
 The increment where the record learned to say how it knows things, and the
