@@ -22,7 +22,7 @@ from .api import Vitai
 from .config import load_inference_config
 from .inference import append_inferences, backend_from_config, run_inference
 from .jsonl import DataError, load_report, read_lines
-from .safety import banner
+from .safety import DISCLAIMER, banner
 from .schema import (KEYS, impossible_claim_problems, recorded_at_problems,
                      supersedes_problems, timestamp_advisories,
                      unranked_source_problems, validate_record)
@@ -896,6 +896,10 @@ def cmd_status(args: argparse.Namespace) -> None:
     pts = sorted((w["date"], w["kg"]) for w in data["weight"] if w.get("kg") is not None)
     if not pts:
         print("no weight data yet - weight.jsonl alone still carries the primary goal")
+        # The early return skipped the disclaimer, so the line described as
+        # "always present" was absent exactly when the record was new - which
+        # is the first thing anybody sees.
+        print(DISCLAIMER)
         return
     d, kg = pts[-1]
     line = f"{kg:.1f} kg ({d})"
@@ -918,6 +922,11 @@ def cmd_status(args: argparse.Namespace) -> None:
                   if ln.startswith("- **")]
         line += f" - tripwires: {len(firing) or 'none'}"
     print(line)
+    # Tier 1 (#110): always present, never fires. A disclaimer that interrupts
+    # gets dismissed; one that is simply always there gets read once and
+    # stays true. This is the artefact carrying the weight, so it goes where
+    # the athlete looks most often rather than where it is least in the way.
+    print(DISCLAIMER)
 
 
 def main(argv: list[str] | None = None) -> None:

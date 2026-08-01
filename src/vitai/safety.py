@@ -1,8 +1,9 @@
 """Deterministic severity-to-action. The one loud exception to never-shame.
 
 G28, and the highest-stakes thing in the model. Everything else vitai computes
-is a coaching input; this decides whether to tell someone to stop and see a
-clinician. Until now that decision lived as prose in a skill file, which means
+is a coaching input; this decides whether vitai STOPS - whether it declines
+to issue a plan, a progression or a session at all. Until now that decision
+lived as prose in a skill file, which means
 a coach optimising for adherence could reason around it, soften it, or simply
 not reach it. Prose can be argued with. A branch cannot.
 
@@ -20,12 +21,17 @@ an explicit `severity: red_flag` written by a skill.
 That combination is deliberate and one-directional: a model can only ever ADD
 an escalation, never remove one. If the coach fails to recognise something,
 the engine still fires. If the coach over-calls it, the worst case is an
-unnecessary "get this looked at", which is the cheap direction of the trade.
+unnecessary refusal to program, which is the cheap direction of the trade.
 
 ## What this is not
 
-It is not diagnosis, and it never names a condition. Every escalation routes
-to a human clinician. The thresholds below are deliberately conservative
+It is not diagnosis, it never names a condition, and it does not route
+anybody anywhere (#110). Every escalation states WHAT WAS OBSERVED and WHAT
+VITAI WILL NOT DO, and stops there - what the reader does about it is theirs
+to decide, and an instruction this tool cannot help anyone carry out is an
+open item they cannot close. The one exception is the acute tier, where
+calling emergency services is an act the person can perform immediately and
+alone. The thresholds below are deliberately conservative
 SCREENING bounds - wide enough that a trained endurance athlete's genuinely
 low resting heart rate does not trip them, narrow enough to catch a number
 that should not occur in a person who is fine. Over-triage is the accepted
@@ -40,7 +46,8 @@ from .schema import IDENTITY_KEY, _restriction_classes, onset_of
 
 # --- escalation levels --------------------------------------------------------
 # EMERGENCY: same day, do not wait for the weekly review.
-# URGENT: contact a clinician; stop the gated activity now.
+# URGENT: stop the gated activity now; the refusal stands until the record
+#         says otherwise.
 # ADVISORY: worth raising at the next check-in.
 # HOLD sits between them because it is not a louder message - it is a different
 # ACT. An escalation tells the athlete something; a hold changes what the system
@@ -51,68 +58,134 @@ EMERGENCY, HOLD, URGENT, ADVISORY = "emergency", "hold", "urgent", "advisory"
 LEVEL_ORDER = {EMERGENCY: 0, HOLD: 1, URGENT: 2, ADVISORY: 3}
 BLOCKING_LEVELS = (EMERGENCY, HOLD)
 
+# EVERY LEVEL EXITS ON THE RECORD, never on a person (#110).
+#
+# A gate whose exit condition is "a clinician has reviewed you" is not a gate,
+# it is a wall: the record owner cannot reach it through the tool, so the state
+# is permanent as far as anything here can tell, and a permanent warning is one
+# that gets dismissed. Whatever the athlete does about their health is theirs
+# to decide - but the SYSTEM's own state has to be something they can change by
+# recording what is true.
+#
+# Stated per level rather than in prose so it is checkable, and so a new level
+# cannot be added without answering the question.
+LEVEL_EXITS = {
+    EMERGENCY: "the episode is recorded as resolved, or the reading that "
+               "raised it is corrected or superseded in the record",
+    HOLD: "the record no longer shows the pattern - intake back above the "
+          "threshold, or the load down - sustained rather than for one day",
+    URGENT: "the episode is recorded as resolved, or its restriction is "
+            "lifted by a check the record owner can perform",
+    ADVISORY: "the observation stops being true in the record, or the athlete "
+              "records the context that explains it",
+}
+
 # --- hardcoded messages -------------------------------------------------------
 # These strings are the product. They are constants so that what the athlete
 # reads in a genuine emergency is exactly what was reviewed and tested, not
 # something assembled at runtime by a model optimising for tone.
-MESSAGES: dict[str, str] = {
+# --- the acute tier -----------------------------------------------------------
+# THE ONE PLACE a care instruction is permitted, kept structurally separate so
+# the distinction cannot erode into "well, this one is nearly as serious".
+#
+# Calling emergency services is not an appointment. It is an act the person can
+# perform immediately, alone, at any hour, with no gatekeeper - which is
+# exactly what makes it different from naming a professional to go and find:
+# an instruction the tool cannot help anyone complete, re-raised every week
+# until they do.
+#
+# The list is closed and short by design: chest pain with the features that
+# make it cardiac until proven otherwise, and losing consciousness. Adding to
+# it is a decision, not a tidy-up, and the fixture test hashes these strings so
+# a change has to be deliberate.
+ACUTE: dict[str, str] = {
     "cardiac": (
         "STOP exercising now. Chest pain, pressure or tightness is not a "
         "training problem and must not be worked around. If it is severe, "
         "spreading to the arm, neck or jaw, or comes with breathlessness, "
-        "sweating, nausea or fainting, call emergency services. Otherwise "
-        "contact a doctor today. Do not train again until a clinician has "
-        "cleared you."),
+        "sweating, nausea or fainting, call emergency services. No training "
+        "is programmed against this."),
+    "syncope": (
+        "STOP training now. If you have lost consciousness and have not come "
+        "round properly, or it happened with chest pain or breathlessness, "
+        "call emergency services. Losing consciousness around exercise is "
+        "never explained by being unfit, and no training is programmed "
+        "against it."),
+}
+
+# --- hardcoded messages -------------------------------------------------------
+# OBSERVATION PLUS REFUSAL, and nothing else (#110).
+#
+# These constants used to end by naming a professional for the reader to go
+# and find, and nine of thirteen did. That is care NAVIGATION, and it is wrong
+# here for two independent reasons.
+#
+# (The professions are not listed here on purpose: the boundary test reads
+# every string and comment in this file, so naming them would trip the guard
+# that exists to keep them out.)
+#
+# It is wrong as design: an instruction the tool cannot help anyone carry out
+# is an open item the record owner cannot close, re-raised at every review
+# until it becomes noise to be dismissed. Nobody in consumer fitness tracks an
+# appointment as an action item; that is a care-plan feature and it lives in
+# patient portals, where a clinician owns the list.
+#
+# And it is wrong as a claim. Under both regimes the trigger is the CLAIM, not
+# the technology: FDA's general-wellness policy and MDCG 2019-11 / MDR Annex
+# VIII Rule 11 all turn on whether a product asserts a medical purpose. A tool
+# telling the reader their record shows a pattern needing assessment, and to
+# go and obtain that assessment, has asserted one. A tool saying "this is
+# unresolved, so no progression is issued" has not. The strings were the
+# strongest evidence that vitai intends a medical purpose, and the engine does
+# not need them to be safe.
+#
+# So every constant below states WHAT WAS OBSERVED and WHAT VITAI WILL NOT DO.
+# No addressee, no imperative aimed at obtaining care. What the reader does
+# with the observation is theirs to decide, which is the honest division: the
+# engine can see the record and cannot see the person.
+MESSAGES: dict[str, str] = {
+    **ACUTE,
     "rhr_absolute": (
-        "STOP training and contact a doctor today. Your recorded resting "
-        "heart rate is outside the range seen in healthy people at rest, "
-        "including trained athletes. This may be a measurement error - check "
-        "the device - but it must be ruled out rather than assumed."),
+        "Your recorded resting heart rate is outside the range seen in "
+        "healthy people at rest, including trained athletes. This may be a "
+        "measurement error and nothing here can tell the difference, so no "
+        "training is programmed against it."),
     "severe_pain": (
-        "Stop the activity that provokes this and contact a clinician. Pain "
-        "at this level is not something to train through, and no plan here "
-        "will suggest working around it."),
+        "Pain at this level is recorded as unresolved. No plan here will "
+        "suggest training through it or working around it."),
     "red_s": (
-        "Contact a doctor or a sports dietitian. Your logged intake, rate of "
-        "loss and training load together match a low-energy-availability "
-        "pattern (RED-S), which carries real risk to bone, hormonal and "
-        "cardiac health. This is the syndrome that a deficit plus hard "
-        "training can cause, so treat it as a reason to eat more and train "
-        "less until someone qualified has looked at it - not as a target met."),
+        "Your logged intake, rate of loss and training load together match a "
+        "low-energy-availability pattern (RED-S), which is associated with "
+        "bone, hormonal and cardiac harm. This is the syndrome a deficit plus "
+        "hard training can cause, so it is not a target met. No progression "
+        "is issued against this pattern."),
     "red_flag_declared": (
-        "This was recorded as a red flag. Stop the affected activity and "
-        "contact a clinician. Nothing in this record substitutes for that."),
+        "This was recorded as a red flag, so it is treated as unresolved. "
+        "No training is programmed against the affected activity."),
     "gate": (
         "This activity is gated by an active entry in your record. The gate "
         "clears when the episode is resolved in the data, not by explaining "
         "it away."),
     "clinical_hold": (
         "TRAINING IS ON HOLD. This is not a suggestion to take it easy: no "
-        "plan, progression or session will be issued until a clinician has "
-        "reviewed you. The pattern in your record - low energy availability "
-        "alongside other findings - is associated with bone, hormonal and "
-        "cardiac harm, and continuing to train through it is how that harm "
-        "happens. Take this record to a doctor or a sports physician."),
+        "plan, progression or session is issued while this stands. The "
+        "pattern in your record - low energy availability alongside other "
+        "findings - is associated with bone, hormonal and cardiac harm, and "
+        "training through it is how that harm happens. The hold lifts when "
+        "the record shows the pattern has gone: intake back above the "
+        "threshold, or the load down, sustained rather than for one day."),
     "intake_floor": (
         "Your logged intake is below the level a body needs to run on, "
-        "sustained over more than a week. Eat more today, and contact a "
-        "doctor or a registered dietitian. If your intake is low because "
-        "eating is hard right now, that is a reason to get support, not a "
-        "reason to wait."),
+        "sustained over more than a week. No progression is issued against "
+        "an intake this low."),
     "protein_floor": (
         "Your protein intake is far below what is needed during weight loss. "
         "Losing weight on inadequate protein without resistance training "
-        "takes the weight off muscle as well as fat, and that loss is hard to "
-        "reverse. Raise protein and add resistance work - and if a medication "
-        "is suppressing your appetite, tell the prescriber it is this low."),
-    "syncope": (
-        "Stop training and contact a doctor. Losing consciousness, or nearly "
-        "losing it, during or around exercise is never something to train "
-        "through and is never explained by being unfit. It needs looking at "
-        "before your next session, not after it."),
+        "takes the weight off muscle as well as fat, and that loss is hard "
+        "to reverse. No progression is issued against it."),
     "prose_symptom": (
-        "Something you wrote in a note describes a symptom that should be "
-        "checked rather than trained through. Contact a doctor. If the note "
+        "Something you wrote in a note describes a symptom, so it is treated "
+        "as unresolved and no training is programmed against it. If the note "
         "did not mean what it sounds like, record the entry properly so the "
         "record stops guessing."),
     "check_not_done": (
@@ -122,13 +195,21 @@ MESSAGES: dict[str, str] = {
         "rebuild."),
     "check_failed": (
         "Today's check did not pass, so this activity stays gated today. "
-        "That is the check doing its job, not a setback. Try again tomorrow "
-        "and tell your clinician if it keeps failing."),
+        "That is the check doing its job, not a setback. Try again tomorrow."),
     "check_passed": (
         "Today's check passed, so this restriction is lifted FOR TODAY. It "
         "returns tomorrow until the episode itself is resolved in the "
         "record."),
 }
+
+# The standing, always-present line. It carries the legal weight precisely
+# because it never fires: a disclaimer that interrupts gets dismissed, and a
+# disclaimer that is always there gets read once and remains true. Every
+# training platform in the field ships one, and it costs nothing.
+DISCLAIMER = (
+    "vitai describes what is in your record and declines to program against "
+    "what it cannot see. It is not a medical device and does not diagnose, "
+    "treat or advise on any condition.")
 
 # --- engine-owned triggers ----------------------------------------------------
 
@@ -136,8 +217,8 @@ MESSAGES: dict[str, str] = {
 # musculoskeletal site in the body-site registry (sternum, ribs, costochondral
 # pain are all real), and that is exactly the trap: a coach handed "chest pain"
 # alongside a hip and a knee will happily suggest a substitution. It does not
-# get to. Chest pain routes to a clinician first, every time, and the athlete
-# can tell the doctor it was the rib.
+# get to. Chest pain is treated as unresolved every time, and nothing is
+# programmed against it - the athlete is free to conclude it was the rib.
 RED_FLAG_SITES: dict[str, str] = {"chest": "cardiac"}
 
 # Resting heart rate outside this band is not "drifted from baseline" - it is
@@ -520,10 +601,10 @@ def escalations(medical: list[dict], daily: list[dict], weight: list[dict],
     landed on a Tuesday would defeat the point.
     """
     out: list[dict] = []
-    out += _declared_red_flags(medical)
-    out += _red_flag_sites(medical, daily)
+    out += _declared_red_flags(medical, on)
+    out += _red_flag_sites(medical, daily, on)
     out += _absolute_thresholds(daily)
-    out += _prose_symptoms(daily, sessions, medical)
+    out += _prose_symptoms(daily, sessions, medical, on)
     out += _intake_and_protein_floors(daily, weight, medical, sessions)
     if include_red_s:
         out += _red_s(daily, weight, sessions, medical)
@@ -534,7 +615,25 @@ def escalations(medical: list[dict], daily: list[dict], weight: list[dict],
     return out
 
 
-def _declared_red_flags(medical: list[dict]) -> list[dict]:
+def _still_open(medical: list[dict], on: str | date | None) -> list[dict]:
+    """The episodes that are still open, or every row if no date is given.
+
+    Both red-flag paths used to iterate the RAW rows, so a flag recorded once
+    fired forever - recording `status: resolved` with a `resolved_date`
+    changed nothing, and the athlete had no way to exit the state through the
+    record. `LEVEL_EXITS` promises "the episode is recorded as resolved" exits
+    both levels, and for these two triggers it did not (#110).
+
+    Nothing is weakened: the same rows fire, they simply stop firing once the
+    record says the episode closed. That is a gate rather than a wall.
+    """
+    if on is None:
+        return list(medical)
+    return active_episodes(medical, on)
+
+
+def _declared_red_flags(medical: list[dict],
+                        on: str | date | None = None) -> list[dict]:
     """Honour an explicit `severity: red_flag`, whoever wrote it.
 
     A skill that recognises something dangerous can raise this, and the engine
@@ -542,7 +641,7 @@ def _declared_red_flags(medical: list[dict]) -> list[dict]:
     add an escalation.
     """
     out = []
-    for rec in medical:
+    for rec in _still_open(medical, on):
         if rec.get("severity") == "red_flag" and rec.get("date"):
             out.append(_escalation(
                 str(rec["date"]), URGENT, "red_flag_declared",
@@ -550,7 +649,8 @@ def _declared_red_flags(medical: list[dict]) -> list[dict]:
     return out
 
 
-def _red_flag_sites(medical: list[dict], daily: list[dict]) -> list[dict]:
+def _red_flag_sites(medical: list[dict], daily: list[dict],
+                    on: str | date | None = None) -> list[dict]:
     """Sites that are never assumed musculoskeletal, from EITHER dataset.
 
     Both paths matter. A chest symptom logged as a medical line is obvious; a
@@ -558,7 +658,7 @@ def _red_flag_sites(medical: list[dict], daily: list[dict]) -> list[dict]:
     past as an ordinary sore spot to program around.
     """
     out = []
-    for rec in medical:
+    for rec in _still_open(medical, on):
         site = rec.get("body_site")
         if site in RED_FLAG_SITES and rec.get("date"):
             out.append(_escalation(
@@ -638,7 +738,8 @@ def _occurrences(text: str, phrase: str) -> list[int]:
 
 
 def _prose_symptoms(daily: list[dict], sessions: list[dict],
-                    medical: list[dict]) -> list[dict]:
+                    medical: list[dict],
+                    on: str | date | None = None) -> list[dict]:
     """Escalate red-flag language wherever the athlete actually wrote it.
 
     One mention is enough. Waiting for a pattern would mean waiting for the
@@ -648,8 +749,15 @@ def _prose_symptoms(daily: list[dict], sessions: list[dict],
     seen: set[tuple[str, str]] = set()
     sources = ([(r.get("date"), r.get("note")) for r in daily]
                + [(r.get("date"), r.get("note")) for r in sessions]
+               # The MEDICAL rows are read through the episode state for the
+               # same reason the two red-flag paths are: a title saying
+               # "chest pain" kept firing forever after the episode it named
+               # was recorded as resolved. `daily` and `sessions` notes are
+               # NOT episodes and have no resolution to read, so they stay -
+               # a note is a thing the athlete wrote on a day, and it does not
+               # stop having been written.
                + [(r.get("date"), f"{r.get('title') or ''} {r.get('note') or ''}")
-                  for r in medical])
+                  for r in _still_open(medical, on)])
     for when, note in sources:
         if not when:
             continue
@@ -1048,8 +1156,11 @@ def banner(rows: list[dict]) -> str:
     for row in rows:
         lines += ["", f"[{row['level'].upper()}] {row['date']} - {row['detail']}",
                   "", row["action"]]
-    lines += ["", "This is not a diagnosis. vitai routes to a clinician and stops.",
-              "=" * 68, ""]
+    # This used to end with a sentence claiming vitai sends the reader to a
+    # professional and stops - the removed claim, live on every escalation
+    # surface, which survived the rewrite of MESSAGES because the boundary
+    # test only looked inside that dict.
+    lines += ["", DISCLAIMER, "=" * 68, ""]
     return "\n".join(lines)
 
 
