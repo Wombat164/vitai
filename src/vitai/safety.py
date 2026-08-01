@@ -989,17 +989,32 @@ def _red_s(daily: list[dict], weight: list[dict], sessions: list[dict],
     # NO body-composition read at all: fall back to energy balance, which
     # cannot see the weight-stable presentation but is better than screening
     # nothing. Reached only when EA is genuinely unavailable.
+    # A MODELLED burn DECLARES itself here; it does not disqualify the screen
+    # (#49). An inflated estimate reaching a deficit makes the arithmetic read
+    # ON TARGET while the scale goes up, which is the harm - but refusing to
+    # screen at all when the burn is estimated silences RED-S detection for
+    # every athlete whose tracker models their burn, which is most of them.
+    #
+    # So the honest move is the one #37 and #68 already established: state the
+    # basis rather than withhold the finding. Declining would remove a false
+    # positive by creating a silence, and in this tier silence is the
+    # dangerous direction.
+    from .provenance import is_modelled
     balances = [float(r["kcal_in"]) - float(r["kcal_out"]) for r in window
                 if _numeric(r.get("kcal_in")) and _numeric(r.get("kcal_out"))]
+    estimated = sum(1 for r in window if is_modelled(r, "kcal_out")
+                    and _numeric(r.get("kcal_in")) and _numeric(r.get("kcal_out")))
     if len(balances) < RED_S_MIN_DAYS:
         return []
     mean_balance = sum(balances) / len(balances)
     if mean_balance > RED_S_DEFICIT_KCAL or not markers:
         return []
+    basis = (f" (the burn behind this is MODELLED on {estimated} of "
+             f"{len(balances)} days, not measured)" if estimated else "")
     return [_escalation(
         end.isoformat(), HOLD, "clinical_hold",
-        f"mean energy balance {mean_balance:.0f} kcal/day, {per_week:.0f} "
-        f"min/week of training, and: {'; '.join(markers)}")]
+        f"mean energy balance {mean_balance:.0f} kcal/day{basis}, "
+        f"{per_week:.0f} min/week of training, and: {'; '.join(markers)}")]
 
 
 # --- the fast path ------------------------------------------------------------

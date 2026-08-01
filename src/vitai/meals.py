@@ -37,9 +37,21 @@ ago the day the table shipped an update. Storing the figures used makes the
 row reproducible, and storing the table name makes it auditable.
 
 It also means this module ships no food data and takes no position on which
-table to use - a licence question, and a real one: USDA FoodData Central is
-public domain, Open Food Facts is ODbL share-alike, and the regional tables
-that are far better for prepared Belgian food each have their own terms.
+table to use - a licence question, and a real one.
+
+**The distinction that matters, so nobody vendors past it by accident.** Open
+Food Facts is ODbL, and the share-alike attaches to the DATABASE rather than
+to code that queries it. Bundling OFF entries into a shipped `foods.toml`
+would make that derived table ODbL and bind every fork of this MIT engine.
+Querying it at runtime, or an athlete pointing the engine at their own copy,
+does not. USDA FoodData Central is public domain and carries no such
+condition; CIQUAL, NEVO and NUBEL are regionally far better for prepared food
+and each have their own terms, which is a check to make before copying rather
+than after.
+
+Storing the figures on the row is what keeps that a choice: the record holds
+what some table said, this module holds no table at all, and the decision can
+be made once and written down.
 
 ## No numeric confidence, ever
 

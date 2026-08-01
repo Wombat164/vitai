@@ -18,6 +18,7 @@ from .clocks import (is_aware, is_stamp, order_key,  # noqa: F401
 from .provenance import capture_problems
 from .meals import problems as meal_problems
 from .provenance import problems as provenance_problems
+from .provenance import value_kind_problems
 
 # dataset -> ordered keys (column order for the SQLite read model)
 KEYS: dict[str, list[str]] = {
@@ -39,7 +40,7 @@ KEYS: dict[str, list[str]] = {
     "weight": ["date", "kg", "source", "note", "body_fat_pct",
                "kg_lo", "kg_hi", "body_fat_lo", "body_fat_hi", "measured_at",
                "recorded_at", "origin", "path", "origin_evidence",
-               "capture", "read_by"],
+               "capture", "read_by", "modelled"],
     # `hip_pain` is RETIRED at generation 2 in favour of `pain` + `pain_site`:
     # the hip was this record's founding injury, but a record that can only
     # describe one joint cannot describe a second one. Old lines keep it and
@@ -52,7 +53,7 @@ KEYS: dict[str, list[str]] = {
               "protein_g", "sleep_h", "rhr", "hip_pain", "alcohol", "note",
               "source", "mood", "feel", "coverage", "pain", "pain_site",
               "pain_side", "recorded_at", "origin", "path",
-              "origin_evidence", "capture", "read_by"],
+              "origin_evidence", "capture", "read_by", "modelled"],
     # `location` is RETIRED at generation 2, split into `place` (coarse, and
     # deliberately coarse - "home"/"work"/a travel slug, never an address) and
     # `route` (a personal slug the athlete names). Free text could not be
@@ -80,7 +81,8 @@ KEYS: dict[str, list[str]] = {
                  "source", "start_time", "elevation_m", "setting", "route",
                  "place", "with", "context", "planned", "weather", "recorded_at",
                  "track", "activity_id", "activity_source",
-                 "origin", "path", "origin_evidence", "capture", "read_by"],
+                 "origin", "path", "origin_evidence", "capture", "read_by",
+                 "modelled", "type_source"],
     # Third data tier: MODEL-INFERRED knowledge. Append-only like everything
     # else, but carries provenance (model, evidence, confidence) because it is
     # neither ground truth (observed) nor rebuildable (derived). The engine
@@ -167,7 +169,8 @@ KEYS: dict[str, list[str]] = {
     # single point. `body_fat_pct` measured BY the scale already rides the
     # `weight` line (gen-2, G36/G37); this dataset is for the other instruments.
     "measurements": ["date", "kind", "value", "source", "note", "recorded_at",
-                     "origin", "path", "origin_evidence", "capture", "read_by"],
+                     "origin", "path", "origin_evidence", "capture",
+                     "read_by", "modelled"],
     # One row per ITEM of a meal, never per dish (#96). A dish-level number
     # cannot be corrected, cannot be questioned and cannot say which part it
     # is unsure about - and the total is the least defensible part of a photo
@@ -500,6 +503,19 @@ for _ds in ("weight", "daily", "sessions", "measurements"):
     for _k in _new:
         KEY_GENERATION[_ds][_k] = CURRENT_GENERATION[_ds]
 
+# --- was it measured at all? (#49, #88) ---------------------------------------
+# Its OWN generation on top of #78's above, for the reason #78 was filed:
+# that generation has now shipped, so a row an existing deployment stamped
+# with it must not suddenly owe keys it cannot have.
+# `modelled` names the fields on a row that are model outputs; `type_source`
+# says how a categorical label was assigned. Both answer "was this observed",
+# which origin and capture do not.
+for _ds in ("weight", "daily", "sessions", "measurements"):
+    CURRENT_GENERATION[_ds] += 1
+    _new = ["modelled"] + (["type_source"] if _ds == "sessions" else [])
+    for _k in _new:
+        KEY_GENERATION[_ds][_k] = CURRENT_GENERATION[_ds]
+
 
 def key_generation(dataset: str, key: str) -> int:
     """Generation a key was introduced in (1 = founding)."""
@@ -647,6 +663,7 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
     if dataset in ("weight", "daily", "sessions", "measurements", "meals"):
         problems += provenance_problems(rec)
         problems += capture_problems(rec)
+        problems += value_kind_problems(rec, KEYS[dataset])
     if dataset == "meals":
         problems += meal_problems(rec)
     if dataset == "sessions":

@@ -74,12 +74,23 @@ from .schema import KEYS
 #     photograph of a console read by a model is an inference over an
 #     artifact, not a reading of an instrument, and MUST NOT be rendered as
 #     device-measured.
-# 12: resolution audit (#73) - `resolution` gains `discarded` (every claim
+#     ALSO 11, shipped in the same build: resolution audit (#73). It was
+#     briefly numbered 12 here, but no database ever emitted a 12 - the two
+#     changes merged within an hour of each other and both went out under 11,
+#     so a consumer gating on 11 gets both. Renumbered to say what shipped
+#     rather than what was intended. `resolution` gains `discarded` (every claim
 #     that lost, not only the runner-up) and `unattributed_loser`, and a new
 #     `unattributed_claim_lost` tripwire. A consumer showing a canonical value
 #     can now say what it beat; before this, a resolved value had no way to
 #     say it had beaten anything at all.
-# 12: the itemised meal estimate (#96) - a `meals` table, one row per
+# 12: was it measured at all (#49, #88) - `modelled` on the observation
+#     datasets names the FIELDS on a row that are model outputs rather than
+#     observations, and `type_source` on `sessions` says how a categorical
+#     label was assigned. A consumer summing a column MUST check `modelled`:
+#     an inflated estimate reaching a deficit reads ON TARGET while the scale
+#     goes up. A `type` carrying `vendor-classified` is a third-party model's
+#     guess, not something the athlete or a device asserted.
+# 14: the itemised meal estimate (#96) - a `meals` table, one row per
 #     INGREDIENT of a photographed meal, with a gram estimate, a gram RANGE,
 #     and the per-100 g composition figures as the food table gave them
 #     alongside the table's name. Three things a consumer must not get wrong.
@@ -91,7 +102,7 @@ from .schema import KEYS
 #     never feed `daily.kcal_in`, a total must never be rendered without its
 #     range, and a consumer that sums meals into a day is asserting the
 #     athlete ate nothing they did not photograph.
-CONTRACT_VERSION = "12"
+CONTRACT_VERSION = "14"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
@@ -123,6 +134,7 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               "origin", "path", "origin_evidence", "trust", "chain", "compares",
               "capture", "read_by",
               "discarded",
+              "modelled", "type_source",
               "scope",
               # #43. `activity_id` MUST be TEXT: a REAL-affinity column
               # converts "9914203377" to a float, which destroys leading
