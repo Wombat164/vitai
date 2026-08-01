@@ -570,3 +570,141 @@ def test_a_type_source_needs_a_type():
     from vitai.provenance import value_kind_problems
     assert any("needs a 'type'" in p for p in
                value_kind_problems({"type_source": "vendor-classified"}, []))
+
+
+# ---- a correction that is in the file and did nothing ---------------------
+#
+# `retire` walks backwards so a line can only be superseded by a LATER one.
+# "Later" means later in the MERGED order, and that order is not always the
+# order the athlete wrote things in.
+
+def _adv(rows):
+    from vitai.schema import corrections_that_did_not_apply
+    return corrections_that_did_not_apply(
+        "weight", list(enumerate(rows, start=1)))
+
+
+def test_an_unstamped_correction_of_a_stamped_line_is_reported():
+    assert _adv([weight(kg=8.04, recorded_at="2030-05-01T07:00:00+02:00"),
+                 weight(kg=80.4, supersedes="2030-05-01/scale")])
+
+
+def test_a_correction_stamped_EARLIER_than_its_target_is_reported():
+    """Two devices, and #105 explicitly embraces per-device clock skew. Each
+    file is monotonic on its own; the correction still sorts first and does
+    nothing, and looking for "unstamped" would never see it."""
+    assert _adv([weight(kg=80.4, supersedes="2030-05-01/scale",
+                        recorded_at="2030-05-01T06:59:00+02:00"),
+                 weight(kg=8.04, recorded_at="2030-05-01T07:00:00+02:00")])
+
+
+def test_an_unstamped_correction_above_its_unstamped_target_is_reported():
+    """A wholly unstamped record orders by position, so a re-import that
+    appends the bad row again AFTER the correction loses it. Nothing here is
+    stamped, so a stamped-target rule would miss it entirely."""
+    assert _adv([weight(kg=80.4, supersedes="2030-05-01/scale"),
+                 weight(kg=8.04)])
+
+
+def test_a_correction_that_applied_is_not_reported():
+    """An advisory that fires on the working case is one people learn to
+    ignore - and every correction shares its target's key in the commonest
+    shape, so counting the correction itself would report all of them."""
+    assert _adv([weight(kg=8.04, recorded_at="2030-05-01T07:00:00+02:00"),
+                 weight(kg=80.4, supersedes="2030-05-01/scale",
+                        recorded_at="2030-05-02T07:00:00+02:00")]) == []
+
+
+def test_a_chain_is_not_ambiguity():
+    """A superseded by B, B superseded by C legitimately shares one reference
+    and retires all of it. That is documented behaviour."""
+    assert _adv([weight(kg=8.04, recorded_at="2030-05-01T07:00:00+02:00"),
+                 weight(kg=80.4, supersedes="2030-05-01/scale",
+                        recorded_at="2030-05-02T07:00:00+02:00"),
+                 weight(kg=80.6, supersedes="2030-05-01/scale",
+                        recorded_at="2030-05-03T07:00:00+02:00")]) == []
+
+
+def test_the_advisory_clears_when_the_record_is_repaired():
+    """THE defect in the first cut, and the reason this is an advisory rather
+    than a problem. That version checked the SHAPE of lines already on disk,
+    so nothing an athlete could append ever cleared it - and its own remedy
+    said to add a field to an existing line, which append-only forbids and
+    `append_many` refuses. A row that fails the build with no legal path to
+    green is the #38 mistake.
+
+    Asking whether the correction APPLIED is self-clearing: the append that
+    repairs the record retires the dead line along with the value it was
+    aiming at.
+    """
+    broken = [weight(kg=8.04, recorded_at="2030-05-01T07:00:00+02:00"),
+              weight(kg=80.4, supersedes="2030-05-01/scale")]
+    assert _adv(broken), "premise"
+    repaired = broken + [weight(kg=80.4, supersedes="2030-05-01/scale",
+                                recorded_at="2030-05-04T07:00:00+02:00")]
+    assert _adv(repaired) == []
+
+
+def test_it_never_fails_a_build(tmp_path, capsys):
+    """The lines are on disk, they are not malformed, and the record still
+    builds. What was wrong is that a correction could do nothing silently."""
+    from vitai.cli import main
+    root = repo(tmp_path)
+    write(root, [weight(kg=8.04, recorded_at="2030-05-01T07:00:00+02:00"),
+                 weight(kg=80.4, supersedes="2030-05-01/scale")])
+    capsys.readouterr()
+    assert main(["validate", "--root", str(root)]) in (0, None)
+    out = capsys.readouterr().out
+    assert "did NOT apply" in out
+    # One prefix, and no filename or line number: `validate` hands this the
+    # merged stream across every device file, so a line number belongs to
+    # whichever file it came from.
+    assert "ADVISORY: advisory:" not in out
+
+
+def test_the_defect_it_reports_is_real(tmp_path):
+    """The premise, end to end: without this the typo stays in the record and
+    nothing anywhere says so.
+
+    WHEN THIS FAILS, the ordering has been fixed - and this advisory has
+    become a false-positive generator. Delete both.
+    """
+    from vitai.api import Vitai
+    root = repo(tmp_path)
+    write(root, [weight(kg=8.04, recorded_at="2030-05-01T07:00:00+02:00"),
+                 weight(kg=80.4, supersedes="2030-05-01/scale")])
+    assert Vitai(root).canonical()["weight"][0]["kg"] == 8.04
+
+
+def test_the_remedy_in_the_message_actually_works(tmp_path):
+    """An advisory whose remedy cannot be carried out is worse than silence,
+    because it costs the reader an attempt before they learn that.
+
+    The first cut told the athlete to "add a recorded_at later than the line
+    being corrected". That is editing a line, which append-only forbids, and
+    `append_many` refuses a caller-supplied `recorded_at` anyway - so the
+    instruction was unexecutable by every supported path. This walks the one
+    it now gives, end to end.
+
+    Dates are near the present here rather than the suite's usual 2030,
+    because appending stamps with the real clock and the engine refuses a
+    stamp that would run backwards - which is correct, and which a synthetic
+    future date makes untestable.
+    """
+    from vitai.api import Vitai
+    from vitai.cli import main
+    root = repo(tmp_path)
+    old = weight(date="2026-05-01", kg=8.04,
+                 recorded_at="2026-05-01T07:00:00+02:00")
+    write(root, [old, weight(date="2026-05-01", kg=80.4,
+                             supersedes="2026-05-01/scale")])
+    engine = Vitai(root)
+    assert engine.canonical()["weight"][0]["kg"] == 8.04, "premise"
+
+    fix = {k: v for k, v in weight(date="2026-05-01", kg=80.4,
+                                   supersedes="2026-05-01/scale").items()
+           if k not in ("recorded_at", "_gen", "device")}
+    engine.append("weight", fix)
+
+    assert Vitai(root).canonical()["weight"][0]["kg"] == 80.4
+    main(["validate", "--root", str(root)])

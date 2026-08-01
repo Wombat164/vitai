@@ -24,7 +24,8 @@ from .inference import append_inferences, backend_from_config, run_inference
 from .devices import stream_paths
 from .jsonl import DataError, load_report, read_lines
 from .safety import DISCLAIMER, banner
-from .schema import (KEYS, impossible_claim_problems, recorded_at_problems,
+from .schema import (KEYS, corrections_that_did_not_apply,
+                     impossible_claim_problems, recorded_at_problems,
                      supersedes_problems, timestamp_advisories,
                      unranked_source_problems,
                      unstamped_after_the_clock_started, validate_record)
@@ -1075,6 +1076,10 @@ def cmd_validate(args: argparse.Namespace) -> None:
         for p in supersedes_problems(name, rows):
             print(p)
             problems += 1
+        # ADVISORY, not a problem: the lines are on disk, they are not
+        # malformed, and the record still builds. What was wrong is that a
+        # correction could do nothing and nothing said so.
+        advisories += corrections_that_did_not_apply(name, rows)
         advisories += timestamp_advisories(name, rows)
         # A missing track file is NOT a missing session: the session is the
         # fact and the track is an attachment, so a broken pointer is

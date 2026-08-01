@@ -1334,6 +1334,76 @@ def supersedes_problems(dataset: str, rows: list[tuple[int, dict]]) -> list[str]
     return problems
 
 
+def corrections_that_did_not_apply(dataset: str,
+                                   rows: list[tuple[int, dict]]) -> list[str]:
+    """ADVISORY: a correction that is in the file and did nothing.
+
+    `retire` walks BACKWARDS so a line can only be superseded by a LATER one,
+    which is what stops a same-day correction sharing its target's key from
+    superseding itself. "Later" means later in the MERGED order - `(recorded_at,
+    device, position)`, with an unstamped row sorting first - and that order is
+    not always the order the athlete wrote things in. An unstamped correction
+    of a stamped line, a correction stamped a minute earlier than its target by
+    a second device's clock, an unstamped correction in a device file whose
+    slug sorts first: each is ordered BEFORE the line it corrects, so the walk
+    reaches the target before it ever sees the reference and the target
+    survives. The correction validates, reads correctly to a human, and does
+    nothing. A typo fixed from 8.04 to 80.4 leaves 8.04 in the record.
+
+    ASKED, NOT DERIVED. The first cut looked for the shape - unstamped
+    correction, stamped target - and got three cases wrong in both directions.
+    This runs the same retirement `load` runs and asks whether the correction
+    survived ALONGSIDE something it was supposed to retire, which is the actual
+    question and is exact.
+
+    That also makes it self-clearing, which a build-failing version was not:
+    the append that fixes the record - a fresh, engine-stamped correction -
+    retires the dead line along with the value it was aiming at, and this goes
+    quiet. An on-disk row that fails the build with no legal path to green is
+    the #38 mistake, and append-only means editing the line is not a path.
+
+    An ADVISORY for the same reason: the lines are already on disk, they are
+    not malformed, and the record still builds. What was wrong was that
+    nothing said so.
+    """
+    from .devices import merge
+    from .jsonl import line_key, retire
+    # IN MERGED ORDER, which is the whole point. `validate` hands these over
+    # in FILE order, one device file after another, and in file order the
+    # correction sits below its target and applies perfectly. The defect is
+    # created by the reordering, so a check that skips it cannot see it.
+    #
+    # `merge` over a single unnamed stream is the same code path with one
+    # actor, so a single-file record is ordered exactly as `load` orders it.
+    lines = merge([("", [r for _, r in rows])], dataset)
+    survived = retire(dataset, lines)
+    by_key: dict[str, list[dict]] = {}
+    for r in survived:
+        by_key.setdefault(line_key(dataset, r), []).append(r)
+
+    out = []
+    for r in survived:
+        if not (ref := r.get("supersedes")):
+            continue
+        # Everything still alive under the referenced key EXCEPT this line.
+        # A correction shares its target's key in the commonest shape, so
+        # counting itself would report every correction ever written.
+        stale = [o for o in by_key.get(str(ref), []) if o is not r]
+        if not stale:
+            continue
+        when = ", ".join(sorted({str(o.get("date")) for o in stale})[:4])
+        out.append(
+            f"{dataset}: a correction of {ref!r} did "
+            f"NOT apply - the line it names is still in the record (dated "
+            f"{when}), so the value it was meant to replace is what every "
+            f"reader sees. It sorted before the line it corrects, which "
+            f"happens when a correction carries no recorded_at and its target "
+            f"does, or when two devices stamp out of order. Append the "
+            f"correction again with `vitai append` and the engine will stamp "
+            f"it late enough to take effect")
+    return out
+
+
 def recorded_at_problems(dataset: str, rows: list[tuple[int, dict]]) -> list[str]:
     """File-level checks on transaction time: monotonic, and no exact ties.
 

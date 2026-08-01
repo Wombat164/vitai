@@ -29,6 +29,31 @@ versioning follows [SemVer](https://semver.org/).
   actually deliver; finishing G14, so a toml change is snapshotted into the
   record and `state` becomes total, remains open.
 
+- **A correction that does nothing now says so.** `load` walks the record
+  backwards so a line can only be superseded by a LATER one, which is what
+  stops a same-day correction sharing its target's key from superseding
+  itself. "Later" means later in the MERGED order - `(recorded_at, device,
+  position)`, with an unstamped row sorting first - and that is not always
+  the order the athlete wrote things in.
+
+  So a correction can sort BEFORE the line it corrects: an unstamped
+  correction of a stamped line, a correction stamped a minute earlier by a
+  second device's clock, an unstamped correction in a device file whose slug
+  sorts first. The walk reaches the target before it ever sees the reference,
+  the target survives, and the correction validates, reads correctly to a
+  human and does nothing. A typo fixed from 8.04 to 80.4 left 8.04 in the
+  record.
+
+  `vitai validate` now reports it, as an ADVISORY: the lines are already on
+  disk, they are not malformed, and the record still builds. What was wrong
+  was that nothing said so. It asks whether the correction APPLIED - running
+  the same retirement `load` runs - rather than looking for the shape, which
+  makes it exact and, more importantly, self-clearing: the append that
+  repairs the record retires the dead line along with the value it was aiming
+  at. The ordering itself is unchanged, because deciding what "later" means
+  for a row that declined to say when it was written is a question for the
+  clocks doctrine rather than a validator.
+
 - **Key custody: an untested backup is not a backup** (#107). `vitai key new`
   and `vitai key check`, plus a setup that cannot report success without a
   passing restore drill.
