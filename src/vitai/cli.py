@@ -449,8 +449,12 @@ def cmd_artifact(args: argparse.Namespace) -> None:
         return
     sys.exit(f"{len(broken)} artifact(s) can no longer back the values citing them")
 def cmd_sets(args: argparse.Namespace) -> None:
-    """Logged sets (#97), in the order they were performed."""
-    rows = Vitai(_root(args)).sets(args.on)
+    """Logged sets (#97) and the reads over them (#100)."""
+    v = Vitai(_root(args))
+    if getattr(args, "action", "list") != "list":
+        _sets_read(v, args)
+        return
+    rows = v.sets(args.on)
     if args.json:
         for row in rows:
             print(json.dumps(row))
@@ -460,6 +464,70 @@ def cmd_sets(args: argparse.Namespace) -> None:
         return
     for row in rows:
         print(_set_line(row))
+
+
+def _sets_read(v: Vitai, args: argparse.Namespace) -> None:
+    """The derivations (#100). Half of this is printing refusals."""
+    if args.action in ("progression", "working-weight") and not args.exercise:
+        sys.exit(f"`vitai sets {args.action}` needs an exercise to be about")
+
+    if args.action == "working-weight":
+        got = v.working_weight(args.exercise)
+        if got.get("load") is None:
+            # `.get`, not `[...]`: every decline carries a reason now, but a
+            # KeyError here would take down the verb on the commonest case
+            # there is - a bodyweight movement, which has no load figure at
+            # all. A missing reason prints as one.
+            print(got.get("detail") or "no working weight for this exercise")
+            return
+        # The failure state travels WITH the number: "80 kg for 8" means
+        # something different depending on whether 8 was all there was.
+        ended = (f"{got['failure']} failure" if got.get("failure")
+                 else "endpoint unstated, so this is not a maximum")
+        print(f"{got['exercise']}: {got['load']:g} [{got['scale']}] x "
+              f"{got['reps']} on {got['date']} - {ended}")
+        _maturity(got.get("sessions", 0))
+        return
+
+    if args.action == "progression":
+        got = v.set_progression(args.exercise, args.machine)
+        for finding in got["findings"]:
+            print(f"{finding['kind'].upper()}: {finding['detail']}")
+        for point in got["points"]:
+            load = f"{point['load']:g} [{point['scale']}]" if point["load"] \
+                is not None else point["scale"]
+            mark = "" if point["maximal_evidence"] else "  (not a maximum)"
+            reps = ("FAILED" if not point["reps_completed"]
+                    and (point["reps_attempted"] or 0) else
+                    f"{point['reps_completed']} reps")
+            print(f"{point['date']}  {load} x {reps}{mark}")
+        if got["points"]:
+            _maturity(got.get("sessions", 0))
+        return
+
+    if args.action == "volume":
+        got = v.set_volume(args.on)
+        for row in got["by_exercise"]:
+            failed = (f", {row['failed_attempts']} failed attempt(s)"
+                      if row["failed_attempts"] else "")
+            print(f"{row['exercise']}: {row['sets']} sets, "
+                  f"{row['reps']} reps{failed}")
+        print(f"total: {got['sets']} sets, {got['reps']} reps")
+        return
+
+    got = v.set_tonnage(args.on)
+    for row in got["by_scale"]:
+        basis = "modelled" if "modelled" in row["basis"] else "measured"
+        print(f"{row['scale']}: {row['tonnage']:,.0f} over {row['sets']} "
+              f"set(s) [{basis}]")
+    for finding in got["findings"]:
+        print(f"{finding['kind'].upper()}: {finding['detail']}")
+
+
+def _maturity(sessions: int) -> None:
+    """P3/G27: a trend over two sessions does not get a year-of-data voice."""
+    if sessions < 3:
+        print(f"({sessions} session(s) - too thin to read as a trend)")
 
 
 def _set_line(row: dict) -> str:
@@ -999,6 +1067,12 @@ def main(argv: list[str] | None = None) -> None:
         if name == "append":
             p.add_argument("dataset", help="which dataset to append to")
         if name == "sets":
+            p.add_argument("action", nargs="?", default="list",
+                           choices=("list", "progression", "working-weight",
+                                    "volume", "tonnage"))
+            p.add_argument("exercise", nargs="?",
+                           help="which movement (progression, working-weight)")
+            p.add_argument("--machine", help="scope a progression to one machine")
             p.add_argument("--on", metavar="YYYY-MM-DD", help="only this date")
             p.add_argument("--json", action="store_true",
                            help="emit set rows as JSONL instead of prose")
