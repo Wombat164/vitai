@@ -345,10 +345,13 @@ def test_red_s_fires_on_deep_deficit_plus_fast_loss_plus_load():
     red_s = [r for r in rows if r["trigger"] == "clinical_hold"]
     assert len(red_s) == 1
     # Issue #12 raised this from a message to a HOLD: the correct response is
-    # to suspend progression and refer, not to add a line to the rollup.
+    # to suspend progression, not to add a line to the rollup. #110 removed
+    # the second half of that - "and refer" - so what is asserted now is the
+    # ACT and an exit the record owner can reach, rather than an addressee.
     assert red_s[0]["level"] == HOLD
     assert "TRAINING IS ON HOLD" in red_s[0]["action"]
-    assert "clinician" in red_s[0]["action"] or "doctor" in red_s[0]["action"]
+    assert "no plan, progression or session is issued" in red_s[0]["action"]
+    assert "The hold lifts when the record shows" in red_s[0]["action"]
 
 
 def test_red_s_does_not_fire_on_a_deficit_alone():
@@ -410,12 +413,17 @@ def test_the_banner_is_empty_when_clear():
     assert banner([]) == ""
 
 
-def test_the_banner_says_it_is_not_a_diagnosis():
+def test_the_banner_carries_the_standing_disclaimer_and_routes_nobody():
+    """It used to end "vitai routes to a clinician and stops" - the removed
+    claim, live on every escalation surface, asserting exactly the medical
+    purpose #110 exists to disclaim."""
+    from vitai.safety import DISCLAIMER
     rows = escalations([], [daily(date="2030-05-10", pain=4, pain_site="chest")],
                        [], [])
     text = banner(rows)
-    assert "not a diagnosis" in text
-    assert "clinician" in text
+    assert DISCLAIMER in text
+    assert "not a medical device" in text
+    assert "routes to a clinician" not in text
 
 
 # ---- surfaces: CLI, API, read model -----------------------------------------
@@ -1144,3 +1152,216 @@ def test_a_measured_burn_carries_no_caveat():
     held = [e for e in escalations(injury, starved, body, training,
                                    on=date(2030, 5, 14)) if e["level"] == HOLD]
     assert held and "MODELLED" not in held[0]["detail"]
+
+
+# ---- the medical boundary (#110) ------------------------------------------------
+
+# The acute tier, pinned. Changing a byte of either string changes this, so the
+# emergency path cannot be edited as a side effect of tidying the others - and
+# this issue cannot be used later to argue the acute path away.
+ACUTE_DIGEST = "1f2b8100422cea5a4aaeca93a79b0ee56ebc68b98f0752f969d5367311b3fe65"
+
+
+def test_the_acute_tier_is_unchanged():
+    """The carve-out, hash-pinned.
+
+    Calling emergency services is not an appointment: it is an act the person
+    can perform immediately, alone, at any hour, with no gatekeeper. That is
+    what makes it different from "contact a doctor", and it is why these two
+    keep an imperative when nothing else does.
+
+    A test that merely asserted the strings were non-empty would let a future
+    tidy-up soften them one word at a time.
+    """
+    import hashlib
+
+    from vitai.safety import ACUTE, MESSAGES
+    # Hashed off MESSAGES, which is what the runtime actually reads
+    # (`_escalation` looks up `MESSAGES[trigger]`). Pinning `ACUTE` alone left
+    # the hole open: `MESSAGES = {**ACUTE, ...}`, so a softened `"cardiac"`
+    # entry later in that literal would change what athletes see while `ACUTE`
+    # and the digest stayed byte-identical.
+    got = hashlib.sha256(
+        "\n".join(f"{k}={MESSAGES[k]}" for k in sorted(ACUTE)).encode()).hexdigest()
+    assert got == ACUTE_DIGEST, (
+        "the acute tier changed. That is a decision, not a tidy-up - if it is "
+        "deliberate, update ACUTE_DIGEST in the same commit and say why")
+    assert set(ACUTE) == {"cardiac", "syncope"}
+    for key in ACUTE:
+        assert MESSAGES[key] == ACUTE[key], (
+            f"{key} is overridden after ACUTE is spread into MESSAGES")
+        assert "emergency services" in MESSAGES[key]
+
+
+def test_no_string_outside_the_acute_tier_directs_the_reader_to_care():
+    """The acceptance criterion, asserted over the module rather than over
+    the constants I happened to think of.
+
+    Nine of thirteen `MESSAGES` used to end by naming an addressee - a doctor,
+    a sports physician, a dietitian. That is care NAVIGATION, and it is both
+    an open item the record owner cannot close inside the tool and the
+    strongest evidence that vitai asserts a medical purpose. Under FDA general
+    wellness and MDCG 2019-11 the trigger is the CLAIM, not the technology.
+
+    The earlier version of this test iterated `MESSAGES` only, which is
+    exactly why `banner()` kept printing "vitai routes to a clinician and
+    stops" through a green build: the removed claim was live on every
+    escalation surface and no assertion could see it. So this reads the
+    MODULE - every string literal, docstring and comment in safety.py - and
+    the acute tier is carved out by VALUE rather than by key name.
+    """
+    import ast
+    import io
+    import tokenize
+    from pathlib import Path as _P
+
+    from vitai.safety import ACUTE
+    directives = ("contact a doctor", "contact a clinician", "contact your",
+                  "see a doctor", "see a clinician", "consult a",
+                  "get assessed", "get checked", "take this record to",
+                  "book an appointment", "tell your clinician",
+                  "until a clinician", "dietitian", "sports physician",
+                  "referral", "refer to", "routes to a clinician",
+                  "route to a clinician", "and see a clinician")
+    source = (_P(__file__).resolve().parents[1] / "src" / "vitai"
+              / "safety.py").read_text()
+
+    spared = set(ACUTE.values())
+    chunks = [node.value for node in ast.walk(ast.parse(source))
+              if isinstance(node, ast.Constant) and isinstance(node.value, str)]
+    chunks += [tok.string for tok in
+               tokenize.generate_tokens(io.StringIO(source).readline)
+               if tok.type == tokenize.COMMENT]
+    for chunk in chunks:
+        if chunk in spared:
+            continue
+        lowered = chunk.lower()
+        for phrase in directives:
+            assert phrase not in lowered, (
+                f"a string in safety.py directs the reader ({phrase!r}): "
+                f"{' '.join(chunk.split())[:90]}")
+
+
+def test_every_message_says_what_vitai_will_not_do():
+    """Observation PLUS refusal. An observation alone is a warning that
+    leaves the reader to guess what changed; the refusal is the part that is
+    about vitai's own behaviour, which is the only thing it can speak to.
+
+    A refusal names something vitai will NOT do. "This restriction is lifted"
+    is a permission and used to satisfy this test, which made it satisfiable
+    by a message that refused nothing.
+    """
+    from vitai.safety import ACUTE, MESSAGES
+    refusals = ("no training is programmed", "no progression is issued",
+                "no plan, progression or session is issued",
+                "no plan here will suggest", "is gated", "stays gated",
+                "treated as unresolved", "the gate stands")
+    for key, text in MESSAGES.items():
+        if key in ACUTE:
+            continue
+        if key == "check_passed":
+            # The one message that is legitimately a permission: it announces
+            # that a restriction lifted today. Named rather than matched by a
+            # loose phrase, so the exception stays visible.
+            assert "lifted FOR TODAY" in text
+            continue
+        assert any(r in text.lower() for r in refusals), (
+            f"{key} observes something and never says what vitai will not do")
+
+
+def test_every_level_has_an_exit_the_record_owner_can_reach():
+    """A gate whose exit is "a clinician has reviewed you" is a wall: the
+    record owner cannot reach it through the tool, so the state is permanent
+    as far as anything here can tell - and a permanent warning is one that
+    gets dismissed.
+
+    Asserted over `LEVEL_ORDER` so a new level cannot be added without
+    answering the question.
+    """
+    from vitai.safety import LEVEL_EXITS, LEVEL_ORDER
+    assert set(LEVEL_EXITS) == set(LEVEL_ORDER)
+    for level, exit_condition in LEVEL_EXITS.items():
+        assert exit_condition, level
+        assert "clinician has reviewed" not in exit_condition, level
+
+
+def test_recording_a_resolution_actually_exits_the_state():
+    """The prose above promises "the episode is recorded as resolved" exits
+    both blocking levels. It did not: both red-flag paths and the prose
+    scanner iterated the RAW medical rows, so a flag recorded once fired
+    forever and the athlete had no exit through the record at all.
+
+    Asserted as BEHAVIOUR, because the previous test proves only that a
+    sentence exists.
+    """
+    episode = {"date": "2030-01-01", "slug": "chest", "title": "chest pain",
+               "kind": "symptom", "status": "active", "resolved_date": None,
+               "severity": "red_flag", "body_site": "chest",
+               "restricts": None, "provider_type": None, "source": None,
+               "note": None, "onset_date": None, "precondition": None}
+    while_open = escalations([episode], [], [], [], on="2030-01-03")
+    assert {r["level"] for r in while_open} & {EMERGENCY, URGENT}
+
+    resolved = {**episode, "status": "resolved",
+                "resolved_date": "2030-01-05"}
+    assert escalations([resolved], [], [], [], on="2030-12-31") == [], (
+        "recording the resolution exited nothing - the state is a wall")
+    # And it still fires for the days it was genuinely open.
+    assert escalations([resolved], [], [], [], on="2030-01-03")
+
+
+def test_a_note_the_athlete_wrote_does_not_stop_having_been_written():
+    """The counterpart, so the fix above cannot be widened into silence: a
+    `daily` or `sessions` note is not an episode and has no resolution to
+    read. Closing an episode must not retract a symptom described elsewhere.
+    """
+    rows = escalations([], [daily(date="2030-05-10", note="chest pain on the "
+                                  "stairs today")], [], [], on="2030-12-31")
+    assert any(r["trigger"] == "cardiac" for r in rows)
+
+
+def test_a_visit_dated_after_it_was_written_is_an_appointment():
+    """A `visit` records a visit that HAPPENED. A row dated later than the
+    line was written is an appointment, which is a plan - and vitai does not
+    own the record owner's plans for their own body.
+
+    Measured against the record's OWN clocks, not against today: comparing to
+    `date.today()` would make a row valid this morning and invalid tomorrow,
+    which breaks determinism and would fail every 2030-dated fixture here for
+    being prescient.
+    """
+    from vitai.schema import validate_record
+    base = {"slug": "gp", "title": "GP", "kind": "visit", "status": "active",
+            "severity": "mild", "note": None, "body_site": None,
+            "restricts": None, "resolved_date": None, "provider_type": None,
+            "source": None}
+    appointment = {**base, "date": "2030-06-01",
+                   "recorded_at": "2030-05-01T10:00:00+02:00"}
+    assert any("appointment" in p for p in
+               validate_record("medical", appointment))
+
+    happened = {**base, "date": "2030-05-01",
+                "recorded_at": "2030-05-01T18:00:00+02:00"}
+    assert not any("appointment" in p for p in
+                   validate_record("medical", happened))
+
+    # A row predating the clocks cannot be judged, and guessing would
+    # retroactively invalidate history.
+    legacy = {**base, "date": "2030-06-01", "recorded_at": None}
+    assert not any("appointment" in p for p in validate_record("medical", legacy))
+
+
+def test_the_standing_disclaimer_is_present_and_never_fires(tmp_path, capsys):
+    """Tier 1: it carries the legal weight precisely BECAUSE it never
+    interrupts. A disclaimer that fires gets dismissed."""
+    from vitai.cli import main
+    from vitai.safety import DISCLAIMER
+    assert "not a medical device" in DISCLAIMER
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    (root / "data" / "weight.jsonl").write_text(
+        '{"date": "2030-05-01", "kg": 80.0, "source": "scale", "note": null}\n',
+        encoding="utf-8")
+    capsys.readouterr()
+    main(["status", "--root", str(root)])
+    assert DISCLAIMER in capsys.readouterr().out

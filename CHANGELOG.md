@@ -5,6 +5,45 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **The engine states the observation and refuses to prescribe; it no longer
+  routes anybody to care** (#110). `safety.py` was doing three things under one
+  heading: refusing to prescribe, routing the user to a clinician, and holding
+  an appointment open as a tracked item. The second and third are gone.
+
+  Nine of thirteen `MESSAGES` ended by naming a professional to go and find.
+  That is care NAVIGATION, and it was wrong twice over. As design: an
+  instruction the tool cannot help anyone carry out is an open item the record
+  owner cannot close, re-raised at every review until it is noise. As a claim:
+  under FDA general wellness and MDCG 2019-11 / MDR Annex VIII Rule 11 the
+  trigger is the CLAIM, not the technology, and those strings were the
+  strongest evidence that vitai asserts a medical purpose. The engine does not
+  need them to be safe.
+
+  Every constant now states what was observed and what vitai will therefore
+  not do. No addressee, no imperative aimed at obtaining care.
+
+  **The acute tier is kept, verbatim and structurally separate.** Chest pain
+  and syncope retain "call emergency services", because that is an act the
+  person can perform immediately, alone, at any hour - unlike an appointment.
+  The list is closed, and a test hashes the strings the runtime actually reads
+  so the tier cannot erode a word at a time.
+
+  **Every level exits on the record.** `clinical_hold` used to clear only when
+  a clinician had reviewed the athlete, which is not a gate but a wall. And
+  both red-flag paths iterated the raw rows, so a flag fired forever - marking
+  the episode resolved exited nothing. `LEVEL_EXITS` states the exit per level,
+  and a test asserts the behaviour rather than the sentence.
+
+  **An appointment is not a visit.** `kind: visit` records something that
+  HAPPENED; a row dated after the line was written is a plan, and vitai does
+  not own the record owner's plans for their own body. Measured against the
+  record's own transaction time rather than `date.today()`, so validation stays
+  deterministic.
+
+  **A standing Tier-1 disclaimer** in `status` and the escalation banner. It
+  carries the weight precisely because it never fires.
+
 ### Added
 - **Reads over sets, and the numbers that refuse to be computed** (#100,
   increment 4 of #59). `vitai sets progression | working-weight | volume |
@@ -42,6 +81,33 @@ versioning follows [SemVer](https://semver.org/).
   direction of looking fine.
 
 ### Added
+- **A knowledge cutoff: what the record said THEN** (#130). `Vitai(root,
+  as_of=...)` and `load(..., as_of=...)` reconstruct the record at an instant,
+  using only lines whose `recorded_at` precedes it.
+
+  `clocks.py` promised exactly this in its own docstring, telling "what the
+  record said on 30 July, as we understood it then" apart from "as we
+  understand it now". The record was bitemporal in STORAGE and unitemporal in
+  EVALUATION: `recorded_at` was stamped rigorously, refused from callers and
+  monotonic by construction, and every single use of it was writing it or
+  ordering by it. Nothing ever filtered on it.
+
+  It is not the question `goals_in_force(date)` answers. That is valid time,
+  which goals APPLIED on a date using everything known now. This is
+  transaction time: what was KNOWN then. A month of degraded data whose cause
+  is filed six weeks later reads unexplained under a cutoff inside those weeks
+  and explained after, which is the difference between judging a decision and
+  judging it with hindsight.
+
+  **The filter runs before the supersedes walk**, and that order is the whole
+  correctness argument: a correction written after the cutoff had not been
+  made yet, so applying it would produce a state the record never held.
+
+  An unstamped line survives every cutoff, following the clocks canon's own
+  rule that absent sorts before present: a legacy line lacks a transaction
+  time because it predates the clock, not because it was written later. A
+  naive `as_of` is refused, because a cutoff read in the local zone returns
+  different records on different machines.
 - **An exercise registry, and restrictions that can finally see a set** (#98,
   increment 2 of #59). Two defects, one registry.
 
