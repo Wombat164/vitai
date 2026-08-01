@@ -100,7 +100,7 @@ from .schema import KEYS
 #     `load` under `load_type: machine_stack` is a PIN NUMBER, not a mass:
 #     66 on two machines is two different loads, so it is never comparable
 #     across machines and never rendered in kilograms.
-#     Also in 12: `rpe` widens from integer to numeric across every dataset
+#     Also in 15: `rpe` widens from integer to numeric across every dataset
 #     that carries it, `sessions` included. Half points are standard on the
 #     RIR-anchored scale. Strictly looser, so no row that validated before
 #     stops validating.
