@@ -68,6 +68,42 @@ aliases = ["farmer walk", "farmers carry", "suitcase carry"]
 label = "Rotation"
 aliases = ["rotation", "twist", "anti-rotation", "woodchop"]
 
+# --- the frontal-plane pair (#58) ---------------------------------------------
+# Found live, on a machine the athlete was about to load. Twelve patterns and
+# none of them named adduction or abduction, so a seated hip-adduction machine
+# - about as direct a loaded hip movement as a gym contains - could not be
+# described by the restriction system that exists to protect a hip.
+#
+# The coarse `restricts: strength` projection caught it. That is luck, not
+# design: had the restriction been written narrowly, which is exactly what
+# post-coordination encourages, the precise form would have been the only one
+# and it would have said nothing.
+#
+# `plane = frontal` IS NOT A SUBSTITUTE, and using it as one is the mistake
+# this entry exists to avoid. It would also catch abduction, lateral lunges
+# and side planks - a far wider ban than any clinician said, and
+# over-restriction is its own harm. A plane is where a movement happens; a
+# pattern is what it does.
+#
+# GROUNDED, not invented. Anatomical planes-of-motion terminology is standard
+# and universal, and this registry already carries `flexion`, `extension` and
+# `rotate` from it - so this completes a vocabulary that was already half
+# adopted rather than starting a new one (G85: the taxonomy exists, use its
+# words).
+[pattern.adduction]
+label = "Adduction"
+# Toward the midline. Adductor-related groin pain is one of the classic
+# presentations confused with hip-joint pathology, which is precisely the
+# population this gate exists for.
+aliases = ["adduct", "adductor", "hip adduction", "adductor machine",
+           "inner thigh"]
+
+[pattern.abduction]
+label = "Abduction"
+# Away from the midline: the abductor machine, lateral raises, band walks.
+aliases = ["abduct", "abductor", "hip abduction", "abductor machine",
+           "lateral raise", "side raise"]
+
 [pattern.flexion]
 label = "Flexion"
 aliases = ["crunch", "crunches", "sit up", "sit-up", "curl up", "spinal flexion"]

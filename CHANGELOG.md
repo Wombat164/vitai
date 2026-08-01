@@ -6,6 +6,26 @@ versioning follows [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`adduction` and `abduction` on the pattern axis** (#58). Found live, on a
+  machine the athlete was about to load. Twelve patterns and none of them
+  named adduction, so a seated hip-adduction machine - about as direct a
+  loaded hip movement as a gym contains - could not be described by the
+  restriction system that exists to protect a hip.
+
+  The coarse `restricts: strength` projection caught it. That is luck rather
+  than design: had the restriction been written narrowly, which is exactly
+  what post-coordination encourages, the precise form would have been the only
+  one and would have said nothing.
+
+  **`plane = frontal` is not a substitute**, and using it as one is the
+  mistake this avoids: it would also catch abduction, lateral lunges and side
+  planks, a far wider ban than any clinician said, and over-restriction is its
+  own harm. A plane is where a movement happens; a pattern is what it does.
+
+  Grounded rather than invented - the registry already carried `flexion`,
+  `extension` and `rotate` from standard planes-of-motion terminology, so this
+  finishes a vocabulary that was half adopted instead of starting a second one
+  (G85).
 - **A content-addressed artifact store** (#80). The evidence behind a value
   was discarded the moment it was read: an athlete photographs a gym console,
   a model reads the numbers off it, the numbers enter the record and the
