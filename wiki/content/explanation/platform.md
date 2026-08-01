@@ -89,9 +89,12 @@ UI priorities, or let a language model rewrite it for tone. A game must not
 mint anything from a day carrying one, and must not treat a gated day as a
 missed target.
 
-Neither table is advisory and neither is a diagnosis - they route to a human
-and stop. If you are building something that could plausibly encourage
-training, honouring these two tables is the minimum bar.
+Neither table is advisory and neither is a diagnosis - they are where the
+engine stops. Every obligation above still stands: read `gates` before
+suggesting an activity, render the escalation text verbatim, mint nothing
+from a day carrying one, and never treat a gated day as a missed target. If
+you are building something that could plausibly encourage training,
+honouring these two tables is the minimum bar.
 
 ## Single-user or multi-user?
 

@@ -229,3 +229,87 @@ def test_a_conditional_negative_is_still_a_directive():
                  "If you cannot bear weight on it, see a doctor immediately.",
                  "Unless it settles, contact your doctor."):
         assert scan(line), line
+
+
+# ---- #112 / #113 / #114: what the surface rewrite removed, locked in --------
+#
+# Every string below was live on the public surface and passed this gate. A
+# rewrite that is not also a rule is a rewrite somebody undoes.
+
+def test_a_hyphenated_directive_is_the_same_directive():
+    """`vitai init` stamped "stop-and-see-a-clinician" into every content
+    repo and the gate never saw it: each phrase was written with spaces, so
+    hyphenating one evaded all of them. Punctuation is not a boundary."""
+    assert scan("Red-flag symptoms that mean stop-and-see-a-clinician.")
+
+
+def test_hyphen_folding_does_not_move_the_exemption_digests():
+    """Matching folds hyphens; HASHING must not, or an exemption recorded
+    against a hyphenated sentence stops matching it and CI fails on a
+    sentence somebody deliberately spared.
+
+    Through `findings` on purpose. Recomputing the digest with `_norm` here
+    and comparing it to `_norm` there proves only that a function equals
+    itself: fold the hyphens on the hashing path too and that comparison
+    stays green while every hyphenated exemption lapses.
+    """
+    import hashlib
+    text = "Red-flag symptoms that mean stop-and-see-a-clinician."
+    assert scan(text), "premise: this is a directive the gate catches"
+    digest = hashlib.sha256(gate._norm(text).encode()).hexdigest()
+    assert not gate.findings(Path("x.md"), text, {digest})
+
+
+def test_no_exemption_outlives_the_sentence_it_spares():
+    """A hash with nothing behind it is an exemption nobody can review: the
+    reason beside it describes a sentence that is no longer in the file."""
+    import hashlib
+    for (path, digest) in gate.EXEMPT:
+        live = {hashlib.sha256(gate._norm(s).encode()).hexdigest()
+                for s in gate.sentences(
+                    (gate.ROOT / path).read_text(encoding="utf-8"))}
+        assert digest in live, f"{path}: no live sentence hashes to {digest}"
+
+
+def test_an_addressee_with_no_profession_is_still_an_addressee():
+    """The wiki's consumer contract told every integrator that the tables
+    "route to a human and stop". It read as safe because it named nobody."""
+    assert scan("Neither table is advisory - they route to a human "
+                    "and stop.")
+
+
+def test_a_duty_to_watch_for_a_named_syndrome_is_a_purpose_claim():
+    """ARCHITECTURE.md's principle 7 claimed "a duty to watch
+    deterministically for what its own coaching can cause (RED-S / low
+    energy availability)" - a self-assigned duty to notice a medical
+    syndrome, which is the classic sentence by which a wellness tool argues
+    itself into being a device. None of the clinical-sounding verbs were in
+    it, and neither was any of the generic medical nouns."""
+    assert scan("A tool that coaches calorie deficits owes a duty to "
+                    "watch deterministically for what its own coaching can "
+                    "cause (RED-S / low energy availability).")
+
+
+def test_ordinary_watching_is_not_a_purpose_claim():
+    """`watch ... for` is an engineering verb and `injury` is core vocabulary
+    here, so pairing them by proximity fired on sentences a test docstring
+    writes. An adverb may sit between the verb and `for`; a noun phrase may
+    not, and the object must be a named condition."""
+    assert not scan("Reviewers should watch for regressions in the injury "
+                    "parser.")
+    assert not scan("The CI job watches the fixtures for drift in the "
+                    "injuries table.")
+
+
+def test_a_human_in_the_loop_is_not_a_care_destination():
+    """"Unreviewed PRs route to a human reviewer" is the stock phrase of
+    every process document and has nothing to do with care."""
+    assert not scan("Escalations in CI route to a human reviewer before "
+                    "merge.")
+    assert scan("They route to a human and stop."), "premise"
+
+
+def test_the_engine_may_still_say_it_does_not_watch_for_anything():
+    """The disclaiming form must survive the new verb, or the doctrine
+    cannot state its own rule."""
+    assert not scan("The module never claims to watch for a syndrome.")

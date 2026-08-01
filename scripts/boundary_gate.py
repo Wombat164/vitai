@@ -45,9 +45,6 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # The public surface. `docs/` is included even though the engine never reads
 # it: a claim in a design document is still a claim, and it is the surface a
-# regulator or a contributor reads first.
-# The public surface. `docs/` is included even though the engine never reads
-# it: a claim in a design document is still a claim, and it is the surface a
 # regulator or a contributor reads first. `pyproject.toml` is here because its
 # `description` renders on PyPI, which is the single most-read sentence the
 # project has.
@@ -75,6 +72,13 @@ DIRECTIVES = (
     r"until a clinician has",
     r"refer(?:ral)? to (?:a|your) (?:doctor|clinician|specialist)",
     r"routes? to a clinician",
+    # A destination without a noun. "They route to a human and stop" gives the
+    # output an addressee just as plainly as naming the profession does, and
+    # it read as safe precisely because it named nobody. The lookahead spares
+    # the human-in-the-loop idiom, which is the stock phrase of every process
+    # document ("unreviewed PRs route to a human reviewer") and has nothing to
+    # do with care.
+    r"routes? to a human(?!\s+(?:reviewer|operator|maintainer|in.the.loop))",
     # The `get ...` family needs a care word nearby, or it fires on
     # "timestamps get checked during the build" and the lint gets deleted.
     r"get (?:assessed|checked|looked at|seen)\b[^.!?]{0,60}"
@@ -95,6 +99,26 @@ PURPOSE_VERB = (r"(?:detects?|detecting|identif(?:y|ies)|screens? for|"
                 r"screening for|monitors? for|diagnos(?:es|is|ing)|"
                 r"predicts?)")
 
+# `watch ... for` is a SEPARATE rule with a narrower object, because it is an
+# ordinary engineering verb and the nouns above are ordinary vocabulary here.
+# It was grown for the actual form the violation took - ARCHITECTURE.md's "a
+# duty to watch deterministically for what its own coaching can cause (RED-S /
+# low energy availability)", a self-assigned duty to notice a named syndrome,
+# which is the classic sentence by which a wellness tool argues itself into
+# being a device and which none of the clinical verbs appeared in.
+#
+# Folded into PURPOSE_VERB it fired on "watch for regressions in the injury
+# parser" and "the CI job watches the fixtures for drift in the injuries
+# table". A lint that cries wolf gets deleted, and a deleted lint catches
+# nothing at all. So: an adverb may sit between the verb and `for` (that is
+# the form the violation used) but a noun phrase may not, and the object must
+# be a named CONDITION rather than any medical word - "watch for injuries" is
+# something a test docstring says and "watch for a syndrome" is not.
+WATCH_VERB = r"watch(?:es|ing)? (?:\w+ly )?for"
+CONDITION_NOUN = (r"\b(?:medical conditions?|disease|illness|disorder|"
+                  r"syndrome|pathology|arrhythmia|"
+                  r"red[- ]s|low energy availability)\b")
+
 # `\b` on BOTH sides, and `precondition`/`conditioning` excluded explicitly.
 # `precondition` is a live schema field and `conditioning` is core training
 # vocabulary: without this, one ordinary sentence pairing either with a purpose
@@ -104,12 +128,32 @@ PURPOSE_VERB = (r"(?:detects?|detecting|identif(?:y|ies)|screens? for|"
 # (ordinary engineering), and a lint that fires on those is one that gets
 # deleted. `medical condition` is explicit and unambiguous, which is the only
 # form worth matching.
+# `red[- ]s` and `low energy availability` are named because the sentence this
+# gate was grown to catch named THEM and none of the generic nouns: "a duty to
+# watch deterministically for what its own coaching can cause (RED-S / low
+# energy availability)". The generic list would have let the most specific
+# claim in the repo through, which is the wrong way round. `red[- ]s` rather
+# than `red-s` because hyphens are word spaces by the time a pattern sees a
+# sentence - the second branch is belt and braces for any caller that matches
+# an unfolded string.
 MEDICAL_NOUN = (r"\b(?:medical conditions?|disease|illness|disorder|"
                 r"syndrome|pathology|arrhythmia|deficienc(?:y|ies)|"
-                r"injur(?:y|ies))\b")
+                r"injur(?:y|ies)|red[- ]s|low energy availability)\b")
+
+# HYPHENS ARE WORD SPACES for matching. `stop-and-see-a-clinician` is the same
+# claim as `stop and see a clinician`, and every phrase above was blind to it -
+# the template that `vitai init` copies into every content repo carried the
+# hyphenated form and passed. Length-preserving on purpose, so a match offset
+# still indexes the original sentence; and matching-only, so the digests the
+# exemptions are keyed on do not move.
+def _match_form(sentence: str) -> str:
+    return sentence.replace("-", " ")
+
 
 _DIRECTIVE_RE = re.compile("|".join(DIRECTIVES), re.I)
-_PURPOSE_RE = re.compile(rf"{PURPOSE_VERB}[^.!?]{{0,80}}{MEDICAL_NOUN}", re.I)
+_PURPOSE_RE = re.compile(
+    rf"(?:{PURPOSE_VERB}[^.!?]{{0,80}}{MEDICAL_NOUN})"
+    rf"|(?:{WATCH_VERB}[^.!?]{{0,80}}{CONDITION_NOUN})", re.I)
 
 # Sentences, across hard line wraps. The docs here are wrapped at ~80 columns,
 # so splitting on a newline hid every directive long enough to straddle one -
@@ -165,6 +209,12 @@ EXEMPT: dict[tuple[str, str], str] = {
     ("docs/medical-boundary.md",
      "88bda657dc35a6b7cc9775996858fb587fc480989917cb08f9a60824ff665620"):
         "the doctrine defining the capability-claim class",
+    ("docs/medical-boundary.md",
+     "3c253765cab65ea46a81d341ad2e16d107052375c4081fd469a084d40c11b497"):
+        "the doctrine quoting the watch-for-a-syndrome claim it forbids",
+    ("docs/medical-boundary.md",
+     "38e2021bcc1c802e562a6ae14a7cee6f0811503a8f4a745d2415beb1bf043b05"):
+        "the doctrine's worked rewrite pair, quoting the non-compliant form",
 
     # --- DEBT, not decisions. Every one describes routing that #110 REMOVED,
     # so these sentences are now false as well as over the line. They belong
@@ -184,6 +234,10 @@ EXEMPT: dict[tuple[str, str], str] = {
     ("docs/plan-v3.md",
      "93d1e27fbfff46e31a1bfe6295fd797ebce90fed5dcf759bc9969b3ad7f424e7"):
         "stale: pre-#110 routing; #116 owns the rewrite",
+    ("docs/the-loop.md",
+     "27b32823f12553739406ea3026d590e37346261652dca6fb87f374e4d580d1bf"):
+        "stale: pre-#110 routing, surfaced by hyphen normalisation; "
+        "#116 owns the rewrite",
 }
 
 
@@ -245,10 +299,11 @@ def findings(path: Path, text: str, spared: set[str]) -> list[str]:
         digest = hashlib.sha256(_norm(sentence).encode()).hexdigest()
         if digest in spared or (here, digest) in EXEMPT:
             continue
+        probe = _match_form(sentence)
         for label, pattern in (("care directive", _DIRECTIVE_RE),
                                ("purpose claim", _PURPOSE_RE)):
-            hit = pattern.search(sentence)
-            if hit and not _disclaimed(sentence, hit.start()):
+            hit = pattern.search(probe)
+            if hit and not _disclaimed(probe, hit.start()):
                 out.append(f"{label}: {' '.join(sentence.split())[:80]}")
                 break
     return out
