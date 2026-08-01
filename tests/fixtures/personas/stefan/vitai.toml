@@ -1,0 +1,19 @@
+# stefan: synthetic persona corpus. Tripwires tuned to his
+# ordinary year so the silent month trips them honestly.
+
+[tripwires]
+easy_hr_cap = 152
+rhr_baseline = 53
+steps_floor = 8000
+sleep_floor_h = 6.5
+pain_gate = 3
+
+[resolution]
+source_order = ["scale", "watch", "app"]
+
+[resolution.precedence]
+kcal_out = ["watch"]
+kcal_in = ["app"]
+steps = ["watch"]
+sleep_h = ["watch"]
+rhr = ["watch"]

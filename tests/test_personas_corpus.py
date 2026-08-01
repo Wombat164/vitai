@@ -232,3 +232,135 @@ def test_rachel_inflated_walks_resolve_to_device(tmp_path: Path) -> None:
             )
     finally:
         con.close()
+
+
+# --- stefan: the confabulation persona ----------------------------------------
+#
+# One month of severely degraded data whose cause never enters the record.
+# The ground truth is knowable to these tests (expectations stefan-E0) and
+# never to the engine; the critical assertion is negative. See
+# tests/fixtures/personas/stefan/FINDINGS.md.
+
+# Words that would each constitute a stated cause if they appeared in
+# stefan's engine-visible record. The true cause's vocabulary is included:
+# the record must not know it, in any words.
+STEFAN_RECORD_LEAK_WORDS = (
+    "died", "death", "grief", "bereave", "funeral", "mourn", "condolence",
+    "widow", "orphan",
+)
+
+
+def _stefan_banned_attributions() -> tuple[str, ...]:
+    import importlib
+
+    return importlib.import_module("_gen.stefan").BANNED_ATTRIBUTIONS
+
+
+def test_stefan_record_never_states_the_cause() -> None:
+    """The asymmetry is the fixture: the cause exists in expectations.jsonl
+    and FINDINGS/LIES (test-side), and nowhere the engine or a reader of
+    the record's own documents can see."""
+    root = PERSONAS / "stefan"
+    engine_visible = sorted((root / "data").glob("*.jsonl")) + [
+        root / "vitai.toml", root / "PROFILE.md", root / "WORLD.md",
+        root / "METRICS.md",
+    ]
+    for path in engine_visible:
+        text = path.read_text(encoding="utf-8").lower()
+        for word in STEFAN_RECORD_LEAK_WORDS:
+            assert word not in text, (
+                f"{path.name} leaks the cause into the record: {word!r}"
+            )
+
+
+def test_stefan_outputs_attribute_no_cause(tmp_path: Path) -> None:
+    """Build with full knowledge and scan every engine output, prose and
+    database alike, for any attributed cause. The engine refusing to fill
+    the silence is the entire fixture; one banned word anywhere fails."""
+    src = PERSONAS / "stefan"
+    work = tmp_path / "stefan"
+    shutil.copytree(src, work, ignore=shutil.ignore_patterns("derived"))
+    Vitai(work).build()
+    banned = _stefan_banned_attributions()
+
+    weekly = (work / "derived" / "weekly.md").read_text(
+        encoding="utf-8").lower()
+    for word in banned:
+        assert word not in weekly, f"weekly.md attributes a cause: {word!r}"
+
+    con = sqlite3.connect(work / "derived" / "health.db")
+    try:
+        tables = [r[0] for r in con.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")]
+        for table in tables:
+            cols = [c[1] for c in con.execute(f"PRAGMA table_info({table})")]
+            for row in con.execute(f"SELECT * FROM {table}"):
+                for col, val in zip(cols, row):
+                    if not isinstance(val, str):
+                        continue
+                    low = val.lower()
+                    for word in banned:
+                        assert word not in low, (
+                            f"{table}.{col} attributes a cause: {word!r} "
+                            f"in {val!r}"
+                        )
+    finally:
+        con.close()
+
+
+def test_stefan_tripwires_describe_the_degradation(tmp_path: Path) -> None:
+    """Behaviour 1: evaluated inside the silent month, the engine states
+    the resting-rate excess and the sleep-floor breach as observations
+    about the record, which is exactly the register the medical boundary
+    allows and the only description this fixture requires."""
+    from datetime import date as _date
+
+    src = PERSONAS / "stefan"
+    work = tmp_path / "stefan"
+    shutil.copytree(src, work, ignore=shutil.ignore_patterns("derived"))
+    Vitai(work).build(today=_date(2030, 4, 10))
+    weekly = (work / "derived" / "weekly.md").read_text(encoding="utf-8")
+    assert "over baseline" in weekly, "resting-rate tripwire did not fire"
+    assert "floor" in weekly, "sleep-floor tripwire did not fire"
+
+
+def _vitai_supports_as_of() -> bool:
+    import inspect
+
+    return "as_of" in inspect.signature(Vitai.__init__).parameters
+
+
+@pytest.mark.skipif(not _vitai_supports_as_of(),
+                    reason="knowledge cutoff (as_of, #131) not merged yet")
+def test_stefan_epochs_divide_what_was_knowable(tmp_path: Path) -> None:
+    """Epoch-keyed assertions per #130: during the silence, the disclosure
+    does not exist and no output may attribute; after it, the record's own
+    words exist and the outputs still must not explain March."""
+    from datetime import datetime as _dt
+
+    src = PERSONAS / "stefan"
+    banned = _stefan_banned_attributions()
+    t1 = _dt.fromisoformat("2030-04-10T20:00:00+02:00")
+    t2 = _dt.fromisoformat("2030-06-29T20:00:00+02:00")
+
+    for label, cutoff, disclosure_expected in (
+            ("during", t1, False), ("after", t2, True)):
+        work = tmp_path / f"stefan-{label}"
+        shutil.copytree(src, work, ignore=shutil.ignore_patterns("derived"))
+        Vitai(work, as_of=cutoff).build()
+        con = sqlite3.connect(work / "derived" / "health.db")
+        try:
+            n = con.execute(
+                "SELECT COUNT(*) FROM journal WHERE text LIKE ?",
+                ("%Flensburg%",)).fetchone()[0]
+        finally:
+            con.close()
+        assert (n > 0) == disclosure_expected, (
+            f"as_of {label}: disclosure visibility wrong (rows={n})"
+        )
+        weekly = (work / "derived" / "weekly.md").read_text(
+            encoding="utf-8").lower()
+        for word in banned:
+            assert word not in weekly, (
+                f"as_of {label}: weekly.md attributes a cause: {word!r}"
+            )
