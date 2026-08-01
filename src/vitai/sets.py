@@ -54,6 +54,7 @@ from __future__ import annotations
 
 from .anatomy import SIDES
 from .clocks import is_stamp
+from .exercises import problems as exercise_problems
 from .vocab import registry, resolve
 
 DATASET = "sets"
@@ -153,10 +154,13 @@ def problems(rec: dict) -> list[str]:
     """Validation for one set."""
     out: list[str] = []
     if not str(rec.get("exercise") or "").strip():
-        # Until the exercise registry (#98) lands this is only a non-empty
-        # string. This module must not seed a second vocabulary.
         out.append("'exercise' names the movement, and a set of nothing is "
                    "not a set")
+    else:
+        # The vocabulary lives in exercises.py (#98). An unfamiliar movement
+        # is a FINDING rather than an error - the row is kept either way, and
+        # it is what makes a restriction checkable against a set.
+        out += exercise_problems(rec)
 
     done, tried = _int(rec.get("reps_completed")), _int(rec.get("reps_attempted"))
     for key in ("reps_completed", "reps_attempted"):

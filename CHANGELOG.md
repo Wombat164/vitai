@@ -6,6 +6,42 @@ versioning follows [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **An exercise registry, and restrictions that can finally see a set** (#98,
+  increment 2 of #59). Two defects, one registry.
+
+  `sets.exercise` was free text, so `push-up`, `pushup` and `press-up` were
+  three exercises and no query grouped them. And a restriction could not be
+  checked against a set at all: a clinical gate of `pattern=hinge region=hip
+  load=loaded` had nothing to match, so the coarse `restricts: strength` gate
+  was used instead - and it blocked push-ups. That is collateral damage caused
+  *precisely* by the precise gate having nothing to check.
+
+  `semantics/exercises.toml` carries 108 movements whose axes are BORROWED,
+  never invented: `pattern`, `load` and `plane` from `restrictions.toml`,
+  `region` from `body_sites.toml`. A set inherits them, and the gate the
+  clinician described becomes mechanically checkable - a loaded hip hinge is
+  blocked, a squat and a push-up are not.
+
+  **Post-coordination throughout.** `incline_dumbbell_bench_press` is never an
+  entry; equipment, grip and angle are #99's axes. `pattern` and `region` are
+  both LISTS, because a thruster is a squat and a press, and a deadlift loads
+  hip, hamstring and lower back - a restriction naming any one of them catches
+  it.
+
+  **The set overrides the registry.** Registry `load` is what usually happens;
+  the set's `load_type`, or a stated `load`, is what did. An exercise done
+  both ways states no default, and a restriction keyed on load abstains until
+  the set says.
+
+  **An unknown exercise ABSTAINS**, and so does a restriction keyed on an axis
+  the exercise cannot carry, and so does one that parsed to nothing. Never a
+  silent `allowed`: a missing gate means the athlete trains on an injury
+  nobody flagged, and nothing in the output ever says so.
+
+  Seeded from free-exercise-db (Unlicense, safe to vendor); entries written
+  here say `source = "curated"`. Nothing from wger, whose exercise data is
+  CC-BY-SA. Lateral raises and hip abduction/adduction are deliberately absent
+  until #58 adds the patterns that describe them.
 - **`sets.jsonl`: the set is the atom** (#97, increment 1 of #59). Three facts
   had nowhere to live, and all three were being reconstructed from prose.
 
