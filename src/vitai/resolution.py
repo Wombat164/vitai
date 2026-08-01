@@ -56,6 +56,17 @@ from .schema import KEYS
 # Datasets that carry competing observations. Policy datasets (goals,
 # thresholds, context, achievements) are not claims about a measurement and
 # resolve by effective date instead - see policy.py.
+# `sets` is deliberately ABSENT (#97). It carries the full provenance suite
+# and competes by source in every other sense, but this resolver's unit is one
+# canonical record per DATE, and a set is not a per-date quantity: four sets of
+# one exercise on one morning are four things that happened, not four claims
+# about one. Adding it here collapsed a whole block into a single row.
+#
+# Doing it properly means keying resolution on the position tuple
+# (session_start, exercise, block, round, set_index) the way #43 taught
+# `sessions` to key on `activity_id` - which is its own increment. Until then
+# a set's claims are kept exactly as recorded, which is the safe direction:
+# nothing is merged, so nothing is lost.
 RESOLVED_DATASETS = ("weight", "daily", "sessions", "measurements")
 
 # Quantity class per dataset (P3). Anchors top the ladder: a tape measure or a
