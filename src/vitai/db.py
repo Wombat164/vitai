@@ -90,7 +90,7 @@ from .schema import KEYS
 #     an inflated estimate reaching a deficit reads ON TARGET while the scale
 #     goes up. A `type` carrying `vendor-classified` is a third-party model's
 #     guess, not something the athlete or a device asserted.
-# 14: the itemised meal estimate (#96) - a `meals` table, one row per
+# 15: the itemised meal estimate (#96) - a `meals` table, one row per
 #     INGREDIENT of a photographed meal, with a gram estimate, a gram RANGE,
 #     and the per-100 g composition figures as the food table gave them
 #     alongside the table's name. Three things a consumer must not get wrong.
@@ -102,7 +102,7 @@ from .schema import KEYS
 #     never feed `daily.kcal_in`, a total must never be rendered without its
 #     range, and a consumer that sums meals into a day is asserting the
 #     athlete ate nothing they did not photograph.
-CONTRACT_VERSION = "14"
+CONTRACT_VERSION = "15"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
