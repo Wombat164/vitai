@@ -2,7 +2,8 @@
 
 The table set IS the public contract a game/dashboard reads (see
 ARCHITECTURE.md "The platform"): one table per dataset plus `verdicts`
-(weekly goal-attainment rows) and `meta` (contract version).
+(weekly goal-attainment rows) and `meta` (contract version, and the
+policy digest of the config the record does not hold).
 """
 
 from __future__ import annotations
@@ -139,7 +140,22 @@ from .schema import KEYS
 #     must not treat two rows describing one event from two devices as two
 #     events; `duplicate_captures()` reports them and the engine never merges
 #     them silently.
-CONTRACT_VERSION = "16"
+# 17: `meta` gains a `policy` row (#148) - a content hash of the config that
+#     is NOT in the append-only record. Additive, and a contract-16 reader
+#     that only selects `key='contract'` is unaffected; the bump is here
+#     because `meta` was documented as carrying the contract version and
+#     nothing else, so a consumer selecting the whole table saw one row and
+#     may now see two. What it buys: a reconstruction judged under one
+#     `vitai.toml` and one judged under another are not comparable, and until
+#     now nothing said so. Thresholds without a dated row fall through to
+#     whatever the toml says TODAY, so editing one silently re-judges every
+#     historical week that lacked one. This does not fix that - it makes it
+#     detectable rather than invisible. OPTIONAL at 17: `build_db` omits the
+#     row when no digest is supplied, so absence means "built without one",
+#     NOT "pre-17" and not "no policy". Every build the engine itself drives
+#     writes it; a consumer must read `contract` to know the shape and must
+#     not infer a build's age from this row missing.
+CONTRACT_VERSION = "17"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
@@ -263,10 +279,18 @@ def _cols(keys: list[str]) -> str:
 
 def build_db(derived: Path, datasets: dict[str, list[dict]],
              verdicts: list[dict] | None = None,
-             derivations: dict[str, list[dict]] | None = None) -> Path:
+             derivations: dict[str, list[dict]] | None = None,
+             policy: str | None = None) -> Path:
     """Write the read model. `derivations` carries the computed tables
     (contributions, milestones, plan_churn, goal_progress); `verdicts` stays a
-    named argument because it predates them and callers pass it positionally."""
+    named argument because it predates them and callers pass it positionally.
+
+    `policy` is `config.policy_digest(cfg)` - the hash of the policy the
+    record does not hold (#148). Optional so a caller building a read model
+    from datasets alone still works, and ABSENT rather than a placeholder
+    when it is not supplied: a fixed string would read as "policy unchanged"
+    across two builds that were judged differently, which is the one wrong
+    answer this row exists to prevent."""
     derived.mkdir(exist_ok=True)
     db = derived / "health.db"
     db.unlink(missing_ok=True)
@@ -280,6 +304,8 @@ def build_db(derived: Path, datasets: dict[str, list[dict]],
             _table(con, table, keys, computed.get(table) or [])
         con.execute("CREATE TABLE meta(key TEXT, value TEXT)")
         con.execute("INSERT INTO meta VALUES ('contract', ?)", (CONTRACT_VERSION,))
+        if policy is not None:
+            con.execute("INSERT INTO meta VALUES ('policy', ?)", (policy,))
         con.commit()
     finally:
         con.close()

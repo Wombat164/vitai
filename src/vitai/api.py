@@ -21,7 +21,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from pathlib import Path
 
-from .config import Config, load_config
+from .config import Config, load_config, policy_digest
 from .contributions import compute_contributions, goal_progress
 from .db import build_db
 from .clocks import is_aware
@@ -60,6 +60,12 @@ class Vitai:
 
         Threaded through `dataset()`, so resolution, verdicts, safety and the
         build all inherit it rather than each needing to remember.
+
+        It reconstructs DATA, and policy only as far as policy is data. A
+        threshold with a dated `thresholds.jsonl` row on or before the date
+        IS in the record and IS filtered by the cutoff. A key with no such
+        row falls through to `vitai.toml`, which has no history, so that part
+        of the answer is judged by today - see `policy_digest` and #148.
         """
         self.root = Path(root)
         self.as_of = as_of
@@ -78,6 +84,17 @@ class Vitai:
     @property
     def config(self) -> Config:
         return load_config(self.root)
+
+    @property
+    def policy(self) -> str:
+        """The digest of the policy this record does NOT hold (#148).
+
+        `as_of` reconstructs data. It cannot reconstruct `vitai.toml`, which
+        has no history, so two reconstructions taken under different configs
+        differ for a reason that is not in the record. This is what makes
+        that detectable.
+        """
+        return policy_digest(self.config)
 
     def append(self, name: str, record: dict) -> dict:
         """Append one line to a dataset, stamping the machine-owned clocks.
@@ -577,6 +594,11 @@ class Vitai:
     def state(self, on: date | str) -> State:
         """The goals and thresholds in force on a date - as-of reconstruction.
 
+        PARTIAL: it returns the dated rows in force, and a key with no dated
+        row on or before this date is simply absent rather than falling back
+        to `vitai.toml`. The caller that overlays it onto the config gets the
+        toml value for that key - today's, not the date's (#148).
+
         The question this exists to answer: "looking at a day three months
         ago, what was I actually aiming at THEN?"
         """
@@ -622,12 +644,13 @@ class Vitai:
         return plan_churn(d["goals"], d["thresholds"], self.verdicts(today=today),
                           events=d["events"])
 
-    def _derivations(self, resolved: dict,
-                     today: date | None = None) -> dict[str, list[dict]]:
+    def _derivations(self, resolved: dict, today: date | None = None,
+                     cfg: Config | None = None) -> dict[str, list[dict]]:
         d = resolved["canonical"]
+        cfg = self.config if cfg is None else cfg
         contributions, milestones = compute_contributions(
             d["goals"], d["thresholds"], d["daily"], d["sessions"])
-        verdicts = compute_verdicts(self.config, d["weight"], d["daily"],
+        verdicts = compute_verdicts(cfg, d["weight"], d["daily"],
                                     d["sessions"], today=today,
                                     goals=d["goals"], thresholds=d["thresholds"],
                                     medical=d["medical"])
@@ -666,10 +689,16 @@ class Vitai:
         # An inference whose justification was retracted stops being presented
         # as current knowledge, though the line itself remains in the file.
         d["inferences"] = live_inferences(self.datasets())
-        derivations = self._derivations(resolved, today=today)
+        # ONE config for the whole build. `self.config` re-reads vitai.toml on
+        # every access, so the verdicts were computed under one read and
+        # stamped with the digest of a later one. Edit the toml between them
+        # and the read model records an identity claim that is simply false -
+        # worse than the absence this is careful not to be misread as.
+        cfg = self.config
+        derivations = self._derivations(resolved, today=today, cfg=cfg)
         derived = self.root / "derived"
         db = build_db(derived, d, verdicts=derivations["verdicts"],
-                      derivations=derivations)
+                      derivations=derivations, policy=policy_digest(cfg))
         (derived / "weekly.md").write_text(
             build_report(self.config, d["weight"], d["daily"], d["sessions"],
                          today=today, gates=derivations["gates"],

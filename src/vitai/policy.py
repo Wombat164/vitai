@@ -8,9 +8,22 @@ been judged. That destroys the audit chain - the record could no longer answer
 retroactively turn old misses into hits.
 
 Here policy is effective-dated data. `state(on)` reconstructs the goals and
-thresholds in force on a date, so every judgment uses the policy that was
-actually in force THEN. Loosening a goal today changes today forward and
-nothing else.
+thresholds in force on a date, so a judgment uses the policy that was actually
+in force THEN. Loosening a goal today changes today forward and nothing else.
+
+HOW FAR THAT GOES, precisely, because the sentence above is easy to read as
+more than it is (#148). It holds for a key on a date that HAS a dated row.
+A week carrying no row for a threshold still falls through to whatever
+`vitai.toml` says today, and most of `Config` - the rate phases, the
+resolution ladder, suppressed metrics, the check tolerance, the intake
+buffer - has no dated history to fall back TO. So editing a threshold in
+September still re-judges every historical week that lacked an explicit row:
+a reconstruction of March returns March's data under September's policy.
+
+That is a correctness problem in the reconstruction itself, not only in
+staleness detection, and it is open. `config.policy_digest` makes it
+detectable in the meantime; finishing G14 - snapshotting a toml change into
+the record when it happens, so `state` is TOTAL - is the fix.
 
 The second half is that goalpost-moving is itself a signal (G20). The athlete
 owns the record and nothing blocks an edit - but churn is derived and a
