@@ -156,8 +156,8 @@ governing the weeks it governed.
 
 ### Safety is a branch, not a sentence
 
-One decision in this system is not a coaching input: whether to stop and see
-a clinician. It used to live as prose in a skill file, which meant a coach
+One decision in this system is not a coaching input: whether the engine
+stops. It used to live as prose in a skill file, which meant a coach
 optimising for adherence could reason around it, soften it, or simply not
 reach it. Prose can be argued with; a branch cannot.
 
@@ -184,9 +184,10 @@ nothing, not really worth going on about" rather than filling in a field.
 
 The most serious finding raises a **clinical hold**: not a louder warning but
 a suspension, routed through the same gate mechanism, so no plan or session is
-issued until a clinician has looked.
+issued while the record still shows the pattern.
 
-None of it is diagnosis. Every escalation routes to a human, and the
+None of it is diagnosis. Every escalation states what was observed and what
+vitai will therefore not do, and the
 thresholds are deliberately conservative screening bounds - the resting-heart-
 rate floor sits below a trained athlete's genuinely low rate, because a safety
 layer that cries wolf at normal physiology teaches people to ignore it.
