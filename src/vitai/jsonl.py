@@ -314,8 +314,10 @@ def load(data_dir: Path, name: str,
     Malformed lines are QUARANTINED (dropped) so a build proceeds from the
     good rows; use `load_report` if you need to know what was quarantined.
 
-    `as_of` reconstructs what the record contained at an instant. See
-    `load_report`.
+    `as_of` reconstructs what the RECORD contained at an instant. That covers
+    the dated `thresholds.jsonl` rows too, which are as-of like any dataset.
+    What it cannot cover is the `vitai.toml` FALLBACK a key with no dated row
+    lands on, because the toml has no history (#148). See `load_report`.
     """
     records, _ = load_report(data_dir, name, as_of=as_of)
     return records

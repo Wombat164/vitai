@@ -138,3 +138,205 @@ def test_a_naive_cutoff_is_refused(repo):
     root, _ = repo
     with pytest.raises(ValueError, match="explicit offset"):
         Vitai(root, as_of=datetime(2030, 4, 10, 12))
+
+
+# ---- #148: the policy the record does not hold ----------------------------
+
+def test_the_digest_moves_when_the_policy_moves():
+    """A reconstruction taken under one `vitai.toml` and one taken under
+    another are not comparable, and until now nothing said so."""
+    from vitai.config import Config, policy_digest
+    base = Config(steps_floor=8000)
+    assert policy_digest(base) != policy_digest(Config(steps_floor=9000))
+    assert policy_digest(base) == policy_digest(Config(steps_floor=8000))
+
+
+def test_the_digest_ignores_which_machine_is_reading():
+    """`device` changes which FILE the engine appends to, not what it says.
+    Including it would give two devices reading one record two digests, so
+    every cross-device comparison would report a policy change that never
+    happened."""
+    from vitai.config import Config, policy_digest
+    assert (policy_digest(Config(steps_floor=8000, device="watch"))
+            == policy_digest(Config(steps_floor=8000, device="laptop")))
+
+
+def test_the_digest_covers_the_fields_with_no_dated_history():
+    """`thresholds.jsonl` overlays five keys. The rate phases, the resolution
+    ladder, suppressed metrics, the check tolerance and the intake buffer
+    have no dated history at all - which is exactly why they need to be in
+    the digest rather than left to the overlay."""
+    from vitai.config import THRESHOLD_TYPES, Config, policy_digest
+    base = Config()
+    for field, value in (("phases", ((100.0, 90.0, 0.5),)),
+                         ("source_order", ("scale", "app")),
+                         ("precedence", {"kg": ("scale",)}),
+                         ("suppressed_metrics", ("kg",)),
+                         ("check_tolerance", 0.05),
+                         ("intake_buffer_pct", 10.0)):
+        assert field not in THRESHOLD_TYPES, f"{field} is overlaid after all"
+        moved = policy_digest(Config(**{field: value}))
+        assert moved != policy_digest(base), field
+
+
+def test_the_digest_is_stable_across_equal_configs_built_differently():
+    """Canonical serialisation, not dict or dataclass ordering: a digest that
+    depended on insertion order would differ between two runs that loaded the
+    same toml, and the row would be noise rather than a signal."""
+    from vitai.config import Config, policy_digest
+    one = Config(precedence={"kg": ("scale", "app"), "steps": ("watch",)})
+    two = Config(precedence={"steps": ("watch",), "kg": ("scale", "app")})
+    assert policy_digest(one) == policy_digest(two)
+
+
+# A distinct, valid value per policy field, so each can be shown to move the
+# digest ON ITS OWN. A count assertion would have passed a `policy_digest`
+# rewritten with a hardcoded field list that went stale, and would have
+# survived a field being renamed out of the digest entirely.
+MOVED = {
+    "phases": ((100.0, 90.0, 0.5),),
+    "easy_hr_cap": 150,
+    "rhr_baseline": 48,
+    "steps_floor": 8000,
+    "sleep_floor_h": 7.5,
+    "pain_gate": 4,
+    "source_order": ("scale", "app"),
+    "precedence": {"kg": ("scale",)},
+    "suppressed_metrics": ("kg",),
+    "nudge_ok": True,
+    "check_tolerance": 0.05,
+    "intake_buffer_pct": 10.0,
+}
+
+
+def test_every_policy_field_is_actually_consulted():
+    """Not a count - a count stays green while a field silently drops out of
+    the digest, which is the whole failure this guards. Each field must move
+    the digest by itself, and a field added to `Config` without a value here
+    fails until somebody classifies it."""
+    from dataclasses import fields
+
+    from vitai.config import NOT_POLICY, Config, policy_digest
+    covered = [f.name for f in fields(Config) if f.name not in NOT_POLICY]
+    assert set(covered) == set(MOVED), (
+        "a Config field is unclassified: add it to MOVED if it is policy, or "
+        "to NOT_POLICY with a reason if it is a property of the reader")
+    assert set(NOT_POLICY) == {"device"}
+    base = policy_digest(Config())
+    seen = {}
+    for name, value in MOVED.items():
+        digest = policy_digest(Config(**{name: value}))
+        assert digest != base, f"{name} does not reach the digest"
+        assert digest not in seen, f"{name} collides with {seen.get(digest)}"
+        seen[digest] = name
+
+
+def test_toml_number_formatting_does_not_move_the_digest():
+    """`steps_floor = 8000` and `steps_floor = 8000.0` are the same policy
+    and judge identically, and they hashed differently: a formatter
+    normalising the toml marked every later reconstruction incomparable with
+    every earlier one. Noise in the one signal this row carries."""
+    from vitai.config import load_config, policy_digest
+
+    def written(text, tmp):
+        tmp.mkdir(parents=True, exist_ok=True)
+        (tmp / "vitai.toml").write_text(text, encoding="utf-8")
+        return policy_digest(load_config(tmp))
+
+    import tempfile
+    from pathlib import Path
+    root = Path(tempfile.mkdtemp())
+    plain = written("[tripwires]\nsteps_floor = 8000\nsleep_floor_h = 7\n",
+                    root / "a")
+    floaty = written(
+        "[tripwires]\nsteps_floor = 8000.0\nsleep_floor_h = 7.0\n",
+        root / "b")
+    assert plain == floaty
+
+
+def test_one_config_governs_a_whole_build(tmp_path, monkeypatch):
+    """The digest must describe the config the verdicts were JUDGED under.
+
+    `Vitai.config` re-reads vitai.toml on every access, so the verdicts came
+    from one read and the stamp from a later one. Edit the toml between them
+    and the read model records an identity claim that is false - which is
+    worse than the absence the omitted-row case is careful not to be misread
+    as.
+
+    Asserted against what `compute_verdicts` actually received, not against a
+    guess at which read wins: the invariant is that they AGREE, however many
+    reads the build makes.
+    """
+    import sqlite3
+
+    from vitai import api
+    from vitai.api import Vitai
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    toml = root / "vitai.toml"
+    toml.write_text("[tripwires]\nsteps_floor = 8000\n", encoding="utf-8")
+
+    judged = {}
+    real = api.compute_verdicts
+
+    def capture(cfg, *a, **kw):
+        judged["cfg"] = cfg
+        # Every later read of vitai.toml now sees something different.
+        toml.write_text("[tripwires]\nsteps_floor = 9000\n", encoding="utf-8")
+        return real(cfg, *a, **kw)
+
+    monkeypatch.setattr(api, "compute_verdicts", capture)
+    db = Vitai(root).build()
+    con = sqlite3.connect(db)
+    try:
+        stamped = dict(con.execute("SELECT key, value FROM meta").fetchall())
+    finally:
+        con.close()
+
+    from vitai.config import policy_digest
+    assert judged["cfg"].steps_floor == 8000, "premise: the edit landed after"
+    assert stamped["policy"] == policy_digest(judged["cfg"])
+
+
+def test_the_read_model_carries_the_policy_it_was_built_under(tmp_path):
+    """The read model IS the recorded reconstruction, so it is where the
+    digest has to land."""
+    import sqlite3
+
+    from vitai.api import Vitai
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    engine = Vitai(root)
+    con = sqlite3.connect(engine.build())
+    try:
+        meta = dict(con.execute("SELECT key, value FROM meta").fetchall())
+    finally:
+        con.close()
+    assert meta["policy"] == engine.policy
+    assert meta["contract"] == "17"
+
+
+def test_a_read_model_built_without_a_policy_omits_the_row(tmp_path):
+    """ABSENT rather than a placeholder. A fixed string would read as "policy
+    unchanged" across two builds that were judged differently, which is the
+    one wrong answer this row exists to prevent.
+
+    Both branches, because asserting only the omission passes against code
+    that never writes the row at all.
+    """
+    import sqlite3
+
+    from vitai.db import build_db
+
+    def meta(**kw):
+        db = build_db(tmp_path / str(len(kw)), {}, verdicts=[], **kw)
+        con = sqlite3.connect(db)
+        try:
+            return dict(con.execute("SELECT key, value FROM meta").fetchall())
+        finally:
+            con.close()
+
+    assert set(meta()) == {"contract"}
+    assert meta(policy="abc") == {"contract": "17", "policy": "abc"}
