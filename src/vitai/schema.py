@@ -869,6 +869,20 @@ def _validate_medical(rec: dict) -> list[str]:
             problems.append(f"'{key}' must be a non-empty string")
     problems += _enum(rec, "kind", MEDICAL_KINDS)
     problems += _enum(rec, "status", MEDICAL_STATUSES)
+    if rec.get("kind") == "visit" and _dated_after_it_was_written(rec):
+        # A `visit` records a visit that HAPPENED - a fact with a date, and
+        # useful provenance for whatever was said there. A row dated in the
+        # future is an appointment, which is a plan, and vitai does not own
+        # the record owner's plans for their own body (#110).
+        #
+        # Held as data it becomes a to-do nobody can complete inside the tool,
+        # re-raised at every review until it is noise to be dismissed. Nothing
+        # in consumer fitness tracks an appointment as an open item; that is a
+        # care-plan feature and it lives where a clinician owns the list.
+        problems.append(
+            f"a 'visit' dated {rec.get('date')!r} is in the future, so it is "
+            "an appointment rather than a visit. This record holds what "
+            "happened; record the visit once it has")
     problems += _enum(rec, "severity", SEVERITIES)
     problems += _enum(rec, "provider_type", PROVIDER_TYPES, optional=True)
 
@@ -914,6 +928,46 @@ def _validate_medical(rec: dict) -> list[str]:
             problems.append("'precondition' without 'restricts' gates nothing - "
                             "a check that lifts no restriction is just a note")
     return problems
+
+
+def _dated_after_it_was_written(rec: dict) -> bool:
+    """Is this row's valid time after its transaction time?
+
+    "In the future" measured against the RECORD's own clocks rather than
+    against today. Comparing to `date.today()` would make a row's validity
+    depend on when it is read - the same line valid this morning and invalid
+    tomorrow - which breaks the determinism the whole engine rests on, and
+    would fail every 2030-dated fixture in the repo for being prescient.
+
+    Transaction time is the honest comparison anyway, and the record already
+    carries it: a visit whose `date` is after the moment the line was WRITTEN
+    is a visit that had not happened when it was recorded. That is exactly
+    what an appointment is.
+
+    A FULL DAY of slack, because the two clocks are not on one calendar. The
+    visit's `date` is a calendar day where it happened; `recorded_at` carries
+    the writing machine's offset. A visit at 00:30 in UTC+13, written minutes
+    later on a laptop still on +02:00, is the same instant on two different
+    days - and rejecting that as an appointment would be wrong about a visit
+    that had already happened. No offset pair on Earth spans more than 26
+    hours, so one day of tolerance removes the whole class.
+
+    The cost is that a same-day appointment passes. That is accepted: this
+    catches the unambiguous case, and a check that also fired on real visits
+    would be argued away rather than fixed.
+
+    Absent `recorded_at` means absent: a legacy row predating the clocks
+    cannot be judged, and guessing would retroactively invalidate history.
+    """
+    stamp = rec.get("recorded_at")
+    if not stamp:
+        return False
+    try:
+        when = date.fromisoformat(str(rec.get("date")))
+        written = date.fromisoformat(str(stamp)[:10])
+    except (TypeError, ValueError):
+        return False
+    return (when - written).days > 1
 
 
 def onset_of(rec: dict) -> object:
