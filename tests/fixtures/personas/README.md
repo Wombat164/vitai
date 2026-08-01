@@ -1,6 +1,6 @@
 # The persona corpus
 
-Eight synthetic athletes, each constructed to stress an axis the model was not
+Nine synthetic athletes, each constructed to stress an axis the model was not
 built for. They are fictional. The failures they found were not.
 
 They live here as PEOPLE, not as test data: a profile, their history, the data
@@ -18,6 +18,7 @@ fixture built from a person tests what you did not.
 | `yasmin` | 46, perimenopausal, week-on-week-off custody, failed attempts | two-week cadence, biased logging, life-stage | 2 |
 | `tom` | 53, taxi driver, BMI 36, loss-regain history, hates apps | occupational activity, medication, regain cycle | 2 |
 | `rachel` | 39, BMI 45, five months on a GLP-1, knee osteoarthritis | medication effects, capacity limits, involuntary intake | 2 |
+| `stefan` | 44, harbour dispatcher, one month of degraded data with no stated cause | confabulation refusal, knowledge cutoffs, silence handling | 4 |
 
 ## Why the profiles matter more than the numbers
 
