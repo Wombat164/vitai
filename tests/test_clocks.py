@@ -635,3 +635,267 @@ def test_the_cli_accepts_jsonl_so_a_bulk_import_is_one_invocation(tmp_path, caps
     echoed = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
     assert len(echoed) == 5
     assert len({r["recorded_at"] for r in echoed}) == 5
+
+
+# ---- #134: one clock, read once, at the boundary --------------------------
+#
+# `as_of` is what was KNOWN; `on` is when the engine is answering AS. Both are
+# needed to ask whether a report has gone stale, because recomputing an old
+# artifact must vary the cutoff and HOLD the viewpoint - otherwise every
+# week-old report diffs against its month-later self trivially, because life
+# continued, and "later" gets reported as "the record no longer supports what
+# we told you".
+
+def test_the_wall_clock_is_read_at_the_boundary_and_nowhere_below_it():
+    """Eleven methods read `date.today()` for themselves. A build straddling
+    midnight therefore answered two different questions, no caller could pin
+    the viewpoint without passing it to every method, and there was nothing
+    for an artifact to record afterwards.
+
+    Mechanical on purpose: this is a property of where the clock is read, and
+    a reviewer cannot see it by reading any one method.
+    """
+    import re
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1]
+           / "src" / "vitai" / "api.py").read_text(encoding="utf-8")
+    body = src[src.index("    @property"):]  # everything after __init__
+    reads = [ln.strip() for ln in body.splitlines()
+             if re.search(r"date\.today\(\)|datetime\.now\(", ln)
+             and not ln.lstrip().startswith("#")]
+    assert reads == [], reads
+
+
+def _dated_repo(tmp_path):
+    """A repo whose answers actually move with the viewpoint.
+
+    `examples/demo` has no medical episodes, gates or escalations, so most of
+    these methods return an empty list on every date - and comparing empty to
+    empty certifies nothing. Each method below is checked for DISCRIMINATION
+    first, so a fixture that stops exercising one fails loudly instead of
+    quietly passing.
+    """
+    import json
+
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    (root / "data" / "medical.jsonl").write_text(json.dumps(
+        {"date": "2030-06-01", "slug": "chest", "kind": "symptom",
+         "title": "chest tightness", "body_site": "chest",
+         "severity": "red_flag", "status": "open", "resolved_date": None,
+         "restricts": "all", "provider_type": None, "source": "athlete",
+         "note": None, "expects": None, "onset_date": "2030-06-01",
+         "precondition": "hop-test", "restriction": None}) + "\n"
+        # Closed by a LATER LINE rather than by editing the first: the
+        # episode is open on 2 June and closed on 15 July, which is what
+        # makes the viewpoint observable at all.
+        + json.dumps(
+        {"date": "2030-06-30", "slug": "chest", "kind": "symptom",
+         "title": "chest tightness", "body_site": "chest",
+         "severity": "red_flag", "status": "resolved",
+         "resolved_date": "2030-06-30", "restricts": "all",
+         "provider_type": None, "source": "athlete", "note": None,
+         "expects": None, "onset_date": "2030-06-01",
+         "precondition": "hop-test", "restriction": None}) + "\n",
+        encoding="utf-8")
+    (root / "data" / "events.jsonl").write_text(json.dumps(
+        {"date": "2030-05-01", "slug": "spring-10k",
+         "title": "a 10k somewhere", "kind": "race",
+         "event_date": "2030-07-01", "priority": "a", "immovable": True,
+         "place": None, "status": "planned", "set_by": "athlete",
+         "reason": None, "note": None}) + "\n", encoding="utf-8")
+    return root
+
+
+def test_the_viewpoint_threads_to_every_method_that_takes_one(tmp_path):
+    """`self.on` has to be the default each method falls back to, or pinning
+    it at construction is decoration - the caller would still have to pass it
+    everywhere, which is the thing it exists to stop.
+    """
+    from datetime import date
+
+    from vitai.api import Vitai
+    root = _dated_repo(tmp_path)
+    # `inside` sits inside `urgent_now`'s one-day window around the episode's
+    # own date, or `urgent` and the banner come back empty on both viewpoints
+    # and certify nothing.
+    inside, outside = date(2030, 6, 2), date(2030, 7, 15)
+    loose = Vitai(root)
+    # `checks` and `safety` are deliberately absent. There, `on=None` means
+    # EVERY date rather than today - `escalations` applies no cutoff at all
+    # without one - so defaulting them to the viewpoint would silently turn
+    # "everything the record justifies" into "today's". Not every optional
+    # `on` is a clock, and the ones that are not must keep their meaning.
+    for name in ("episodes", "gates", "pending_checks", "urgent",
+                 "safety_banner", "events"):
+        method = getattr(loose, name)
+        assert method(inside) != method(outside), (
+            f"{name} does not move with the viewpoint on this fixture, so "
+            f"comparing it proves nothing")
+        assert getattr(Vitai(root, on=inside), name)() == method(inside), name
+
+
+def test_the_viewpoint_is_not_re_read_per_access(tmp_path):
+    """Read per method, a build crossing midnight answered half its questions
+    on one day and half on the next. A property that re-read the clock would
+    reintroduce exactly that while looking identical from outside.
+    """
+    import datetime as real
+
+    from vitai.api import Vitai
+    import vitai.api as api
+    engine = Vitai(_dated_repo(tmp_path))
+    first = engine.on
+
+    class Moved(real.date):
+        @classmethod
+        def today(cls):
+            return real.date(1999, 1, 1)
+
+    api.date = Moved
+    try:
+        assert engine.on == first
+    finally:
+        api.date = real.date
+
+
+def test_a_viewpoint_of_the_wrong_type_is_refused_at_the_boundary(tmp_path):
+    """`as_of` validates one line below and `on` did not, so a `str` - the
+    natural call, since every per-call `on` here takes `date | str` - left
+    half the engine working and half raising AttributeError from somewhere
+    that never mentioned the constructor. A `datetime` was worse: it
+    subclasses `date`, so it passed every isinstance check in the codebase
+    and died comparing a datetime to a date.
+    """
+    from datetime import date, datetime
+
+    import pytest
+
+    from vitai.api import Vitai
+    root = _dated_repo(tmp_path)
+    assert Vitai(root, on="2030-06-15").on == date(2030, 6, 15)
+    with pytest.raises(TypeError, match="as_of"):
+        Vitai(root, on=datetime(2030, 6, 15, 14, 30))
+    with pytest.raises(TypeError):
+        Vitai(root, on=20300615)
+
+
+def test_a_pinned_window_does_not_fall_through_to_the_wall_clock(tmp_path):
+    """`query.window` anchors to the last logged session, which is right. Its
+    empty-record branch reached for the wall clock, so a pinned instance on a
+    repo with no sessions returned today's real week.
+    """
+    from datetime import date
+
+    from vitai.api import Vitai
+    got = Vitai(_dated_repo(tmp_path), on=date(2030, 6, 15)).window(days=7)
+    assert got["to"] == "2030-06-15" and got["from"] == "2030-06-09"
+
+
+def test_no_module_reads_the_wall_clock_during_a_build(tmp_path):
+    """The behavioural half of the check above, and it caught what the source
+    check could not: `rollup` passed its own UN-defaulted `today` straight
+    into `build_report`, which fell back to `date.today()` itself. Every
+    table honoured the pinned viewpoint and the report around them was dated
+    by the wall clock - a rollup that disagreed with its own contents.
+
+    Nothing in `api.py` was wrong to read, so a source scan of that one file
+    could not see it. This watches every module instead.
+    """
+    import datetime as real
+    import importlib
+    import pkgutil
+    import shutil
+    from pathlib import Path
+
+    import vitai
+    from vitai.api import Vitai
+
+    reads: list[str] = []
+
+    class Meta(type):
+        # `isinstance(a_real_date, Watched)` must stay true, or the engine's
+        # own `isinstance(on, date)` branches take the wrong path and the
+        # probe measures its own instrumentation.
+        def __instancecheck__(cls, obj):
+            return isinstance(obj, real.date)
+
+    class Watched(real.date, metaclass=Meta):
+        @classmethod
+        def today(cls):
+            import traceback
+            frame = traceback.extract_stack()[-2]
+            reads.append(f"{Path(frame.filename).name}:{frame.lineno}")
+            return real.date(2030, 7, 1)
+
+    patched: list = []
+    try:
+        # INSIDE the try. Patching before it meant a failure part-way through
+        # the loop left the already-patched modules answering 2030-07-01 for
+        # the rest of the session.
+        for mod in pkgutil.iter_modules(vitai.__path__):
+            module = importlib.import_module(f"vitai.{mod.name}")
+            if getattr(module, "date", None) is real.date:
+                module.date = Watched
+                patched.append(module)
+        assert patched, "nothing was instrumented, so this proves nothing"
+        root = tmp_path / "demo"
+        shutil.copytree(
+            Path(__file__).resolve().parents[1] / "examples" / "demo", root)
+        engine = Vitai(root, on=real.date(2030, 6, 20))
+        engine.build()
+        engine.rollup()
+        engine.safety()
+        engine.goals()
+        engine.churn()
+        engine.events()
+        assert reads == [], reads
+    finally:
+        for module in patched:
+            module.date = real.date
+
+
+def test_the_viewpoint_reaches_the_context_lookup(tmp_path):
+    """`context` was one of the eleven changed call sites and neither test
+    above reaches it - the fixture has no context rows, so it answers None on
+    every date."""
+    import json
+    from datetime import date
+
+    from vitai.api import Vitai
+    root = _dated_repo(tmp_path)
+    # TWO rows. Context carries forward from the most recent row at or
+    # before the date, so a single row answers the same thing on every later
+    # viewpoint and the comparison would prove nothing.
+    (root / "data" / "context.jsonl").write_text("\n".join(json.dumps(r) for r in [
+        {"date": "2030-06-02", "mode": "travel", "facilities": None,
+         "place": None, "source": "athlete", "note": "away"},
+        {"date": "2030-07-01", "mode": "home", "facilities": None,
+         "place": None, "source": "athlete", "note": "back"},
+    ]) + "\n", encoding="utf-8")
+    assert Vitai(root, on=date(2030, 6, 2)).context()["mode"] == "travel"
+    assert Vitai(root, on=date(2030, 7, 15)).context()["mode"] == "home"
+
+
+def test_verdicts_take_a_viewpoint_they_do_not_read():
+    """A parameter nothing consumes is worse than no parameter: `verdicts`,
+    `churn` and the `today=` threaded through `build` all reach
+    `compute_verdicts`, which never references it.
+
+    So the viewpoint does NOT govern verdicts, and this records that rather
+    than letting the signature imply otherwise. Delete this test when
+    `compute_verdicts` starts reading its clock - it will fail then, which is
+    the point.
+    """
+    import ast
+    import inspect
+
+    from vitai import verdicts
+    tree = ast.parse(inspect.getsource(verdicts.compute_verdicts))
+    fn = tree.body[0]
+    used = {n.id for n in ast.walk(fn) if isinstance(n, ast.Name)}
+    assert "today" in {a.arg for a in fn.args.args}
+    assert "today" not in used, (
+        "compute_verdicts now reads its viewpoint - good; delete this test "
+        "and add verdicts back to the threading test above")
