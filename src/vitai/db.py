@@ -115,7 +115,19 @@ from .schema import KEYS
 #     that carries it, `sessions` included. Half points are standard on the
 #     RIR-anchored scale. Strictly looser, so no row that validated before
 #     stops validating.
-CONTRACT_VERSION = "14"
+# 15: the itemised meal estimate (#96) - a `meals` table, one row per
+#     INGREDIENT of a photographed meal, with a gram estimate, a gram RANGE,
+#     and the per-100 g composition figures as the food table gave them
+#     alongside the table's name. Three things a consumer must not get wrong.
+#     Energy and macros are DERIVED from the quantity and are not columns: an
+#     item whose portion is corrected must not keep a figure computed from the
+#     old one. There is NO confidence column and there will not be one - the
+#     range IS the confidence statement, and a number there would be a decimal
+#     point pretending to be calibration. And A MEAL IS NOT A DAY: these rows
+#     never feed `daily.kcal_in`, a total must never be rendered without its
+#     range, and a consumer that sums meals into a day is asserting the
+#     athlete ate nothing they did not photograph.
+CONTRACT_VERSION = "15"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
@@ -168,7 +180,10 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               # the reps, loads and counters stay numeric.
               "exercise", "machine", "load_type", "load_unit", "set_type",
               "failure", "side", "tempo", "session_start",
-              # #99: the categorical modifier axes. The parametric ones stay
+# #96: the itemised meal estimate. The per-100 g figures and the
+              # gram range stay numeric; only the labels are TEXT.
+              "meal", "item", "food_table",
+# #99: the categorical modifier axes. The parametric ones stay
               # numeric - including the machine-scoped ordinals, which ARE
               # numbers, just not comparable ones.
               "equipment", "angle_class"}

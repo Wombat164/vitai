@@ -42,6 +42,58 @@ versioning follows [SemVer](https://semver.org/).
   here say `source = "curated"`. Nothing from wger, whose exercise data is
   CC-BY-SA. Lateral raises and hip abduction/adduction are deliberately absent
   until #58 adds the patterns that describe them.
+- **`meal` is required on a meal item.** `item` was required and `meal` was
+  not, so two items of the same name on one date - two coffees, or one
+  ingredient in two unnamed snacks - shared an identity, and a `supersedes`
+  naming either was ambiguous. Required now for the same reason `set_index` is
+  on `sets`: a row nobody can name is a row nobody can correct. It costs one
+  word, and an unnamed snack is `meal: "snack"`.
+- **An itemised meal estimate, with a range that never collapses** (#96). A
+  photograph of a meal produces an ITEMISED estimate, never one confident
+  number. Every app that does photo estimation hands back a total, and the
+  total is the least defensible part of the answer: it cannot be corrected,
+  cannot be questioned, and cannot say which part it is unsure about.
+
+  `data/meals.jsonl` holds one row per INGREDIENT - a gram estimate, a gram
+  RANGE, and the per-100 g composition figures as the food table gave them,
+  beside the name of that table. Energy and macros are derived from the
+  quantity and never stored, so correcting a portion re-prices the item.
+
+  The split comes from what a photograph can and cannot do. It settles
+  COMPOSITION well - "crispy chicken" read as breaded at ~280 kcal/100 g was
+  corrected to crispy-skinned thigh at ~240 by looking at the skin. It settles
+  PORTIONS badly - with no scale reference, 30 g of chicken either way is 72
+  kcal, and no amount of model effort on the pixels recovers that. So asking
+  is a first-class step: `vitai meals` lists the unsettled quantities as
+  questions, and names which item dominates the range, because "600, and 70 of
+  the 90 is how much chicken" tells the athlete which single question would
+  collapse it.
+
+  **There is no confidence field and there will not be one.** No corpus of
+  photo-estimated meals scored against weighed truth exists, so a number there
+  would be a decimal point pretending to be calibration (P4). The range is the
+  confidence statement, and a total is never rendered without it.
+
+  **A meal is not a day.** `stated-in-chat` outranks `mfp-export` in the
+  precedence ladder, so writing a meal estimate into `daily.kcal_in` would
+  displace the athlete's own itemised whole-day entry when it arrived - a
+  model's guess beating the athlete's own record, which is #88 one domain
+  over. Meal rows never feed `kcal_in`; when both exist the pair is REPORTED
+  against the canonical day, because a partial day and a whole day are
+  different quantities and neither supersedes the other.
+
+  A stated intake buffer lives in `[preferences] intake_buffer_pct` - policy,
+  applied to every estimate or to none, and kept decomposable back into
+  estimate and policy. This ships no food data and takes no position on which
+  composition table to use: that is a licence question (USDA FoodData Central
+  is public domain, Open Food Facts is ODbL share-alike) and it is deliberately
+  left open.
+
+  `IDENTITY_KEY` now accepts a tuple, because every item of one plate shares a
+  date and a source - so a `supersedes` correcting the chicken retired the
+  olives and the tomato with it. That is the #43 defect in a new dataset, and
+  in the one whose premise is that the item is the unit of estimate: it has to
+  be the unit of correction too.
 - **`adduction` and `abduction` on the pattern axis** (#58). Found live, on a
   machine the athlete was about to load. Twelve patterns and none of them
   named adduction, so a seated hip-adduction machine - about as direct a

@@ -213,6 +213,44 @@ class Vitai:
                       for k in ("block", "round", "set_index")))
 
         return sorted(rows, key=where)
+    def meals(self, on: str | None = None) -> list[dict]:
+        """Itemised meal estimates, each with its range and its questions (#96).
+
+        One entry per meal, never a bare number: the total is the least
+        defensible part of a photo estimate, so it is always reported with the
+        range it came from, with the item that dominates that range named, and
+        with the quantities nobody has settled listed as questions worth
+        asking. A stated intake buffer is applied here if config carries one -
+        policy, applied to every meal or to none.
+        """
+        from .meals import (buffered, by_meal, dominant_uncertainty,
+                            meal_total, unsettled)
+        pct = self.config.intake_buffer_pct
+        out = []
+        for label, rows in sorted(by_meal(self.dataset("meals"), on).items()):
+            date, _, meal = label.partition(" ")
+            out.append({
+                "date": date, "meal": meal, "items": rows,
+                "kcal": buffered(meal_total(rows, "kcal"), pct),
+                **{m: meal_total(rows, m) for m in
+                   ("protein_g", "fat_g", "carb_g")},
+                "dominant": dominant_uncertainty(rows),
+                "questions": unsettled(rows)})
+        return out
+
+    def meal_day_disagreements(self) -> list[dict]:
+        """Days where meal estimates and a stated whole-day intake both exist.
+
+        Reported, never resolved. A meal estimate must never displace the
+        athlete's own whole-day figure - the precedence ladder would do
+        exactly that, since `stated-in-chat` outranks a logger export.
+        """
+        from .meals import day_disagreements
+        # CANONICAL daily, not the raw claims: with two sources on one day the
+        # raw rows would quote whichever landed last in the file, which is
+        # exactly the figure precedence decided AGAINST. Comparing against a
+        # superseded number is worse than not comparing.
+        return day_disagreements(self.dataset("meals"), self.canonical("daily"))
 
     def explanations(self) -> list[dict]:
         """Which source won a contested field, and why (G29).

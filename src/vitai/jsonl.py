@@ -153,7 +153,14 @@ def append_many(data_dir: Path, name: str, records: list[dict],
 # protect, so it gets the readable spelling - and `sets` needs it, because
 # three of its five identity fields are legitimately null on the ordinary
 # logging path (bodyweight sets, no session row, no circuit).
-_BLANK_NULL = frozenset({"sets"})
+#
+# The test for membership is "has this dataset ever been written to disk
+# anywhere", NOT "is the tuple form nicer to read". `goals`, `thresholds`,
+# `medical` and `events` are permanently excluded on that basis and no
+# argument about readability moves them; a dataset introduced from here on
+# belongs in this set. Stated as a rule because a list is what goes wrong
+# when the next person adds a dataset and copies whichever branch is shorter.
+_BLANK_NULL = frozenset({"sets", "meals"})
 
 
 def identity_of(dataset: str, rec: dict) -> str | None:

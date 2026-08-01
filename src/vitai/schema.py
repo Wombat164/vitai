@@ -19,6 +19,7 @@ from .artifacts import is_reference
 from .provenance import capture_problems
 from .modifiers import problems as modifier_problems
 from .sets import problems as set_problems
+from .meals import problems as meal_problems
 from .provenance import problems as provenance_problems
 from .provenance import value_kind_problems
 
@@ -221,6 +222,26 @@ KEYS: dict[str, list[str]] = {
              # `angle_deg` is portable, which is why it carries its unit.
              "equipment", "angle_class", "angle_deg",
              "resistance_level", "seat_pos", "pad_pos", "lever_pos"],
+    # One row per ITEM of a meal, never per dish (#96). A dish-level number
+    # cannot be corrected, cannot be questioned and cannot say which part it
+    # is unsure about - and the total is the least defensible part of a photo
+    # estimate, so it is derived here and never stored.
+    #
+    # `grams_lo`/`grams_hi` carry the part a photograph cannot settle. There
+    # is NO confidence field: no corpus of photo-estimated meals scored
+    # against weighed truth exists, so a number there would be a decimal point
+    # pretending to be calibration. The range IS the confidence statement.
+    #
+    # The per-100 g figures are what the TABLE said, stored beside the name of
+    # the table. `food_table` rather than `table`, which is a SQL reserved
+    # word: the read model refused to build. A composition table is an
+    # external fact that gets revised, so
+    # a row holding only a gram count would silently re-price a two-year-old
+    # meal the day an update shipped.
+    "meals": ["date", "meal", "item", "grams", "grams_lo", "grams_hi",
+              "kcal_100g", "protein_100g", "fat_100g", "carb_100g",
+              "food_table", "note", "source", "recorded_at",
+              "origin", "path", "origin_evidence", "capture", "read_by"],
     # --- increment 3: the medical layer (G11) ------------------------------
     # One condition's whole lifecycle shares a `slug`: onset, the visit, the
     # restriction, the resolution. Appending a line advances the episode; the
@@ -324,9 +345,14 @@ CONTEXT_MODES = {"normal", "vacation", "work", "conference", "weekend",
 # A TUPLE where one field is not enough. `sets` is the case that forced it:
 # many sets share a date and a source, so a `supersedes` correcting set 2 of
 # 4 retired all four - the #43 defect, which cost real data once already.
+#
+# `meals` keys the same way for the same reason: every item of one
+# photographed plate shares a date and a source, so a `supersedes`
+# correcting the chicken retired the olives and the tomato with it.
 IDENTITY_KEY: dict[str, str | tuple[str, ...]] = {
     "goals": "slug", "thresholds": "key", "medical": "slug", "events": "slug",
-    "sets": ("session_start", "exercise", "block", "round", "set_index")}
+    "sets": ("session_start", "exercise", "block", "round", "set_index"),
+    "meals": ("meal", "item")}
 
 # --- the medical layer (increment 3) -----------------------------------------
 # `state` (G57) is a physiological condition rather than an illness -
@@ -473,6 +499,18 @@ KEY_GENERATION: dict[str, dict[str, int]] = {
 # retirement generation is not expected to carry it. Without this, replacing
 # `hip_pain` with `pain` would force every new line to keep writing the field
 # it replaced - a schema that can only ever grow.
+# G89: RETIRING A KEY IS A THREE-PART CHANGE. Listing it here is part one and
+# it is the easy part. Part two is that forward mapping happens in exactly ONE
+# canonicaliser, not re-implemented at each reader. Part three is that every
+# lookup, filter, dispatch key and comparison naming the old key tries the
+# SUCCESSOR FIRST, with the old name as fallback.
+#
+# Part three is the one that gets missed, and it fails silently: the pain
+# verdict resolved its goal by exact match on `hip_pain`, so an athlete who
+# had only ever written `pain` got the right number with no goal attached,
+# which renders identically to having declared no goal. The legacy path is
+# always the one under test, because retirement exists to keep it working.
+# Grep the retired name across the whole tree before calling this done.
 KEY_RETIREMENT: dict[str, dict[str, int]] = {
     "daily": {"hip_pain": 2},
     "sessions": {"location": 2},
@@ -605,6 +643,12 @@ _TYPES: dict[str, tuple[type, ...]] = {
     "max_hr": (int,), "cadence": (int,), "kcal": _NUMERIC,
     "rpe": _NUMERIC,
     "confidence": _NUMERIC,
+    # #96. Without these a quoted number - the ordinary hand-edit typo -
+    # validates clean and then reads as null, so the biggest item on the
+    # plate silently drops out of the total instead of being rejected.
+    "grams": _NUMERIC, "grams_lo": _NUMERIC, "grams_hi": _NUMERIC,
+    "kcal_100g": _NUMERIC, "protein_100g": _NUMERIC,
+    "fat_100g": _NUMERIC, "carb_100g": _NUMERIC,
     "body_fat_pct": _NUMERIC, "kg_lo": _NUMERIC, "kg_hi": _NUMERIC,
     "body_fat_lo": _NUMERIC, "body_fat_hi": _NUMERIC,
     "target": _NUMERIC, "guard_pct": _NUMERIC, "value": _NUMERIC,
@@ -718,7 +762,7 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
     if dataset == "daily" and (a := rec.get("alcohol")) is not None:
         if not isinstance(a, bool):
             problems.append(f"'alcohol' should be true/false/null, got {a!r}")
-    if dataset in ("weight", "daily", "sessions", "measurements", "sets"):
+    if dataset in ("weight", "daily", "sessions", "measurements", "sets", "meals"):
         problems += provenance_problems(rec)
         problems += capture_problems(rec)
         problems += value_kind_problems(rec, KEYS[dataset])
@@ -730,6 +774,8 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
     if dataset == "sets":
         problems += set_problems(rec)
         problems += modifier_problems(rec)
+    if dataset == "meals":
+        problems += meal_problems(rec)
     if dataset == "sessions":
         problems += _validate_track(rec)
     if dataset == "sessions" and rec.get("type") not in SESSION_TYPES:
