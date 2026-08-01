@@ -7,8 +7,10 @@ everyone; the numbers are the athlete's.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import tomllib
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
 
 
@@ -66,6 +68,21 @@ def load_inference_config(root: Path) -> dict:
     return tomllib.loads(path.read_text(encoding="utf-8")).get("inference", {})
 
 
+def _typed(key: str, value):
+    """A threshold cast to its declared type, or left alone if it will not go.
+
+    Left alone rather than dropped: a garbage value should reach the athlete
+    as the wrong number they typed, not disappear into a default that looks
+    deliberate.
+    """
+    if value is None:
+        return None
+    try:
+        return THRESHOLD_TYPES[key](value)
+    except (KeyError, TypeError, ValueError):
+        return value
+
+
 def load_config(root: Path) -> Config:
     path = root / "vitai.toml"
     if not path.exists():
@@ -83,13 +100,20 @@ def load_config(root: Path) -> Config:
         for k, v in (res.get("precedence") or {}).items()
         if isinstance(v, (list, tuple))
     }
+    # CAST to the declared type, the same way `overlay` casts a dated row.
+    # These five arrived uncast while every other number here went through
+    # `float()`, so `steps_floor = 8000` and `steps_floor = 8000.0` built two
+    # Configs that judge identically and hash differently - a formatter
+    # normalising the toml marked every later reconstruction incomparable
+    # with every earlier one, which is noise in the one signal
+    # `policy_digest` exists to carry.
     return Config(
         phases=phases,
-        easy_hr_cap=trip.get("easy_hr_cap"),
-        rhr_baseline=trip.get("rhr_baseline"),
-        steps_floor=trip.get("steps_floor"),
-        sleep_floor_h=trip.get("sleep_floor_h"),
-        pain_gate=trip.get("pain_gate"),
+        easy_hr_cap=_typed("easy_hr_cap", trip.get("easy_hr_cap")),
+        rhr_baseline=_typed("rhr_baseline", trip.get("rhr_baseline")),
+        steps_floor=_typed("steps_floor", trip.get("steps_floor")),
+        sleep_floor_h=_typed("sleep_floor_h", trip.get("sleep_floor_h")),
+        pain_gate=_typed("pain_gate", trip.get("pain_gate")),
         source_order=tuple(str(s) for s in res.get("source_order", [])),
         precedence=precedence,
         suppressed_metrics=tuple(str(m) for m in prefs.get("suppressed_metrics", [])),
@@ -101,6 +125,66 @@ def load_config(root: Path) -> Config:
                 if isinstance(raw.get("device"), dict)
                 and raw["device"].get("slug") else None),
     )
+
+
+# NOT policy: the machine writing the file. The test is whether the field is
+# a property of the RECORD or of the reader - readers union every device's
+# file, so two machines over one record must digest the same or every
+# cross-device comparison reports a policy change that never happened.
+#
+# Not "does the engine read it": `nudge_ok` has no consumer in the engine at
+# all (only skill prose honours it), and it stays IN the digest anyway.
+# Include-by-default is the safe direction - a field wrongly included says
+# "incomparable" about two things that were comparable, and a field wrongly
+# excluded says "comparable" about two things that were not. Only the second
+# is the failure this row exists to prevent.
+NOT_POLICY = ("device",)
+
+
+def policy_digest(cfg: Config) -> str:
+    """A content hash over the policy that is NOT in the record (#148).
+
+    `as_of` reconstructs the record at an instant by filtering `recorded_at`.
+    That is right for everything the record holds and wrong for everything it
+    does not, and threshold baselines are in the second category: they live in
+    `vitai.toml`, a mutable file with no history, and `thresholds.jsonl` only
+    overlays the five keys in `THRESHOLD_TYPES`. Every other field here -
+    phases, the resolution ladder, suppressed metrics, the check tolerance,
+    the intake buffer - has no dated history at all.
+
+    So editing a rate threshold in September silently re-judges every
+    historical week that carried no dated row. A reconstruction of March does
+    not return what the engine would have said in March; it returns March's
+    data under September's policy.
+
+    This does not fix that. It makes it DETECTABLE: a reconstruction that
+    records this digest can be compared against one taken under a different
+    policy and known to be incomparable, rather than quietly differing. Build
+    systems put the environment in an action's identity for the same reason -
+    an untracked input silently poisons every claim downstream of it.
+
+    Stable across runs and machines: canonical JSON, sorted keys, and no
+    reliance on dict or dataclass ordering.
+    """
+    payload = {f.name: _canonical(getattr(cfg, f.name))
+               for f in fields(cfg) if f.name not in NOT_POLICY}
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                   ensure_ascii=True).encode()).hexdigest()
+
+
+def _canonical(value):
+    """Tuples to lists and dict values likewise, so JSON round-trips.
+
+    `asdict` would do this too, but it deep-copies and it would silently
+    include a field added to `Config` later without anyone deciding whether
+    it is policy - the loop above is explicit about that.
+    """
+    if isinstance(value, (list, tuple)):
+        return [_canonical(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): _canonical(v) for k, v in sorted(value.items())}
+    return value
 
 
 # Threshold names that `thresholds.jsonl` can carry, and the type each takes.
@@ -122,6 +206,13 @@ def overlay(cfg: Config, thresholds: dict[str, float]) -> Config:
 
     Used with `policy.state(d).thresholds` so a week is judged against the
     numbers in force THEN, not the ones in vitai.toml today - the G14 fix.
+
+    PARTIAL, and the gap is #148. This covers a key only for a week that
+    carries a dated row for it; a week without one still falls through to
+    whatever the toml says today. And it covers only the five keys in
+    `THRESHOLD_TYPES` - the rest of `Config` has no dated history to overlay
+    at all. `policy_digest` makes the difference detectable until the toml
+    gets the append-only history the data already has.
     """
     if not thresholds:
         return cfg
