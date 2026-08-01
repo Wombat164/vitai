@@ -153,7 +153,14 @@ def line_key(dataset: str, rec: dict) -> str:
     that matches more than one line, so the remaining ambiguity is loud.
     """
     if (ident := IDENTITY_KEY.get(dataset)) is not None:
-        return f"{rec.get(ident, '')}@{rec.get('date')}"
+        fields = (ident,) if isinstance(ident, str) else ident
+        # `rec.get(f, "")`, NOT a None-to-empty-string conversion. A row with
+        # an explicit null slug has always keyed as "None@<date>", and any
+        # existing goals/medical file may hold a `supersedes` naming it.
+        # Rendering null as "" instead orphans that reference and silently
+        # UN-RETIRES the line it corrected on the next load.
+        named = "/".join(str(rec.get(f, "")) for f in fields)
+        return f"{named}@{rec.get('date')}"
     if dataset == "sessions" and (aid := rec.get("activity_id")):
         return f"{aid}@{rec.get('date')}"
     return f"{rec.get('date')}/{rec.get('source', '')}"
@@ -231,7 +238,12 @@ def heads(records: list[dict], dataset: str) -> dict[str, dict]:
     # formatter can change is not an ordering (#37). The sort is STABLE and
     # the key is constant across unstamped rows, so a legacy file resolves in
     # exactly the file order it always did.
+    fields = (ident,) if isinstance(ident, str) else ident
     for r in sorted(records, key=order_key):
-        if (slug := r.get(ident)) is not None:
-            out[str(slug)] = r
+        # Every field present, and the same rendering `line_key` uses: for the
+        # single-field datasets this is exactly the old `r.get(ident) is not
+        # None` behaviour, and it keeps the two functions from disagreeing
+        # about what a row is called.
+        if all(r.get(f) is not None for f in fields):
+            out["/".join(str(r.get(f, "")) for f in fields)] = r
     return out

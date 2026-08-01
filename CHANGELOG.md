@@ -6,6 +6,41 @@ versioning follows [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`sets.jsonl`: the set is the atom** (#97, increment 1 of #59). Three facts
+  had nowhere to live, and all three were being reconstructed from prose.
+
+  **A failed attempt.** `73 FAILED` after `66x12` is the most informative set
+  of a stack progression - an attempted load that could not be completed - and
+  there was no field for it. `reps_attempted: 1, reps_completed: 0` says it,
+  and it is a different fact from a set never attempted, which is the absence
+  of a row.
+
+  **Whether a set was taken to failure.** Push-ups of 13, 12, 10 against a
+  stated max of 12 read as maximal and were not: set 2 held 92% of set 1,
+  where genuine failure leaves 55-70%. `failure` is three states -
+  `technical`, `muscular`, `volitional` - because "to failure" is ambiguous
+  across all three. **Null means UNSTATED and must never be read as maximal.**
+
+  **What kind of number a load is.** `load_type` is a closed enum:
+  `external` is a mass; `bodyweight` means the load IS the athlete, and gets
+  lighter as they cut, for reasons unrelated to strength; `bodyweight_plus`
+  is added mass; `assisted` subtracts; and `machine_stack` is a **pin number,
+  not a mass** - 66 on two machines is two different loads, so it carries its
+  machine and is never rendered in kilograms.
+
+  `set_type` goes in `semantics/set_types.toml` rather than in code, the
+  opposite call from `load_type` and for the opposite reason: methodology
+  coins set types faster than any sample, while "how does this number resolve
+  to a resistance" has no sixth answer to discover.
+
+  `vitai sets [--on DATE] [--json]` and `Vitai.sets()`. `IDENTITY_KEY` now
+  accepts a tuple, and `set_index` is REQUIRED - a tightening of the spec,
+  because a set nobody numbered shares an identity with every other unnumbered
+  set of that exercise, so a correction naming one would retire them all.
+
+  `rpe` widens from integer to numeric wherever it appears, `sessions`
+  included: half points are standard on the RIR-anchored scale. Strictly
+  looser, so nothing that validated before stops validating.
 - **A capture axis: how a value was acquired** (#77, #78). Three questions
   were answered by one string and two of them had no field at all: what
   observed it (`origin`, shipped in #51), HOW it got here, and what evidence

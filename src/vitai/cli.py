@@ -374,6 +374,80 @@ def cmd_safety(args: argparse.Namespace) -> None:
         raise SystemExit(2)
 
 
+def cmd_sets(args: argparse.Namespace) -> None:
+    """Logged sets (#97), in the order they were performed."""
+    rows = Vitai(_root(args)).sets(args.on)
+    if args.json:
+        for row in rows:
+            print(json.dumps(row))
+        return
+    if not rows:
+        print("no sets logged" + (f" on {args.on}" if args.on else ""))
+        return
+    for row in rows:
+        print(_set_line(row))
+
+
+def _set_line(row: dict) -> str:
+    """One set, said the way the athlete would say it."""
+    from .sets import is_failed_attempt
+    done = row.get("reps_completed")
+    tried = row.get("reps_attempted")
+    if is_failed_attempt(row):
+        # THE case this dataset exists for. "0 reps" reads as nothing
+        # happened; a failed attempt is the most informative set in a stack
+        # progression and has to read like one.
+        reps = "FAILED"
+    elif done is not None and tried is not None and tried > done:
+        reps = f"{done} of {tried} attempted"
+    elif not done and not tried and not row.get("duration_s"):
+        # `validate` rejects this row, but rejection does not stop a file
+        # loading - so the display path has to be honest about it too, rather
+        # than printing "0 reps" and letting it read as a set that happened.
+        reps = "nothing recorded"
+    elif done is not None:
+        reps = f"{done} reps"
+    elif row.get("duration_s") is not None:
+        reps = f"{row['duration_s']}s"
+    else:
+        reps = "?"
+    load = ""
+    if row.get("load") is not None:
+        unit = row.get("load_unit") or ("stack" if row.get("load_type")
+                                        == "machine_stack" else "kg")
+        load = f" @ {row['load']:g} {unit}"
+        if row.get("load_type") == "machine_stack":
+            # A stack number is not a mass, so it never prints without the
+            # machine it is a number about (#60).
+            load += f" on {row.get('machine') or 'an unnamed machine'}"
+        elif row.get("load_type") == "bodyweight_plus":
+            load += " added"
+        elif row.get("load_type") == "assisted":
+            load += " assistance"
+    elif row.get("load_type") == "bodyweight":
+        load = " @ bodyweight"
+    where = []
+    if row.get("block") is not None:
+        where.append(f"block {row['block']}")
+    if row.get("round") is not None:
+        where.append(f"round {row['round']}")
+    if row.get("set_index") is not None:
+        where.append(f"set {row['set_index']}")
+    tail = f" [{', '.join(where)}]" if where else ""
+    # UNSTATED prints as unstated. A set that says nothing about how it ended
+    # must not read as one taken to failure - that is the defect that turned
+    # 13 reps into a maximum it was not.
+    ended = (f", {row['failure']} failure" if row.get("failure")
+             else ", endpoint unstated")
+    effort = ""
+    if row.get("rir") is not None:
+        effort = f", {row['rir']} in reserve"
+    elif row.get("rpe") is not None:
+        effort = f", RPE {row['rpe']:g}"
+    return (f"{row.get('date')} {row.get('exercise')}: {reps}{load}"
+            f"{ended}{effort}{tail}")
+
+
 def cmd_route(args: argparse.Namespace) -> None:
     """Tier-1 geometry for a GPS track, with the parameters that produced it."""
     from .route import compass
@@ -707,6 +781,8 @@ def main(argv: list[str] | None = None) -> None:
         ("ramp", cmd_ramp, "week-on-week volume, with its base-size caveat"),
         ("route", cmd_route,
          "deterministic geometry for a GPS track (distance, shape, stops)"),
+        ("sets", cmd_sets,
+         "logged sets, in the order they were performed"),
         ("journal", cmd_journal,
          "what the athlete said: claims, worries, ideas, what is still open"),
         ("infer", cmd_infer, "opt-in: model reads the record, appends validated inferences"),
@@ -751,6 +827,10 @@ def main(argv: list[str] | None = None) -> None:
                            help="show the last N per-goal contributions (0 = none)")
         if name == "append":
             p.add_argument("dataset", help="which dataset to append to")
+        if name == "sets":
+            p.add_argument("--on", metavar="YYYY-MM-DD", help="only this date")
+            p.add_argument("--json", action="store_true",
+                           help="emit set rows as JSONL instead of prose")
         if name == "events":
             p.add_argument("--json", action="store_true",
                            help="emit event rows as JSONL instead of prose")

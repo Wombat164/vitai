@@ -16,6 +16,7 @@ from datetime import date, datetime
 from .clocks import (is_aware, is_stamp, order_key,  # noqa: F401
                      parse_time, stamp_instant)
 from .provenance import capture_problems
+from .sets import problems as set_problems
 from .provenance import problems as provenance_problems
 
 # dataset -> ordered keys (column order for the SQLite read model)
@@ -167,6 +168,35 @@ KEYS: dict[str, list[str]] = {
     # `weight` line (gen-2, G36/G37); this dataset is for the other instruments.
     "measurements": ["date", "kind", "value", "source", "note", "recorded_at",
                      "origin", "path", "origin_evidence", "capture", "read_by"],
+    # One row per SET (#97). The set is the atom: anything coarser cannot say
+    # that a load was attempted and not completed, or that a set stopped
+    # short of failure - and both of those produced wrong readings of a real
+    # record within a day of each other.
+    #
+    # `reps_attempted` vs `reps_completed` is the first distinction:
+    # attempted counts reps INITIATED. A failed top set is
+    # `reps_attempted: 1, reps_completed: 0`, which is a different fact from
+    # no row at all.
+    #
+    # `failure` is three states rather than a flag, because "to failure" is
+    # ambiguous across all three. Null means UNSTATED and must never be read
+    # as maximal.
+    #
+    # `block`/`round`/`index` carry loop membership: without them a 5-round
+    # circuit is 25 unrelated rows. `set_index` rather than the spec's
+    # `index`, stated rather than silently changed: `index` is a SQL reserved
+    # word and the read model refuses to build with it, the same way `table`
+    # did one increment ago. `session_start` links a set to its
+    # session by (date, start_time) - offset-bearing per the clocks canon,
+    # and NOT called `session`, which would imply an identity `sessions` does
+    # not have (#43).
+    "sets": ["date", "session_start", "exercise", "block", "round",
+             "set_index",
+             "reps_completed", "reps_attempted", "load", "load_type",
+             "load_unit", "machine", "set_type", "failure", "rir", "rpe",
+             "rest_s", "tempo", "duration_s", "side", "note",
+             "source", "recorded_at", "origin", "path", "origin_evidence",
+             "capture", "read_by"],
     # --- increment 3: the medical layer (G11) ------------------------------
     # One condition's whole lifecycle shares a `slug`: onset, the visit, the
     # restriction, the resolution. Appending a line advances the episode; the
@@ -254,8 +284,13 @@ CONTEXT_MODES = {"normal", "vacation", "work", "conference", "weekend",
 
 # Datasets whose lines are keyed by a stable identity rather than date/source:
 # a supersedes chain runs per slug, and the LAST line for a slug is its head.
-IDENTITY_KEY: dict[str, str] = {"goals": "slug", "thresholds": "key",
-                                "medical": "slug", "events": "slug"}
+#
+# A TUPLE where one field is not enough. `sets` is the case that forced it:
+# many sets share a date and a source, so a `supersedes` correcting set 2 of
+# 4 retired all four - the #43 defect, which cost real data once already.
+IDENTITY_KEY: dict[str, str | tuple[str, ...]] = {
+    "goals": "slug", "thresholds": "key", "medical": "slug", "events": "slug",
+    "sets": ("session_start", "exercise", "block", "round", "set_index")}
 
 # --- the medical layer (increment 3) -----------------------------------------
 # `state` (G57) is a physiological condition rather than an illness -
@@ -493,7 +528,8 @@ _TYPES: dict[str, tuple[type, ...]] = {
     "kg": _NUMERIC, "steps": (int,), "distance_km": _NUMERIC, "active_min": (int,),
     "kcal_out": (int,), "kcal_in": (int,), "protein_g": _NUMERIC, "sleep_h": _NUMERIC,
     "rhr": (int,), "hip_pain": (int,), "duration_s": (int,), "avg_hr": (int,),
-    "max_hr": (int,), "cadence": (int,), "kcal": _NUMERIC, "rpe": (int,),
+    "max_hr": (int,), "cadence": (int,), "kcal": _NUMERIC,
+    "rpe": _NUMERIC,
     "confidence": _NUMERIC,
     "body_fat_pct": _NUMERIC, "kg_lo": _NUMERIC, "kg_hi": _NUMERIC,
     "body_fat_lo": _NUMERIC, "body_fat_hi": _NUMERIC,
@@ -608,9 +644,11 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
     if dataset == "daily" and (a := rec.get("alcohol")) is not None:
         if not isinstance(a, bool):
             problems.append(f"'alcohol' should be true/false/null, got {a!r}")
-    if dataset in ("weight", "daily", "sessions", "measurements"):
+    if dataset in ("weight", "daily", "sessions", "measurements", "sets"):
         problems += provenance_problems(rec)
         problems += capture_problems(rec)
+    if dataset == "sets":
+        problems += set_problems(rec)
     if dataset == "sessions":
         problems += _validate_track(rec)
     if dataset == "sessions" and rec.get("type") not in SESSION_TYPES:
