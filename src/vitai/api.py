@@ -88,7 +88,8 @@ class Vitai:
         keys with null, stamps `_gen`, and validates before writing - an
         append-only file cannot be un-appended.
         """
-        return append(self.root / "data", name, record)
+        return append(self.root / "data", name, record,
+                      device=self.config.device)
 
     def append_many(self, name: str, records: list[dict]) -> list[dict]:
         """Append many rows in one pass - what a bulk import should call.
@@ -97,7 +98,8 @@ class Vitai:
         validates every row before writing any, and writes in a single open.
         Looping over `append` re-parses a growing file per row.
         """
-        return append_many(self.root / "data", name, records)
+        return append_many(self.root / "data", name, records,
+                           device=self.config.device)
 
     @property
     def artifacts(self):
@@ -182,6 +184,24 @@ class Vitai:
         """Raw claims, exactly as recorded. See `canonical()` for adjudicated."""
         return {name: self.dataset(name) for name in KEYS}
 
+    def _converged(self) -> dict[str, list[dict]]:
+        """Datasets with duplicate CAPTURES resolved to one row each (#105).
+
+        Dedupe happens HERE, at build, rather than at write. A device that was
+        offline still converges, because the resolution runs over whatever
+        files are present whenever they arrive - and deduping at write would
+        need the writer to have seen the other device's file, which is exactly
+        the coupling actor-per-file exists to remove.
+
+        The RECORD is untouched: `dataset()` still returns every line, because
+        an append-only file cannot un-append and both rows are legitimate
+        writes. Only the derived numbers converge, which is the point - a
+        session captured on the laptop and again on the phone would otherwise
+        double its distance in every figure downstream.
+        """
+        from .devices import deduplicate
+        return {name: deduplicate(self.dataset(name), name)[0] for name in KEYS}
+
     def resolution(self) -> dict:
         """Run the resolution layer: canonical rows plus the audit trail.
 
@@ -190,7 +210,7 @@ class Vitai:
         count every day the athlete happens to own two devices.
         """
         cfg = self.config
-        return resolve(self.datasets(), precedence=cfg.precedence,
+        return resolve(self._converged(), precedence=cfg.precedence,
                        source_order=cfg.source_order)
 
     def canonical(self, name: str | None = None):
@@ -308,6 +328,48 @@ class Vitai:
         """
         from .progression import tonnage
         return tonnage(self.sets(on), self.canonical("weight"))
+
+    def devices(self) -> list[str]:
+        """Every device that has written to this record.
+
+        Read off the FILENAMES rather than the rows: a device that has only
+        ever written legacy unstamped lines still owns a file, and the point
+        of the topology is that the file layout is the truth about who writes
+        what.
+        """
+        from .devices import device_of, stream_paths
+        found = {device_of(p, name) for name in KEYS
+                 for p in stream_paths(self.root / "data", name)}
+        return sorted(d for d in found if d)
+
+    def duplicate_captures(self) -> list[dict]:
+        """One real event captured twice, from two devices (#105).
+
+        Union does not deduplicate, and nothing else would notice: the same
+        workout pulled from a vendor on the laptop and again on the phone is
+        two rows describing one event, from two files, both legitimate
+        appends. Reported rather than dropped - the athlete decides what to
+        do, and a silent merge of two legitimate lines is the one thing an
+        append-only record must not do on its own.
+        """
+        from .devices import duplicates, event_key
+        out = []
+        for name in KEYS:
+            rows = self.dataset(name)
+            for row in duplicates(rows, name):
+                first = next(r for r in rows
+                             if event_key(name, r) == event_key(name, row))
+                out.append({
+                    "dataset": name, "date": row.get("date"),
+                    "device": row.get("device"),
+                    "first_device": first.get("device"),
+                    "key": event_key(name, row),
+                    "detail": (f"a {name} row from "
+                               f"{row.get('device') or 'an unnamed device'} "
+                               "describes the same event as one from "
+                               f"{first.get('device') or 'an unnamed device'} "
+                               "- one happening, captured twice")})
+        return out
 
     def explanations(self) -> list[dict]:
         """Which source won a contested field, and why (G29).
