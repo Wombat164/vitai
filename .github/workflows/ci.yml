@@ -20,6 +20,8 @@ jobs:
       - run: ruff check src tests
       - name: Personal-content gate (blocking)
         run: python scripts/personal_gate.py
+      - name: Medical-boundary gate (blocking)
+        run: python scripts/boundary_gate.py
 
   tests:
     runs-on: ${{ matrix.os }}

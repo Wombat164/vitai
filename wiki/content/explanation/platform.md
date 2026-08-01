@@ -83,8 +83,8 @@ run to someone whose record has blocked running - which is the exact failure
 the table exists to prevent. `Vitai.gated("run")` answers it in one call.
 
 **`escalations` is not a notification feed.** Rows at `emergency` or `urgent`
-level mean the athlete needs a clinician, and the `action` string is fixed
-text that must be shown verbatim. Do not summarise it, rank it against other
+level mean the engine has stopped programming against something in the record,
+and the `action` string is fixed text that must be shown verbatim. Do not summarise it, rank it against other
 UI priorities, or let a language model rewrite it for tone. A game must not
 mint anything from a day carrying one, and must not treat a gated day as a
 missed target.

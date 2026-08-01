@@ -5,6 +5,34 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **A deterministic medical-boundary lint over the public surface** (#117).
+  `scripts/boundary_gate.py`, blocking in CI beside the personal-content gate.
+  #110 fixed `safety.py`; a boundary that lives only in a document regresses
+  the first time somebody writes a helpful string, so this is the mechanical
+  complement.
+
+  It fails on care directives ("see a doctor", "seek medical attention") and
+  on medical-purpose claims ("detects a disease"). Both are the same mistake
+  in different grammar: one asserts an instruction the tool cannot help anyone
+  carry out, the other asserts a medical purpose, and under FDA general
+  wellness and MDCG 2019-11 the trigger is the claim rather than the
+  technology.
+
+  **The allowlist is hashed sentences keyed by file, never file paths.**
+  Sparing a file would spare whatever is written into it next; sparing a
+  hashed sentence means an edit re-triggers review. The acute tier is read
+  from `safety.ACUTE` directly, so the two guards cannot drift apart.
+
+  Deliberately narrow. `flag`, `spot` and bare `condition` are not matched:
+  this codebase says "red flag" and "precondition" constantly, and a lint that
+  cries wolf gets deleted - after which it catches nothing at all.
+
+  Seven sentences in `docs/` are recorded as exemptions with reasons: three
+  because the doctrine cannot be written without quoting the rule, and four
+  as visible DEBT - they describe routing that #110 removed, so they are now
+  false as well as over the line, and #116 owns the rewrite.
+
 ### Changed
 - **The engine states the observation and refuses to prescribe; it no longer
   routes anybody to care** (#110). `safety.py` was doing three things under one

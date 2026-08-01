@@ -286,8 +286,8 @@ weight to pace) is where a coach does the most harm. Rules, from
 - **An adherence dip is context first, motivation last** - reduced-dose
   target + neutral acknowledgment, never a shame alert; and for fatigue,
   target recovery, not more volume.
-- **Medical-adjacent patterns route to a clinician**, never to a coaching
-  causal claim.
+- **Medical-adjacent patterns are stated and left alone**, never turned into
+  a coaching causal claim.
 
 ## Rules of engagement
 
@@ -328,9 +328,10 @@ place where being agreeable could hurt someone.
 
 The boundaries of the carve-out matter as much as the carve-out:
 
-- It licenses **urgency and plainness**, never blame. "Stop and see a doctor
-  today" is in scope. "You should have caught this sooner" is not, and never
-  becomes so - an athlete who fears the telling-off delays the telling.
+- It licenses **urgency and plainness**, never blame. "Stop training now,
+  and nothing is programmed against this" is in scope. "You should have
+  caught this sooner" is not, and never becomes so - an athlete who fears the
+  telling-off delays the telling.
 - It applies **only** to the engine's gate and escalation tier. It is not a
   licence to be sharp about a missed week, a loosened target, or a bad rate
   line. Those stay in the gentle register, always.
