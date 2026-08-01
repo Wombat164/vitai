@@ -644,3 +644,24 @@ def test_no_ladder_configured_means_no_finding():
     from vitai.schema import unranked_source_problems
     rows = [(1, {"date": "2026-07-28", "kg": 80.0, "source": "anything"})]
     assert unranked_source_problems("weight", rows, set()) == []
+def test_an_impossible_claim_is_a_validation_finding():
+    """A scale reporting distance is not a contest to adjudicate - it is a
+    row that cannot be true as written, and `source` being free text meant
+    nothing knew a scale from a watch (#79)."""
+    from vitai.schema import impossible_claim_problems
+    rows = [(1, {"date": "2030-05-01", "kg": 80.0, "source": "fitbit aria"}),
+            (2, {"date": "2030-05-02", "kg": 80.0, "source": "fitbit aria",
+                 "steps": 9000})]
+    found = impossible_claim_problems("weight", rows)
+    assert len(found) == 0, "weight carries no steps column to claim"
+    daily = [(1, {"date": "2030-05-01", "steps": 9000, "distance_km": 4.2,
+                  "source": "fitbit aria"})]
+    found = impossible_claim_problems("daily", daily)
+    assert len(found) == 1
+    assert "cannot observe" in found[0] and "fitbit-scale" in found[0]
+
+
+def test_a_plausible_claim_is_not_a_finding():
+    from vitai.schema import impossible_claim_problems
+    rows = [(1, {"date": "2030-05-01", "steps": 9000, "source": "polar"})]
+    assert impossible_claim_problems("daily", rows) == []

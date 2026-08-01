@@ -56,6 +56,37 @@ versioning follows [SemVer](https://semver.org/).
   `origin_evidence` landed on `weight`, `daily` and `measurements` in #51 and
   were never extended - and sessions is exactly where multi-instrument claims
   collide.
+- **A catalogued source registry** (#79). Source names were free text, so a
+  console meant whatever the writer typed that day, and nothing knew a scale
+  cannot observe distance. `semantics/sources.toml` catalogues 49 instruments
+  with a `kind` (Google Fit's `Device.type` axis, extended) and aliases, so
+  `Polar Pacer Pro`, `polar-pacer-pro` and `PacerPro` are one thing.
+
+  It answers `provenance.toml`'s own "roles, not vendors" rule rather than
+  contradicting it: that file classifies what KIND of hop something is, this
+  one normalises WHICH instrument. And it avoids the G85 failure the same way
+  `session_types` did - an unrecognised source RESOLVES to `other` carrying
+  its kind, never errors, and there is deliberately no `other-console` or
+  `other-wearable` to multiply the catalog by the kind axis.
+
+  **Nothing personal lives in it.** A source named for someone's own gym or
+  their own spreadsheet resolves to `other`, which is what the catchall is
+  for, and the checks work on the kind so nothing is lost by that.
+
+  The catalog implies no precedence. Which instrument to believe stays in the
+  athlete's config, because a figure stated in chat outranks a vendor channel
+  in one record and would not in another.
+- **A claim its instrument cannot have made is a validation finding.** A
+  scale reporting distance, a rowing console reporting sleep: not resolution
+  ties to adjudicate but rows that cannot be true as written.
+
+  Held as a **deny list at the kind level**. It was first written as a
+  per-instrument list of what each device CAN observe, and that was wrong in
+  the direction that costs something - an Oura ring does report calories, a
+  hand-typed row can carry a heart rate read off a watch, a relaying app
+  carries whatever it received, and watch models differ. Every one of those
+  was flagged by a whitelist that merely forgot them. An omission from a deny
+  list produces silence instead.
 - **`track`, `activity_id` and `activity_source` on `sessions`** (#43). The
   link from a session to the file that recorded it lived in a prose note and
   was recovered by regex - unqueryable, unvalidatable, and silently broken by
