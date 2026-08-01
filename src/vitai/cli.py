@@ -520,6 +520,69 @@ def _set_line(row: dict) -> str:
         effort = f", RPE {row['rpe']:g}"
     return (f"{row.get('date')} {row.get('exercise')}: {reps}{load}"
             f"{ended}{effort}{tail}")
+def cmd_meals(args: argparse.Namespace) -> None:
+    """Itemised meal estimates (#96): never a bare number."""
+    v = Vitai(_root(args))
+    meals = v.meals(args.on)
+    if args.json:
+        for m in meals:
+            print(json.dumps(m))
+        return
+    if not meals:
+        print("no meal estimates" + (f" for {args.on}" if args.on else ""))
+        return
+    for m in meals:
+        kcal = m["kcal"]
+        # ALWAYS the range, never the midpoint alone. A single number here is
+        # the defect the whole dataset exists to prevent.
+        head = f"{m['date']} {m['meal']}: {kcal['lo']:.0f}-{kcal['hi']:.0f} kcal"
+        if kcal.get("buffer_pct"):
+            raw = kcal["unbuffered"]
+            head += (f" (incl. the stated +{kcal['buffer_pct']:g}% buffer; "
+                     f"{raw['lo']:.0f}-{raw['hi']:.0f} before it)")
+        print(head)
+        for row in m["items"]:
+            span = _item_line(row)
+            print(f"  {span}")
+        macros = ", ".join(
+            f"{m[k]['lo']:.0f}-{m[k]['hi']:.0f} {k[:-2] if k.endswith('_g') else k}"
+            for k in ("protein_g", "fat_g", "carb_g"))
+        print(f"  macros: {macros}")
+        if not kcal["complete"]:
+            print(f"  {kcal['unpriced']} item(s) not priced - this total is "
+                  "short by however much they were")
+        if (d := m["dominant"]) and d["share"] > 0.4:
+            print(f"  most of the range is {d['item']}: {d['width']:.0f} of "
+                  f"{d['of_total']:.0f} kcal. Settling that one collapses it")
+        for q in m["questions"]:
+            print(f"  ask: {q['item']} - {q['why']}")
+    for row in v.meal_day_disagreements():
+        if args.on and row["date"] != args.on:
+            continue
+        print(row["detail"])
+
+
+def _item_line(row: dict) -> str:
+    from .meals import item_energy, quantity_range
+    grams = quantity_range(row)
+    energy = item_energy(row)
+    where = f" [{row['food_table']}]" if row.get("food_table") else ""
+    if grams is None:
+        return f"{row.get('item')}: quantity unknown{where}"
+    # An unbounded estimate must not render identically to a settled one. A
+    # point with no range is a GUESS nobody has bounded, and printing
+    # "150 g, 195 kcal" the same way a weighed item prints is the bare-number
+    # defect this whole dataset exists to prevent, one row down.
+    unbounded = row.get("grams_lo") is None or row.get("grams_hi") is None
+    span = (f"{grams[0]:.0f}-{grams[2]:.0f} g" if grams[2] > grams[0]
+            else f"{grams[1]:.0f} g")
+    if unbounded:
+        span += " (unbounded)"
+    if energy is None:
+        return f"{row.get('item')}: {span}, not priced{where}"
+    kcal = (f"{energy[0]:.0f}-{energy[2]:.0f}" if energy[2] > energy[0]
+            else f"{energy[1]:.0f}")
+    return f"{row.get('item')}: {span}, {kcal} kcal{where}"
 
 
 def cmd_route(args: argparse.Namespace) -> None:
@@ -859,6 +922,8 @@ def main(argv: list[str] | None = None) -> None:
          "deterministic geometry for a GPS track (distance, shape, stops)"),
         ("sets", cmd_sets,
          "logged sets, in the order they were performed"),
+        ("meals", cmd_meals,
+         "itemised meal estimates, with the range and the open questions"),
         ("journal", cmd_journal,
          "what the athlete said: claims, worries, ideas, what is still open"),
         ("infer", cmd_infer, "opt-in: model reads the record, appends validated inferences"),
@@ -907,6 +972,11 @@ def main(argv: list[str] | None = None) -> None:
             p.add_argument("--on", metavar="YYYY-MM-DD", help="only this date")
             p.add_argument("--json", action="store_true",
                            help="emit set rows as JSONL instead of prose")
+        if name == "meals":
+            p.add_argument("--on", metavar="YYYY-MM-DD",
+                           help="only this date")
+            p.add_argument("--json", action="store_true",
+                           help="emit meal rows as JSONL instead of prose")
         if name == "events":
             p.add_argument("--json", action="store_true",
                            help="emit event rows as JSONL instead of prose")

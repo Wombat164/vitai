@@ -752,3 +752,39 @@ def test_an_attested_goal_has_no_scope_to_infer():
                         [], [], [], "2030-05-01")[0]
     assert row["scope"] == "undeclared"
     assert row["counted"] is None
+
+
+# ---- the pain verdict's goal linkage (#126) ---------------------------------
+# `_goal_for` matches `metric` exactly, and the pain verdict looked up only the
+# RETIRED `hip_pain`. The number was always right; the linkage was not. That is
+# the worst shape a defect can take here, because a missing goal renders exactly
+# like having declared none, so nothing looks wrong.
+
+
+def _pain_gate_row(goals):
+    days = [daily(f"2030-04-0{d}", pain=5, pain_site="knee") for d in range(1, 8)]
+    rows = compute_verdicts(Config(pain_gate=3), [], days, [], goals=goals)
+    gate = [r for r in rows if r["metric"] == "pain_gate"]
+    assert gate, "pain_gate verdict did not compute"
+    return gate[0]
+
+
+def test_a_pain_goal_links_to_the_pain_verdict():
+    """The regression. An athlete who never had the retired field declares
+    `metric: pain`, and before the fix got the right number with no goal."""
+    row = _pain_gate_row([goal(slug="pain-down", metric="pain", target=2)])
+    assert row["goal"] == "pain-down"
+
+
+def test_a_legacy_hip_pain_goal_still_links():
+    """The originating record predates the generalization and still declares
+    the old metric. Fixing the new name must not orphan the old one."""
+    row = _pain_gate_row([goal(slug="hip-down", metric="hip_pain", target=2)])
+    assert row["goal"] == "hip-down"
+
+
+def test_the_current_name_wins_when_both_are_declared():
+    """`pain` is the name in force; `hip_pain` is only a fallback."""
+    row = _pain_gate_row([goal(slug="hip-down", metric="hip_pain", target=2),
+                          goal(slug="pain-down", metric="pain", target=2)])
+    assert row["goal"] == "pain-down"

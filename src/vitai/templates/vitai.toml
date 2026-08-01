@@ -27,6 +27,12 @@
 #                          # scored. Use this rather than deleting history
 #                          # when a number is not healthy to be judged on.
 # nudge_ok = false         # may the coach interrupt proactively at all?
+# intake_buffer_pct = 15   # margin on ESTIMATED meal intake (#96).
+#                          # Under-counting intake stalls a deficit while
+#                          # looking like adherence. Set it here so it
+#                          # applies to every estimate or to none - a
+#                          # buffer used on some meals and not others
+#                          # corrupts every comparison in the series.
 
 # [resolution]           # Only needed once a SECOND source appears.
 # source_order = ["scale", "watch", "app"]   # fallback ladder
