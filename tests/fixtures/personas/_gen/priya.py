@@ -21,7 +21,7 @@ its output once that version changes.
 from __future__ import annotations
 
 import random
-from datetime import date, timedelta
+from datetime import date
 
 from . import common
 

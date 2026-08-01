@@ -21,7 +21,6 @@ import math
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-import vitai
 from vitai.schema import CURRENT_GENERATION, KEYS
 
 # --- schema pin ---------------------------------------------------------------

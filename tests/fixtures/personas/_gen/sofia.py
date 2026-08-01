@@ -279,7 +279,8 @@ def _pram_or_run(rng: random.Random, stamper: common.Stamper, d: date) -> dict:
         duration_s = int(distance * pace_min_per_km * 60 + rng.uniform(-60, 60))
         session_type = "walk"
         rpe = rng.choice([2, 2, 3])
-    start_time = f"{d.isoformat()}T{rng.randrange(9, 12):02d}:{rng.randrange(0, 59):02d}:00{_spain_offset(d)}"
+    start_time = (f"{d.isoformat()}T{rng.randrange(9, 12):02d}"
+                  f":{rng.randrange(0, 59):02d}:00{_spain_offset(d)}")
     fields = {
         "date": d.isoformat(), "type": session_type, "distance_km": round(distance, 1),
         "duration_s": max(60, duration_s), "rpe": rpe,

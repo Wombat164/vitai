@@ -481,7 +481,8 @@ _E1_TRUTH = {
         "June, all on the hill-loop route, all downplayed in the "
         "journal as indigestion or heartburn"
     ),
-    date(2030, 4, 27): "the same exertional chest pressure on the incline as the other four episodes",
+    date(2030, 4, 27): "the same exertional chest pressure on the incline "
+                       "as the other four episodes",
     date(2030, 5, 16): (
         "the same exertional chest pressure on the incline as the other "
         "four episodes; the stored GPX's raw trackpoint timing shows "
@@ -494,7 +495,8 @@ _E1_TRUTH = {
         "walk, resolving after about ten minutes sitting; he reports it "
         "a full day later, not in the moment"
     ),
-    date(2030, 6, 25): "the same exertional chest pressure on the incline as the other four episodes",
+    date(2030, 6, 25): "the same exertional chest pressure on the incline "
+                       "as the other four episodes",
 }
 
 _E1_GAP = (

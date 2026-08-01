@@ -320,12 +320,21 @@ def _sessions(rng: random.Random, stamper: common.Stamper, end: date,
 
 
 _DAILY_NOTES = [
-    (date(2025, 12, 25), {"note": "Christmas dinner then a nap, Lin says I ate like there was no tomorrow", "alcohol": True}),
-    (date(2026, 4, 12), {"note": "Kelly had the baby, a boy, Jack. Didn't leave the hospital car park for two hours, just sat there grinning."}),
-    (date(2028, 11, 9), {"note": "knee's given out again, in a right mood about it", "mood": 2}),
-    (date(2028, 12, 3), {"note": "fourteen of fourteen with the shopping, first time all year", "mood": 8}),
-    (date(2029, 9, 2), {"note": "landed in Benidorm, feet up for a fortnight, first pint at the airport bar", "alcohol": True}),
-    (date(2030, 1, 1), {"note": "new year, told Lin I'm not doing the crash thing again, slow this time"}),
+    (date(2025, 12, 25), {"note": "Christmas dinner then a nap, Lin says I "
+                                  "ate like there was no tomorrow",
+                          "alcohol": True}),
+    (date(2026, 4, 12), {"note": "Kelly had the baby, a boy, Jack. Didn't "
+                                 "leave the hospital car park for two "
+                                 "hours, just sat there grinning."}),
+    (date(2028, 11, 9), {"note": "knee's given out again, in a right mood "
+                                 "about it", "mood": 2}),
+    (date(2028, 12, 3), {"note": "fourteen of fourteen with the shopping, "
+                                 "first time all year", "mood": 8}),
+    (date(2029, 9, 2), {"note": "landed in Benidorm, feet up for a "
+                                "fortnight, first pint at the airport bar",
+                        "alcohol": True}),
+    (date(2030, 1, 1), {"note": "new year, told Lin I'm not doing the "
+                                "crash thing again, slow this time"}),
 ]
 
 
@@ -494,7 +503,8 @@ def _e2_vending_streak() -> dict:
                    "kind=claim, status=open), never promote it to a fact "
                    "feeding any number or trend; there is no fingerprint to "
                    "check it against and the engine must not invent one"),
-        "gap": "G-tom-5: an unfalsifiable claim with zero corroborating data anywhere in the record",
+        "gap": "G-tom-5: an unfalsifiable claim with zero corroborating "
+               "data anywhere in the record",
     }
 
 
@@ -598,7 +608,8 @@ def _e7_waist_vs_scale() -> dict:
                    "using another quantity's readings; waist_cm stays its "
                    "own trend line, cited only when a claim is actually "
                    "about waist, never blended into a weight-level estimate"),
-        "gap": "none: this is a boundary the ladder already respects by ranking sources within a field, not across fields",
+        "gap": "none: this is a boundary the ladder already respects by "
+               "ranking sources within a field, not across fields",
     }
 
 
@@ -660,7 +671,8 @@ def _e10_batch_backfill(transcribe_dates: list[date]) -> dict:
                    "written, never by itself as evidence about whether WHAT "
                    "was written is true; tom is one half of that "
                    "calibration pair"),
-        "gap": "none: marcus M3 and tom together are the test that any such heuristic stays neutral",
+        "gap": "none: marcus M3 and tom together are the test that any "
+               "such heuristic stays neutral",
     }
 
 
