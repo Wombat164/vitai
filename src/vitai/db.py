@@ -90,12 +90,6 @@ from .schema import KEYS
 #     an inflated estimate reaching a deficit reads ON TARGET while the scale
 #     goes up. A `type` carrying `vendor-classified` is a third-party model's
 #     guess, not something the athlete or a device asserted.
-CONTRACT_VERSION = "13"
-#     rather than what was intended. `resolution` gains `discarded` (every
-#     claim that lost, not only the runner-up) and `unattributed_loser`, and a
-#     `unattributed_claim_lost` tripwire. A consumer showing a canonical value
-#     can now say what it beat; before this, a resolved value had no way to
-#     say it had beaten anything at all.
 # 13: the artifact store (#80) - an `artifacts` manifest table (one row per
 #     kept file: hash, media type, size, why it was kept) and an `artifact`
 #     reference on weight, daily, sessions and measurements, so the evidence a

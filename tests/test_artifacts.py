@@ -469,3 +469,39 @@ def test_the_check_fails_when_a_value_can_no_longer_be_backed(tmp_path):
                    {"artifacts": [manifest_row(ref)],
                     "weight": [{"artifact": ref}]})
     assert [f["kind"] for f in faults(found)] == ["missing"]
+
+
+def test_the_contract_constant_is_assigned_exactly_once():
+    """A dead duplicate of a version constant survives review and then gets
+    edited in the wrong place a month later.
+
+    It arrived here through a merge: the union duplicated the tail of one
+    version's comment and carried a second assignment with it, so the block
+    read 11, 12, an assignment, half of 11 again, then 13. Python took the
+    last one and every test passed - which is exactly why this is asserted
+    rather than left to reading.
+    """
+    from pathlib import Path as _P
+    source = (_P(__file__).resolve().parents[1] / "src" / "vitai"
+              / "db.py").read_text()
+    assignments = [ln for ln in source.splitlines()
+                   if ln.startswith("CONTRACT_VERSION")]
+    assert len(assignments) == 1, assignments
+
+
+def test_the_migration_notes_are_consecutive_and_end_at_the_constant():
+    """The comment block is the changelog a consumer reads to decide whether
+    it can still parse the file, so a gap or a repeat in it is a defect in
+    the contract itself rather than in a comment.
+    """
+    import re
+    from pathlib import Path as _P
+    from vitai.db import CONTRACT_VERSION
+    source = (_P(__file__).resolve().parents[1] / "src" / "vitai"
+              / "db.py").read_text()
+    numbered = [int(m) for m in re.findall(r"^# (\d+): ", source, re.M)]
+    assert numbered == sorted(numbered), numbered
+    assert len(numbered) == len(set(numbered)), "a version is documented twice"
+    assert numbered[-1] == int(CONTRACT_VERSION), (
+        f"the notes stop at {numbered[-1]} and the constant says "
+        f"{CONTRACT_VERSION}")
