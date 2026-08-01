@@ -56,6 +56,15 @@ ALLOWED_TRACKS = {
     "examples/demo/tracks/canal-loop-2030-06-16.gpx",
     "examples/demo/tracks/canal-loop-2030-06-16.tcx",
 }
+# The persona corpus carries the same proof of syntheticness as the demo's
+# two tracks: every file under a persona's tracks/ directory is emitted by
+# the committed, seeded generator at tests/fixtures/personas/generate.py,
+# whose --check mode regenerates and byte-compares it (and pytest runs that
+# gate as test_committed_data_matches_generator). GPX and TCX only: text
+# formats a reviewer can read in a diff. FIT stays banned everywhere; a
+# binary track cannot be reviewed, so it cannot be proved synthetic here.
+ALLOWED_TRACK_RE = re.compile(
+    r"^tests/fixtures/personas/[a-z][a-z0-9-]*/tracks/[^/]+\.(gpx|tcx)$")
 TOKEN_RE = re.compile(r"[a-zA-Z]+")
 
 # --- what a word matcher structurally cannot see (#64) -------------------------
@@ -127,7 +136,9 @@ def numeric_findings(path: Path, text: str) -> list[str]:
     # Checked EVERYWHERE, including under the synthetic prefixes. Copying a
     # real track into a fixture directory is the realistic accident, and a
     # blanket exemption for `tests/` and `examples/` would wave it through.
-    if path.suffix.lower() in TRACK_EXT and path.as_posix() not in ALLOWED_TRACKS:
+    posix = path.as_posix()
+    if (path.suffix.lower() in TRACK_EXT and posix not in ALLOWED_TRACKS
+            and not ALLOWED_TRACK_RE.match(posix)):
         found.append("a track file that is not one of the generator's own - "
                      "a track is a few hundred coordinates starting at a front "
                      "door, so it is allowed only where it is provably synthetic")
