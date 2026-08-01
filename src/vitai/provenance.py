@@ -183,10 +183,58 @@ def has_artifact(rec: dict) -> bool:
         "has_artifact", False))
 
 
+# The worst value on the scale, for a registry entry that predates the field.
+MOST_RESTATED = 2
+
+
+def states_capture(rec: dict) -> bool:
+    """Did this line SAY how the value was acquired?
+
+    UNSTATED IS NOT ABSENT, which this module's own header insists on and
+    which the first cut of the rank ignored: it defaulted an unstated capture
+    to the worst value, so a line that said nothing lost to a line that said
+    `file_export`. That is not the costly side, it is the wrong side - the
+    cost lands on the OTHER claim, and penalising the silent row PROMOTES the
+    stale annotated one. A food log re-exported the next morning with no
+    capture written lost to the previous morning's annotated export, which is
+    the 1,700 kcal error #70 exists to prevent, reintroduced through the
+    fix for #140.
+    """
+    return resolve("capture", "capture", rec.get("capture")) is not None
+
+
+def restatements(rec: dict) -> int:
+    """How many times a PERSON restated this number between the instrument
+    and the record (#140).
+
+    Not a quality score. `ble` and `file_export` both sit at 0 though their
+    virtues differ completely, and nothing here says which is better - see
+    `semantics/capture.toml`, which exists partly to stop that reading.
+
+    It exists because the resolution ladder had nothing to rank by when a lie
+    and the truth SHARE A SOURCE. An athlete who logs a weight from memory and
+    records it as `source: scale` produces two claims precedence cannot tell
+    apart, and no configuration helps. This ranks what the record SAYS about
+    how the value was acquired, so an honestly recorded "I remembered this"
+    loses to a device reading - which is all the athlete meant by writing it
+    down that way. It is not lie detection and must never become it.
+    """
+    return int(meta("capture", "capture", capture_of(rec)).get(
+        "restatements", MOST_RESTATED))
+
+
 def transcribed_by(rec: dict) -> str | None:
     """Who did the reading, where the capture needed one."""
     who = rec.get("read_by")
     return str(who) if who else None
+
+
+# DELIBERATELY UNRANKED: `read_by`. #140 notes that third-party capture
+# carries no rank either - `derek`'s wife enters rows on his behalf - and the
+# answer is not to rank the people. A third party reading a display is still
+# a display reading, so `capture` already carries what resolution needs, and
+# a training log that sorted its owner's household by reliability would be
+# doing something no finding here asks for.
 
 
 def capture_problems(rec: dict) -> list[str]:

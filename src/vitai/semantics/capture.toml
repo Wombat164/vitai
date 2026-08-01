@@ -40,6 +40,39 @@
 # erroring. The registry is open - a capture method nobody here imagined is a
 # gap in this file, not a fault in the athlete's record.
 
+# RESTATEMENTS (#140) - how many times a PERSON restated the number between
+# the instrument and the record. It is deliberately not a quality score, and
+# the paragraph above is the reason: `ble` and `file_export` both sit at 0
+# because neither passed through a person, though their virtues differ
+# completely, and nothing here says which of the two is better.
+#
+# It exists because the resolution ladder had nothing to rank by when a lie
+# and the truth share a source. An athlete who logs a weight from memory and
+# records it as `source: scale` produces two claims the ladder cannot tell
+# apart, and no precedence configuration helps. That is strictly harder than
+# two devices disagreeing, where the ladder can do its job.
+#
+# This is NOT lie detection and must never become it. It ranks what the record
+# SAYS about how a value was acquired, so that an honestly recorded "I
+# remembered this" loses to a device reading - which is all the athlete meant
+# by writing it down that way.
+#
+#   0  the instrument's number reached the record with nobody restating it
+#   1  a person or a model read it off a display, so it can be MISread - but
+#      the display's number is fixed and, for `photo`, the evidence survives
+#      and can be re-read
+#   2  a person supplied the number from somewhere else; nothing constrains it
+#      to what any instrument showed
+#
+# `unknown` takes 2 rather than a worse value of its own: assume the costly
+# side, as this file does everywhere, and the costly side is the worst thing
+# actually on the scale. It TIES with `narrative` because we know nothing
+# worse about an unstated capture than about a stated recollection.
+#
+# It only ever breaks a tie the SOURCE ladder left. Two different sources
+# still resolve by precedence, because that is the athlete's configured
+# judgement and this is not entitled to overrule it.
+
 version = 1
 
 [capture.connector]
@@ -48,6 +81,7 @@ aliases = ["api", "sync", "integration", "oauth"]
 may_transcribe = false
 has_artifact = false
 note = "the vendor's current model, re-derived; not reproducible later"
+restatements = 0
 
 [capture.file_export]
 label = "Parsed from a bulk export"
@@ -55,6 +89,7 @@ aliases = ["export", "archive", "takeout", "dump", "csv", "bulk"]
 may_transcribe = false
 has_artifact = true
 note = "the archive survives, which is why an export beats a connector for re-checking"
+restatements = 0
 
 [capture.ble]
 label = "Read over a local device link"
@@ -62,6 +97,7 @@ aliases = ["bluetooth", "ftms", "ant+", "gatt", "pm5"]
 may_transcribe = false
 has_artifact = false
 note = "no human in the loop, and usually no durable artifact either"
+restatements = 0
 
 [capture.photo]
 label = "An image of a display, read by a person or a model"
@@ -69,6 +105,7 @@ aliases = ["picture", "screenshot", "image", "camera"]
 may_transcribe = true
 has_artifact = true
 note = "the artifact fully DETERMINES the value - it can be re-read and disagreed with"
+restatements = 1
 
 [capture.narrative]
 label = "The athlete described it in conversation"
@@ -76,6 +113,7 @@ aliases = ["spoken", "told", "chat", "said", "stated-in-chat"]
 may_transcribe = true
 has_artifact = true
 note = "the artifact records what was SAID, not what was shown - so it cannot settle a misreading"
+restatements = 2
 
 [capture.manual_entry]
 label = "Typed into a form or a file"
@@ -83,6 +121,7 @@ aliases = ["typed", "hand", "handwritten", "form", "by hand"]
 may_transcribe = false
 has_artifact = false
 note = "no reading step and no evidence; fallible, but not a transcription"
+restatements = 2
 
 [capture.derived]
 label = "Computed by this engine"
@@ -90,6 +129,12 @@ aliases = ["computed", "calculated", "engine"]
 may_transcribe = false
 has_artifact = true
 note = "the artifact is the inputs, and the computation is reproducible from them"
+# THE COSTLY SIDE, because the count here is the count of its INPUTS and
+# this file cannot see them: a computation over a remembered number is
+# that remembered number wearing arithmetic. Nothing writes this capture
+# today, so taking 2 costs nothing and stops a future writer inheriting a
+# rank the value may not have earned.
+restatements = 2
 
 [capture.unknown]
 label = "Not stated"
@@ -97,3 +142,4 @@ aliases = []
 may_transcribe = true
 has_artifact = false
 note = "assumes the costly side of both, as provenance.toml does for an unrecognised hop"
+restatements = 2
