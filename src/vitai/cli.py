@@ -21,6 +21,7 @@ from . import __version__
 from .api import Vitai
 from .config import load_inference_config
 from .inference import append_inferences, backend_from_config, run_inference
+from .devices import stream_paths
 from .jsonl import DataError, load_report, read_lines
 from .safety import DISCLAIMER, banner
 from .schema import (KEYS, impossible_claim_problems, recorded_at_problems,
@@ -52,6 +53,25 @@ def cmd_init(args: argparse.Namespace) -> None:
     # rather than shipped as a template dotfile (packaging globs skip dotfiles).
     (target / ".gitattributes").write_text(
         "* text=auto\n*.jsonl text eol=lf\n*.md text eol=lf\n",
+        encoding="utf-8", newline="\n")
+    # `derived/` is REBUILDABLE and must never be synced or committed (#105).
+    # The database rebuilds from `data/*.jsonl` in seconds, so syncing it
+    # would make a disposable file load-bearing - and SQLite's main file and
+    # its WAL are separate files that must stay consistent, so a client that
+    # uploads them independently produces a database that is corrupt rather
+    # than merely stale. Written here rather than shipped as a template
+    # dotfile, for the same reason `.gitattributes` is: packaging globs skip
+    # dotfiles.
+    (target / ".gitignore").write_text(
+        "# Rebuilt by `vitai build` from data/*.jsonl. Never sync or commit\n"
+        "# this: it is derived, and a synced SQLite file is corrupt rather\n"
+        "# than merely stale.\n"
+        "derived/\n"
+        "\n"
+        "# Artifacts are personal data (#80). Keep them, but decide\n"
+        "# deliberately how - git-lfs, a sibling directory, an object store -\n"
+        "# rather than by a default nobody chose.\n"
+        "artifacts/\n",
         encoding="utf-8", newline="\n")
     (target / "data").mkdir(exist_ok=True)
     for name in DATASETS:
@@ -912,15 +932,28 @@ def cmd_validate(args: argparse.Namespace) -> None:
     ranked = set(cfg.source_order) | {
         s for ladder in cfg.precedence.values() for s in ladder}
     for name in DATASETS:
-        path = root / "data" / f"{name}.jsonl"
-        rows, parse_errors = read_lines(path)
-        for e in parse_errors:  # G26: report EVERY malformed line, not just the first
-            print(f"MALFORMED: {e}")
-            problems += 1
-        for n, rec in rows:
-            for p in validate_record(name, rec):
-                print(f"{name}.jsonl line {n}: {p}")
+        # EVERY device file, not just the plain one (#105). Reading only
+        # `<name>.jsonl` meant a malformed or invalid line in
+        # `<name>.laptop.jsonl` passed validate clean and was then quarantined
+        # by the build - and monotonicity, unranked sources and supersedes
+        # ambiguity were all skipped for every device stream, precisely when
+        # the union makes cross-file reference collisions likelier.
+        #
+        # Per FILE for the per-line checks, so a message names the file the
+        # reader has to open. The file-level checks below run over the merged
+        # stream, because monotonicity across a union is the question that
+        # actually matters once a second device exists.
+        rows = []
+        for path in stream_paths(root / "data", name):
+            found, parse_errors = read_lines(path)
+            for e in parse_errors:  # G26: report EVERY malformed line
+                print(f"MALFORMED: {e}")
                 problems += 1
+            for n, rec in found:
+                for p in validate_record(name, rec):
+                    print(f"{path.name} line {n}: {p}")
+                    problems += 1
+            rows += found
         # File-level: transaction time must be monotonic and tie-free (#37).
         # Neither is a property of any single line, so neither can be caught
         # by validate_record - and monotonicity is the check that actually

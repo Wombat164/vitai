@@ -43,12 +43,30 @@ from vitai.schema import CURRENT_GENERATION, KEYS
 # so a generator authored against a different shape is a broken fixture, and
 # a log line that scrolls past in green CI verifies nothing. Generation stops.
 VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
-AUTHORED_AGAINST_CONTRACT = "15"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #105, which added a nullable `device` to every dataset and so
+# advanced every generation by one. REVIEWED rather than bumped: the builders
+# None-fill from `KEYS[dataset]`, so `device` lands absent on every persona
+# row - which is the correct reading for a corpus that predates multi-device
+# support, and nothing here should assert a machine it never had. The contract
+# is unchanged at 15; only the generations moved.
+AUTHORED_AGAINST_CONTRACT = "16"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
-    "weight": 7, "daily": 7, "sessions": 8, "inferences": 3, "goals": 3,
-    "events": 2, "thresholds": 2, "achievements": 3, "measurements": 6,
-    "sets": 3, "meals": 2, "medical": 4, "checks": 2, "context": 2,
-    "artifacts": 2, "journal": 2,
+    "achievements": 4,
+    "artifacts": 3,
+    "checks": 3,
+    "context": 3,
+    "daily": 8,
+    "events": 3,
+    "goals": 4,
+    "inferences": 4,
+    "journal": 3,
+    "meals": 3,
+    "measurements": 7,
+    "medical": 5,
+    "sessions": 9,
+    "sets": 4,
+    "thresholds": 3,
+    "weight": 8,
 }
 
 

@@ -48,6 +48,12 @@ class Config:
     # number the athlete cannot decompose back into estimate and policy is a
     # number they cannot check. None means no buffer, which is the default.
     intake_buffer_pct: float | None = None
+    # #105. This machine's slug, and the ONLY thing that decides which file
+    # this instance appends to. Set it per device and no two devices ever
+    # write the same file, which is what makes a merge a set union rather
+    # than a conflict to resolve. None keeps the single-file record every
+    # existing athlete already has.
+    device: str | None = None
 
 
 def load_inference_config(root: Path) -> dict:
@@ -91,6 +97,9 @@ def load_config(root: Path) -> Config:
         check_tolerance=float(prefs.get("check_tolerance", 0.02)),
         intake_buffer_pct=(None if prefs.get("intake_buffer_pct") is None
                            else float(prefs["intake_buffer_pct"])),
+        device=(str(raw["device"]["slug"])
+                if isinstance(raw.get("device"), dict)
+                and raw["device"].get("slug") else None),
     )
 
 

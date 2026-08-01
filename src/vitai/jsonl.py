@@ -42,7 +42,7 @@ class DataError(Exception):
 
 
 def append(data_dir: Path, name: str, rec: dict,
-           now: datetime | None = None) -> dict:
+           now: datetime | None = None, device: str | None = None) -> dict:
     """Append one line, stamping the clocks the machine owns. Returns the row.
 
     This exists because `recorded_at` is worthless as a tie-break if callers
@@ -56,11 +56,12 @@ def append(data_dir: Path, name: str, rec: dict,
     use: this one re-reads the file to find the clock's high-water mark, so a
     loop over it is quadratic.
     """
-    return append_many(data_dir, name, [rec], now=now)[0]
+    return append_many(data_dir, name, [rec], now=now, device=device)[0]
 
 
 def append_many(data_dir: Path, name: str, records: list[dict],
-                now: datetime | None = None) -> list[dict]:
+                now: datetime | None = None,
+                device: str | None = None) -> list[dict]:
     """Append many lines in one pass. The primitive bulk import actually wants.
 
     Bulk is the normal write pattern here - every source so far arrives as
@@ -91,7 +92,16 @@ def append_many(data_dir: Path, name: str, records: list[dict],
     if name not in KEYS:
         raise KeyError(f"unknown dataset {name!r}; one of {sorted(KEYS)}")
 
-    path = data_dir / f"{name}.jsonl"
+    # THIS device's file, and its high-water mark is read from that file
+    # alone. Actor-per-file dissolves the skew problem rather than solving it:
+    # a phone whose clock sits a minute behind the laptop never compares
+    # against the laptop's stamps, because it never reads the laptop's file.
+    # `CLOCK_SKEW_TOLERANCE` goes back to its real job - catching a device
+    # whose OWN clock jumped backwards - and stops rejecting writes for a
+    # reason that was never about this device (#105).
+    from .devices import write_path
+
+    path = write_path(data_dir, name, device)
     existing, _ = read_lines(path)
     prior = [i for i in (stamp_instant(r.get("recorded_at"))
                          for _, r in existing) if i is not None]
@@ -109,6 +119,16 @@ def append_many(data_dir: Path, name: str, records: list[dict],
 
     rows: list[dict] = []
     for n, rec in enumerate(records, 1):
+        if "device" in rec:
+            # Machine-set, like `recorded_at`. A caller could otherwise write
+            # a row into the plain file asserting it came from the phone, or
+            # contradict the configured device and be silently overruled -
+            # either way "device is metadata about the WRITE" stops being
+            # enforceable and becomes a convention.
+            raise ValueError(
+                "device is machine-set and must not be supplied - it names "
+                "the machine doing the writing, which the writer knows and "
+                "the caller cannot assert. Set [device] slug in vitai.toml")
         if "recorded_at" in rec:
             raise ValueError(
                 "recorded_at is machine-set and must not be supplied - it is "
@@ -126,6 +146,12 @@ def append_many(data_dir: Path, name: str, records: list[dict],
         row["_gen"] = row.get("_gen") or CURRENT_GENERATION[name]
         stamp = now_stamp(now, after=high_water)
         row["recorded_at"] = stamp
+        if device:
+            # Metadata about the WRITE, beside `source` rather than inside it:
+            # `source` says which instrument observed the value, `device` says
+            # which machine wrote the line down. Conflating them would make a
+            # phone and a laptop look like two instruments (#35).
+            row["device"] = device
         high_water = stamp_instant(stamp)
         if problems := validate_record(name, row):
             raise DataError(
@@ -253,6 +279,34 @@ def known_by(rec: dict, cutoff: datetime) -> bool:
     return stamp is None or stamp <= cutoff
 
 
+def _read_streams(data_dir: Path, name: str
+                  ) -> tuple[list[tuple[int, dict]], list[str]]:
+    """Read and merge every device file for one dataset.
+
+    The merge is a set UNION over disjoint files - no two devices write the
+    same one - so nothing here has to reconcile content. That is the property
+    the whole topology exists to produce, and it is what lets a sync transport
+    stay content-blind.
+    """
+    from .devices import device_of, merge, stream_paths
+
+    paths = stream_paths(data_dir, name)
+    if not paths:
+        return [], []
+    streams, errors = [], []
+    for path in paths:
+        rows, problems = read_lines(path)
+        errors += problems
+        streams.append((device_of(path, name), [r for _, r in rows]))
+    # ONE code path, single- or multi-actor. A short-circuit for the single
+    # case parsed the file twice and, worse, ordered it differently - so
+    # syncing in an EMPTY second file re-ordered an existing record's mixed
+    # stamped and unstamped rows, which can change what a `supersedes`
+    # retires. `merge` is stable and absent-first, so one stream comes back
+    # in exactly its file order.
+    return list(enumerate(merge(streams, name), 1)), errors
+
+
 def load(data_dir: Path, name: str,
          as_of: datetime | None = None) -> list[dict]:
     """Records from <data_dir>/<name>.jsonl with supersedes applied.
@@ -281,7 +335,10 @@ def load_report(data_dir: Path, name: str,
     would apply a future retraction to a past reconstruction and produce a
     state the record never held.
     """
-    rows, errors = read_lines(data_dir / f"{name}.jsonl")
+    # EVERY device's file, unioned into one deterministic sequence. A record
+    # with a single `<name>.jsonl` is the same code path with one actor whose
+    # name is nothing, so nothing about an existing record changes (#105).
+    rows, errors = _read_streams(data_dir, name)
     if as_of is not None:
         rows = [(i, r) for i, r in rows if known_by(r, as_of)]
     # Walk backwards so a line can only be superseded by a LATER one. This

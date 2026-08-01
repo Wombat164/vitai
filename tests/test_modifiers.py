@@ -30,7 +30,8 @@ def a_set(**kw):
            "capture": "narrative", "read_by": "athlete",
            "equipment": None, "angle_class": None, "angle_deg": None,
            "resistance_level": None, "seat_pos": None, "pad_pos": None,
-           "lever_pos": None, "_gen": CURRENT_GENERATION["sets"]}
+           "lever_pos": None, "device": None,
+           "_gen": CURRENT_GENERATION["sets"]}
     row.update(kw)
     return row
 
@@ -279,7 +280,7 @@ def test_a_set_with_no_modifiers_says_nothing_extra(tmp_path, capsys):
 
 # ---- what the review of this feature found ------------------------------------------
 
-def test_the_modifier_generation_is_the_current_one_and_later_than_everything():
+def test_the_modifier_generation_is_later_than_everything_that_predates_it():
     """The G25 test could not catch the regression it exists for.
 
     Deriving `previous` from `key_generation("sets", "equipment")` means
@@ -291,9 +292,16 @@ def test_the_modifier_generation_is_the_current_one_and_later_than_everything():
     So this asserts the registration against the DATASET's state instead.
     """
     landed = key_generation("sets", "equipment")
-    assert landed == CURRENT_GENERATION["sets"], "modifiers are not the newest"
+    # NOT `== CURRENT_GENERATION`. That was a moving target - the same trap
+    # this test was written to close, one level up: #105's `device` landed
+    # afterwards and made "modifiers are the newest" false without anything
+    # being wrong. What has to hold is that modifiers came AFTER everything
+    # that predates them, which is what a reused generation would break.
     for older in ("set_index", "exercise", "recorded_at", "load_type"):
         assert key_generation("sets", older) < landed, older
+    assert landed <= CURRENT_GENERATION["sets"]
+    for sibling in ("angle_class", "angle_deg", *MACHINE_SCOPED):
+        assert key_generation("sets", sibling) == landed, sibling
 
 
 def test_one_machine_typed_two_ways_is_one_machine():

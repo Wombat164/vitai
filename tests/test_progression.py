@@ -32,7 +32,8 @@ def a_set(**kw):
            "capture": "narrative", "read_by": "athlete",
            "equipment": None, "angle_class": None, "angle_deg": None,
            "resistance_level": None, "seat_pos": None, "pad_pos": None,
-           "lever_pos": None, "_gen": CURRENT_GENERATION["sets"]}
+           "lever_pos": None, "device": None,
+           "_gen": CURRENT_GENERATION["sets"]}
     row.update(kw)
     return row
 

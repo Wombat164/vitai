@@ -9,22 +9,22 @@ seed = 109
 span = ["2029-05-01", "2030-06-30"]
 
 [schema]
-contract = "15"
+contract = "16"
 
 [schema.generations]
-achievements = 3
-artifacts = 2
-checks = 2
-context = 2
-daily = 7
-events = 2
-goals = 3
-inferences = 3
-journal = 2
-meals = 2
-measurements = 6
-medical = 4
-sessions = 8
-sets = 3
-thresholds = 2
-weight = 7
+achievements = 4
+artifacts = 3
+checks = 3
+context = 3
+daily = 8
+events = 3
+goals = 4
+inferences = 4
+journal = 3
+meals = 3
+measurements = 7
+medical = 5
+sessions = 9
+sets = 4
+thresholds = 3
+weight = 8

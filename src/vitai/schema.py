@@ -43,7 +43,7 @@ KEYS: dict[str, list[str]] = {
     "weight": ["date", "kg", "source", "note", "body_fat_pct",
                "kg_lo", "kg_hi", "body_fat_lo", "body_fat_hi", "measured_at",
                "recorded_at", "origin", "path", "origin_evidence",
-               "capture", "read_by", "modelled", "artifact"],
+               "capture", "read_by", "modelled", "artifact", "device"],
     # `hip_pain` is RETIRED at generation 2 in favour of `pain` + `pain_site`:
     # the hip was this record's founding injury, but a record that can only
     # describe one joint cannot describe a second one. Old lines keep it and
@@ -56,7 +56,7 @@ KEYS: dict[str, list[str]] = {
               "protein_g", "sleep_h", "rhr", "hip_pain", "alcohol", "note",
               "source", "mood", "feel", "coverage", "pain", "pain_site",
               "pain_side", "recorded_at", "origin", "path",
-              "origin_evidence", "capture", "read_by", "modelled", "artifact"],
+              "origin_evidence", "capture", "read_by", "modelled", "artifact", "device"],
     # `location` is RETIRED at generation 2, split into `place` (coarse, and
     # deliberately coarse - "home"/"work"/a travel slug, never an address) and
     # `route` (a personal slug the athlete names). Free text could not be
@@ -85,7 +85,7 @@ KEYS: dict[str, list[str]] = {
                  "place", "with", "context", "planned", "weather", "recorded_at",
                  "track", "activity_id", "activity_source",
                  "origin", "path", "origin_evidence", "capture", "read_by",
-                 "modelled", "type_source", "artifact"],
+                 "modelled", "type_source", "artifact", "device"],
     # Third data tier: MODEL-INFERRED knowledge. Append-only like everything
     # else, but carries provenance (model, evidence, confidence) because it is
     # neither ground truth (observed) nor rebuildable (derived). The engine
@@ -95,7 +95,7 @@ KEYS: dict[str, list[str]] = {
     # inference with it, rather than leaving a stale belief behind whose
     # evidence quietly no longer exists.
     "inferences": ["date", "kind", "statement", "confidence", "model",
-                   "evidence", "note", "depends_on", "recorded_at"],
+                   "evidence", "note", "depends_on", "recorded_at", "device"],
     # --- policy datasets (increment 1) --------------------------------------
     # These are DATED POLICY, not observations: what the athlete was aiming at,
     # and when. A goal is edited by appending a new line with the same `slug`
@@ -135,7 +135,8 @@ KEYS: dict[str, list[str]] = {
               "tracker", "target", "policy", "guard_pct", "period",
               "on_period_end", "deadline", "status", "motivator", "rationale",
               "on_success", "on_miss", "accountability", "set_by", "reason",
-              "note", "event", "deadline_kind", "verification", "change_kind", "recorded_at"],
+              "note", "event", "deadline_kind", "verification",
+              "change_kind", "recorded_at", "device"],
     # A dated real-world FIXTURE, and the thing a plan is built backwards from
     # (G86). Distinct from a MILESTONE, which the engine derives as a fraction
     # of a target: a milestone is a consequence of progress, an event happens
@@ -150,13 +151,13 @@ KEYS: dict[str, list[str]] = {
     # `deadline_kind` is a property of a GOAL. They are related but not the
     # same field - a soft goal may still be anchored to a hard fixture.
     "events": ["date", "slug", "title", "kind", "event_date", "priority",
-               "immovable", "place", "status", "set_by", "reason", "note", "recorded_at"],
+               "immovable", "place", "status", "set_by", "reason", "note", "recorded_at", "device"],
     # G14/G20: every threshold is effective-dated, so editing one today can
     # never silently re-score a past week. `change_kind` separates a genuine
     # policy CHANGE from a CORRECTION of a mis-entered number (G31) - only the
     # former is churn, and only the former can be suspiciously timed.
     "thresholds": ["date", "key", "value", "change_kind", "set_by", "reason",
-                   "note", "recorded_at"],
+                   "note", "recorded_at", "device"],
     # A recorded accomplishment worth keeping. Distinct from a MILESTONE, which
     # the engine derives; `source` carries authorship (G31) so a hand-logged
     # race finish is never confused with an engine-derived crossing.
@@ -164,7 +165,8 @@ KEYS: dict[str, list[str]] = {
     # `onset_date`: a race finished in March and written up in July belongs on
     # the day it happened. Named differently on purpose - an achievement is a
     # point event that OCCURRED, an episode has an ONSET that opens a window.
-    "achievements": ["date", "title", "goal", "source", "note", "occurred_date", "recorded_at"],
+    "achievements": ["date", "title", "goal", "source", "note", "occurred_date",
+                     "recorded_at", "device"],
     # --- increment 2 -------------------------------------------------------
     # Sparse ANCHOR-class reads that do not come off the scale: a tape measure,
     # a DEXA scan, an InBody. Anchors top the resolution precedence ladder and,
@@ -173,7 +175,7 @@ KEYS: dict[str, list[str]] = {
     # `weight` line (gen-2, G36/G37); this dataset is for the other instruments.
     "measurements": ["date", "kind", "value", "source", "note", "recorded_at",
                      "origin", "path", "origin_evidence", "capture",
-                     "read_by", "modelled", "artifact"],
+                     "read_by", "modelled", "artifact", "device"],
     # One row per SET (#97). The set is the atom: anything coarser cannot say
     # that a load was attempted and not completed, or that a set stopped
     # short of failure - and both of those produced wrong readings of a real
@@ -221,7 +223,7 @@ KEYS: dict[str, list[str]] = {
              # require `machine` and may never be compared across machines.
              # `angle_deg` is portable, which is why it carries its unit.
              "equipment", "angle_class", "angle_deg",
-             "resistance_level", "seat_pos", "pad_pos", "lever_pos"],
+             "resistance_level", "seat_pos", "pad_pos", "lever_pos", "device"],
     # One row per ITEM of a meal, never per dish (#96). A dish-level number
     # cannot be corrected, cannot be questioned and cannot say which part it
     # is unsure about - and the total is the least defensible part of a photo
@@ -241,7 +243,7 @@ KEYS: dict[str, list[str]] = {
     "meals": ["date", "meal", "item", "grams", "grams_lo", "grams_hi",
               "kcal_100g", "protein_100g", "fat_100g", "carb_100g",
               "food_table", "note", "source", "recorded_at",
-              "origin", "path", "origin_evidence", "capture", "read_by"],
+              "origin", "path", "origin_evidence", "capture", "read_by", "device"],
     # --- increment 3: the medical layer (G11) ------------------------------
     # One condition's whole lifecycle shares a `slug`: onset, the visit, the
     # restriction, the resolution. Appending a line advances the episode; the
@@ -265,18 +267,18 @@ KEYS: dict[str, list[str]] = {
     "medical": ["date", "slug", "kind", "title", "body_site", "severity",
                 "status", "resolved_date", "restricts", "provider_type",
                 "source", "note", "expects", "onset_date", "precondition",
-                "restriction", "recorded_at"],
+                "restriction", "recorded_at", "device"],
     # The result of a named check, on a day (G28 gate mechanics). A rehab plan
     # says "5 gentle hops before each run; pain in the hip means do not run
     # today" - a gate CONDITIONAL on a test performed that morning. Without
     # this the whole instruction sits in a note where no rule can read it,
     # which is the prose problem G28 exists to solve, one level down.
-    "checks": ["date", "slug", "result", "value", "source", "note", "recorded_at"],
+    "checks": ["date", "slug", "result", "value", "source", "note", "recorded_at", "device"],
     # Dated situational mode (G34): what was going on around the athlete. The
     # engine uses it to explain missingness rather than flag it - an absent
     # weigh-in in a week with no scale is not a lapse - and the coach uses it
     # to constrain what it asks for. Effective-dated like all policy (P2).
-    "context": ["date", "mode", "facilities", "place", "source", "note", "recorded_at"],
+    "context": ["date", "mode", "facilities", "place", "source", "note", "recorded_at", "device"],
     # What the ATHLETE said, in their own words. Deliberately NOT `inferences`,
     # which is MODEL-inferred and carries a `model` field: filing a first-hand
     # statement there would launder the athlete's own claim as engine output,
@@ -300,9 +302,9 @@ KEYS: dict[str, list[str]] = {
     # distinguishable from data loss, which are completely different facts.
     "artifacts": ["date", "sha256", "media_type", "bytes", "captured_at",
                   "origin", "kind", "note", "removed", "reason",
-                  "recorded_at"],
+                  "recorded_at", "device"],
     "journal": ["date", "kind", "text", "about", "source", "confidence",
-                "status", "note", "recorded_at"],
+                "status", "note", "recorded_at", "device"],
 }
 
 # Sourced from semantics/session_types.toml (G85): a curated registry, not a
@@ -618,6 +620,24 @@ for _k in ("equipment", "angle_class", "angle_deg", "resistance_level",
     KEY_GENERATION.setdefault("sets", {})[_k] = CURRENT_GENERATION["sets"]
 
 
+# --- which machine wrote the line down (#105) ----------------------------------
+# On EVERY dataset, like `recorded_at`, and for the same reason: it describes
+# the write rather than the observation, so a caller must never have to
+# remember it. Additive and nullable - a record written before multi-device
+# support has no device, and "nobody said" is the correct reading.
+#
+# Beside `source`, never inside it: `source` says which INSTRUMENT observed
+# the value, `device` says which MACHINE wrote the line down. Conflating them
+# would make a phone and a laptop look like two instruments, which is the
+# false-corroboration defect #35 exists to prevent.
+#
+# Appended last, per the rule beside the artifact block: a generation block
+# appends, and a new field never lands ahead of one already in the wild.
+for _ds in KEYS:
+    CURRENT_GENERATION[_ds] = CURRENT_GENERATION.get(_ds, 1) + 1
+    KEY_GENERATION.setdefault(_ds, {})["device"] = CURRENT_GENERATION[_ds]
+
+
 def key_generation(dataset: str, key: str) -> int:
     """Generation a key was introduced in (1 = founding)."""
     return KEY_GENERATION.get(dataset, {}).get(key, 1)
@@ -739,6 +759,14 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
     if _bad_date(rec.get("date")):
         problems.append(f"bad date {rec.get('date')!r} (ISO-8601 YYYY-MM-DD)")
     problems += _validate_recorded_at(rec)
+    if (dev := rec.get("device")) is not None:
+        from .devices import is_slug
+        if not is_slug(dev):
+            problems.append(
+                f"'device' is a slug naming the machine that wrote this line "
+                f"(lowercase, digits, hyphens), got {dev!r} - it becomes part "
+                "of a filename, so a dot or a separator would make the "
+                "dataset ambiguous")
     for k, types in _TYPES.items():
         if k in keys and (v := rec.get(k)) is not None and k in rec:
             if isinstance(v, bool) or not isinstance(v, types):
