@@ -18,12 +18,13 @@ verdicts - never by joining raw health records across users.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from .config import Config, load_config
 from .contributions import compute_contributions, goal_progress
 from .db import build_db
+from .clocks import is_aware
 from .jsonl import append, append_many, load
 from . import query
 from .policy import (State, context_on, days_between, events_on, plan_churn,
@@ -41,8 +42,35 @@ from .verdicts import compute_verdicts
 class Vitai:
     """Read/derive interface over one user's content repo."""
 
-    def __init__(self, root: Path | str):
+    def __init__(self, root: Path | str, as_of: datetime | None = None):
+        """`as_of` is a KNOWLEDGE CUTOFF, not a date filter.
+
+        Without it the engine answers with everything it knows now. With it,
+        the engine answers as it would have on that instant: only lines whose
+        `recorded_at` precedes the cutoff are loaded, so a correction, an
+        explanation or a backdated context line that arrived later is absent.
+
+        This is the transaction-time question and it is not the one
+        `goals_in_force(date)` answers. That asks which goals APPLIED on a
+        date using everything known now; this asks what was KNOWN then. A
+        month of degraded data whose cause is filed six weeks later reads as
+        unexplained under a cutoff inside those six weeks and explained after,
+        which is the difference between judging a decision and judging it with
+        hindsight.
+
+        Threaded through `dataset()`, so resolution, verdicts, safety and the
+        build all inherit it rather than each needing to remember.
+        """
         self.root = Path(root)
+        self.as_of = as_of
+        if as_of is not None and not is_aware(as_of):
+            # A naive cutoff compares against aware stamps by guessing a zone,
+            # and the guess is the local one, which makes the same call return
+            # different records on two machines.
+            raise ValueError(
+                "as_of must carry an explicit offset: a naive cutoff would be "
+                "interpreted in the local zone and give different answers on "
+                "different machines")
         if not (self.root / "data").is_dir():
             raise FileNotFoundError(
                 f"{self.root} is not a vitai content repo (no data/ directory)")
@@ -148,7 +176,7 @@ class Vitai:
     def dataset(self, name: str) -> list[dict]:
         if name not in KEYS:
             raise KeyError(f"unknown dataset {name!r}; one of {sorted(KEYS)}")
-        return load(self.root / "data", name)
+        return load(self.root / "data", name, as_of=self.as_of)
 
     def datasets(self) -> dict[str, list[dict]]:
         """Raw claims, exactly as recorded. See `canonical()` for adjudicated."""
