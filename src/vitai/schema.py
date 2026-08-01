@@ -16,6 +16,7 @@ from datetime import date, datetime
 from .clocks import (is_aware, is_stamp, order_key,  # noqa: F401
                      parse_time, stamp_instant)
 from .provenance import capture_problems
+from .meals import problems as meal_problems
 from .provenance import problems as provenance_problems
 
 # dataset -> ordered keys (column order for the SQLite read model)
@@ -167,6 +168,26 @@ KEYS: dict[str, list[str]] = {
     # `weight` line (gen-2, G36/G37); this dataset is for the other instruments.
     "measurements": ["date", "kind", "value", "source", "note", "recorded_at",
                      "origin", "path", "origin_evidence", "capture", "read_by"],
+    # One row per ITEM of a meal, never per dish (#96). A dish-level number
+    # cannot be corrected, cannot be questioned and cannot say which part it
+    # is unsure about - and the total is the least defensible part of a photo
+    # estimate, so it is derived here and never stored.
+    #
+    # `grams_lo`/`grams_hi` carry the part a photograph cannot settle. There
+    # is NO confidence field: no corpus of photo-estimated meals scored
+    # against weighed truth exists, so a number there would be a decimal point
+    # pretending to be calibration. The range IS the confidence statement.
+    #
+    # The per-100 g figures are what the TABLE said, stored beside the name of
+    # the table. `food_table` rather than `table`, which is a SQL reserved
+    # word: the read model refused to build. A composition table is an
+    # external fact that gets revised, so
+    # a row holding only a gram count would silently re-price a two-year-old
+    # meal the day an update shipped.
+    "meals": ["date", "meal", "item", "grams", "grams_lo", "grams_hi",
+              "kcal_100g", "protein_100g", "fat_100g", "carb_100g",
+              "food_table", "note", "source", "recorded_at",
+              "origin", "path", "origin_evidence", "capture", "read_by"],
     # --- increment 3: the medical layer (G11) ------------------------------
     # One condition's whole lifecycle shares a `slug`: onset, the visit, the
     # restriction, the resolution. Appending a line advances the episode; the
@@ -254,8 +275,17 @@ CONTEXT_MODES = {"normal", "vacation", "work", "conference", "weekend",
 
 # Datasets whose lines are keyed by a stable identity rather than date/source:
 # a supersedes chain runs per slug, and the LAST line for a slug is its head.
-IDENTITY_KEY: dict[str, str] = {"goals": "slug", "thresholds": "key",
-                                "medical": "slug", "events": "slug"}
+#
+# A tuple where one field is not enough. `meals` is the case that forced it:
+# every item of one photographed plate shares a date and a source, so a
+# `supersedes` correcting the chicken RETIRED the olives and the tomato with
+# it - the #43 defect (two runs on one day collapsing into one) arriving in a
+# new dataset, and in the one whose whole premise is that the ITEM is the unit
+# of estimate. It has to be the unit of correction too, or the athlete cannot
+# fix the portion that a photograph is least able to settle.
+IDENTITY_KEY: dict[str, str | tuple[str, ...]] = {
+    "goals": "slug", "thresholds": "key", "medical": "slug", "events": "slug",
+    "meals": ("meal", "item")}
 
 # --- the medical layer (increment 3) -----------------------------------------
 # `state` (G57) is a physiological condition rather than an illness -
@@ -495,6 +525,12 @@ _TYPES: dict[str, tuple[type, ...]] = {
     "rhr": (int,), "hip_pain": (int,), "duration_s": (int,), "avg_hr": (int,),
     "max_hr": (int,), "cadence": (int,), "kcal": _NUMERIC, "rpe": (int,),
     "confidence": _NUMERIC,
+    # #96. Without these a quoted number - the ordinary hand-edit typo -
+    # validates clean and then reads as null, so the biggest item on the
+    # plate silently drops out of the total instead of being rejected.
+    "grams": _NUMERIC, "grams_lo": _NUMERIC, "grams_hi": _NUMERIC,
+    "kcal_100g": _NUMERIC, "protein_100g": _NUMERIC,
+    "fat_100g": _NUMERIC, "carb_100g": _NUMERIC,
     "body_fat_pct": _NUMERIC, "kg_lo": _NUMERIC, "kg_hi": _NUMERIC,
     "body_fat_lo": _NUMERIC, "body_fat_hi": _NUMERIC,
     "target": _NUMERIC, "guard_pct": _NUMERIC, "value": _NUMERIC,
@@ -608,9 +644,11 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
     if dataset == "daily" and (a := rec.get("alcohol")) is not None:
         if not isinstance(a, bool):
             problems.append(f"'alcohol' should be true/false/null, got {a!r}")
-    if dataset in ("weight", "daily", "sessions", "measurements"):
+    if dataset in ("weight", "daily", "sessions", "measurements", "meals"):
         problems += provenance_problems(rec)
         problems += capture_problems(rec)
+    if dataset == "meals":
+        problems += meal_problems(rec)
     if dataset == "sessions":
         problems += _validate_track(rec)
     if dataset == "sessions" and rec.get("type") not in SESSION_TYPES:

@@ -40,6 +40,14 @@ class Config:
     # calls it confirmed. A fraction, not a law: 2% is a starting point, and
     # an athlete who rounds every number in conversation wants it looser.
     check_tolerance: float = 0.02
+    # #96. A stated margin on estimated intake, in percent. Under-counting
+    # intake is the error that stalls a deficit while looking like adherence,
+    # so an athlete may choose to carry one - but it belongs HERE, applied to
+    # every estimated meal or to none. A buffer added by judgement on some
+    # meals and not others corrupts every comparison in the series, and a
+    # number the athlete cannot decompose back into estimate and policy is a
+    # number they cannot check. None means no buffer, which is the default.
+    intake_buffer_pct: float | None = None
 
 
 def load_inference_config(root: Path) -> dict:
@@ -81,6 +89,8 @@ def load_config(root: Path) -> Config:
         suppressed_metrics=tuple(str(m) for m in prefs.get("suppressed_metrics", [])),
         nudge_ok=bool(prefs.get("nudge_ok", False)),
         check_tolerance=float(prefs.get("check_tolerance", 0.02)),
+        intake_buffer_pct=(None if prefs.get("intake_buffer_pct") is None
+                           else float(prefs["intake_buffer_pct"])),
     )
 
 

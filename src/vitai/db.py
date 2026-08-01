@@ -79,7 +79,19 @@ from .schema import KEYS
 #     `unattributed_claim_lost` tripwire. A consumer showing a canonical value
 #     can now say what it beat; before this, a resolved value had no way to
 #     say it had beaten anything at all.
-CONTRACT_VERSION = "11"
+# 12: the itemised meal estimate (#96) - a `meals` table, one row per
+#     INGREDIENT of a photographed meal, with a gram estimate, a gram RANGE,
+#     and the per-100 g composition figures as the food table gave them
+#     alongside the table's name. Three things a consumer must not get wrong.
+#     Energy and macros are DERIVED from the quantity and are not columns: an
+#     item whose portion is corrected must not keep a figure computed from the
+#     old one. There is NO confidence column and there will not be one - the
+#     range IS the confidence statement, and a number there would be a decimal
+#     point pretending to be calibration. And A MEAL IS NOT A DAY: these rows
+#     never feed `daily.kcal_in`, a total must never be rendered without its
+#     range, and a consumer that sums meals into a day is asserting the
+#     athlete ate nothing they did not photograph.
+CONTRACT_VERSION = "12"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
@@ -121,7 +133,10 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               "event_date", "priority", "event", "deadline_kind",
               "verification",
               # #37: the three clocks
-              "recorded_at", "measured_at"}
+              "recorded_at", "measured_at",
+              # #96: the itemised meal estimate. The per-100 g figures and the
+              # gram range stay numeric; only the labels are TEXT.
+              "meal", "item", "food_table"}
 
 VERDICT_KEYS = ["week", "metric", "value", "target", "verdict", "goal"]
 
