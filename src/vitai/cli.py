@@ -703,6 +703,66 @@ def _config(row: dict) -> str:
     return f", {', '.join(bits)}" if bits else ""
 
 
+def _resolve_impl(spec: str, kind: str, at: Path):
+    """A bundled name or a dotted path, with no difference in privilege.
+
+    The bundled implementations are reached the same way anyone else's are -
+    resolved by name, constructed, handed to the same suite. If the golden
+    path had a shortcut here, the interface would be decoration.
+    """
+    from . import sync
+    bundled = {
+        "transport": {"directory": lambda: sync.DirectoryTransport(at),
+                      "memory": sync.MemoryTransport,
+                      "mirror": lambda: sync.MirrorTransport(
+                          sync.DirectoryTransport(at), sync.MemoryTransport())},
+        "custody": {"file": lambda: sync.FileCustody(at / "key"),
+                    "env": lambda: sync.EnvCustody("VITAI_KEY")},
+    }[kind]
+    if spec in bundled:
+        return bundled[spec]()
+    module, _, attr = spec.rpartition(".")
+    if not module:
+        sys.exit(f"{spec!r} is neither a bundled {kind} "
+                 f"({', '.join(sorted(bundled))}) nor a dotted path to one")
+    import importlib
+    try:
+        return getattr(importlib.import_module(module), attr)()
+    except (ImportError, AttributeError, TypeError) as e:
+        sys.exit(f"could not construct {spec!r}: {e}")
+
+
+def cmd_conform(args: argparse.Namespace) -> None:
+    """Run a contract against an implementation (#108).
+
+    The deliverable of the whole layering: a written contract produces
+    implementations that mostly work and fail strangely; a suite produces
+    implementations that either pass or do not.
+    """
+    import tempfile
+
+    from . import conform
+    if not args.transport and not args.custody:
+        sys.exit("`vitai conform` needs --transport or --custody")
+    at = Path(args.at) if args.at else Path(tempfile.mkdtemp())
+    failed = 0
+    for kind, spec, suite in (("transport", args.transport, conform.transport),
+                              ("custody", args.custody, conform.custody)):
+        if not spec:
+            continue
+        findings = suite(_resolve_impl(spec, kind, at))
+        for finding in findings:
+            mark = "ok  " if finding["ok"] else "FAIL"
+            print(f"{mark} {kind}: {finding['case']}"
+                  + (f" - {finding['detail']}" if finding["detail"] else ""))
+        failed += len(conform.failures(findings))
+    if failed:
+        sys.exit(f"{failed} contract case(s) failed. An implementation that "
+                 "does not pass is one the engine cannot use safely, and the "
+                 "bundled ones run this same suite with no privileged access")
+    print("conformance: clean")
+
+
 def cmd_route(args: argparse.Namespace) -> None:
     """Tier-1 geometry for a GPS track, with the parameters that produced it."""
     from .route import compass
@@ -1064,6 +1124,8 @@ def main(argv: list[str] | None = None) -> None:
          "logged sets, in the order they were performed"),
         ("meals", cmd_meals,
          "itemised meal estimates, with the range and the open questions"),
+        ("conform", cmd_conform,
+         "run the transport or custody contract against an implementation"),
         ("journal", cmd_journal,
          "what the athlete said: claims, worries, ideas, what is still open"),
         ("infer", cmd_infer, "opt-in: model reads the record, appends validated inferences"),
@@ -1108,6 +1170,15 @@ def main(argv: list[str] | None = None) -> None:
                            help="show the last N per-goal contributions (0 = none)")
         if name == "append":
             p.add_argument("dataset", help="which dataset to append to")
+        if name == "conform":
+            p.add_argument("--transport", metavar="IMPL",
+                           help="dotted path to a Transport, or 'directory' "
+                                "/ 'memory' for the bundled ones")
+            p.add_argument("--custody", metavar="IMPL",
+                           help="dotted path to a Custody, or 'file' / 'env'")
+            p.add_argument("--at", metavar="PATH",
+                           help="where a directory transport or file custody "
+                                "lives (default: a temporary directory)")
         if name == "sets":
             p.add_argument("action", nargs="?", default="list",
                            choices=("list", "progression", "working-weight",
