@@ -948,6 +948,33 @@ def unranked_source_problems(dataset: str, rows: list[tuple[int, dict]],
 # Datasets whose rows compete by source. Policy datasets carry a `source` too,
 # but it records authorship rather than entering a precedence contest.
 RESOLVED_BY_SOURCE = ("weight", "daily", "sessions", "measurements")
+def impossible_claim_problems(dataset: str,
+                              rows: list[tuple[int, dict]]) -> list[str]:
+    """Values an instrument physically cannot have observed (#79).
+
+    Not a resolution tie - a tie is two instruments disagreeing, and this is
+    one instrument claiming something it has no sensor for. A scale reporting
+    distance is not a contest to adjudicate, it is a row that cannot be true
+    as written, and `source` being free text meant nothing knew a scale from
+    a watch.
+
+    A DENY list held at the KIND level, so a registry gap produces silence
+    rather than a finding against the record - the direction that costs
+    nothing when it is wrong.
+    """
+    from .provenance import denied_fields, impossible_claims, resolve_source
+    checkable = [f for f in KEYS[dataset] if f in denied_fields()]
+    if not checkable:
+        return []
+    out: list[str] = []
+    for n, r in rows:
+        if bad := impossible_claims(r, checkable):
+            out.append(
+                f"{dataset}.jsonl line {n}: source {r.get('source')!r} "
+                f"({resolve_source(r.get('source'))}) cannot observe "
+                f"{', '.join(bad)} - either the source is wrong or the value "
+                "came from somewhere else")
+    return out
 
 
 def supersedes_problems(dataset: str, rows: list[tuple[int, dict]]) -> list[str]:

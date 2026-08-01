@@ -213,6 +213,101 @@ def capture_problems(rec: dict) -> list[str]:
                        "display, so 'read_by' must say who: "
                        f"{', '.join(READERS)}")
     return out
+# --- the source catalog (#79) ---------------------------------------------------
+
+CATALOG_OTHER = "other"
+
+# Words that name how a value ARRIVED rather than what observed it. They
+# belong to `capture`, and a source string ending in one is still naming the
+# instrument in front of it.
+CHANNEL_SUFFIXES = frozenset({
+    "export", "api", "takeout", "sync", "connector", "csv", "dump",
+    "archive", "download", "file"})
+
+
+def resolve_source(written: object) -> str:
+    """Catalogued instrument for whatever was written, or `other`.
+
+    NEVER an error. An uncatalogued instrument is a gap in the registry, not a
+    fault in the athlete's record - and a private source name (someone's own
+    spreadsheet, their own gym) resolves here precisely so it never has to
+    appear in a public file.
+    """
+    if written is None or str(written).strip() == "":
+        return UNKNOWN
+    if (found := resolve("sources", "sources", written)) is not None:
+        return found
+    # Source strings routinely carry the CHANNEL as a suffix - `mfp-export`,
+    # `fitbit-takeout`, `strava-api`. That suffix answers `capture`, not
+    # "which instrument", so it is stripped and the instrument looked up
+    # again. A spelling rule over declared names, not a fuzzy match: it can
+    # only reach an entry that already names the base.
+    base = str(written).replace("_", "-").rsplit("-", 1)
+    if len(base) == 2 and base[1].lower() in CHANNEL_SUFFIXES:
+        if (found := resolve("sources", "sources", base[0])) is not None:
+            return found
+    return CATALOG_OTHER
+
+
+def source_kind(written: object) -> str:
+    """What KIND of thing observed this - a watch, a scale, a console, a
+    person. Google Fit's `Device.type` axis, extended.
+
+    An uncatalogued source still gets a kind where the name says one: a row
+    whose source is written `scale` or `watch` is not a catalogued instrument,
+    but it is plainly not a person either. That is exactly the shape the issue
+    asked for - `other` PLUS a kind - rather than a `generic-scale` entry that
+    would multiply the catalog by the size of the kind axis.
+    """
+    catalogued = meta("sources", "sources", resolve_source(written)).get("kind")
+    if catalogued and catalogued != UNKNOWN:
+        return catalogued
+    return resolve("sources", "kinds", written) or UNKNOWN
+
+
+def cannot_observe(written: object) -> set[str]:
+    """Fields no instrument of this KIND can physically produce.
+
+    A DENY list, not a whitelist. Written the other way round it turned every
+    omission into a false accusation - an Oura ring does report calories, a
+    hand-typed row can carry a heart rate read off a watch, a relaying app
+    carries whatever it received. An omission here produces silence instead,
+    which is the direction that costs nothing.
+
+    Held at the kind rather than the instrument because that is the level at
+    which the claim is confidently true of EVERY member.
+    """
+    kind = source_kind(written)
+    return set(meta("sources", "kinds", kind).get("cannot") or [])
+
+
+def denied_fields() -> set[str]:
+    """Every field any kind is declared unable to observe.
+
+    A field no kind denies is never checked, so adding a schema column cannot
+    retroactively accuse anybody.
+    """
+    return {f for entry in registry("sources")["kinds"].values()
+            for f in entry.get("cannot") or []}
+
+
+def impossible_claims(rec: dict, fields: list[str]) -> list[str]:
+    """Fields this row states that its own instrument cannot observe (#79).
+
+    Not a resolution tie to adjudicate - a tie is two instruments disagreeing,
+    and this is one instrument claiming something it has no sensor for: a
+    scale reporting distance, a rowing console reporting sleep, a food log
+    reporting heart rate. Nothing caught that before, because `source` was
+    free text and nothing knew what a scale is.
+
+    Silent unless the source's KIND is known and denies the field outright,
+    so an uncatalogued instrument is never accused of anything.
+    """
+    denied = cannot_observe(rec.get("source"))
+    if not denied:
+        return []
+    return [f for f in fields
+            if f in denied and rec.get(f) is not None]
 
 
 def trust_ceiling(rec: dict) -> str:
