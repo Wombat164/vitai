@@ -28,7 +28,8 @@ the monthly review; the daily numbers live in data/, not here.]
 ## 3. Medical history and gates
 
 [Injuries with dates and attribution. Anything unassessed that gates
-training. Red-flag symptoms that mean stop-and-see-a-clinician. Family
+training. Red-flag symptoms that gate training until resolved in the
+record. Family
 patterns that inform exercise selection.]
 
 ## 4. Constraints

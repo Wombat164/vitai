@@ -84,7 +84,7 @@ day energy distribution and accounting, which belong in the plan.
 
 ## Red lines
 
-- An unassessed red-flag symptom becomes a GATE plus a see-a-clinician
-  action, never a programming workaround.
+- An unassessed red-flag symptom becomes a GATE, and the engine's own
+  escalation text is delivered as written - never a programming workaround.
 - Movement blacklists from injury history are respected by substitution.
 - Nothing about the athlete ever leaves the private content repo.

@@ -51,7 +51,7 @@ content repo. Adherence is the constraint, not knowledge.
    logging fidelity before cutting anything.
 3. **Walk the tripwires.** Any firing tripwire outranks the rate discussion.
    A pain gate firing means stop the gated work and repeat the plan's
-   escalation (clinician, imaging) - do not program around it.
+   escalation text as written - do not program around it.
 4. **Check easy-run discipline.** If easy runs keep flagging OVER the cap,
    address execution (pace, route, ego) rather than moving the cap.
 5. **Judge each event per goal, not once.** An activity contributes

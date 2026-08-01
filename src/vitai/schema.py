@@ -1134,6 +1134,71 @@ def _validate_recorded_at(rec: dict) -> list[str]:
     return []
 
 
+def unstamped_after_the_clock_started(filename: str,
+                                       rows: list[tuple[int, dict]]) -> list[str]:
+    """Rows with no `recorded_at` dated inside the stamped era (#149).
+
+    `known_by` lets an unstamped row survive every cutoff, which is deliberate
+    and right: a legacy line lacks a transaction time by PREDATING the clock,
+    and without the affordance `as_of` would empty a legacy corpus instead of
+    reconstructing one.
+
+    The hole is that engine writes are the only writes guaranteed to be
+    stamped, and the format invites hand editing. A forgotten workout appended
+    by hand with no stamp is visible at EVERY historical cutoff, so a
+    reconstruction stops being stable - the one property `as_of` exists to
+    provide - and the row is invisible as a special case, because it looks
+    exactly like a legacy one.
+
+    Keyed on the row's DATE against the earliest stamped date, not on its
+    position in the file. File position was the obvious signal and is the
+    wrong one: #37 established that an ordering a formatter can change is not
+    an ordering, and the demo corpus is written sorted, so a
+    position-based rule flags a legitimately regenerated file.
+
+    An ADVISORY, for the same reason the naive-`start_time` check is one: a
+    record that predates the clock is not wrong, and making this an error
+    would make it unbuildable until every legacy row was rewritten - which
+    is the migration the rule would be demanding.
+    """
+    stamped = [r for _, r in rows if r.get("recorded_at") is not None]
+    if not stamped:
+        return []  # a wholly unstamped file is a legacy corpus
+    # And so is a MOSTLY unstamped one. The first cut asked only whether any
+    # stamp existed, which made two stamped rows among fifty start a clock for
+    # the whole file - the demo corpus, whose sessions arrived from an export
+    # that does not stamp, with one stamped provenance pair. The question this
+    # answers is which shape is the EXCEPTION here: where stamping is the
+    # exception the file is not on the clock and there is nothing to say;
+    # where the MISSING stamp is the exception, that row is the anomaly.
+    if len(stamped) * 2 <= len(rows):
+        return []
+    # Empty dates excluded from the floor. A stamped row with no date made
+    # `started` the empty string, so every legacy row sorted after it and the
+    # message named a blank date - flagging rows written a decade before the
+    # clock existed.
+    dates = [d for r in stamped if (d := str(r.get("date") or ""))]
+    if not dates:
+        return []
+    started = min(dates)
+    late = sorted({d for _, r in rows
+                   if r.get("recorded_at") is None
+                   and (d := str(r.get("date") or "")) > started})
+    if not late:
+        return []
+    # Dates, collected DIRECTLY. The first cut kept a list of line numbers and
+    # re-selected the rows by `n in late` to recover the dates, which listed
+    # every unrelated row sharing a line number and pushed real offenders out
+    # of the truncation - an indirection that could only lose information.
+    on = ", ".join(late[:8])
+    return [f"{filename}: {len(late)} date(s) with no recorded_at, after "
+            f"{started} when the clock was already running (on {on}"
+            f"{', ...' if len(late) > 8 else ''}). A row that predates the "
+            "clock is fine; one dated inside the stamped era was written by "
+            "hand, and it stays visible at every historical cutoff - so every "
+            "reconstruction of this record changes when it is recomputed"]
+
+
 def timestamp_advisories(dataset: str, rows: list[tuple[int, dict]]) -> list[str]:
     """Naive `start_time` values: legal, but not what new writes should carry.
 
@@ -1147,15 +1212,17 @@ def timestamp_advisories(dataset: str, rows: list[tuple[int, dict]]) -> list[str
     it is the mixture that costs something, because every comparison across it
     rests on an assumed offset.
     """
+    out: list[str] = []
     if dataset != "sessions":
-        return []
+        return out
     naive = [n for n, r in rows
              if r.get("start_time") and not is_aware(parse_time(r["start_time"]))]
     aware = [n for n, r in rows
              if r.get("start_time") and is_aware(parse_time(r["start_time"]))]
     if not naive or not aware:
-        return []
-    return [f"{dataset}.jsonl: {len(naive)} start_time value(s) are naive and "
+        return out
+    return out + [
+            f"{dataset}.jsonl: {len(naive)} start_time value(s) are naive and "
             f"{len(aware)} carry an offset (first naive: line {naive[0]}). "
             "Both are legal and the build handles the mixture, but every "
             "comparison between the two shapes rests on an assumed offset. "
@@ -1310,6 +1377,7 @@ def recorded_at_problems(dataset: str, rows: list[tuple[int, dict]]) -> list[str
                 "been written at once, and a repeated stamp orders nothing, "
                 "which is the only thing this field is for")
         seen.setdefault(i, n)
+
     return problems
 
 
