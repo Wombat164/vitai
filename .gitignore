@@ -6,3 +6,10 @@ build/
 .ruff_cache/
 .venv/
 examples/demo/derived/
+
+# #80. Artifacts are personal data - a photograph of a gym console can carry
+# another member's face, a location, a name badge. Running
+# `vitai artifact get` against a private record while sitting in this
+# checkout must not be one `git add -A` away from publishing one.
+artifacts/
+*.bin
