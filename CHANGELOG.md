@@ -52,6 +52,64 @@ versioning follows [SemVer](https://semver.org/).
   olives and the tomato with it. That is the #43 defect in a new dataset, and
   in the one whose premise is that the item is the unit of estimate: it has to
   be the unit of correction too.
+- **`adduction` and `abduction` on the pattern axis** (#58). Found live, on a
+  machine the athlete was about to load. Twelve patterns and none of them
+  named adduction, so a seated hip-adduction machine - about as direct a
+  loaded hip movement as a gym contains - could not be described by the
+  restriction system that exists to protect a hip.
+
+  The coarse `restricts: strength` projection caught it. That is luck rather
+  than design: had the restriction been written narrowly, which is exactly
+  what post-coordination encourages, the precise form would have been the only
+  one and would have said nothing.
+
+  **`plane = frontal` is not a substitute**, and using it as one is the
+  mistake this avoids: it would also catch abduction, lateral lunges and side
+  planks, a far wider ban than any clinician said, and over-restriction is its
+  own harm. A plane is where a movement happens; a pattern is what it does.
+
+  Grounded rather than invented - the registry already carried `flexion`,
+  `extension` and `rotate` from standard planes-of-motion terminology, so this
+  finishes a vocabulary that was half adopted instead of starting a second one
+  (G85).
+- **A content-addressed artifact store** (#80). The evidence behind a value
+  was discarded the moment it was read: an athlete photographs a gym console,
+  a model reads the numbers off it, the numbers enter the record and the
+  photograph is stored nowhere. So the richest single-instrument reading in a
+  record was also the only one that could never be re-checked - and `#79`'s
+  capture axis can say a value was *transcribed* without anything being able
+  to say transcribed *from what*.
+
+  `data/artifacts.jsonl` is a manifest (hash, media type, size, why it was
+  kept); `artifact` on `weight`, `daily`, `sessions` and `measurements` cites
+  a row in it. The reference is a content address (`sha256:...`) rather than a
+  path, so it cannot drift from the row citing it, a filename is a validation
+  error, and storing the same bytes twice stores one copy. One artifact can
+  back several rows, which is why the manifest is its own dataset rather than
+  a column - a console photograph carries distance, pace, power and stroke
+  rate at once.
+
+  `vitai artifact ls | get | verify`. `verify` checks both directions: PREMIS
+  fixity (the stored bytes must hash to their own address) and referential
+  integrity (a value whose evidence is gone). It fails on a promise the record
+  is no longer keeping - and `not_erased`, an artifact the manifest says was
+  deleted whose bytes are still on disk, is one of them: the athlete has no
+  other way to find out. An orphan, a not-yet-cited artifact and a deliberate
+  deletion are printed and do not fail a build, because a check that cries
+  wolf over disk hygiene teaches the athlete to ignore the one finding that
+  matters. `artifact get` requires `--out`: where personal bytes land is not
+  something a default should guess.
+
+  **Removed is not missing.** Deleting an artifact appends a tombstone with a
+  reason rather than rewriting the row that cites it: a retention decision and
+  a data loss are completely different facts and the record has to keep them
+  apart. A removal without a reason is a validation error.
+
+  The backend is behind an interface and the default is a local directory. The
+  mechanism is public; the artifacts are personal data. Nothing here uploads,
+  syncs or attaches - storing an artifact is not consent to transmit it - and
+  no artifact, manifest row or hash of a real one appears in this repository,
+  including in the tests, where the bytes are synthetic.
 - **A value can say it was never measured** (#49, #88). The orthogonal
   question to origin and capture: those say which instrument and how it
   reached us, this says whether the number was observed at all.

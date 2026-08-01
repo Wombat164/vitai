@@ -15,6 +15,7 @@ from datetime import date, datetime
 
 from .clocks import (is_aware, is_stamp, order_key,  # noqa: F401
                      parse_time, stamp_instant)
+from .artifacts import is_reference
 from .provenance import capture_problems
 from .meals import problems as meal_problems
 from .provenance import problems as provenance_problems
@@ -40,7 +41,7 @@ KEYS: dict[str, list[str]] = {
     "weight": ["date", "kg", "source", "note", "body_fat_pct",
                "kg_lo", "kg_hi", "body_fat_lo", "body_fat_hi", "measured_at",
                "recorded_at", "origin", "path", "origin_evidence",
-               "capture", "read_by", "modelled"],
+               "capture", "read_by", "modelled", "artifact"],
     # `hip_pain` is RETIRED at generation 2 in favour of `pain` + `pain_site`:
     # the hip was this record's founding injury, but a record that can only
     # describe one joint cannot describe a second one. Old lines keep it and
@@ -53,7 +54,7 @@ KEYS: dict[str, list[str]] = {
               "protein_g", "sleep_h", "rhr", "hip_pain", "alcohol", "note",
               "source", "mood", "feel", "coverage", "pain", "pain_site",
               "pain_side", "recorded_at", "origin", "path",
-              "origin_evidence", "capture", "read_by", "modelled"],
+              "origin_evidence", "capture", "read_by", "modelled", "artifact"],
     # `location` is RETIRED at generation 2, split into `place` (coarse, and
     # deliberately coarse - "home"/"work"/a travel slug, never an address) and
     # `route` (a personal slug the athlete names). Free text could not be
@@ -82,7 +83,7 @@ KEYS: dict[str, list[str]] = {
                  "place", "with", "context", "planned", "weather", "recorded_at",
                  "track", "activity_id", "activity_source",
                  "origin", "path", "origin_evidence", "capture", "read_by",
-                 "modelled", "type_source"],
+                 "modelled", "type_source", "artifact"],
     # Third data tier: MODEL-INFERRED knowledge. Append-only like everything
     # else, but carries provenance (model, evidence, confidence) because it is
     # neither ground truth (observed) nor rebuildable (derived). The engine
@@ -170,7 +171,7 @@ KEYS: dict[str, list[str]] = {
     # `weight` line (gen-2, G36/G37); this dataset is for the other instruments.
     "measurements": ["date", "kind", "value", "source", "note", "recorded_at",
                      "origin", "path", "origin_evidence", "capture",
-                     "read_by", "modelled"],
+                     "read_by", "modelled", "artifact"],
     # One row per ITEM of a meal, never per dish (#96). A dish-level number
     # cannot be corrected, cannot be questioned and cannot say which part it
     # is unsure about - and the total is the least defensible part of a photo
@@ -238,6 +239,18 @@ KEYS: dict[str, list[str]] = {
     # FIRMLY it was expressed - a passing "maybe I should" is not a decision -
     # never how likely it is to be true. `status` lets a worry be resolved, or a
     # grain of a goal be superseded once it becomes a real goal.
+    # The manifest for the content-addressed artifact store (#80). Its own
+    # dataset rather than a column, because ONE artifact backs SEVERAL rows -
+    # a single console photograph carries distance, pace, power and stroke
+    # rate - so the reference is many-to-one.
+    #
+    # `removed` is a TOMBSTONE. The store is append-only, so a deletion cannot
+    # rewrite the observation that cites an artifact and should not want to:
+    # appending "the athlete deleted this" keeps a retention decision
+    # distinguishable from data loss, which are completely different facts.
+    "artifacts": ["date", "sha256", "media_type", "bytes", "captured_at",
+                  "origin", "kind", "note", "removed", "reason",
+                  "recorded_at"],
     "journal": ["date", "kind", "text", "about", "source", "confidence",
                 "status", "note", "recorded_at"],
 }
@@ -502,7 +515,6 @@ for _ds in ("weight", "daily", "sessions", "measurements"):
         _new += ["origin", "path", "origin_evidence"]
     for _k in _new:
         KEY_GENERATION[_ds][_k] = CURRENT_GENERATION[_ds]
-
 # --- was it measured at all? (#49, #88) ---------------------------------------
 # Its OWN generation on top of #78's above, for the reason #78 was filed:
 # that generation has now shipped, so a row an existing deployment stamped
@@ -515,6 +527,17 @@ for _ds in ("weight", "daily", "sessions", "measurements"):
     _new = ["modelled"] + (["type_source"] if _ds == "sessions" else [])
     for _k in _new:
         KEY_GENERATION[_ds][_k] = CURRENT_GENERATION[_ds]
+
+# --- the artifact reference (#80) ---------------------------------------------
+# LAST, because it is the newest change. Order matters here in a way that is
+# easy to get wrong on a merge: placed above #49/#88's block instead, this
+# takes the generation those fields already shipped under, and every demo and
+# deployed row stamped with it suddenly owes an `artifact` key it cannot have.
+# The rule is simply that a block appends - a new field never lands ahead of
+# one already in the wild.
+for _ds in ("weight", "daily", "sessions", "measurements"):
+    CURRENT_GENERATION[_ds] += 1
+    KEY_GENERATION[_ds]["artifact"] = CURRENT_GENERATION[_ds]
 
 
 def key_generation(dataset: str, key: str) -> int:
@@ -664,6 +687,11 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
         problems += provenance_problems(rec)
         problems += capture_problems(rec)
         problems += value_kind_problems(rec, KEYS[dataset])
+        if (ref := rec.get("artifact")) is not None and not is_reference(ref):
+            problems.append(
+                f"'artifact' is a content address like "
+                f"'sha256:<64 hex>', got {ref!r} - a filename would drift "
+                "from the row that cites it, which is why this is a hash")
     if dataset == "meals":
         problems += meal_problems(rec)
     if dataset == "sessions":
@@ -1220,6 +1248,19 @@ def _validate_policy(dataset: str, rec: dict) -> list[str]:
         problems += _enum(rec, "source", AUTHORS)
         if (od := rec.get("occurred_date")) is not None and _bad_date(od):
             problems.append(f"bad occurred_date {od!r} (ISO-8601 YYYY-MM-DD)")
+    if dataset == "artifacts":
+        if not is_reference(rec.get("sha256")):
+            problems.append(f"'sha256' is a content address like "
+                            f"'sha256:<64 hex>', got {rec.get('sha256')!r}")
+        if (n := rec.get("bytes")) is not None and (
+                not isinstance(n, int) or isinstance(n, bool) or n < 0):
+            problems.append(f"'bytes' is a non-negative integer, got {n!r}")
+        if (rm := rec.get("removed")) is not None and not isinstance(rm, bool):
+            problems.append(f"'removed' should be true/false/null, got {rm!r}")
+        if rec.get("removed") and not rec.get("reason"):
+            problems.append("a removal needs a 'reason' - deleting evidence is "
+                            "a decision worth recording, and it is what "
+                            "distinguishes it from data loss")
     if dataset == "checks":
         if not isinstance(rec.get("slug"), str) or not rec.get("slug"):
             problems.append("'slug' must name the check, e.g. 'hop-test'")
