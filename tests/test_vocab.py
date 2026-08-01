@@ -387,3 +387,62 @@ def test_a_retired_setting_still_resolves():
     assert vocab.resolve_setting("treadmill") == "indoor"
     assert vocab.resolve_setting("home") == "indoor"
     assert "treadmill" not in vocab.settings(), "legal, no longer offered"
+
+
+# ---- the frontal-plane pair (#58) ---------------------------------------------------
+
+def test_a_hip_adduction_machine_is_describable():
+    """Found live, on a machine the athlete was about to load. Twelve
+    patterns and none of them named adduction, so about as direct a loaded
+    hip movement as a gym contains could not be described by the restriction
+    system that exists to protect a hip.
+    """
+    from vitai.vocab import parse_restriction
+    spec = parse_restriction("pattern=adduction region=hip load=loaded")
+    assert spec == {"pattern": "adduction", "region": "hip", "load": "loaded"}
+
+
+def test_a_hip_restriction_can_name_adduction_without_banning_the_plane():
+    """The acceptance criterion, and the reason `plane=frontal` is not a
+    substitute: it would also catch abduction, lateral lunges and side planks
+    - a far wider ban than any clinician said, and over-restriction is its
+    own harm.
+    """
+    from vitai.vocab import parse_restriction, restriction_matches
+    spec = parse_restriction("pattern=adduction region=hip load=loaded")
+    adduction = {"pattern": "adduction", "region": "hip", "load": "loaded"}
+    assert restriction_matches(spec, adduction) is True
+    for spared in ({"pattern": "abduction", "region": "hip", "load": "loaded"},
+                   {"pattern": "lunge", "region": "hip", "load": "loaded"},
+                   {"pattern": "isometric", "region": "hip",
+                    "load": "bodyweight"}):
+        assert restriction_matches(spec, spared) is False, spared
+
+
+def test_the_plane_axis_is_not_used_as_a_proxy():
+    """A plane is WHERE a movement happens; a pattern is what it does. The
+    two stay separate axes, and neither stands in for the other."""
+    from vitai.vocab import axis_values
+    assert set(axis_values("plane")) == {"frontal", "sagittal", "transverse"}
+    assert "frontal" not in axis_values("pattern")
+    assert "adduction" not in axis_values("plane")
+
+
+def test_the_pair_completes_a_vocabulary_already_half_adopted():
+    """Grounded rather than invented: this registry already carries
+    `flexion`, `extension` and `rotate` from standard planes-of-motion
+    terminology, so adding its remaining pair finishes that adoption instead
+    of starting a second taxonomy (G85)."""
+    from vitai.vocab import axis_values
+    planes_of_motion = {"flexion", "extension", "rotate", "adduction",
+                        "abduction"}
+    assert planes_of_motion <= set(axis_values("pattern"))
+
+
+def test_the_machine_spellings_resolve():
+    """A restriction is written by hand and by a screenshot-reading skill,
+    so the words on the machine resolve."""
+    from vitai.vocab import resolve_axis
+    assert resolve_axis("pattern", "adductor machine") == "adduction"
+    assert resolve_axis("pattern", "hip abduction") == "abduction"
+    assert resolve_axis("pattern", "inner thigh") == "adduction"
