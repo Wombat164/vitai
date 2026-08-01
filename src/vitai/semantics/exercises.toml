@@ -1,0 +1,1023 @@
+# Exercises - the MOVEMENT axis, reusing the axes that already exist.
+#
+# The rule, and it is the whole design: `pattern`, `load` and `plane` come
+# from restrictions.toml, and `region` from body_sites.toml. Inventing a
+# second movement taxonomy or a second anatomy here would be the body-sites
+# mistake in a new place, and it would make the two unjoinable - which is
+# exactly the defect this registry exists to fix.
+#
+# WHAT WAS WRONG. `sets.exercise` was free text, so `push-up`, `pushup` and
+# `press-up` were three exercises and no query grouped them. Worse, a
+# restriction could not see a set at all: an episode wanted `pattern=hinge
+# region=hip load=loaded` and had nothing to match against, so the coarse
+# `restricts: strength` gate was used instead - and it blocked push-ups,
+# which is collateral damage caused precisely by the precise gate having
+# nothing to check. Give exercises the axes and a set INHERITS them.
+#
+# PRIOR ART AND LICENCE. Seeded from free-exercise-db, which is the Unlicense
+# - public domain, no attribution obligation, safe to vendor into an MIT
+# engine. `source` records that per entry. wger is deliberately NOT used:
+# its code is AGPL and, more to the point here, its exercise DATA is CC-BY-SA,
+# so copying entries from it would bind this file's licence. It is readable as
+# a cross-check and nothing from it lands here. Anything invented locally is
+# marked `source = "curated"`.
+#
+# POST-COORDINATION IS THE POINT. `incline_dumbbell_bench_press` is never an
+# entry. It is `bench-press` plus `equipment = dumbbell` plus
+# `angle_class = incline` (#99). FIT's hundreds of fused enum values are the
+# cautionary counter-example: a vocabulary that pre-coordinates multiplies by
+# the size of every axis it folds in, and then cannot answer a question about
+# any single one of them.
+#
+# `region` IS A LIST, and it is body SITES rather than muscles. A push-up
+# loads chest, shoulder and upper arm; forcing a single value would make the
+# file assert a primary mover, which is a modelling claim this record cannot
+# defend. Per-muscle attribution is ruled out for the same reason.
+#
+# `load` IS THE EXERCISE'S DEFAULT. A weighted push-up is still `push-up` -
+# the set's own `load_type` says it was loaded, and a restriction check reads
+# the SET's load_type when present and this default only when it is not.
+#
+# `fit` is the FIT exercise-name token, resolving as an alias the same way
+# `strava` and `healthkit` do in session_types.toml. It is what lets a FIT
+# import (#101) map inward without a translation table of its own.
+#
+# AN UNKNOWN EXERCISE HAS NO AXES, so a restriction check against it can
+# neither pass nor fail and must report that it was not evaluated. A missing
+# gate is the failure mode that matters: the athlete trains on an injury
+# nobody flagged.
+#
+# WHAT IS DELIBERATELY MISSING. `restrictions.toml` has no abduction or
+# adduction pattern (#58 owns adding them), so lateral raises, hip abduction
+# and hip adduction are NOT here. Every available value is wrong for them:
+# `push` over-blocks a lateral raise under a pressing restriction, `rotate`
+# blocks an abductor machine under a rotational one. Left out, they resolve to
+# `unknown` and a gate against them ABSTAINS - which is loud, recoverable, and
+# what this file's own doctrine requires. They land when #58 does.
+#
+# EXTENDING IT: add a curated entry with its aliases. Nothing is fuzzy-matched
+# at import time. This is the world's gym catalogue, never one athlete's
+# programme - the `gym_a`/`gym_b` lesson (G85).
+
+version = 1
+
+# Fields whose values are also accepted spellings (see vocab._index).
+alias_fields = ["fit"]
+
+# Empty from day one, and present from day one: a value that stops being
+# current resolves FORWARD rather than becoming unreadable, so a record
+# written before a rename still loads. See vocab.py.
+[retired]
+
+[exercises.push-up]
+label = "Push-up"
+aliases = ["pushup", "press-up", "push ups", "press up"]
+pattern = "push"
+region = ["chest", "shoulder", "upper_arm"]
+load = "bodyweight"
+plane = "sagittal"
+fit = "PUSH_UP"
+source = "free-exercise-db"
+
+[exercises.knee-push-up]
+label = "Knee push-up"
+aliases = ["box push-up", "modified push-up"]
+pattern = "push"
+region = ["chest", "shoulder", "upper_arm"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+
+[exercises.bench-press]
+label = "Bench press"
+aliases = ["barbell bench press", "flat bench", "close-grip bench press", "close grip bench press"]
+pattern = "push"
+region = ["chest", "shoulder", "upper_arm"]
+load = "loaded"
+plane = "sagittal"
+fit = "BENCH_PRESS"
+source = "free-exercise-db"
+
+[exercises.chest-press]
+label = "Chest press"
+aliases = ["machine chest press", "seated chest press"]
+pattern = "push"
+region = ["chest", "shoulder", "upper_arm"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.chest-fly]
+label = "Chest fly"
+aliases = ["pec deck", "dumbbell fly", "pec fly", "cable crossover", "cable fly"]
+pattern = "push"
+region = ["chest", "shoulder"]
+load = "loaded"
+plane = "transverse"
+fit = "FLYE"
+source = "free-exercise-db"
+
+[exercises.dip]
+label = "Dip"
+aliases = ["parallel bar dip", "chest dip", "tricep dip", "assisted dip"]
+pattern = "push"
+region = ["chest", "shoulder", "upper_arm"]
+
+plane = "sagittal"
+fit = "DIP"
+source = "free-exercise-db"
+
+[exercises.floor-press]
+label = "Floor press"
+pattern = "push"
+region = ["chest", "shoulder", "upper_arm"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.overhead-press]
+label = "Overhead press"
+aliases = ["shoulder press", "military press", "strict press", "ohp", "landmine press"]
+pattern = "push"
+region = ["shoulder", "upper_arm"]
+load = "loaded"
+plane = "sagittal"
+fit = "SHOULDER_PRESS"
+source = "free-exercise-db"
+
+[exercises.push-press]
+label = "Push press"
+pattern = ["push", "squat"]
+region = ["shoulder", "upper_arm", "thigh"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.arnold-press]
+label = "Arnold press"
+pattern = "push"
+region = ["shoulder", "upper_arm"]
+load = "loaded"
+plane = "transverse"
+source = "free-exercise-db"
+
+[exercises.front-raise]
+label = "Front raise"
+pattern = "flexion"
+region = ["shoulder"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.handstand-push-up]
+label = "Handstand push-up"
+aliases = ["hspu"]
+pattern = "push"
+region = ["shoulder", "upper_arm"]
+load = "bodyweight"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.pike-push-up]
+label = "Pike push-up"
+pattern = "push"
+region = ["shoulder", "upper_arm"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+
+[exercises.pull-up]
+label = "Pull-up"
+aliases = ["pullup", "pull ups", "assisted pull-up", "band-assisted pull-up"]
+pattern = "pull"
+region = ["upper_back", "shoulder", "upper_arm"]
+
+plane = "sagittal"
+fit = "PULL_UP"
+source = "free-exercise-db"
+
+[exercises.chin-up]
+label = "Chin-up"
+aliases = ["chinup"]
+pattern = "pull"
+region = ["upper_back", "shoulder", "upper_arm"]
+
+plane = "sagittal"
+fit = "CHIN_UP"
+source = "free-exercise-db"
+
+[exercises.lat-pulldown]
+label = "Lat pulldown"
+aliases = ["pulldown", "lat pull-down"]
+pattern = "pull"
+region = ["upper_back", "shoulder", "upper_arm"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.straight-arm-pulldown]
+label = "Straight-arm pulldown"
+pattern = "pull"
+region = ["upper_back", "shoulder"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.horizontal-row]
+label = "Horizontal row"
+aliases = ["cable row", "seated row", "barbell row", "bent-over row", "bent over row", "dumbbell row", "single-arm row", "one-arm row", "seated cable row", "row", "machine row", "seal row", "landmine row"]
+pattern = "pull"
+region = ["upper_back", "shoulder", "upper_arm"]
+load = "loaded"
+plane = "sagittal"
+source = "curated"
+
+[exercises.chest-supported-row]
+label = "Chest-supported row"
+aliases = ["t-bar row"]
+pattern = "pull"
+region = ["upper_back", "shoulder"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.inverted-row]
+label = "Inverted row"
+aliases = ["australian pull-up", "body row"]
+pattern = "pull"
+region = ["upper_back", "shoulder", "upper_arm"]
+load = "bodyweight"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.face-pull]
+label = "Face pull"
+pattern = "pull"
+region = ["upper_back", "shoulder"]
+load = "loaded"
+plane = "transverse"
+source = "free-exercise-db"
+
+[exercises.shrug]
+label = "Shrug"
+aliases = ["barbell shrug", "dumbbell shrug"]
+pattern = "pull"
+region = ["upper_back", "neck", "shoulder"]
+load = "loaded"
+plane = "frontal"
+fit = "SHRUG"
+source = "free-exercise-db"
+
+[exercises.reverse-fly]
+label = "Reverse fly"
+aliases = ["rear delt fly", "reverse pec deck"]
+pattern = "pull"
+region = ["upper_back", "shoulder"]
+load = "loaded"
+plane = "transverse"
+source = "free-exercise-db"
+
+[exercises.squat]
+label = "Squat"
+aliases = ["barbell squat", "back squat", "smith machine squat", "smith squat", "bodyweight squat", "air squat"]
+pattern = "squat"
+region = ["thigh", "hip", "knee"]
+load = "loaded"
+plane = "sagittal"
+fit = "SQUAT"
+source = "free-exercise-db"
+
+[exercises.front-squat]
+label = "Front squat"
+pattern = "squat"
+region = ["thigh", "hip", "knee"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.goblet-squat]
+label = "Goblet squat"
+pattern = "squat"
+region = ["thigh", "hip", "knee"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.leg-press]
+label = "Leg press"
+aliases = ["seated leg press", "45-degree leg press"]
+pattern = "squat"
+region = ["thigh", "hip", "knee"]
+load = "loaded"
+plane = "sagittal"
+fit = "LEG_PRESS"
+source = "free-exercise-db"
+
+[exercises.hack-squat]
+label = "Hack squat"
+pattern = "squat"
+region = ["thigh", "hip", "knee"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.box-squat]
+label = "Box squat"
+pattern = "squat"
+region = ["thigh", "hip", "knee"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.wall-sit]
+label = "Wall sit"
+aliases = ["wall squat"]
+pattern = "isometric"
+region = ["thigh", "knee"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+
+[exercises.leg-extension]
+label = "Leg extension"
+aliases = ["knee extension", "quad extension"]
+pattern = "extension"
+region = ["thigh", "knee"]
+load = "loaded"
+plane = "sagittal"
+fit = "LEG_EXTENSION"
+source = "free-exercise-db"
+
+[exercises.deadlift]
+label = "Deadlift"
+aliases = ["conventional deadlift", "trap-bar deadlift", "hex bar deadlift"]
+pattern = "hinge"
+region = ["hip", "hamstring", "lower_back"]
+load = "loaded"
+plane = "sagittal"
+fit = "DEADLIFT"
+source = "free-exercise-db"
+
+[exercises.romanian-deadlift]
+label = "Romanian deadlift"
+aliases = ["rdl", "stiff-leg deadlift"]
+pattern = "hinge"
+region = ["hip", "hamstring", "lower_back"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.sumo-deadlift]
+label = "Sumo deadlift"
+pattern = "hinge"
+region = ["hip", "hamstring", "lower_back"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.good-morning]
+label = "Good morning"
+pattern = "hinge"
+region = ["hip", "hamstring", "lower_back"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.hip-thrust]
+label = "Hip thrust"
+aliases = ["barbell hip thrust"]
+pattern = "hinge"
+region = ["hip", "hamstring"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.glute-bridge]
+label = "Glute bridge"
+aliases = ["bridge"]
+pattern = "hinge"
+region = ["hip", "hamstring"]
+load = "bodyweight"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.kettlebell-swing]
+label = "Kettlebell swing"
+aliases = ["kb swing"]
+pattern = ["hinge"]
+region = ["hip", "hamstring", "lower_back"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.back-extension]
+label = "Back extension"
+aliases = ["hyperextension", "45-degree back extension"]
+pattern = "extension"
+region = ["lower_back", "hip"]
+
+plane = "sagittal"
+fit = "BACK_EXTENSION"
+source = "free-exercise-db"
+
+[exercises.leg-curl]
+label = "Leg curl"
+aliases = ["hamstring curl", "lying leg curl", "seated leg curl"]
+pattern = "flexion"
+region = ["hamstring", "knee"]
+load = "loaded"
+plane = "sagittal"
+fit = "LEG_CURL"
+source = "free-exercise-db"
+
+[exercises.nordic-curl]
+label = "Nordic curl"
+aliases = ["nordic hamstring curl"]
+pattern = "flexion"
+region = ["hamstring", "knee"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+
+[exercises.lunge]
+label = "Lunge"
+aliases = ["forward lunge", "walking lunge"]
+pattern = "lunge"
+region = ["thigh", "hip", "knee"]
+load = "bodyweight"
+plane = "sagittal"
+fit = "LUNGE"
+source = "free-exercise-db"
+
+[exercises.reverse-lunge]
+label = "Reverse lunge"
+pattern = "lunge"
+region = ["thigh", "hip", "knee"]
+load = "bodyweight"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.bulgarian-split-squat]
+label = "Bulgarian split squat"
+aliases = ["rear-foot-elevated split squat", "rfess"]
+pattern = "lunge"
+region = ["thigh", "hip", "knee"]
+load = "bodyweight"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.split-squat]
+label = "Split squat"
+aliases = ["static lunge"]
+pattern = "lunge"
+region = ["thigh", "hip", "knee"]
+load = "bodyweight"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.step-up]
+label = "Step-up"
+aliases = ["box step-up"]
+pattern = "lunge"
+region = ["thigh", "hip", "knee"]
+load = "bodyweight"
+plane = "sagittal"
+fit = "STEP_UP"
+source = "free-exercise-db"
+
+[exercises.lateral-lunge]
+label = "Lateral lunge"
+aliases = ["side lunge"]
+pattern = "lunge"
+region = ["thigh", "hip", "groin"]
+load = "bodyweight"
+plane = "frontal"
+source = "free-exercise-db"
+
+[exercises.curtsy-lunge]
+label = "Curtsy lunge"
+pattern = "lunge"
+region = ["thigh", "hip"]
+load = "bodyweight"
+plane = "transverse"
+source = "curated"
+
+[exercises.pistol-squat]
+label = "Pistol squat"
+aliases = ["single-leg squat"]
+pattern = "squat"
+region = ["thigh", "hip", "knee"]
+load = "bodyweight"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.calf-raise]
+label = "Calf raise"
+aliases = ["standing calf raise", "heel raise", "seated calf raise"]
+pattern = "extension"
+region = ["calf", "ankle"]
+load = "bodyweight"
+plane = "sagittal"
+fit = "CALF_RAISE"
+source = "free-exercise-db"
+
+[exercises.tibialis-raise]
+label = "Tibialis raise"
+aliases = ["toe raise"]
+pattern = "flexion"
+region = ["shin", "ankle"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+
+[exercises.bicep-curl]
+label = "Bicep curl"
+aliases = ["biceps curl", "dumbbell curl", "barbell curl", "curl"]
+pattern = "flexion"
+region = ["upper_arm", "elbow"]
+load = "loaded"
+plane = "sagittal"
+fit = "CURL"
+source = "free-exercise-db"
+
+[exercises.hammer-curl]
+label = "Hammer curl"
+pattern = "flexion"
+region = ["upper_arm", "forearm", "elbow"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.preacher-curl]
+label = "Preacher curl"
+pattern = "flexion"
+region = ["upper_arm", "elbow"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.tricep-extension]
+label = "Tricep extension"
+aliases = ["triceps extension", "overhead tricep extension", "skull crusher"]
+pattern = "extension"
+region = ["upper_arm", "elbow"]
+load = "loaded"
+plane = "sagittal"
+fit = "TRICEPS_EXTENSION"
+source = "free-exercise-db"
+
+[exercises.tricep-pushdown]
+label = "Tricep pushdown"
+aliases = ["triceps pushdown", "cable pushdown", "rope pushdown"]
+pattern = "extension"
+region = ["upper_arm", "elbow"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.wrist-curl]
+label = "Wrist curl"
+aliases = ["forearm curl"]
+pattern = "flexion"
+region = ["forearm", "wrist"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.reverse-wrist-curl]
+label = "Reverse wrist curl"
+pattern = "extension"
+region = ["forearm", "wrist"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.plank]
+label = "Plank"
+aliases = ["front plank", "forearm plank"]
+pattern = "isometric"
+region = ["abdomen", "lower_back", "shoulder"]
+load = "bodyweight"
+plane = "sagittal"
+fit = "PLANK"
+source = "free-exercise-db"
+
+[exercises.side-plank]
+label = "Side plank"
+pattern = "isometric"
+region = ["abdomen", "hip", "shoulder"]
+load = "bodyweight"
+plane = "frontal"
+source = "free-exercise-db"
+
+[exercises.crunch]
+label = "Crunch"
+aliases = ["abdominal crunch"]
+pattern = "flexion"
+region = ["abdomen"]
+load = "bodyweight"
+plane = "sagittal"
+fit = "CRUNCH"
+source = "free-exercise-db"
+
+[exercises.hanging-leg-raise]
+label = "Hanging leg raise"
+aliases = ["leg raise", "knee raise"]
+pattern = "flexion"
+region = ["abdomen", "hip"]
+load = "bodyweight"
+plane = "sagittal"
+fit = "LEG_RAISE"
+source = "free-exercise-db"
+
+[exercises.russian-twist]
+label = "Russian twist"
+pattern = "rotate"
+region = ["abdomen", "lower_back"]
+load = "bodyweight"
+plane = "transverse"
+source = "free-exercise-db"
+
+[exercises.woodchop]
+label = "Cable woodchop"
+aliases = ["woodchopper", "chop"]
+pattern = "rotate"
+region = ["abdomen", "shoulder"]
+load = "loaded"
+plane = "transverse"
+source = "free-exercise-db"
+
+[exercises.pallof-press]
+label = "Pallof press"
+aliases = ["anti-rotation press"]
+pattern = "isometric"
+region = ["abdomen"]
+load = "loaded"
+plane = "transverse"
+source = "free-exercise-db"
+
+[exercises.dead-bug]
+label = "Dead bug"
+pattern = "isometric"
+region = ["abdomen", "lower_back"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+
+[exercises.bird-dog]
+label = "Bird dog"
+pattern = "isometric"
+region = ["lower_back", "abdomen", "hip"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+
+[exercises.ab-wheel-rollout]
+label = "Ab wheel rollout"
+aliases = ["ab rollout"]
+pattern = "flexion"
+region = ["abdomen", "shoulder"]
+load = "bodyweight"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.mountain-climber]
+label = "Mountain climber"
+pattern = "flexion"
+region = ["abdomen", "hip", "shoulder"]
+load = "bodyweight"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.hollow-hold]
+label = "Hollow hold"
+pattern = "isometric"
+region = ["abdomen"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+
+[exercises.superman]
+label = "Superman hold"
+pattern = "extension"
+region = ["lower_back", "hip"]
+load = "bodyweight"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.farmers-carry]
+label = "Farmer's carry"
+aliases = ["farmer walk", "farmers walk"]
+pattern = "carry"
+region = ["forearm", "upper_back", "abdomen"]
+load = "loaded"
+plane = "sagittal"
+fit = "FARMERS_WALK"
+source = "free-exercise-db"
+
+[exercises.suitcase-carry]
+label = "Suitcase carry"
+pattern = "carry"
+region = ["forearm", "abdomen", "hip"]
+load = "loaded"
+plane = "frontal"
+source = "free-exercise-db"
+
+[exercises.overhead-carry]
+label = "Overhead carry"
+aliases = ["waiter walk"]
+pattern = "carry"
+region = ["shoulder", "abdomen"]
+load = "loaded"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.sled-push]
+label = "Sled push"
+aliases = ["prowler push"]
+pattern = "push"
+region = ["thigh", "hip", "calf"]
+load = "loaded"
+plane = "sagittal"
+source = "curated"
+
+[exercises.sled-drag]
+label = "Sled drag"
+pattern = "carry"
+region = ["thigh", "hip", "upper_back"]
+load = "loaded"
+plane = "sagittal"
+source = "curated"
+
+[exercises.box-jump]
+label = "Box jump"
+pattern = "jump"
+region = ["thigh", "hip", "calf"]
+load = "bodyweight"
+plane = "sagittal"
+fit = "BOX_JUMP"
+source = "free-exercise-db"
+
+[exercises.broad-jump]
+label = "Broad jump"
+aliases = ["standing long jump"]
+pattern = "jump"
+region = ["thigh", "hip", "calf"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+
+[exercises.jump-squat]
+label = "Jump squat"
+pattern = "jump"
+region = ["thigh", "hip", "calf"]
+load = "bodyweight"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.burpee]
+label = "Burpee"
+pattern = ["jump", "push", "squat"]
+region = ["thigh", "chest", "shoulder"]
+load = "bodyweight"
+plane = "sagittal"
+fit = "BURPEE"
+source = "curated"
+
+[exercises.power-clean]
+label = "Power clean"
+aliases = ["clean"]
+pattern = ["hinge", "pull"]
+region = ["hip", "thigh", "upper_back"]
+load = "loaded"
+plane = "sagittal"
+fit = "CLEAN"
+source = "free-exercise-db"
+
+[exercises.clean-and-jerk]
+label = "Clean and jerk"
+pattern = ["hinge", "push"]
+region = ["hip", "thigh", "shoulder"]
+load = "loaded"
+plane = "sagittal"
+fit = "CLEAN_AND_JERK"
+source = "free-exercise-db"
+
+[exercises.snatch]
+label = "Snatch"
+pattern = ["hinge", "push"]
+region = ["hip", "thigh", "shoulder"]
+load = "loaded"
+plane = "sagittal"
+fit = "SNATCH"
+source = "free-exercise-db"
+
+[exercises.thruster]
+label = "Thruster"
+pattern = ["squat", "push"]
+region = ["thigh", "hip", "shoulder"]
+load = "loaded"
+plane = "sagittal"
+fit = "THRUSTER"
+source = "free-exercise-db"
+
+[exercises.jumping-jack]
+label = "Jumping jack"
+aliases = ["star jump"]
+pattern = "jump"
+region = ["shoulder", "hip", "calf"]
+load = "bodyweight"
+plane = "frontal"
+source = "curated"
+
+[exercises.skipping]
+label = "Skipping"
+aliases = ["jump rope", "rope skipping"]
+pattern = "jump"
+region = ["calf", "ankle"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+
+[exercises.clamshell]
+label = "Clamshell"
+pattern = "rotate"
+region = ["hip"]
+load = "bodyweight"
+plane = "transverse"
+source = "curated"
+
+[exercises.hip-flexor-raise]
+label = "Standing hip flexor raise"
+aliases = ["knee drive"]
+pattern = "flexion"
+region = ["hip", "thigh"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+
+[exercises.pull-through]
+label = "Cable pull-through"
+aliases = ["cable pull-through"]
+pattern = "hinge"
+region = ["hip", "hamstring"]
+load = "loaded"
+plane = "sagittal"
+source = "curated"
+
+[exercises.pendulum-squat]
+label = "Pendulum squat"
+pattern = "squat"
+region = ["thigh", "hip", "knee"]
+load = "loaded"
+plane = "sagittal"
+source = "curated"
+
+[exercises.belt-squat]
+label = "Belt squat"
+pattern = "squat"
+region = ["thigh", "hip", "knee"]
+load = "loaded"
+plane = "sagittal"
+source = "curated"
+
+[exercises.rope-climb]
+label = "Rope climb"
+pattern = "pull"
+region = ["upper_back", "forearm", "upper_arm"]
+load = "bodyweight"
+plane = "sagittal"
+source = "free-exercise-db"
+
+[exercises.battle-rope]
+label = "Battle rope"
+aliases = ["battling ropes"]
+pattern = "pull"
+region = ["shoulder", "forearm", "abdomen"]
+load = "loaded"
+plane = "sagittal"
+source = "curated"
+
+[exercises.sledgehammer-swing]
+label = "Sledgehammer swing"
+pattern = "rotate"
+region = ["abdomen", "shoulder", "upper_back"]
+load = "loaded"
+plane = "transverse"
+source = "curated"
+
+[exercises.hip-airplane]
+label = "Hip airplane"
+pattern = "rotate"
+region = ["hip", "thigh"]
+load = "bodyweight"
+plane = "transverse"
+source = "curated"
+
+[exercises.couch-stretch]
+label = "Couch stretch"
+pattern = "isometric"
+region = ["hip", "thigh"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+
+[exercises.thoracic-rotation]
+label = "Thoracic rotation"
+aliases = ["open book"]
+pattern = "rotate"
+region = ["upper_back", "lower_back"]
+load = "bodyweight"
+plane = "transverse"
+source = "curated"
+
+[exercises.cat-cow]
+label = "Cat-cow"
+pattern = "flexion"
+region = ["lower_back", "upper_back"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+
+[exercises.shoulder-dislocate]
+label = "Shoulder dislocate"
+aliases = ["band dislocate", "pass-through"]
+pattern = "rotate"
+region = ["shoulder"]
+load = "bodyweight"
+plane = "transverse"
+source = "curated"
+
+[exercises.scapular-pull-up]
+label = "Scapular pull-up"
+aliases = ["scap pull-up"]
+pattern = "pull"
+region = ["upper_back", "shoulder"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+
+[exercises.wall-slide]
+label = "Wall slide"
+pattern = "push"
+region = ["shoulder", "upper_back"]
+load = "bodyweight"
+plane = "frontal"
+source = "curated"
+
+[exercises.neck-flexion]
+label = "Neck flexion"
+pattern = "flexion"
+region = ["neck"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+
+[exercises.neck-extension]
+label = "Neck extension"
+pattern = "extension"
+region = ["neck"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+
+[exercises.ankle-dorsiflexion]
+label = "Ankle dorsiflexion drill"
+aliases = ["knee-to-wall"]
+pattern = "flexion"
+region = ["ankle", "shin"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+
+[exercises.toe-yoga]
+label = "Toe yoga"
+pattern = "isometric"
+region = ["foot"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+
+[exercises.heel-walk]
+label = "Heel walk"
+pattern = "gait"
+region = ["shin", "ankle"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+
+[exercises.toe-walk]
+label = "Toe walk"
+pattern = "gait"
+region = ["calf", "ankle", "foot"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+
+[exercises.sled-march]
+label = "Sled march"
+pattern = "gait"
+region = ["thigh", "hip"]
+load = "loaded"
+plane = "sagittal"
+source = "curated"
