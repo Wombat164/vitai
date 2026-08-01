@@ -483,3 +483,65 @@ def test_a_new_dataset_spells_a_null_as_empty_and_a_legacy_one_does_not():
     from vitai.jsonl import identity_of
     assert identity_of("meals", {"meal": None, "item": "olives"}) == "/olives"
     assert identity_of("goals", {"slug": None}) == "None"
+
+
+def test_two_whole_day_figures_refuse_rather_than_picking_one():
+    """The lookup was a dict comprehension, so with two sources on one day
+    the answer was whichever row came last in file order - and file order for
+    `daily` is (date, source): an ordering, but not a PRECEDENCE ordering.
+    The same rows reversed gave the other figure, silently (#152).
+
+    That inverts the function's own purpose: handed raw claims it could quote
+    the very figure precedence rejected, and then compare an itemised
+    estimate against it.
+    """
+    rows = [{"date": "2030-05-01", "kcal_in": 1500, "source": "guessed-in-chat"},
+            {"date": "2030-05-01", "kcal_in": 2400, "source": "mfp-export"}]
+    forward = day_disagreements(PLATE, rows)
+    backward = day_disagreements(PLATE, list(reversed(rows)))
+    assert forward == backward, "the answer depended on file order"
+    assert forward[0]["ambiguous"] is True
+    assert forward[0]["stated"] is None
+    assert "pass the canonical daily" in forward[0]["detail"]
+
+
+def test_a_resolved_day_still_compares_normally():
+    """The shipped caller passes `canonical("daily")`, which has one row per
+    date. Nothing about that path changes."""
+    resolved = [{"date": "2030-05-01", "kcal_in": 2210, "source": "mfp-export"}]
+    got = day_disagreements(PLATE, resolved)
+    assert len(got) == 1 and got[0]["stated"] == 2210
+    assert got[0]["ambiguous"] is False
+
+
+def test_the_contract_holds_for_a_date_that_is_not_a_string():
+    """The guard tested the RAW date against a `str`-keyed dict, so a
+    non-string date never matched it and the dict comprehension's
+    last-writer-wins came straight back - the defect surviving inside its own
+    fix, and nothing in the suite reached it.
+    """
+    rows = [{"date": 20300501, "kcal_in": 1500, "source": "guessed-in-chat"},
+            {"date": 20300501, "kcal_in": 2400, "source": "mfp-export"}]
+    meals = [{**PLATE[0], "date": "20300501"}]
+    forward = day_disagreements(meals, rows)
+    assert forward == day_disagreements(meals, list(reversed(rows)))
+    assert forward[0]["ambiguous"] is True
+
+
+def test_an_ambiguous_day_with_no_meals_is_not_this_functions_business():
+    """It reports where a day's estimates and a stated intake BOTH exist."""
+    rows = [{"date": "2030-09-09", "kcal_in": 1, "source": "a"},
+            {"date": "2030-09-09", "kcal_in": 2, "source": "b"}]
+    assert day_disagreements([], rows) == []
+
+
+def test_every_finding_carries_the_same_keys():
+    """A consumer iterating findings must not KeyError on the normal ones
+    because only the ambiguous ones carry a flag."""
+    resolved = [{"date": "2030-05-01", "kcal_in": 2210, "source": "mfp-export"}]
+    ambiguous = [{"date": "2030-05-01", "kcal_in": 1, "source": "a"},
+                 {"date": "2030-05-01", "kcal_in": 2, "source": "b"}]
+    normal = day_disagreements(PLATE, resolved)[0]
+    refused = day_disagreements(PLATE, ambiguous)[0]
+    assert set(normal) == set(refused)
+    assert normal["ambiguous"] is False and refused["ambiguous"] is True

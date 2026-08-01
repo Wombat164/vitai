@@ -635,3 +635,163 @@ def test_the_cli_accepts_jsonl_so_a_bulk_import_is_one_invocation(tmp_path, caps
     echoed = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
     assert len(echoed) == 5
     assert len({r["recorded_at"] for r in echoed}) == 5
+
+
+# ---- an unstamped line among stamped ones (#149) ---------------------------------
+
+def test_a_wholly_unstamped_file_is_a_legacy_corpus():
+    """`known_by` lets an unstamped row survive every cutoff, which is right:
+    a legacy line lacks a transaction time by PREDATING the clock, and
+    without the affordance `as_of` would empty a legacy corpus instead of
+    reconstructing one."""
+    from vitai.schema import unstamped_after_the_clock_started
+    rows = [(1, {"date": "2030-01-01"}), (2, {"date": "2030-02-01"})]
+    assert unstamped_after_the_clock_started("weight.jsonl", rows) == []
+
+
+def test_an_unstamped_row_predating_the_clock_is_fine():
+    from vitai.schema import unstamped_after_the_clock_started
+    rows = [(1, {"date": "2030-01-01"}),
+            (2, {"date": "2030-05-01",
+                 "recorded_at": "2030-05-01T09:00:00+02:00"})]
+    assert unstamped_after_the_clock_started("weight.jsonl", rows) == []
+
+
+def test_an_unstamped_row_inside_the_stamped_era_is_flagged():
+    """A forgotten workout appended by hand with no stamp is visible at EVERY
+    historical cutoff, so a reconstruction stops being stable - which is the
+    one property `as_of` exists to provide."""
+    from vitai.schema import unstamped_after_the_clock_started
+    rows = [(1, {"date": "2030-05-01",
+                 "recorded_at": "2030-05-01T09:00:00+02:00"}),
+            (2, {"date": "2030-05-02",
+                 "recorded_at": "2030-05-02T09:00:00+02:00"}),
+            (3, {"date": "2030-06-01"})]
+    found = unstamped_after_the_clock_started("weight.jsonl", rows)
+    assert found and "was already running" in found[0]
+    # It names the DATE of the offending row, not its line - see
+    # test_the_advisory_names_the_dates_rather_than_a_line_number.
+    assert "2030-06-01" in found[0]
+
+
+def test_the_rule_reads_the_clock_rather_than_file_position():
+    """File position was the obvious signal and is the wrong one: #37
+    established that an ordering a formatter can change is not an ordering,
+    and a regenerated file is written sorted. An unstamped row sitting AFTER
+    a stamped one but dated before it is a legacy row that got sorted there.
+    """
+    from vitai.schema import unstamped_after_the_clock_started
+    rows = [(1, {"date": "2030-05-01",
+                 "recorded_at": "2030-05-01T09:00:00+02:00"}),
+            (2, {"date": "2030-04-01"})]
+    assert unstamped_after_the_clock_started("weight.jsonl", rows) == []
+
+
+def test_it_is_an_advisory_and_never_fails_a_build(tmp_path, capsys):
+    """Making it an error would make a legacy record unbuildable until every
+    row was rewritten - which is the migration the rule would be demanding."""
+    import json
+
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    (root / "data" / "weight.jsonl").write_text("\n".join(json.dumps(r) for r in [
+        {"date": "2030-05-01", "kg": 80.0, "source": "scale", "note": None,
+         "recorded_at": "2030-05-01T09:00:00+02:00"},
+        {"date": "2030-05-02", "kg": 79.8, "source": "scale", "note": None,
+         "recorded_at": "2030-05-02T09:00:00+02:00"},
+        {"date": "2030-06-01", "kg": 79.0, "source": "scale", "note": None},
+    ]) + "\n", encoding="utf-8")
+    capsys.readouterr()
+    main(["validate", "--root", str(root)])
+    out = capsys.readouterr().out
+    assert "was already running" in out
+    # One prefix, not two. The message carried its own "advisory: " while the
+    # caller adds "ADVISORY: ", so it printed "ADVISORY: advisory:".
+    assert "ADVISORY: advisory:" not in out
+    # And it names no file or line: `validate` hands this the merged stream
+    # across every device file, so a line number belongs to whichever file it
+    # came from and naming one points at the wrong row.
+    assert "weight.jsonl line" not in [
+        ln for ln in out.splitlines() if "was already running" in ln][0]
+
+
+def test_a_stamped_row_with_no_date_does_not_flag_every_legacy_row():
+    """`min` over the dates included the empty string for a dateless stamped
+    row, so the floor became "" - every legacy row sorted after it, and the
+    message named a blank date."""
+    from vitai.schema import unstamped_after_the_clock_started
+    rows = [(1, {"date": None, "recorded_at": "2030-05-01T09:00:00+02:00"}),
+            (2, {"date": "2030-06-01",
+                 "recorded_at": "2030-06-01T09:00:00+02:00"}),
+            (3, {"date": "2020-01-01"})]
+    assert unstamped_after_the_clock_started("weight.jsonl", rows) == []
+
+
+def test_the_advisory_names_the_dates_rather_than_a_line_number():
+    """Across device files the line numbers belong to different files, so one
+    of them points at the wrong row."""
+    from vitai.schema import unstamped_after_the_clock_started
+    rows = [(1, {"date": "2030-05-01",
+                 "recorded_at": "2030-05-01T09:00:00+02:00"}),
+            (2, {"date": "2030-05-02",
+                 "recorded_at": "2030-05-02T09:00:00+02:00"}),
+            (1, {"date": "2030-06-01"})]
+    found = unstamped_after_the_clock_started("weight.jsonl", rows)
+    assert "2030-06-01" in found[0]
+    assert "line 1" not in found[0]
+    assert not found[0].startswith("advisory")
+
+
+def test_a_couple_of_stamped_rows_do_not_start_a_clock_for_a_legacy_file():
+    """The demo's sessions came from an export that does not stamp, plus one
+    stamped provenance pair. Treating any stamp as the start of the clock
+    flagged eight ordinary legacy rows in the flagship corpus - the advisory
+    firing on the normal case, which is how an advisory teaches people to
+    ignore it."""
+    from vitai.schema import unstamped_after_the_clock_started
+    rows = [(n, {"date": f"2030-04-{n:02d}"}) for n in range(1, 21)]
+    rows[9] = (10, {"date": "2030-04-10",
+                    "recorded_at": "2030-04-10T09:00:00+02:00"})
+    assert unstamped_after_the_clock_started("weight.jsonl", rows) == []
+
+
+def test_a_legacy_device_file_is_not_outvoted_by_a_stamped_sibling(tmp_path,
+                                                                   capsys):
+    """The rule is per FILE, and a file is what has a clock. Run on the
+    merged multi-device stream, `weight.jsonl` being wholly unstamped - the
+    case the first guard exists to exempt - lost the majority vote to a
+    stamped `weight.watch.jsonl`, and every one of its legacy rows was
+    flagged as a hand edit.
+    """
+    import json
+
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    data = root / "data"
+    (data / "weight.jsonl").write_text("\n".join(json.dumps(
+        {"date": f"2030-03-{n:02d}", "kg": 80.0, "source": "scale",
+         "note": None}) for n in range(1, 6)) + "\n", encoding="utf-8")
+    (data / "weight.watch.jsonl").write_text("\n".join(json.dumps(
+        {"date": f"2030-01-{n:02d}", "kg": 80.0, "source": "scale",
+         "note": None, "recorded_at": f"2030-01-{n:02d}T09:00:00+02:00"})
+        for n in range(1, 12)) + "\n", encoding="utf-8")
+    capsys.readouterr()
+    main(["validate", "--root", str(root)])
+    assert "was already running" not in capsys.readouterr().out
+
+
+def test_findings_come_back_in_date_order(tmp_path):
+    """Emitting the ambiguous findings and then the normal ones gave a list
+    sorted within each group and out of order overall."""
+    from vitai.meals import day_disagreements
+    meals = [{"date": "2030-01-05", "meal": "lunch", "item": "x",
+              "grams": 100, "kcal_100g": 100, "food_table": "usda"},
+             {"date": "2030-09-09", "meal": "lunch", "item": "x",
+              "grams": 100, "kcal_100g": 100, "food_table": "usda"}]
+    daily = [{"date": "2030-09-09", "kcal_in": 1, "source": "a"},
+             {"date": "2030-09-09", "kcal_in": 2, "source": "b"},
+             {"date": "2030-01-05", "kcal_in": 2200, "source": "mfp-export"}]
+    got = day_disagreements(meals, daily)
+    assert [f["date"] for f in got] == ["2030-01-05", "2030-09-09"]

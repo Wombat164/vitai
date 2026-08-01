@@ -233,7 +233,8 @@ def by_meal(rows: list[dict], on: str | None = None) -> dict[str, list[dict]]:
     return out
 
 
-def day_disagreements(meal_rows: list[dict], daily_rows: list[dict]) -> list[dict]:
+def day_disagreements(meal_rows: list[dict],
+                      resolved_daily: list[dict]) -> list[dict]:
     """Where a day's meal estimates and a stated whole-day intake both exist.
 
     REPORTED, never resolved. A partial day and a whole day are different
@@ -246,26 +247,83 @@ def day_disagreements(meal_rows: list[dict], daily_rows: list[dict]) -> list[dic
     estimate written into `kcal_in` would displace an itemised whole-day entry
     from the athlete's own logger - a model's guess beating the athlete's own
     record, which is the #88 defect one domain over.
+
+    THE INPUT CONTRACT, which used to live in one caller's comment (#152).
+    `resolved_daily` is ADJUDICATED rows - one per date - not raw claims. The
+    lookup was a dict comprehension, so with two sources on one day the answer
+    was whichever row came last in file order, and file order for `daily` is
+    (date, source): an ordering, but not a PRECEDENCE ordering. The same rows
+    in the other order gave the other figure, silently.
+
+    That inverts the function's own purpose. It exists to stop a meal estimate
+    displacing the athlete's own whole-day figure, and handed raw claims it
+    could quote the very figure precedence rejected - then compare an itemised
+    estimate against it. Comparing against a superseded number is worse than
+    not comparing.
+
+    So ambiguity is REFUSED rather than resolved by luck. An invariant only
+    one caller knows about is not an invariant; it is a coincidence with good
+    documentation, and it survives exactly until somebody adds a second
+    caller.
     """
-    stated = {r["date"]: r for r in daily_rows
-              if r.get("date") and _num(r.get("kcal_in")) is not None}
+    stated: dict[str, dict] = {}
+    ambiguous: dict[str, list[dict]] = {}
+    for row in resolved_daily:
+        date = row.get("date")
+        if not date or _num(row.get("kcal_in")) is None:
+            continue
+        # `str(date)` on BOTH sides. Testing the raw value against a
+        # str-keyed dict meant a non-string date never matched, so the
+        # ambiguity guard missed it and the dict comprehension's
+        # last-writer-wins came straight back - the exact defect this is
+        # fixing, surviving inside the fix.
+        key = str(date)
+        if key in stated:
+            ambiguous.setdefault(key, [stated[key]]).append(row)
+        stated[key] = row
+
+    days = {str(r.get("date")) for r in meal_rows if r.get("date")}
     out = []
-    for date in sorted({r.get("date") for r in meal_rows if r.get("date")}):
+    # ONE date-ordered pass over the days with meals. Emitting the ambiguous
+    # findings and then the normal ones gave a list that was sorted within
+    # each group and out of order overall, so a reader scanning dates saw
+    # September before January.
+    #
+    # Days only. This function reports where a day's meal estimates and a
+    # stated intake BOTH exist, and an ambiguous daily row on a day with no
+    # meals is not in its scope.
+    for date in sorted(days):
         if date not in stated:
             continue
-        rows = [r for r in meal_rows if r.get("date") == date]
-        total = meal_total(rows)
-        day = _num(stated[date].get("kcal_in"))
+        if date not in ambiguous:
+            rows = [r for r in meal_rows if str(r.get("date")) == date]
+            total = meal_total(rows)
+            day = _num(stated[date].get("kcal_in"))
+            out.append({
+                "date": date, "ambiguous": False,
+                "meals_lo": total["lo"], "meals_hi": total["hi"],
+                "stated": day, "stated_source": stated[date].get("source"),
+                "meals_cover": total["complete"],
+                "detail": (f"{len(rows)} estimated item(s) sum to "
+                           f"{total['lo']:.0f}-{total['hi']:.0f} kcal; the "
+                           f"day is logged at {day:.0f} by "
+                           f"{stated[date].get('source') or 'an unnamed source'}"
+                           ". A partial day is not a correction to a whole "
+                           "one - neither figure supersedes the other")})
+            continue
+        candidates = ambiguous[date]
+        sources = ", ".join(sorted(str(r.get("source") or "an unnamed source")
+                                   for r in candidates))
         out.append({
-            "date": date, "meals_lo": total["lo"], "meals_hi": total["hi"],
-            "stated": day, "stated_source": stated[date].get("source"),
-            "meals_cover": total["complete"],
-            "detail": (f"{len(rows)} estimated item(s) sum to "
-                       f"{total['lo']:.0f}-{total['hi']:.0f} kcal; the day is "
-                       f"logged at {day:.0f} by "
-                       f"{stated[date].get('source') or 'an unnamed source'}. "
-                       "A partial day is not a correction to a whole one - "
-                       "neither figure supersedes the other")})
+            "date": date, "meals_lo": None, "meals_hi": None,
+            "stated": None, "stated_source": None, "meals_cover": False,
+            "ambiguous": True,
+            "detail": (f"{len(candidates)} whole-day intake figures for "
+                       f"{date} ({sources}), so there is no single stated day "
+                       "to compare against. These are raw claims rather than "
+                       "resolved rows - pass the canonical daily, because "
+                       "picking one by file order would quote whichever "
+                       "source name happens to sort later")})
     return out
 
 
