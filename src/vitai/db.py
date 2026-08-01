@@ -78,6 +78,19 @@ from .schema import KEYS
 #     briefly numbered 12 here, but no database ever emitted a 12 - the two
 #     changes merged within an hour of each other and both went out under 11,
 #     so a consumer gating on 11 gets both. Renumbered to say what shipped
+#     rather than what was intended. `resolution` gains `discarded` (every claim
+#     that lost, not only the runner-up) and `unattributed_loser`, and a new
+#     `unattributed_claim_lost` tripwire. A consumer showing a canonical value
+#     can now say what it beat; before this, a resolved value had no way to
+#     say it had beaten anything at all.
+# 12: was it measured at all (#49, #88) - `modelled` on the observation
+#     datasets names the FIELDS on a row that are model outputs rather than
+#     observations, and `type_source` on `sessions` says how a categorical
+#     label was assigned. A consumer summing a column MUST check `modelled`:
+#     an inflated estimate reaching a deficit reads ON TARGET while the scale
+#     goes up. A `type` carrying `vendor-classified` is a third-party model's
+#     guess, not something the athlete or a device asserted.
+CONTRACT_VERSION = "13"
 #     rather than what was intended. `resolution` gains `discarded` (every
 #     claim that lost, not only the runner-up) and `unattributed_loser`, and a
 #     `unattributed_claim_lost` tripwire. A consumer showing a canonical value
@@ -126,6 +139,7 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               "origin", "path", "origin_evidence", "trust", "chain", "compares",
               "capture", "read_by",
               "discarded",
+              "modelled", "type_source",
               "scope",
               # #43. `activity_id` MUST be TEXT: a REAL-affinity column
               # converts "9914203377" to a float, which destroys leading

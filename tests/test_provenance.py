@@ -351,8 +351,8 @@ def test_a_row_at_the_previous_generation_still_validates():
 
     Anchored to the generation the CAPTURE FIELDS landed on rather than to
     `CURRENT_GENERATION`, which moves every time any later change adds a
-    field. Pinned to a moving target, this test breaks on the next unrelated
-    increment and says nothing about the property it is here to protect.
+    field. Pinned to a moving target this breaks on the next unrelated
+    increment, saying nothing about the property it exists to protect.
     """
     from vitai.schema import KEYS, key_generation, validate_record
     landed = key_generation("sessions", "capture")
@@ -511,7 +511,8 @@ def test_every_generation_a_deployment_could_have_stamped_still_validates():
     """
     from vitai.schema import (CURRENT_GENERATION, KEYS, key_generation,
                               validate_record)
-    seed = {"sessions": {"type": "run"}, "measurements": {"kind": "waist_cm", "value": 84.0},
+    seed = {"sessions": {"type": "run"},
+            "measurements": {"kind": "waist_cm", "value": 84.0},
             "daily": {}, "weight": {}}
     for ds, fields in seed.items():
         for gen in range(1, CURRENT_GENERATION[ds] + 1):
@@ -527,3 +528,45 @@ def test_the_capture_fields_share_one_generation_of_their_own():
     for k in ("read_by", "origin", "path", "origin_evidence"):
         assert key_generation("sessions", k) == landed, k
     assert key_generation("sessions", "track") < landed
+# ---- #49/#88: was it measured at all? ------------------------------------------
+
+def test_modelled_names_fields_not_the_whole_row():
+    """The distinction is per-field: one row can carry a measured step count
+    and an estimated burn."""
+    from vitai.provenance import is_modelled, modelled_fields
+    row = {"modelled": "kcal_out rhr", "kcal_out": 1728, "rhr": 0, "steps": 9000}
+    assert modelled_fields(row) == {"kcal_out", "rhr"}
+    assert is_modelled(row, "kcal_out") is True
+    assert is_modelled(row, "steps") is False
+
+
+def test_an_unannotated_row_claims_nothing():
+    from vitai.provenance import modelled_fields
+    assert modelled_fields({"kcal_out": 1728}) == set()
+
+
+def test_modelled_must_name_real_fields():
+    """A typo would make the declaration silently unenforceable - the field
+    would keep being treated as measured."""
+    from vitai.provenance import value_kind_problems
+    assert any("not a field" in p for p in
+               value_kind_problems({"modelled": "kcal_ou"}, ["kcal_out"]))
+    assert value_kind_problems({"modelled": "kcal_out"}, ["kcal_out"]) == []
+
+
+def test_a_categorical_label_can_say_how_it_was_assigned():
+    """1,093 of 1,502 session types in one live record were a classifier's
+    guess, and the record could not tell them from the 409 the athlete
+    asserted (#88)."""
+    from vitai.provenance import TYPE_SOURCES, type_source, value_kind_problems
+    assert "vendor-classified" in TYPE_SOURCES
+    assert type_source({"type_source": "vendor-classified"}) == "vendor-classified"
+    assert type_source({}) is None
+    assert any("type_source" in p for p in
+               value_kind_problems({"type_source": "guessed", "type": "run"}, []))
+
+
+def test_a_type_source_needs_a_type():
+    from vitai.provenance import value_kind_problems
+    assert any("needs a 'type'" in p for p in
+               value_kind_problems({"type_source": "vendor-classified"}, []))

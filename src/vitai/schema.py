@@ -18,6 +18,7 @@ from .clocks import (is_aware, is_stamp, order_key,  # noqa: F401
 from .artifacts import is_reference
 from .provenance import capture_problems
 from .provenance import problems as provenance_problems
+from .provenance import value_kind_problems
 
 # dataset -> ordered keys (column order for the SQLite read model)
 KEYS: dict[str, list[str]] = {
@@ -39,7 +40,7 @@ KEYS: dict[str, list[str]] = {
     "weight": ["date", "kg", "source", "note", "body_fat_pct",
                "kg_lo", "kg_hi", "body_fat_lo", "body_fat_hi", "measured_at",
                "recorded_at", "origin", "path", "origin_evidence",
-               "capture", "read_by", "artifact"],
+               "capture", "read_by", "modelled", "artifact"],
     # `hip_pain` is RETIRED at generation 2 in favour of `pain` + `pain_site`:
     # the hip was this record's founding injury, but a record that can only
     # describe one joint cannot describe a second one. Old lines keep it and
@@ -52,7 +53,7 @@ KEYS: dict[str, list[str]] = {
               "protein_g", "sleep_h", "rhr", "hip_pain", "alcohol", "note",
               "source", "mood", "feel", "coverage", "pain", "pain_site",
               "pain_side", "recorded_at", "origin", "path",
-              "origin_evidence", "capture", "read_by", "artifact"],
+              "origin_evidence", "capture", "read_by", "modelled", "artifact"],
     # `location` is RETIRED at generation 2, split into `place` (coarse, and
     # deliberately coarse - "home"/"work"/a travel slug, never an address) and
     # `route` (a personal slug the athlete names). Free text could not be
@@ -81,7 +82,7 @@ KEYS: dict[str, list[str]] = {
                  "place", "with", "context", "planned", "weather", "recorded_at",
                  "track", "activity_id", "activity_source",
                  "origin", "path", "origin_evidence", "capture", "read_by",
-                 "artifact"],
+                 "modelled", "type_source", "artifact"],
     # Third data tier: MODEL-INFERRED knowledge. Append-only like everything
     # else, but carries provenance (model, evidence, confidence) because it is
     # neither ground truth (observed) nor rebuildable (derived). The engine
@@ -169,7 +170,7 @@ KEYS: dict[str, list[str]] = {
     # `weight` line (gen-2, G36/G37); this dataset is for the other instruments.
     "measurements": ["date", "kind", "value", "source", "note", "recorded_at",
                      "origin", "path", "origin_evidence", "capture",
-                     "read_by", "artifact"],
+                     "read_by", "modelled", "artifact"],
     # --- increment 3: the medical layer (G11) ------------------------------
     # One condition's whole lifecycle shares a `slug`: onset, the visit, the
     # restriction, the resolution. Appending a line advances the episode; the
@@ -484,10 +485,26 @@ for _ds in ("weight", "daily", "sessions", "measurements"):
         _new += ["origin", "path", "origin_evidence"]
     for _k in _new:
         KEY_GENERATION[_ds][_k] = CURRENT_GENERATION[_ds]
+# --- was it measured at all? (#49, #88) ---------------------------------------
+# Its OWN generation on top of #78's above, for the reason #78 was filed:
+# that generation has now shipped, so a row an existing deployment stamped
+# with it must not suddenly owe keys it cannot have.
+# `modelled` names the fields on a row that are model outputs; `type_source`
+# says how a categorical label was assigned. Both answer "was this observed",
+# which origin and capture do not.
+for _ds in ("weight", "daily", "sessions", "measurements"):
+    CURRENT_GENERATION[_ds] += 1
+    _new = ["modelled"] + (["type_source"] if _ds == "sessions" else [])
+    for _k in _new:
+        KEY_GENERATION[_ds][_k] = CURRENT_GENERATION[_ds]
+
 # --- the artifact reference (#80) ---------------------------------------------
-# Its OWN generation rather than joining #78's above, for the reason #78 was
-# filed: that generation has already shipped, so a row an existing deployment
-# stamped with it would suddenly owe a key it cannot have.
+# LAST, because it is the newest change. Order matters here in a way that is
+# easy to get wrong on a merge: placed above #49/#88's block instead, this
+# takes the generation those fields already shipped under, and every demo and
+# deployed row stamped with it suddenly owes an `artifact` key it cannot have.
+# The rule is simply that a block appends - a new field never lands ahead of
+# one already in the wild.
 for _ds in ("weight", "daily", "sessions", "measurements"):
     CURRENT_GENERATION[_ds] += 1
     KEY_GENERATION[_ds]["artifact"] = CURRENT_GENERATION[_ds]
@@ -633,6 +650,7 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
     if dataset in ("weight", "daily", "sessions", "measurements"):
         problems += provenance_problems(rec)
         problems += capture_problems(rec)
+        problems += value_kind_problems(rec, KEYS[dataset])
         if (ref := rec.get("artifact")) is not None and not is_reference(ref):
             problems.append(
                 f"'artifact' is a content address like "
