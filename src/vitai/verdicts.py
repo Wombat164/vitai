@@ -283,7 +283,7 @@ def _symptom_rows(weight: list[dict], daily: list[dict], sessions: list[dict],
 
     counts: dict[tuple[str, str], int] = {}
     for row in escalations(medical, daily, weight, sessions,
-                           include_red_s=False):
+                           include_low_energy_availability=False):
         metric = SYMPTOM_METRICS.get(str(row.get("trigger")))
         if metric and row.get("date"):
             key = (_week_key(str(row["date"])), metric)

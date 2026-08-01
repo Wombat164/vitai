@@ -228,7 +228,7 @@ def test_no_llm_authored_text_in_the_number_path(tmp_path):
 # Sweep 2 (2026-07-29): five athletes spanning elite -> severe obesity
 # --------------------------------------------------------------------------
 
-def red_s_athlete(tmp_path):
+def low_energy_athlete(tmp_path):
     """Endurance athlete: energy availability far below the clinical threshold,
     five months amenorrhoeic, RHR drifted 42 -> 51, two prior stress fractures,
     recurrent exertional dizziness. She names none of it as a problem - the
@@ -285,12 +285,12 @@ def glp1_athlete(tmp_path):
     return root
 
 
-def test_red_s_presentation_triggers_a_hold_not_a_note(tmp_path):
+def test_low_energy_presentation_triggers_a_hold_not_a_note(tmp_path):
     """Energy availability far below threshold + amenorrhoea + RHR drift +
     prior stress fractures is the highest-severity combination in the model.
     Correct behaviour is to SUSPEND progression and refer - not to add a line
     to the weekly rollup."""
-    v = Vitai(red_s_athlete(tmp_path))
+    v = Vitai(low_energy_athlete(tmp_path))
     v.build()
     surfaced = (json.dumps(v.verdicts()) + json.dumps(v.conservation())).lower()
     assert "hold" in surfaced or "refer" in surfaced or "energy" in surfaced, (

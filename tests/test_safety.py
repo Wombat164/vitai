@@ -327,7 +327,7 @@ def test_extreme_pain_escalates_regardless_of_the_configured_gate():
 
 # ---- RED-S -------------------------------------------------------------------
 
-def _red_s_record(deficit=-1400, kg_start=70.0, kg_end=68.6, minutes=60):
+def _low_energy_record(deficit=-1400, kg_start=70.0, kg_end=68.6, minutes=60):
     days = [daily(date=f"2030-05-{d:02d}", kcal_in=2000,
                   kcal_out=2000 - deficit) for d in range(1, 15)]
     weight = [{"date": "2030-05-01", "kg": kg_start, "source": "scale",
@@ -339,44 +339,44 @@ def _red_s_record(deficit=-1400, kg_start=70.0, kg_end=68.6, minutes=60):
     return days, weight, sessions
 
 
-def test_red_s_fires_on_deep_deficit_plus_fast_loss_plus_load():
-    days, weight, sessions = _red_s_record()
+def test_low_energy_fires_on_deep_deficit_plus_fast_loss_plus_load():
+    days, weight, sessions = _low_energy_record()
     rows = escalations([], days, weight, sessions)
-    red_s = [r for r in rows if r["trigger"] == "clinical_hold"]
-    assert len(red_s) == 1
+    low_energy = [r for r in rows if r["trigger"] == "clinical_hold"]
+    assert len(low_energy) == 1
     # Issue #12 raised this from a message to a HOLD: the correct response is
     # to suspend progression, not to add a line to the rollup. #110 removed
     # the second half of that - "and refer" - so what is asserted now is the
     # ACT and an exit the record owner can reach, rather than an addressee.
-    assert red_s[0]["level"] == HOLD
-    assert "TRAINING IS ON HOLD" in red_s[0]["action"]
-    assert "no plan, progression or session is issued" in red_s[0]["action"]
-    assert "The hold lifts when the record shows" in red_s[0]["action"]
+    assert low_energy[0]["level"] == HOLD
+    assert "TRAINING IS ON HOLD" in low_energy[0]["action"]
+    assert "no plan, progression or session is issued" in low_energy[0]["action"]
+    assert "The hold lifts when the record shows" in low_energy[0]["action"]
 
 
-def test_red_s_does_not_fire_on_a_deficit_alone():
+def test_low_energy_does_not_fire_on_a_deficit_alone():
     """A deep deficit is a choice; it is the combination that is the pattern."""
-    days, weight, sessions = _red_s_record(kg_end=69.9, minutes=5)
+    days, weight, sessions = _low_energy_record(kg_end=69.9, minutes=5)
     rows = escalations([], days, weight, sessions)
     assert [r for r in rows if r["trigger"] == "clinical_hold"] == []
 
 
-def test_red_s_does_not_fire_without_training_load():
-    days, weight, _ = _red_s_record()
+def test_low_energy_does_not_fire_without_training_load():
+    days, weight, _ = _low_energy_record()
     rows = escalations([], days, weight, [])
     assert [r for r in rows if r["trigger"] == "clinical_hold"] == []
 
 
-def test_red_s_does_not_screen_on_a_nearly_empty_window():
+def test_low_energy_does_not_screen_on_a_nearly_empty_window():
     days = [daily(date="2030-05-01", kcal_in=1000, kcal_out=3000)]
     weight = [{"date": "2030-05-01", "kg": 70.0, "source": "scale", "note": None},
               {"date": "2030-05-02", "kg": 68.0, "source": "scale", "note": None}]
     assert escalations([], days, weight, []) == []
 
 
-def test_red_s_is_the_cut_first_item_and_can_be_disabled():
-    days, weight, sessions = _red_s_record()
-    rows = escalations([], days, weight, sessions, include_red_s=False)
+def test_low_energy_is_the_cut_first_item_and_can_be_disabled():
+    days, weight, sessions = _low_energy_record()
+    rows = escalations([], days, weight, sessions, include_low_energy_availability=False)
     assert [r for r in rows if r["trigger"] == "clinical_hold"] == []
 
 
@@ -533,7 +533,7 @@ def test_a_record_with_no_medical_data_is_unaffected(tmp_path):
 # real user walked into a gap the design did not know it had.
 # ===================================================================
 
-def _stable_red_s(**kw):
+def _stable_low_energy(**kw):
     """The weight-STABLE presentation: the one the first composite missed.
 
     57 kg and unchanged, energy availability far below threshold, real load,
@@ -554,14 +554,14 @@ def _stable_red_s(**kw):
     return days, weight, sessions
 
 
-def test_red_s_fires_while_the_athlete_is_weight_stable():
+def test_low_energy_fires_while_the_athlete_is_weight_stable():
     """THE finding of issue #12.
 
     RED-S commonly presents weight-stable - the body downregulates instead of
     losing. Requiring rate of loss made stability EXONERATING when it is
     often the finding itself.
     """
-    days, weight, sessions = _stable_red_s()
+    days, weight, sessions = _stable_low_energy()
     rows = escalations([], days, weight, sessions)
     holds = [r for r in rows if r["trigger"] == "clinical_hold"]
     assert len(holds) == 1, "a textbook weight-stable presentation was missed"
@@ -573,7 +573,7 @@ def test_red_s_fires_while_the_athlete_is_weight_stable():
 def test_low_energy_availability_alone_is_not_enough():
     """Still a composite: low EA plus load plus at least one marker. A hard
     training block with no other finding is training, not a syndrome."""
-    days, weight, sessions = _stable_red_s()
+    days, weight, sessions = _stable_low_energy()
     quiet = [dict(r, note=None) for r in days]      # no amenorrhoea, no drift
     rows = escalations([], quiet, weight, sessions)
     assert [r for r in rows if r["trigger"] == "clinical_hold"] == []
@@ -582,7 +582,7 @@ def test_low_energy_availability_alone_is_not_enough():
 def test_energy_availability_is_not_guessed_without_body_composition():
     """No body-fat read means no EA - never an estimated one. A manufactured
     input to a clinical decision is worse than no decision."""
-    days, weight, sessions = _stable_red_s()
+    days, weight, sessions = _stable_low_energy()
     no_comp = [dict(w, body_fat_pct=None) for w in weight]
     ea, terms = energy_availability(days, no_comp, sessions)
     assert ea is None and terms == {}
@@ -593,7 +593,7 @@ def test_a_hold_blocks_training_rather_than_only_warning(tmp_path):
     mechanism, which is the thing a coach cannot talk around."""
     root = tmp_path / "content"
     main(["init", str(root)])
-    days, weight, sessions = _stable_red_s()
+    days, weight, sessions = _stable_low_energy()
     write(root / "data" / "daily.jsonl", days)
     write(root / "data" / "weight.jsonl", weight)
     write(root / "data" / "sessions.jsonl", sessions)
@@ -1031,7 +1031,7 @@ def test_a_healthy_energy_availability_suppresses_the_balance_fallback():
     assert [e for e in rows if e["level"] == HOLD] == []
 
 
-def test_a_genuine_red_s_presentation_still_holds():
+def test_a_genuine_low_energy_presentation_still_holds():
     """The guard must not silence the case the tier exists for."""
     starved = _fortnight(kcal_in=1200, kcal_out=3600)
     body = [weight(f"2030-05-{d:02d}", 55.0, body_fat_pct=14.0)
@@ -1365,3 +1365,89 @@ def test_the_standing_disclaimer_is_present_and_never_fires(tmp_path, capsys):
     capsys.readouterr()
     main(["status", "--root", str(root)])
     assert DISCLAIMER in capsys.readouterr().out
+
+
+def test_no_message_the_athlete_reads_names_a_condition():
+    """Class (c) of the boundary doctrine, which had no guard until now.
+
+    #133 asserted class (d), care directives, across the whole module and that
+    test worked. `MESSAGES["red_s"]` still sat there naming a syndrome outright
+    ("a low-energy-availability pattern (RED-S) ... this is the syndrome") and
+    passed, because it contained no addressee. Two things hid it: the test
+    looked for the wrong class, and the string was UNREACHABLE, since nothing
+    ever emitted `trigger == "red_s"`, so no behavioural test could see it
+    either. Dead code in a constants table is not inert; it is a claim waiting
+    for someone to wire it up.
+
+    Scoped to what the athlete READS, deliberately. Describing an observable
+    state is fine and `clinical_hold` does it: "low energy availability
+    alongside other findings" is a pattern in the record. Naming the syndrome
+    is a diagnosis whoever says it. Source comments citing the literature to
+    justify a threshold are engineering rationale and are covered by the
+    capability test below instead, because the problem with a comment is never
+    that it names a condition, it is that it claims the engine chases one.
+    """
+    from vitai.safety import ACUTE, MESSAGES
+    named = ("red-s", "relative energy deficiency", "the syndrome",
+             "a syndrome", "osteoporosis", "anorexia", "bulimia",
+             "atrial fibrillation", "diabetes", "hypertension",
+             "anaemia", "anemia")
+    for key, text in {**MESSAGES, **ACUTE}.items():
+        lowered = text.lower()
+        for phrase in named:
+            assert phrase not in lowered, (
+                f"{key} names a condition ({phrase!r}). Describe what the "
+                "record shows; naming it is a diagnosis.")
+
+
+def test_the_module_never_claims_to_watch_for_anything():
+    """Class (e), capability claims, over every string AND comment.
+
+    Found live by the class (c) guard above: a section header read "it is the
+    engine's job to watch for it rather than the athlete's". Monitoring for a
+    named condition is the strongest single assertion of a medical purpose a
+    file can make, and it is worse in a comment than in a message, because a
+    comment reads as the authors describing what they built.
+
+    The engine does not watch for anything. It states what the record shows
+    and declines to issue a plan.
+    """
+    import io
+    import tokenize
+    from pathlib import Path as _P
+
+    claims = ("job to watch for", "watch for it", "watches for", "we detect",
+              "detects ", "screens for", "screening for", "monitors ",
+              "owes a duty", "duty to watch")
+    source = (_P(__file__).resolve().parents[1] / "src" / "vitai"
+              / "safety.py").read_text(encoding="utf-8")
+    comments = [t.string for t in
+                tokenize.generate_tokens(io.StringIO(source).readline)
+                if t.type == tokenize.COMMENT]
+    for chunk in comments + [source]:
+        lowered = chunk.lower()
+        for phrase in claims:
+            assert phrase not in lowered, (
+                f"safety.py claims a capability: {phrase!r}. The engine "
+                "states what the record shows and declines to program.")
+
+
+def test_every_message_is_reachable():
+    """The structural half, and the reason the above went unnoticed for so long.
+
+    `_escalation` looks up `MESSAGES[trigger]`, so a key no trigger emits can
+    never be read. An unreachable entry looks like coverage in review and is
+    worth nothing at runtime, which is the worst combination available.
+    """
+    import re
+    from pathlib import Path as _P
+
+    from vitai.safety import MESSAGES
+    source = (_P(__file__).resolve().parents[1] / "src" / "vitai"
+              / "safety.py").read_text(encoding="utf-8")
+    quoted = set(re.findall(r"[\"'](\w+)[\"']", source))
+    for key in MESSAGES:
+        # Every live key is named somewhere other than its own definition:
+        # emitted as a trigger, or looked up explicitly.
+        uses = len(re.findall(rf"[\"']{re.escape(key)}[\"']", source))
+        assert uses > 1 or key in quoted, f"{key!r} is defined and never used"

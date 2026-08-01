@@ -45,6 +45,32 @@ versioning follows [SemVer](https://semver.org/).
   carries the weight precisely because it never fires.
 
 ### Added
+- **`red_s` retired from the code, and two boundary guards that would have
+  caught it** (#115, #110). Renamed to `low_energy_availability` throughout,
+  and the message keyed `red_s` is DELETED rather than renamed.
+
+  It named a syndrome outright ("a low-energy-availability pattern (RED-S) ...
+  this is the syndrome"), which is class (c) of the medical boundary, and it
+  survived #133's rewrite for two independent reasons. The boundary test
+  asserted class (d), care directives, so it looked for the wrong thing. And
+  the string was UNREACHABLE: `_escalation` reads `MESSAGES[trigger]` and
+  nothing ever emitted `trigger == "red_s"`, so no behavioural test could see
+  it either. Its live successor `clinical_hold` describes the same pattern
+  without naming it, which is why deleting rather than renaming is right.
+
+  Two new guards. One asserts no message the athlete READS names a condition,
+  scoped to messages on purpose: describing an observable state is fine and
+  `clinical_hold` does it, while source comments citing the literature to
+  justify a threshold are engineering rationale. The other asserts the module
+  never claims to WATCH for anything, over comments as well as strings, and it
+  found a live one: a section header read "it is the engine's job to watch for
+  it rather than the athlete's". Monitoring for a named condition is the
+  strongest assertion of a medical purpose a file can make, and it is worse in
+  a comment, which reads as the authors describing what they built.
+
+  Also asserts every `MESSAGES` key is reachable. An unreachable entry in a
+  constants table looks like coverage in review and is worth nothing at
+  runtime, which is the worst combination available.
 - **A knowledge cutoff: what the record said THEN** (#130). `Vitai(root,
   as_of=...)` and `load(..., as_of=...)` reconstruct the record at an instant,
   using only lines whose `recorded_at` precedes it.
