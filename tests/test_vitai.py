@@ -665,3 +665,56 @@ def test_a_plausible_claim_is_not_a_finding():
     from vitai.schema import impossible_claim_problems
     rows = [(1, {"date": "2030-05-01", "steps": 9000, "source": "polar"})]
     assert impossible_claim_problems("daily", rows) == []
+
+
+# ---- the contract tables cannot drift from the contract ---------------------
+
+def _documented_contracts() -> set[int]:
+    """Every contract `db.py` documents beside CONTRACT_VERSION."""
+    import re
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1]
+           / "src" / "vitai" / "db.py").read_text(encoding="utf-8")
+    block = src[src.index("# Bump when a table/column changes shape"):
+                src.index("CONTRACT_VERSION =")]
+    # Contract 1 is the founding shape and predates the comment block.
+    return {1} | {int(m) for m in re.findall(r"^# (\d+): ", block, re.M)}
+
+
+def _table_contracts(path: str) -> set[int]:
+    import re
+    from pathlib import Path
+    text = (Path(__file__).resolve().parents[1] / path).read_text(
+        encoding="utf-8")
+    return {int(m) for m in re.findall(r"^\| (\d+) \| ", text, re.M)}
+
+
+def test_db_documents_every_contract_up_to_the_current_one():
+    from vitai.db import CONTRACT_VERSION
+    documented = _documented_contracts()
+    assert max(documented) == int(CONTRACT_VERSION)
+    assert documented == set(range(1, int(CONTRACT_VERSION) + 1))
+
+
+def test_both_public_contract_tables_cover_every_contract():
+    """The README's migration table and the wiki's consumer contract are what
+    an integrator actually reads. Both had silently stopped being maintained -
+    the wiki at contract 4 and the README at 8, while the engine was at 16 -
+    and a consumer contract nobody maintains is one nobody can rely on.
+
+    Mechanical because the drift was invisible: nothing failed, nothing
+    warned, and each new contract widened the gap by one.
+    """
+    documented = _documented_contracts()
+    for path in ("README.md", "wiki/content/explanation/platform.md"):
+        missing = documented - _table_contracts(path)
+        assert not missing, f"{path} is missing contracts {sorted(missing)}"
+
+
+def test_neither_table_invents_a_contract():
+    """A row for a contract the engine never shipped is worse than a missing
+    one: it tells an integrator to handle a shape that does not exist."""
+    documented = _documented_contracts()
+    for path in ("README.md", "wiki/content/explanation/platform.md"):
+        extra = _table_contracts(path) - documented
+        assert not extra, f"{path} documents contracts that do not exist: {sorted(extra)}"
