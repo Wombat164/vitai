@@ -1,0 +1,23 @@
+# yasmin: synthetic persona corpus, thresholds tuned to her record.
+#
+# The weight record's own selection bias (LIES.md Y1) means any [targets]
+# phase or rate-based verdict here would be evaluated against a series the
+# corpus itself documents as untrustworthy for rate claims. The phases below
+# exist for realism (the band her logged weight actually occupies), never as
+# an endorsement that a rate estimate from this record is safe to state.
+[targets]
+phases = [[95.0, 74.0, 0.30]]
+
+[tripwires]
+sleep_floor_h = 6.0
+
+# Only two sources appear anywhere in this record; both are listed here.
+# Once [resolution] exists at all, an unlisted source is a hard validate
+# failure, not a warning (handbook pitfall 4).
+[resolution]
+source_order = ["mechanical-scale", "athlete"]
+
+[preferences]
+suppressed_metrics = []
+nudge_ok = false
+check_tolerance = 0.02

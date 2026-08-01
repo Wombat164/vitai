@@ -1,0 +1,23 @@
+# tom: synthetic persona corpus, thresholds tuned to his record.
+[targets]
+phases = [[113.0, 100.0, 0.3]]
+
+[tripwires]
+pain_gate = 3
+
+# Only three sources appear anywhere in this record; every one is listed
+# here. Once [resolution] exists at all, an unlisted source is a hard
+# validate failure, not a warning (handbook pitfall 4).
+[resolution]
+source_order = ["mechanical-scale", "tape-measure", "athlete"]
+
+[resolution.precedence]
+kg = ["mechanical-scale"]
+value = ["tape-measure"]
+distance_km = ["athlete"]
+duration_s = ["athlete"]
+
+[preferences]
+suppressed_metrics = []
+nudge_ok = false
+check_tolerance = 0.02

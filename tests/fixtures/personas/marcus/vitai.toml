@@ -1,0 +1,25 @@
+# marcus: synthetic persona corpus, thresholds tuned to his record.
+[targets]
+phases = [[79.0, 76.0, 0.2]]
+
+[tripwires]
+easy_hr_cap = 158
+steps_floor = 8000
+sleep_floor_h = 6.5
+pain_gate = 3
+
+# Every source that appears anywhere in this record is listed here. Once
+# [resolution] exists at all, an unlisted source is a hard validate failure,
+# not a warning (handbook pitfall 4).
+[resolution]
+source_order = ["garmin-watch", "garmin-scale", "athlete"]
+
+[resolution.precedence]
+kg = ["garmin-scale"]
+steps = ["garmin-watch"]
+sleep_h = ["garmin-watch"]
+
+[preferences]
+suppressed_metrics = []
+nudge_ok = false
+check_tolerance = 0.02

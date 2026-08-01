@@ -1,0 +1,27 @@
+# rachel: synthetic persona corpus, thresholds tuned to her record.
+[targets]
+phases = [[123.0, 112.0, 0.45]]
+
+[tripwires]
+pain_gate = 3
+
+# Only four sources appear anywhere in this record; every one of them is
+# listed here. Once [resolution] exists at all, an unlisted source is a hard
+# validate failure, not a warning (handbook pitfall 4).
+[resolution]
+source_order = ["withings-scale", "phone", "myfitnesspal", "athlete"]
+
+[resolution.precedence]
+# The cleanest resolution-ladder test in the corpus (R1, see LIES.md): the
+# phone recorded the walk directly; her own later, generous retelling of it
+# never outranks that.
+duration_s = ["phone", "athlete"]
+distance_km = ["phone", "athlete"]
+route = ["phone", "athlete"]
+kcal_in = ["myfitnesspal"]
+kg = ["withings-scale"]
+
+[preferences]
+suppressed_metrics = []
+nudge_ok = false
+check_tolerance = 0.02
