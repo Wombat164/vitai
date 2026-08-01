@@ -55,13 +55,23 @@ TOML = (
     "# Which source wins which quantity when two of them describe one day.\n"
     "# The watch measures burn; the calorie app only models it. The app owns\n"
     "# intake, which the watch never sees at all.\n"
+    "#\n"
+    "# EVERY source that appears in the data is listed (#73). A term the\n"
+    "# ladder has never heard of sorts LAST - below every configured source -\n"
+    "# and nothing used to say so. `hand` is here for the sharpest reason:\n"
+    "# it is the athlete writing a number down, and an unranked first-hand\n"
+    "# reading losing to a relayed vendor figure is the ladder inverted at\n"
+    "# exactly the point it exists for.\n"
     "[resolution]\n"
-    'source_order = ["scale", "watch", "app"]\n\n'
+    'source_order = ["dexa", "tape", "scale", "hand", "watch", '
+    '"gym-console", "vendor-api", "vendor-export", "app"]\n\n'
     "[resolution.precedence]\n"
     'kcal_out = ["watch", "app"]\n'
     'kcal_in = ["app"]\n'
     'protein_g = ["app"]\n'
     'steps = ["watch", "app"]\n'
+    '# A tape measure and a DEXA scan are both anchors; the scan wins.\n'
+    'value = ["dexa", "tape"]\n'
 )
 
 
@@ -284,6 +294,29 @@ def _build(target: Path) -> None:
         "body_fat_lo": None, "body_fat_hi": None, "measured_at": "07:40",
         "recorded_at": f"{independent_day}T21:31:00+02:00", "origin": "athlete",
         "path": None, "origin_evidence": "written on a kitchen notepad"})
+
+    # THE ACQUISITION CASE (#77/#78). A gym console is an independent
+    # instrument the record almost never has - and the richest single reading
+    # in a real record turned out to be its least verifiable, because it came
+    # from a photograph of a console read by a model in a chat window, and
+    # the photograph was never stored.
+    #
+    # Same origin, two acquisitions, two different error modes: the machine's
+    # own link, and a picture of its display. `capture` is what separates
+    # them; `origin` and `path` cannot, because both share those.
+    console_day = (END - timedelta(days=9)).isoformat()
+    sessions.append({
+        "date": console_day, "type": "row", "distance_km": 3.1,
+        "duration_s": 906, "avg_hr": None, "max_hr": None, "cadence": 25,
+        "kcal": 148, "location": None, "rpe": 6, "note": None, "_gen": 6,
+        "source": "gym-console", "start_time": f"{console_day}T19:40:00+02:00",
+        "elevation_m": None, "setting": "indoor", "route": None,
+        "place": "gym", "with": None, "context": "solo", "planned": None,
+        "weather": None, "recorded_at": f"{console_day}T21:05:00+02:00",
+        "track": None, "activity_id": None, "activity_source": None,
+        "origin": "gym-console", "path": None,
+        "origin_evidence": "the console's own display",
+        "capture": "photo", "read_by": "model"})
 
     # A two-source day: the calorie app disagrees with the watch about burn,
     # and owns intake the watch never sees. Field-wise precedence takes the
@@ -665,7 +698,11 @@ def _read_all(root: Path) -> dict[str, str]:
     return {p.name: p.read_text(encoding="utf-8")
             for p in sorted(root.rglob("*"))
             if p.is_file() and "derived" not in p.parts
-            and p.suffix in (".jsonl", ".toml")}
+            # Tracks included (#64): the personal gate permits coordinates in
+            # `examples/demo/tracks/` on the grounds that they are the
+            # generator's own output, and that grounds is only true if they
+            # are actually compared. They were not.
+            and p.suffix in (".jsonl", ".toml", ".gpx", ".tcx")}
 
 
 def main() -> int:
@@ -674,7 +711,12 @@ def main() -> int:
         _build(tmp)
         want, got = _read_all(tmp), _read_all(DEMO)
         # compare only the generated inputs (vitai.toml + data/), not derived/
-        keys = {k for k in want} | {k for k in got if k.endswith((".jsonl", ".toml"))}
+        # Tracks are included (#64): the personal gate permits coordinates in
+        # `examples/demo/tracks/` on the grounds that they are the generator's
+        # output, and that grounds is only true if they are actually compared.
+        keys = {k for k in want} | {
+            k for k in got
+            if k.endswith((".jsonl", ".toml", ".gpx", ".tcx", ".fit"))}
         drift = [k for k in sorted(keys) if want.get(k) != got.get(k)]
         if drift:
             print(f"demo data DRIFTED from generator: {drift}", file=sys.stderr)

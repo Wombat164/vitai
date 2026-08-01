@@ -155,6 +155,64 @@ def shares_origin(a: dict, b: dict) -> bool:
             and origin_of(a) == origin_of(b))
 
 
+# --- how a value was acquired (#77/#78) ---------------------------------------
+
+READERS = ("athlete", "model", "human-other")
+
+
+def capture_of(rec: dict) -> str:
+    """The acquisition method, resolved through the registry.
+
+    An unrecognised value lands in `unknown` rather than erroring: a capture
+    method nobody here imagined is a gap in the registry, not a fault in the
+    athlete's record - and `unknown` already assumes the costly side of both
+    its properties.
+    """
+    return resolve("capture", "capture", rec.get("capture")) or UNKNOWN
+
+
+def may_transcribe(rec: dict) -> bool:
+    """Did a human or a model READ a display to produce this value?"""
+    return bool(meta("capture", "capture", capture_of(rec)).get(
+        "may_transcribe", True))
+
+
+def has_artifact(rec: dict) -> bool:
+    """Can evidence for this value exist and be looked at again?"""
+    return bool(meta("capture", "capture", capture_of(rec)).get(
+        "has_artifact", False))
+
+
+def transcribed_by(rec: dict) -> str | None:
+    """Who did the reading, where the capture needed one."""
+    who = rec.get("read_by")
+    return str(who) if who else None
+
+
+def capture_problems(rec: dict) -> list[str]:
+    """A transcribing capture with nobody named to have done the reading."""
+    out: list[str] = []
+    written = rec.get("capture")
+    if written is not None and resolve("capture", "capture", written) is None:
+        out.append(f"unknown capture {written!r} - one of "
+                   f"{', '.join(sorted(registry('capture')['capture']))}")
+    if (who := rec.get("read_by")) is not None and str(who) not in READERS:
+        out.append(f"'read_by' is one of {', '.join(READERS)}, got {who!r}")
+    if who is not None and written is None:
+        # The mirror of "a path needs an origin to have travelled from": a
+        # reader with nothing said to have been read is a claim about an
+        # acquisition that the row does not describe.
+        out.append("'read_by' names who read a display, so it needs a "
+                   "'capture' that involved reading one")
+    # A photo read by nobody is not a reading, it is an unattributed one - and
+    # a photo read by a MODEL is an inference over an artifact rather than a
+    # measurement, which is the whole reason the field exists (#49's family).
+    if written is not None and may_transcribe(rec) and not rec.get("read_by"):
+        if capture_of(rec) != UNKNOWN:
+            out.append(f"capture {capture_of(rec)!r} means someone read a "
+                       "display, so 'read_by' must say who: "
+                       f"{', '.join(READERS)}")
+    return out
 # --- the source catalog (#79) ---------------------------------------------------
 
 CATALOG_OTHER = "other"
@@ -253,13 +311,38 @@ def impossible_claims(rec: dict, fields: list[str]) -> list[str]:
 
 
 def trust_ceiling(rec: dict) -> str:
-    """`device-measured` | `derived-in-transit` | `unknown-transit`.
+    """`device-measured` | `derived-in-transit` | `transcribed` |
+    `unknown-transit`.
 
     A value is only device-measured if it reached us untouched. One hop that
     rounds, re-derives or back-fills breaks that claim - and a hop nobody
     recognises breaks it too, because the alternative is to assume a stranger
     was lossless.
     """
+    # The ACQUISITION bounds the value just as a hop does, and for the same
+    # reason: a photograph of a console read by a model is an inference over
+    # an artifact, not a reading of an instrument. The origin is still the
+    # console - what changes is what can be claimed about the number.
+    #
+    # Taken as the WEAKEST of the two signals, not the first one that matches.
+    # Returning "transcribed" early let it MASK a worse condition: a photo
+    # with no origin at all, or a chain containing a hop nobody recognises,
+    # would have claimed more than the row deserves - which is this module's
+    # own rule used against itself.
+    levels = []
+    if rec.get("capture") is not None and may_transcribe(rec):
+        levels.append("transcribed")
+    levels.append(_chain_ceiling(rec))
+    return max(levels, key=TRUST_ORDER.index)
+
+
+# Weakest LAST, so `max` over this order takes the least trustworthy signal.
+TRUST_ORDER = ("device-measured", "derived-in-transit", "transcribed",
+               "unknown-transit")
+
+
+def _chain_ceiling(rec: dict) -> str:
+    """What the ORIGIN and the hops alone allow, ignoring the acquisition."""
     if not is_independent(rec):
         return "unknown-transit"
     chain = hops(rec.get("path"))
