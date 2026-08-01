@@ -83,7 +83,7 @@ from .schema import KEYS
 #     `unattributed_claim_lost` tripwire. A consumer showing a canonical value
 #     can now say what it beat; before this, a resolved value had no way to
 #     say it had beaten anything at all.
-# 12: the artifact store (#80) - an `artifacts` manifest table (one row per
+# 13: the artifact store (#80) - an `artifacts` manifest table (one row per
 #     kept file: hash, media type, size, why it was kept) and an `artifact`
 #     reference on weight, daily, sessions and measurements, so the evidence a
 #     value was read FROM survives alongside the value. Two things a consumer
@@ -94,7 +94,7 @@ from .schema import KEYS
 #     one. And REMOVED IS NOT MISSING: an artifact the athlete deleted leaves a
 #     tombstone with a reason, and a consumer that renders that as broken
 #     evidence has turned a retention decision into a data-loss alarm.
-CONTRACT_VERSION = "12"
+CONTRACT_VERSION = "13"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
