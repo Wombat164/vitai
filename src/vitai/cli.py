@@ -26,7 +26,8 @@ from .jsonl import DataError, load_report, read_lines
 from .safety import DISCLAIMER, banner
 from .schema import (KEYS, impossible_claim_problems, recorded_at_problems,
                      supersedes_problems, timestamp_advisories,
-                     unranked_source_problems, validate_record)
+                     unranked_source_problems,
+                     unstamped_after_the_clock_started, validate_record)
 
 DATASETS = list(KEYS)
 
@@ -1013,6 +1014,13 @@ def cmd_validate(args: argparse.Namespace) -> None:
                 for p in validate_record(name, rec):
                     print(f"{path.name} line {n}: {p}")
                     problems += 1
+            # PER FILE, unlike the checks below. The rule is "this file's
+            # clock started, and these rows are dated after it with no
+            # stamp", and a file is what has a clock: run on the merged
+            # stream, a legacy device file that is wholly unstamped - the
+            # case the rule's first guard exists to exempt - gets outvoted
+            # by a stamped sibling and every one of its rows is flagged.
+            advisories += unstamped_after_the_clock_started(path.name, found)
             rows += found
         # File-level: transaction time must be monotonic and tie-free (#37).
         # Neither is a property of any single line, so neither can be caught
