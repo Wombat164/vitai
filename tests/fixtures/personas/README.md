@@ -36,11 +36,44 @@ and they are explicit that magnitude is often deliberately NOT the point.
 
 ```
 <slug>/
-  PROFILE.md     who they are, in their own words + the axis they stress
-  data/          the record their life actually produces (ragged, partial, honest)
-  METRICS.md     the metrics THEY chose, in their units, with their reasons
-  FINDINGS.md    what they broke, and which gap it became
+  PROFILE.md          who they are, in their own words + the axis they stress
+  WORLD.md            the fictional world the record comes from: household,
+                      routes with distances, gyms and tiers, calendar, transport
+  METRICS.md          the metrics THEY chose, in their units, with their reasons
+  FINDINGS.md         what the corpus is designed to break + expected behaviour
+  LIES.md             every deliberate falsehood, with its ground truth
+  vitai.toml          the persona's own thresholds and resolution ladder
+  data/*.jsonl        the record their life actually produces (ragged, partial,
+                      honest, and in places deliberately false)
+  tracks/*.gpx        synthesized tracks for signature activities (no FIT:
+                      binary formats are unreviewable in a public repo diff)
+  expectations.jsonl  GROUND TRUTH, emitted by the generator, never read by
+                      the engine: what actually happened, and what the engine
+                      SHOULD conclude, so a test can assert it
+  derived/            built, never committed
 ```
+
+## The generator
+
+The corpora are emitted by `generate.py` (seeded, deterministic), one module
+per persona under `_gen/`. Committed data is the output of a committed
+generator: `python generate.py --check` regenerates everything into a temp
+directory and fails on any drift, the same contract as
+`examples/generate_demo.py`. Never edit a data file by hand; edit the
+builder and regenerate. The generator refuses to run at all if the engine's
+schema shape (contract version, dataset generations) has moved past the pins
+in `_gen/common.py`: a fixture authored against a different shape is broken,
+not stale.
+
+## Why the lies are the point
+
+A synthetic athlete who under-reports intake, logs a remembered weight as a
+scale reading, back-fills a week on Sunday, or claims adherence the record
+contradicts is the only way to test that the resolution ladder resolves
+competing claims, that provenance fields carry their weight, and that the
+engine refuses rather than averages. Every falsehood is documented in the
+persona's LIES.md and grounded in `expectations.jsonl`, so the corpus tests
+conclusions, not vibes.
 
 ## Rules
 
@@ -49,3 +82,6 @@ and they are explicit that magnitude is often deliberately NOT the point.
   every gap it raised is built and fixtured.
 - **Personas are synthetic and stay synthetic.** No real person's data enters
   this directory, ever.
+- **Expected behaviour stays inside the medical boundary.** Personas may
+  report anything a person would; `docs/medical-boundary.md` governs every
+  "expect" string: observation and self-constraint, nothing else.

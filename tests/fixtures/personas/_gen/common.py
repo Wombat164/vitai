@@ -1,0 +1,274 @@
+"""Shared helpers for the persona corpus generators.
+
+Every persona builder in this package (`rachel.py`, and future ones) writes
+plain Python dicts that already carry every key a dataset expects, then hands
+them to the functions in this module to become JSONL text, a GPX track file,
+or a TOML config. Nothing here talks to the network or the wall clock: a
+persona's data must be exactly reproducible from its seed, every time, on
+every machine.
+
+The skeleton-plus-override pattern (`record`) mirrors the one used by
+`examples/generate_demo.py`: start from a dict holding every key in the
+dataset's schema, set to null, then apply the caller's overrides. That is
+what guarantees a generator can never "forget" a key - the schema itself
+enumerates what has to be there.
+"""
+
+from __future__ import annotations
+
+import json
+import math
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
+
+import vitai
+from vitai.schema import CURRENT_GENERATION, KEYS
+
+# --- schema pin ---------------------------------------------------------------
+#
+# The schema is versioned twice, and the package version is neither. The
+# contract version (vitai.db.CONTRACT_VERSION) versions the READ MODEL: the
+# built SQLite shape that expectations are asserted against. The per-dataset
+# generation (vitai.schema.CURRENT_GENERATION) versions the LINE SHAPE: which
+# keys a row written at generation N owed. A fixture generator cares about
+# both, because it writes lines and its ground truth is asserted against a
+# built database.
+#
+# The package version is recorded below as provenance for a bug report and
+# nothing else. It moves independently of both real versions, in both
+# directions: it rises for a docs fix with no schema change, and it sits
+# still while the schema moves underneath it. It must never be compared as a
+# drift signal.
+#
+# A mismatch here is not a warning. A fixture exists to be asserted against,
+# so a generator authored against a different shape is a broken fixture, and
+# a log line that scrolls past in green CI verifies nothing. Generation stops.
+VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
+AUTHORED_AGAINST_CONTRACT = "15"  # vitai.db.CONTRACT_VERSION is a string
+AUTHORED_AGAINST_GENERATIONS = {
+    "weight": 7, "daily": 7, "sessions": 8, "inferences": 3, "goals": 3,
+    "events": 2, "thresholds": 2, "achievements": 3, "measurements": 6,
+    "sets": 2, "meals": 2, "medical": 4, "checks": 2, "context": 2,
+    "artifacts": 2, "journal": 2,
+}
+
+
+def assert_schema_unmoved() -> str:
+    """Stop generation if the installed engine's schema shape differs from
+    the shape these generators were authored against, naming exactly which
+    datasets moved. Returns the one-line pin statement for ordinary output
+    when everything matches.
+
+    There is no public accessor for either number, so this reaches into
+    vitai.db.CONTRACT_VERSION and vitai.schema.CURRENT_GENERATION directly;
+    that is private surface and a known parity hole (the CLI can print a
+    contract, the API cannot hand you one)."""
+    from vitai.db import CONTRACT_VERSION
+    live_gens = dict(CURRENT_GENERATION)
+    problems = []
+    if CONTRACT_VERSION != AUTHORED_AGAINST_CONTRACT:
+        problems.append(
+            f"contract version moved {AUTHORED_AGAINST_CONTRACT} -> {CONTRACT_VERSION}")
+    for name in sorted(set(AUTHORED_AGAINST_GENERATIONS) | set(live_gens)):
+        pinned, live = AUTHORED_AGAINST_GENERATIONS.get(name), live_gens.get(name)
+        if pinned != live:
+            if pinned is None:
+                problems.append(f"dataset added since authoring: {name} (gen {live})")
+            elif live is None:
+                problems.append(f"dataset removed since authoring: {name} (was gen {pinned})")
+            else:
+                problems.append(f"{name} generation moved {pinned} -> {live}")
+    if problems:
+        detail = "; ".join(problems)
+        raise SystemExit(
+            "persona generators were authored against a schema shape the "
+            f"installed vitai no longer has: {detail}. Review every _gen/ "
+            "builder against the change, regenerate, re-review the committed "
+            "corpora, then update the pins in _gen/common.py. Refusing to "
+            f"generate. (vitai package version at authoring was "
+            f"{VITAI_VERSION_AT_AUTHORING}; recorded as provenance, not "
+            "compared.)")
+    return (f"schema pin holds: contract {AUTHORED_AGAINST_CONTRACT}, "
+            f"{len(AUTHORED_AGAINST_GENERATIONS)} dataset generations unchanged")
+
+
+# --- dates and clocks ---------------------------------------------------------
+
+
+def daterange(start: date, end: date):
+    """Every calendar day from `start` to `end`, inclusive."""
+    d = start
+    while d <= end:
+        yield d
+        d += timedelta(days=1)
+
+
+def irish_offset(d: date) -> str:
+    """UTC offset for Ireland on a given date, kept deliberately simple.
+
+    Irish Summer Time runs from the last Sunday of March to the last Sunday
+    of October; this approximates that window with fixed calendar dates
+    (25 March to 25 October) rather than computing the exact Sunday, which is
+    accurate enough for a synthetic record and never needs to be exact to the
+    day. Winter (the rest of the year) is plain UTC, +00:00.
+    """
+    if date(d.year, 3, 25) <= d <= date(d.year, 10, 25):
+        return "+01:00"
+    return "+00:00"
+
+
+class Stamper:
+    """Produces a strictly increasing `recorded_at` for one dataset file.
+
+    `vitai` requires `recorded_at` to carry an explicit UTC offset and to be
+    strictly increasing across the whole file, with no exact repeats even
+    across different dates (see the handbook, section 0). A separate
+    `Stamper` instance per dataset file keeps each file's sequence
+    independent, which is what the rule actually asks for.
+
+    The model is simple and realistic: an evening logging session at
+    `base_hour:00`, advancing a few seconds for every row logged that same
+    day. The per-date counter is keyed by the date itself (a dict), not by
+    "was the previous call the same date" - a generator commonly builds one
+    kind of row (say, every Wednesday's aqua fit class) in one pass and
+    another kind (a Tuesday walk) in a separate pass, so calls for one date
+    are rarely consecutive in the order they happen to be made. Keying by
+    date directly keeps every same-day stamp distinct regardless of what
+    order the passes run in, while different dates never collide because the
+    date itself dominates the instant comparison.
+    """
+
+    def __init__(self, base_hour: int = 21, step_seconds: int = 45):
+        self._base_hour = base_hour
+        self._step = step_seconds
+        self._counts: dict[date, int] = {}
+
+    def stamp(self, d: date) -> str:
+        count = self._counts.get(d, 0)
+        self._counts[d] = count + 1
+        total_seconds = count * self._step
+        hh = self._base_hour + total_seconds // 3600
+        mm = (total_seconds // 60) % 60
+        ss = total_seconds % 60
+        return f"{d.isoformat()}T{hh:02d}:{mm:02d}:{ss:02d}{irish_offset(d)}"
+
+
+def _instant(rec: dict) -> datetime:
+    """The `recorded_at` of a row as a real instant, for a correct sort.
+
+    Comparing ISO timestamps as text can misorder rows across a DST change (a
+    `+01:00` stamp can sort either side of a `+00:00` one depending on the
+    clock values), so every row here is parsed into an aware `datetime` and
+    compared as an instant instead. Every row this generator produces carries
+    a `recorded_at`, so there is no need for a "missing stamp" fallback path -
+    unlike a real record, which may have unstamped legacy lines.
+    """
+    raw = rec.get("recorded_at")
+    if raw:
+        return datetime.fromisoformat(raw)
+    return datetime.min.replace(tzinfo=timezone.utc)
+
+
+def sort_rows(rows: list[dict]) -> list[dict]:
+    """Sort a dataset's rows the way `vitai` expects a real writer to: by
+    date, then by the instant they were recorded, then by whichever identity
+    field the dataset carries (source, or the identity key for a
+    slug/key-keyed dataset). File order must follow `recorded_at` order,
+    because the monotonicity check in the handbook reads file order, not
+    date order.
+    """
+    def key(rec: dict):
+        tail = rec.get("source") or rec.get("slug") or rec.get("key") or ""
+        return (str(rec.get("date") or ""), _instant(rec), str(tail))
+
+    return sorted(rows, key=key)
+
+
+# --- record skeletons -----------------------------------------------------------
+
+
+def record(dataset: str, **kw) -> dict:
+    """A dataset line with every key from `KEYS[dataset]` present.
+
+    Every value defaults to null; `_gen` defaults to the CURRENT_GENERATION
+    for that dataset (queried live, per the handbook's own warning that these
+    numbers drift and must never be hardcoded). The caller's keyword
+    arguments then override whichever fields it actually knows, exactly the
+    "skeleton plus override" builder pattern `examples/generate_demo.py`
+    uses for its own `_goal`/`_event` helpers.
+    """
+    if dataset not in KEYS:
+        raise KeyError(f"unknown dataset {dataset!r}; one of {sorted(KEYS)}")
+    rec = {k: None for k in KEYS[dataset]}
+    rec["_gen"] = CURRENT_GENERATION[dataset]
+    rec.update(kw)
+    return rec
+
+
+# --- writers ---------------------------------------------------------------------
+
+
+def jsonl_text(rows: list[dict]) -> str:
+    """One `json.dumps` per row, newline-joined, with a trailing newline -
+    the exact shape `examples/generate_demo.py` writes and `vitai` reads."""
+    return "\n".join(json.dumps(r) for r in rows) + "\n"
+
+
+def write_text(path: Path, text: str) -> None:
+    """Write UTF-8 text with LF-only newlines - the load-bearing part on
+    Windows, where the default text-mode write would translate `\\n` to
+    `\\r\\n` and corrupt the LF-pinned convention `vitai init` establishes."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8", newline="\n")
+
+
+def write_jsonl(path: Path, rows: list[dict]) -> None:
+    write_text(path, jsonl_text(sort_rows(rows)))
+
+
+def write_expectations(path: Path, rows: list[dict]) -> None:
+    """`expectations.jsonl` is ground truth emitted by the generator, not a
+    vitai dataset - it is never read by the engine and carries no schema
+    key list, so it is sorted by `id` alone rather than by date/recorded_at."""
+    ordered = sorted(rows, key=lambda r: str(r.get("id") or ""))
+    write_text(path, jsonl_text(ordered))
+
+
+# --- GPX tracks -------------------------------------------------------------------
+
+
+def gpx_text(day: str, start_hhmm: str, duration_s: int,
+             base_lat: float = 51.90, base_lon: float = -8.50,
+             name: str = "route") -> str:
+    """A short synthetic GPX track, as a string: a loop that drifts and
+    returns near its start, with a point every 10 seconds - the same shape
+    and cadence as `examples/generate_demo.py`'s own demo track, generated
+    deterministically (no RNG) so a persona's tracks never drift between
+    generator runs.
+
+    The coordinates are generic values near the Cork, Ireland region and are
+    entirely fictional - they exist only so a stored track has somewhere
+    plausible to have been recorded, never to name a real place precisely.
+    """
+    n = max(6, duration_s // 10)
+    hh, mm = (int(x) for x in start_hhmm.split(":"))
+    start_minutes = hh * 60 + mm
+    pts = []
+    for i in range(n):
+        leg = i if i < n // 2 else n - 1 - i
+        lat = base_lat + leg * 0.00006
+        lon = base_lon + 0.0012 * math.sin(leg * math.pi / max(1, n // 2))
+        ele = round(6.0 + leg * 0.05, 1)
+        t_minutes = start_minutes + (i * 10) // 60
+        t_seconds = (i * 10) % 60
+        t = f"{day}T{(t_minutes // 60) % 24:02d}:{t_minutes % 60:02d}:{t_seconds:02d}Z"
+        pts.append((lat, lon, ele, t))
+    body = "\n".join(
+        f'   <trkpt lat="{lat:.5f}" lon="{lon:.5f}"><ele>{ele}</ele>'
+        f"<time>{t}</time></trkpt>" for lat, lon, ele, t in pts)
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<gpx version="1.1" creator="vitai-persona-generator" '
+            'xmlns="http://www.topografix.com/GPX/1/1">\n'
+            f" <trk><name>{name}</name><trkseg>\n"
+            f"{body}\n"
+            " </trkseg></trk>\n</gpx>\n")
