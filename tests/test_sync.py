@@ -10,6 +10,7 @@ interface never exposed.
 import ast
 import hashlib
 import hmac
+import os
 from pathlib import Path
 
 import pytest
@@ -484,6 +485,10 @@ def test_padding_bounds_the_leak_to_a_ratio_not_four_kilobytes():
         assert len(pad(b"x" * size)) & (len(pad(b"x" * size)) - 1) == 0
 
 
+@pytest.mark.skipif(os.name != "posix",
+                    reason="Windows does not model these bits, which is a "
+                           "real limitation of this backend there rather "
+                           "than a property to assert away - see protected()")
 def test_the_key_file_is_never_briefly_world_readable(tmp_path):
     """Writing then chmodding left the key readable in between, and left it
     that way permanently if anything crashed in the window."""
@@ -492,6 +497,24 @@ def test_the_key_file_is_never_briefly_world_readable(tmp_path):
     FileCustody(path).store(KEY)
     mode = stat.S_IMODE(path.stat().st_mode)
     assert mode & 0o077 == 0, oct(mode)
+    assert FileCustody(path).protected() is True
+
+
+def test_a_backend_that_cannot_protect_the_key_says_so(tmp_path):
+    """`protected` is a different question from `verify`: whether anyone ELSE
+    can read the key, not whether the athlete can. Conflating them would let
+    a world-readable key report itself as fine, and on Windows this backend
+    genuinely cannot protect it.
+    """
+    path = tmp_path / "key"
+    custody = FileCustody(path)
+    custody.store(KEY)
+    assert custody.verify() is True
+    assert custody.protected() is (os.name == "posix")
+    if os.name == "posix":
+        path.chmod(0o644)
+        assert custody.verify() is True, "still retrievable"
+        assert custody.protected() is False, "and no longer private"
 
 
 def test_a_transport_that_appends_on_a_duplicate_put_fails():

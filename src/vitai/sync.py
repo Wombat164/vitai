@@ -337,7 +337,15 @@ class MirrorTransport:
 
 
 class FileCustody:
-    """A key in a file. The working copy, and the simplest thing that works."""
+    """A key in a file. The working copy, and the simplest thing that works.
+
+    ON POSIX the file is created 0600 and never exists more permissively. ON
+    WINDOWS it is not: the platform does not model those bits, `os.open`'s
+    mode argument is largely ignored, and the file lands with whatever the
+    default ACL gives. `protected()` says which of the two happened, because
+    an athlete choosing where to keep a decade of health history should be
+    told that this backend cannot protect it here rather than discovering it.
+    """
 
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
@@ -366,6 +374,24 @@ class FileCustody:
 
     def verify(self) -> bool:
         return self.retrieve() is not None
+
+    def protected(self) -> bool:
+        """Is the key file readable only by its owner?
+
+        Separate from `verify`, which answers whether the key can be
+        RETRIEVED - a different question from whether anyone else can read
+        it, and conflating them would let a world-readable key report itself
+        as fine.
+        """
+        import os
+        import stat
+
+        if os.name != "posix":
+            return False
+        try:
+            return stat.S_IMODE(self.path.stat().st_mode) & 0o077 == 0
+        except OSError:
+            return False
 
 
 class EnvCustody:
