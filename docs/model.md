@@ -116,7 +116,7 @@ these; nothing else exists.
    safety/privacy-critical: consent ledger, access-scope, suppression prefs -
    NOT markdown pages (the redteam's "prose still hiding where data is needed").
 
-## Part 3 - The consolidating gaps (G24-G88)
+## Part 3 - The consolidating gaps (G24-G89)
 
 Each folds several redteam findings and fills a symmetry hole in a principle.
 
@@ -1064,6 +1064,45 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   default-substituted threshold and a sampled subset. Any lossy transform
   applied on the way to a consumer is a tier demotion, and a tier demotion that
   is not announced is indistinguishable from data corruption.
+- **G89 A retirement is not done until every reader prefers the new name**
+  (P8/G25). CODE-VERIFIED, and the standing rule for ALL future key
+  evolutions. G25 makes an old line keep VALIDATING after a key is
+  generalised. This is the other half: making the engine keep READING it, and
+  reading the successor in preference. Miss it and the old data works
+  perfectly while the new data quietly loses a linkage.
+  **The verified instance.** `hip_pain` was retired at generation 2 in favour
+  of `pain` + `pain_site`. `canonical_daily` mapped it forward, old rows kept
+  gating, the suite stayed green. But the pain verdict still resolved its goal
+  as `_goal_for(active, "hip_pain")`, and that lookup is an exact string
+  match. An athlete who had only ever written `pain`, and declared a goal with
+  `metric: "pain"`, got the correct pain number attached to `goal: None`. A
+  missing linkage renders exactly like having declared no goal at all, so
+  nothing looked wrong.
+  **The asymmetry is structural, not an oversight.** Retirement is designed so
+  the legacy path keeps working, which means the legacy path is the one under
+  test, and the successor path is exercised by nobody until a second adopter
+  appears. Compatibility work is self-testing in the direction that does not
+  matter. Only the originating record, the one repo still carrying the retired
+  field, exercised the branch that worked.
+  So retiring a key is a THREE-part change, and doing two parts is worse than
+  doing none, because it looks finished:
+  1. The successor exists and old lines stay legal (`KEY_RETIREMENT`, G25).
+  2. Forward mapping lives in exactly ONE canonicaliser. A fallback
+     re-implemented at each reader means the key is not retired, it is
+     dual-active in every module that names it. `hip_pain` is currently read
+     in five modules for this reason.
+  3. **Every lookup, filter, dispatch key and comparison naming the old key
+     tries the successor FIRST, with the old name as fallback.** Exact string
+     matches are the specific hazard: they fail silently and return a
+     plausible result. Grep the retired name across the whole tree, not only
+     the module that owns the schema.
+  **A retirement also needs an end date.** `KEY_RETIREMENT` records when a key
+  stopped being expected and has no slot for when it stops being legal.
+  Without one, every retired key is permanent public surface area, and a
+  general engine ends up carrying one private record's migration debt
+  indefinitely. Migrate the originating data with the supersedes machinery,
+  then schedule removal at a stated generation.
+  HIGH. Tracked as #126.
 
 ## The frame: a guardrailed world model (belief-state, not a learned net)
 
