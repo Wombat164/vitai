@@ -15,6 +15,7 @@ from datetime import date, datetime
 
 from .clocks import (is_aware, is_stamp, order_key,  # noqa: F401
                      parse_time, stamp_instant)
+from .provenance import capture_problems
 from .provenance import problems as provenance_problems
 from .provenance import value_kind_problems
 
@@ -37,7 +38,8 @@ KEYS: dict[str, list[str]] = {
     # rate could not be checked.
     "weight": ["date", "kg", "source", "note", "body_fat_pct",
                "kg_lo", "kg_hi", "body_fat_lo", "body_fat_hi", "measured_at",
-               "recorded_at", "origin", "path", "origin_evidence", "modelled"],
+               "recorded_at", "origin", "path", "origin_evidence",
+               "capture", "read_by", "modelled"],
     # `hip_pain` is RETIRED at generation 2 in favour of `pain` + `pain_site`:
     # the hip was this record's founding injury, but a record that can only
     # describe one joint cannot describe a second one. Old lines keep it and
@@ -50,7 +52,7 @@ KEYS: dict[str, list[str]] = {
               "protein_g", "sleep_h", "rhr", "hip_pain", "alcohol", "note",
               "source", "mood", "feel", "coverage", "pain", "pain_site",
               "pain_side", "recorded_at", "origin", "path",
-              "origin_evidence", "modelled"],
+              "origin_evidence", "capture", "read_by", "modelled"],
     # `location` is RETIRED at generation 2, split into `place` (coarse, and
     # deliberately coarse - "home"/"work"/a travel slug, never an address) and
     # `route` (a personal slug the athlete names). Free text could not be
@@ -78,6 +80,7 @@ KEYS: dict[str, list[str]] = {
                  "source", "start_time", "elevation_m", "setting", "route",
                  "place", "with", "context", "planned", "weather", "recorded_at",
                  "track", "activity_id", "activity_source",
+                 "origin", "path", "origin_evidence", "capture", "read_by",
                  "modelled", "type_source"],
     # Third data tier: MODEL-INFERRED knowledge. Append-only like everything
     # else, but carries provenance (model, evidence, confidence) because it is
@@ -165,7 +168,8 @@ KEYS: dict[str, list[str]] = {
     # single point. `body_fat_pct` measured BY the scale already rides the
     # `weight` line (gen-2, G36/G37); this dataset is for the other instruments.
     "measurements": ["date", "kind", "value", "source", "note", "recorded_at",
-                     "origin", "path", "origin_evidence", "modelled"],
+                     "origin", "path", "origin_evidence", "capture",
+                     "read_by", "modelled"],
     # --- increment 3: the medical layer (G11) ------------------------------
     # One condition's whole lifecycle shares a `slug`: onset, the visit, the
     # restriction, the resolution. Appending a line advances the episode; the
@@ -447,7 +451,32 @@ for _ds in ("weight", "daily", "sessions", "measurements"):
     for _k in ("origin", "path", "origin_evidence"):
         KEY_GENERATION.setdefault(_ds, {})[_k] = CURRENT_GENERATION[_ds]
 
+# --- how a value was acquired (#77/#78) ---------------------------------------
+# `capture` is a property of the ACQUISITION EVENT rather than of the chain: a
+# photo-read and a BLE-read of one console on one evening are two claims with
+# one origin and two captures.
+#
+# `sessions` gains `origin`/`path`/`origin_evidence` as COLUMNS here: #51
+# registered their generations for sessions but never added them to `KEYS`,
+# and sessions is exactly where multi-instrument claims collide.
+#
+# Critically, sessions ADVANCES to a new generation rather than reusing the
+# one #51 already consumed. It was already at that generation, so a row an
+# existing deployment had appended and stamped with it would suddenly owe
+# five keys it cannot have - the exact G25 time bomb the mechanism exists to
+# defuse, arriving through a restructuring rather than a new field.
+for _ds in ("weight", "daily", "sessions", "measurements"):
+    CURRENT_GENERATION[_ds] += 1
+    _new = ["capture", "read_by"]
+    if _ds == "sessions":
+        _new += ["origin", "path", "origin_evidence"]
+    for _k in _new:
+        KEY_GENERATION[_ds][_k] = CURRENT_GENERATION[_ds]
+
 # --- was it measured at all? (#49, #88) ---------------------------------------
+# Its OWN generation on top of #78's above, for the reason #78 was filed:
+# that generation has now shipped, so a row an existing deployment stamped
+# with it must not suddenly owe keys it cannot have.
 # `modelled` names the fields on a row that are model outputs; `type_source`
 # says how a categorical label was assigned. Both answer "was this observed",
 # which origin and capture do not.
@@ -597,6 +626,7 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
             problems.append(f"'alcohol' should be true/false/null, got {a!r}")
     if dataset in ("weight", "daily", "sessions", "measurements"):
         problems += provenance_problems(rec)
+        problems += capture_problems(rec)
         problems += value_kind_problems(rec, KEYS[dataset])
     if dataset == "sessions":
         problems += _validate_track(rec)
@@ -901,6 +931,40 @@ def timestamp_advisories(dataset: str, rows: list[tuple[int, dict]]) -> list[str
             "comparison between the two shapes rests on an assumed offset. "
             "Offset-bearing is canonical - naive local time cannot say which "
             "02:30 it means on the night the clocks go back"]
+
+
+def unranked_source_problems(dataset: str, rows: list[tuple[int, dict]],
+                             known: set[str]) -> list[str]:
+    """Source terms the precedence ladder has never heard of (#73).
+
+    An unranked term sorts LAST, below every configured source, and nothing
+    says so. That is almost always a typo or a term missing from config
+    rather than a deliberate demotion to worst-in-the-record - and it cost a
+    real day: `context.jsonl` wrote `source: "stated-in-chat"`, the daily
+    ladder had never heard of it, and a 20,336-step day resolved its energy
+    burn to a vendor's figure over the athlete's own. That day flipped from a
+    reported surplus to a deficit.
+
+    Cheap and deterministic: it needs only the data and the config, and it
+    catches the mistake at the door rather than after a rebuild.
+    """
+    if not known or dataset not in RESOLVED_BY_SOURCE:
+        return []
+    seen: dict[str, int] = {}
+    for n, r in rows:
+        if (src := r.get("source")) and str(src) not in known:
+            seen.setdefault(str(src), n)
+    return [f"{dataset}.jsonl line {n}: source {src!r} is not in the "
+            "precedence ladder, so every value on this line sorts below every "
+            "configured source. Add it to [resolution] source_order - putting "
+            "it LAST is how you say 'trust this least' deliberately - or fix "
+            "the spelling"
+            for src, n in sorted(seen.items())]
+
+
+# Datasets whose rows compete by source. Policy datasets carry a `source` too,
+# but it records authorship rather than entering a precedence contest.
+RESOLVED_BY_SOURCE = ("weight", "daily", "sessions", "measurements")
 
 
 def supersedes_problems(dataset: str, rows: list[tuple[int, dict]]) -> list[str]:

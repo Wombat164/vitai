@@ -1,0 +1,99 @@
+# Capture - HOW a value was acquired, as its own axis.
+#
+# Three questions were being answered by one string, and two of them had no
+# field at all:
+#
+#   1. what OBSERVED it        -> origin  (#51, exists)
+#   2. HOW did it get here     -> capture (this file)
+#   3. what EVIDENCE backs it  -> artifact (#80)
+#
+# The athlete's framing, which is the whole issue: "me telling narratively what
+# the rower said is different from me taking a picture of it, or having a
+# Bluetooth connection and seeing the data that way, or the app importing it
+# through a connector."
+#
+# Those four share ONE origin - the same console showing the same number - and
+# have completely different error modes. So capture is a property of the
+# ACQUISITION EVENT, not of the chain: a photo-read and a BLE-read of one
+# console on one evening are two claims with one origin, one path prefix and
+# two different captures. That is why it is a field rather than another hop.
+#
+# `may_transcribe` says a human or a model read a display, so the value passed
+# through an act of reading and can be misread. `has_artifact` says evidence
+# can exist and be looked at again.
+#
+# THE ORDERING IS NOT A QUALITY RANKING, and reading it as one would be the
+# mistake this file exists to prevent. `ble` has no human in the loop and no
+# durable artifact; `photo` has a reader in the loop but the evidence SURVIVES
+# and can be re-read. Those are different virtues, and a query should be able
+# to ask for either.
+#
+# PRIOR ART: FHIR `Observation.method` is precisely this - "the mechanism used
+# to perform the observation" - and it is deliberately separate from
+# `Observation.device` (the instrument) and `Observation.performer` (who).
+# W3C PROV-DM models the same split: the artifact is an Entity, the
+# acquisition an Activity that used it. `ble` is not hypothetical either: BLE
+# FTMS (GATT 0x1826) is the specified path for rowers, treadmills and
+# ellipticals.
+#
+# EXTENDING IT: an unrecognised value resolves to `unknown` rather than
+# erroring. The registry is open - a capture method nobody here imagined is a
+# gap in this file, not a fault in the athlete's record.
+
+version = 1
+
+[capture.connector]
+label = "Pulled by an API integration"
+aliases = ["api", "sync", "integration", "oauth"]
+may_transcribe = false
+has_artifact = false
+note = "the vendor's current model, re-derived; not reproducible later"
+
+[capture.file_export]
+label = "Parsed from a bulk export"
+aliases = ["export", "archive", "takeout", "dump", "csv", "bulk"]
+may_transcribe = false
+has_artifact = true
+note = "the archive survives, which is why an export beats a connector for re-checking"
+
+[capture.ble]
+label = "Read over a local device link"
+aliases = ["bluetooth", "ftms", "ant+", "gatt", "pm5"]
+may_transcribe = false
+has_artifact = false
+note = "no human in the loop, and usually no durable artifact either"
+
+[capture.photo]
+label = "An image of a display, read by a person or a model"
+aliases = ["picture", "screenshot", "image", "camera"]
+may_transcribe = true
+has_artifact = true
+note = "the artifact fully DETERMINES the value - it can be re-read and disagreed with"
+
+[capture.narrative]
+label = "The athlete described it in conversation"
+aliases = ["spoken", "told", "chat", "said", "stated-in-chat"]
+may_transcribe = true
+has_artifact = true
+note = "the artifact records what was SAID, not what was shown - so it cannot settle a misreading"
+
+[capture.manual_entry]
+label = "Typed into a form or a file"
+aliases = ["typed", "hand", "handwritten", "form", "by hand"]
+may_transcribe = false
+has_artifact = false
+note = "no reading step and no evidence; fallible, but not a transcription"
+
+[capture.derived]
+label = "Computed by this engine"
+aliases = ["computed", "calculated", "engine"]
+may_transcribe = false
+has_artifact = true
+note = "the artifact is the inputs, and the computation is reproducible from them"
+
+[capture.unknown]
+label = "Not stated"
+aliases = []
+may_transcribe = true
+has_artifact = false
+note = "assumes the costly side of both, as provenance.toml does for an unrecognised hop"

@@ -462,7 +462,7 @@ def test_build_projects_the_adjudication_trail(tmp_path):
         assert con.execute(
             "SELECT kcal_out FROM daily").fetchone()[0] == 2443
         assert con.execute(
-            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "11"
+            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "12"
     finally:
         con.close()
 
@@ -673,3 +673,88 @@ def test_two_different_sources_disagreeing_is_still_reported():
             _log(3091, "2026-07-31T09:47:00+02:00", source="watch")]
     kinds = [t["kind"] for t in resolve({"daily": rows})["tripwires"]]
     assert "source_disagreement" in kinds
+
+
+# ---- #73: an unattributed row loses every contest, silently --------------------
+
+def _day(kcal_out, source=None, date="2026-07-28", **kw):
+    rec = {"date": date, "steps": None, "distance_km": None, "active_min": None,
+           "kcal_out": kcal_out, "kcal_in": None, "protein_g": None,
+           "sleep_h": None, "rhr": None, "hip_pain": None, "alcohol": None,
+           "note": None, "source": source, "mood": None, "feel": None,
+           "coverage": None, "pain": None, "pain_site": None,
+           "pain_side": None, "recorded_at": None, "_gen": 3}
+    rec.update(kw)
+    return rec
+
+
+def test_an_unattributed_claim_that_loses_is_reported():
+    """The first live instance, reconstructed. An importer wrote the source
+    into a human-readable NOTE instead of the field, so 47 rows ranked
+    `unknown` - last - while the ladder ranks that source FIRST. On two dates
+    they lost a real contest worth over 1,000 kcal/day, and nothing anywhere
+    said so: the rollup printed a canonical figure with no hint that a
+    better-ranked claim had been discarded on a technicality.
+    """
+    rows = [_day(3603, source=None, note="source=polar"),
+            _day(2364, source="fitbit")]
+    out = resolve({"daily": rows}, source_order=("polar", "fitbit"))
+    kinds = [t["kind"] for t in out["tripwires"]]
+    assert "unattributed_claim_lost" in kinds
+    said = next(t["detail"] for t in out["tripwires"]
+                if t["kind"] == "unattributed_claim_lost")
+    assert "carries no source" in said and "3603" in said
+
+
+def test_a_resolved_value_can_say_what_it_beat():
+    """A resolved value had no way to say it beat anything, so the only way
+    either live instance was found was reading the raw JSONL by hand."""
+    rows = [_day(3603, source="polar"), _day(2364, source="fitbit"),
+            _day(2100, source="app")]
+    got = [e for e in resolve({"daily": rows},
+                              source_order=("polar", "fitbit", "app")
+                              )["explanations"] if e["field"] == "kcal_out"]
+    assert got and got[0]["chosen_source"] == "polar"
+    assert "fitbit=2364" in got[0]["discarded"]
+    assert "app=2100" in got[0]["discarded"], "every discard, not the runner-up"
+
+
+def test_an_attributed_loss_is_not_flagged():
+    """Two named sources disagreeing is the ladder working. Flagging it would
+    put a permanent tripwire on every multi-source day."""
+    rows = [_day(3603, source="polar"), _day(2364, source="fitbit")]
+    out = resolve({"daily": rows}, source_order=("polar", "fitbit"))
+    assert "unattributed_claim_lost" not in [t["kind"] for t in out["tripwires"]]
+
+
+def test_an_unattributed_row_that_agrees_is_not_flagged():
+    """No value was lost, so there is nothing to report - a tripwire that
+    fires when nothing went wrong teaches the reader to skip them."""
+    rows = [_day(2364, source=None), _day(2364, source="fitbit")]
+    out = resolve({"daily": rows}, source_order=("fitbit",))
+    assert "unattributed_claim_lost" not in [t["kind"] for t in out["tripwires"]]
+
+
+def test_a_masked_unattributed_loss_is_still_reported():
+    """Two ways a real instance escaped the first version of this tripwire,
+    both closed by testing against the WINNER over EVERY discard rather than
+    reusing the runner-up `disagreed` flag.
+
+    The runner-up agrees with the winner, so `disagreed` is False - and the
+    unattributed third claim, which differs by 290 kcal, was invisible. That
+    difference is also inside the 10% disagreement tolerance, which is the
+    right bar for "do two sources disagree" and the wrong one for "was a
+    claim discarded on a technicality": 10% of a day's burn is enough to flip
+    a surplus into a deficit.
+    """
+    rows = [_day(3600, source="polar"), _day(3590, source="fitbit"),
+            _day(3310, source=None)]
+    out = resolve({"daily": rows}, source_order=("polar", "fitbit"))
+    assert "unattributed_claim_lost" in [t["kind"] for t in out["tripwires"]]
+
+
+def test_an_unattributed_claim_that_matches_exactly_is_not_reported():
+    """Nothing was lost, so there is nothing to say."""
+    rows = [_day(3600, source="polar"), _day(3600, source=None)]
+    out = resolve({"daily": rows}, source_order=("polar",))
+    assert "unattributed_claim_lost" not in [t["kind"] for t in out["tripwires"]]
