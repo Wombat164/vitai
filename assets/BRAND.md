@@ -85,6 +85,49 @@ vendor can take away.
   nautical vocabulary on purpose: a name that never invites a medical reading
   is a name that never has to answer for one.
 
+### The ecosystem throughline
+
+One metaphor family, so four products' copy stays coherent and so the thing
+most likely to slip has a name.
+
+| | |
+|---|---|
+| **you** | the driver |
+| **vitai** | the engine |
+| **the contracts** | the platform other bodies bolt to |
+| **loadline** | the cockpit and the logbook |
+| **the archive** | the service history, which outlives the car |
+| **goalden** | race day |
+
+Four things it is carrying, and each one is a decision rather than a flourish.
+
+**You are the driver, and no product in this family may take that role.** The
+engine advises and never overrides; every gate exits on the record rather than
+on a person; the athlete decides. If a sentence implies the software drives,
+that sentence is wrong, and this table is the cheapest way to catch it.
+Compare the loadmaster reading in loadline's own brand doc: does not own the
+cargo, does not choose the destination.
+
+**The contracts are a platform, not a car.** A platform is only real if
+someone else's body fits it, which is the argument `conform.py` already makes:
+if the bundled transport can do something a user's own storage cannot, the
+interface is decoration. Naming it a platform keeps that honest, and it says
+plainly that vitai is one engine rather than the only one.
+
+**The archive outlives the car.** It is the service history and every parts
+receipt, and it is the only tier that cannot be rebuilt from anything else.
+That is why it gets fixity, replication and a transparent copy, and why its
+promise is stated as verifiable rather than performed.
+
+**goalden is race day, not a joyride.** A joyride is unearned by definition,
+somebody else's car taken for the fun of it. The premise is the opposite: the
+only currency is real, engine-verified attainment. Earn it by living it. The
+grind is outside.
+
+**Where it stops.** Do not extend it into fuel, tyres, gearboxes or mileage.
+It exists to fix six relationships, not to describe the product. A metaphor
+pushed past its job starts making claims the software cannot keep.
+
 ## The mark (master: `vitai-mark.svg`)
 
 One continuous stroke - baseline stub, deep notch, tall rise - plus a detached
