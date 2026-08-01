@@ -151,7 +151,11 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               # #97: the set. `exercise`, `machine` and `tempo` are labels;
               # the reps, loads and counters stay numeric.
               "exercise", "machine", "load_type", "load_unit", "set_type",
-              "failure", "side", "tempo", "session_start"}
+              "failure", "side", "tempo", "session_start",
+              # #99: the categorical modifier axes. The parametric ones stay
+              # numeric - including the machine-scoped ordinals, which ARE
+              # numbers, just not comparable ones.
+              "equipment", "angle_class"}
 
 VERDICT_KEYS = ["week", "metric", "value", "target", "verdict", "goal"]
 

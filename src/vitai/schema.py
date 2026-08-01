@@ -16,6 +16,7 @@ from datetime import date, datetime
 from .clocks import (is_aware, is_stamp, order_key,  # noqa: F401
                      parse_time, stamp_instant)
 from .provenance import capture_problems
+from .modifiers import problems as modifier_problems
 from .sets import problems as set_problems
 from .provenance import problems as provenance_problems
 from .provenance import value_kind_problems
@@ -199,7 +200,26 @@ KEYS: dict[str, list[str]] = {
              "load_unit", "machine", "set_type", "failure", "rir", "rpe",
              "rest_s", "tempo", "duration_s", "side", "note",
              "source", "recorded_at", "origin", "path", "origin_evidence",
-             "capture", "read_by"],
+             "capture", "read_by",
+             # A generation of their own (#99): how the set was CONFIGURED.
+             # The NUMBER is deliberately not written here - `recorded_at`
+             # already consumed one for `sets`, so a comment naming a
+             # generation goes stale the moment anything else lands, and an
+             # external writer transcribing it would stamp rows that owe keys
+             # they cannot have. `key_generation("sets", "equipment")` is the
+             # answer. Flat nullable
+             # columns rather than a nested `modifiers` blob - the repo's
+             # shape is one flat object per line, `KEY_GENERATION` exists so
+             # a later increment can add nullable columns without
+             # invalidating a single existing line, and the read model gets
+             # queryable columns for free.
+             #
+             # `resistance_level`, `seat_pos`, `pad_pos` and `lever_pos` are
+             # MACHINE-SCOPED: ordinals on one manufacturer's scale, which
+             # require `machine` and may never be compared across machines.
+             # `angle_deg` is portable, which is why it carries its unit.
+             "equipment", "angle_class", "angle_deg",
+             "resistance_level", "seat_pos", "pad_pos", "lever_pos"],
     # --- increment 3: the medical layer (G11) ------------------------------
     # One condition's whole lifecycle shares a `slug`: onset, the visit, the
     # restriction, the resolution. Appending a line advances the episode; the
@@ -522,6 +542,21 @@ for _ds in ("weight", "daily", "sessions", "measurements"):
         KEY_GENERATION[_ds][_k] = CURRENT_GENERATION[_ds]
 
 
+# --- how a set was configured (#99) -------------------------------------------
+# Its OWN generation, and additive: every column is nullable, so a line
+# written before modifiers existed still validates untouched. The number is
+# whatever `CURRENT_GENERATION` has reached - not a literal, because
+# `recorded_at` already took one for this dataset and a hardcoded 2 would
+# make wild rows owe seven keys.
+# Appended last for the reason written beside the artifact block - a
+# generation block appends, and a new field never lands ahead of one already
+# in the wild.
+CURRENT_GENERATION["sets"] += 1
+for _k in ("equipment", "angle_class", "angle_deg", "resistance_level",
+           "seat_pos", "pad_pos", "lever_pos"):
+    KEY_GENERATION.setdefault("sets", {})[_k] = CURRENT_GENERATION["sets"]
+
+
 def key_generation(dataset: str, key: str) -> int:
     """Generation a key was introduced in (1 = founding)."""
     return KEY_GENERATION.get(dataset, {}).get(key, 1)
@@ -666,6 +701,7 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
         problems += value_kind_problems(rec, KEYS[dataset])
     if dataset == "sets":
         problems += set_problems(rec)
+        problems += modifier_problems(rec)
     if dataset == "sessions":
         problems += _validate_track(rec)
     if dataset == "sessions" and rec.get("type") not in SESSION_TYPES:

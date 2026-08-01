@@ -1,0 +1,122 @@
+# Set modifiers - the axes an exercise name must NOT absorb.
+#
+# This file is the one `settings.toml` was pointing at. It retired `treadmill`
+# with the note that it is "a piece of equipment, not a setting", and the
+# equipment axis it retired into was never built - so for three increments the
+# repo had committed to post-coordination and had nowhere to post-coordinate
+# onto. `session_types.toml` refused `outdoor_other`, `sources.toml` refuses
+# `other-console`, and `exercises.toml` refuses `incline_dumbbell_bench_press`.
+# Each of those refusals assumed this file.
+#
+# THE LIVE CASES. A crosstrainer at resistance level 15 against 13 a session
+# earlier: the variable that dominated the session had nowhere to live, and
+# distance alone read as a marginal gain. An incline press whose incline was
+# either lost or fused into prose.
+#
+# SCOPE. This increment ships `equipment` and `angle_class` - the categorical
+# axes the live record has actually needed - plus the parametric numbers those
+# cases turn on. `grip`, `grip_width`, `stance`, `position`, `rom` and
+# `assistance` are specified in #99 and deliberately held back: eight
+# categorical axes at once is a lot of surface for a file nothing has queried
+# yet, and an axis with no case behind it is a guess about what someone will
+# want.
+#
+# NOT HERE, AND NOT LATER EITHER:
+#
+# `laterality` - #97 already owns it as `side`, aligned with anatomy.py's
+# SIDES plus `alternating`. #59's spec listed it BOTH as a modifier axis and
+# as a core field; two laterality fields must not both land, and the core one
+# wins because unilateral work is not a niche modifier.
+#
+# `variant` free text - "it is where every one of these axes goes to die".
+#
+# `weight` - the primary quantity, owned by `load` and `load_type`.
+#
+# ABSENT IS ABSENT. No modifier is ever defaulted. An unstated grip is
+# unknown, not `pronated`; an unstated equipment is unknown, not `barbell`.
+# That is the record-wide rule (settings.toml's "ABSENT MEANS UNSTATED", #83's
+# assist field) applied to two more fields.
+
+version = 1
+
+# --- axis: equipment ----------------------------------------------------------
+# Aligned with free-exercise-db's equipment list (Unlicense, the same source
+# `exercises.toml` seeds from), so an import maps in without a second table.
+[equipment.barbell]
+label = "Barbell"
+aliases = ["bar", "olympic bar", "straight bar"]
+
+[equipment.dumbbell]
+label = "Dumbbell"
+aliases = ["dumbbells", "db"]
+
+[equipment.kettlebell]
+label = "Kettlebell"
+aliases = ["kb", "kettlebells"]
+
+[equipment.cable]
+label = "Cable"
+aliases = ["cable stack", "pulley", "cable machine"]
+
+[equipment.machine]
+label = "Machine"
+# The catchall, and a first-class value rather than a failure: `machine` plus
+# the `machine` FIELD naming which one is more useful than a registry entry
+# per manufacturer, which is how a vocabulary explodes.
+aliases = ["plate-loaded machine", "selectorised", "selectorized"]
+
+[equipment.smith]
+label = "Smith machine"
+aliases = ["smith", "smith machine"]
+
+[equipment.band]
+label = "Resistance band"
+aliases = ["bands", "resistance band", "loop band"]
+
+[equipment.bodyweight]
+label = "Bodyweight"
+# The equipment axis's answer to "none", distinct from unstated. It overlaps
+# `load_type: bodyweight` and does not duplicate it: `load_type` says how the
+# LOAD resolves, this says what was in the athlete's hands.
+aliases = ["none", "no equipment", "unweighted"]
+
+[equipment.suspension]
+label = "Suspension trainer"
+aliases = ["trx", "rings", "gymnastic rings"]
+
+[equipment.sled]
+label = "Sled"
+aliases = ["prowler"]
+
+[equipment.trap_bar]
+label = "Trap bar"
+aliases = ["hex bar", "trap-bar"]
+
+[equipment.ez_bar]
+label = "EZ bar"
+aliases = ["ez-bar", "ez curl bar", "cambered bar"]
+
+[equipment.plate]
+label = "Weight plate"
+aliases = ["plates"]
+
+[equipment.medicine_ball]
+label = "Medicine ball"
+aliases = ["med ball", "medball", "slam ball", "wall ball"]
+
+# --- axis: angle class --------------------------------------------------------
+# The CLASS. Degrees are parametric and live in `angle_deg`, because "incline"
+# on one bench is not "incline" on another and a class cannot be subtracted.
+[angle_class.flat]
+label = "Flat"
+aliases = ["horizontal"]
+
+[angle_class.incline]
+label = "Incline"
+aliases = ["inclined", "uphill"]
+
+[angle_class.decline]
+label = "Decline"
+aliases = ["declined", "downhill"]
+
+[retired]
