@@ -142,6 +142,53 @@ def append_many(data_dir: Path, name: str, records: list[dict],
     return rows
 
 
+# Datasets whose identity fields spell a null as an empty string rather than
+# as the literal "None".
+#
+# The legacy single-slug datasets MUST keep "None". A row with an explicit
+# null slug has always keyed that way, and an existing goals or medical file
+# may hold a `supersedes` naming that spelling; rendering it "" instead
+# orphans the reference and silently UN-RETIRES the line it corrected on the
+# next load. A dataset with no rows in the wild has no such history to
+# protect, so it gets the readable spelling - and `sets` needs it, because
+# three of its five identity fields are legitimately null on the ordinary
+# logging path (bodyweight sets, no session row, no circuit).
+#
+# The test for membership is "has this dataset ever been written to disk
+# anywhere", NOT "is the tuple form nicer to read". `goals`, `thresholds`,
+# `medical` and `events` are permanently excluded on that basis and no
+# argument about readability moves them; a dataset introduced from here on
+# belongs in this set. Stated as a rule because a list is what goes wrong
+# when the next person adds a dataset and copies whichever branch is shorter.
+_BLANK_NULL = frozenset({"sets", "meals"})
+
+
+def identity_of(dataset: str, rec: dict) -> str | None:
+    """How this row's identity renders, or None if the dataset has no identity.
+
+    THE one renderer. Three functions used to spell a set's identity three
+    different ways - `line_key` as `None/push-up/None/None/1`, a helper in
+    `sets.py` as `/push-up///1`, and `heads` by refusing the row outright -
+    so a `supersedes` computed one way named nothing when read another. That
+    is #43 pointing the other way: a correction that matches no line, failing
+    quietly, on the common case rather than an edge one.
+    """
+    ident = IDENTITY_KEY.get(dataset)
+    if ident is None:
+        return None
+    fields = (ident,) if isinstance(ident, str) else ident
+    blank = "" if dataset in _BLANK_NULL else "None"
+    parts = []
+    for field in fields:
+        if field not in rec:
+            parts.append("")
+        elif rec[field] is None:
+            parts.append(blank)
+        else:
+            parts.append(str(rec[field]))
+    return "/".join(parts)
+
+
 def line_key(dataset: str, rec: dict) -> str:
     """The reference a `supersedes` on a later line would use to name this one.
 
@@ -152,9 +199,7 @@ def line_key(dataset: str, rec: dict) -> str:
     correction path instead of the merge path. `validate` reports a reference
     that matches more than one line, so the remaining ambiguity is loud.
     """
-    if (ident := IDENTITY_KEY.get(dataset)) is not None:
-        fields = (ident,) if isinstance(ident, str) else ident
-        named = "/".join(str(rec.get(f, "")) for f in fields)
+    if (named := identity_of(dataset, rec)) is not None:
         return f"{named}@{rec.get('date')}"
     if dataset == "sessions" and (aid := rec.get("activity_id")):
         return f"{aid}@{rec.get('date')}"
@@ -235,6 +280,12 @@ def heads(records: list[dict], dataset: str) -> dict[str, dict]:
     # exactly the file order it always did.
     fields = (ident,) if isinstance(ident, str) else ident
     for r in sorted(records, key=order_key):
-        if all(r.get(f) is not None for f in fields):
-            out["/".join(str(r[f]) for f in fields)] = r
+        # ANY identity field present, and `identity_of` for the spelling. The
+        # previous `all(... is not None)` DROPPED every set without a session
+        # start, a block and a round - the ordinary logging path, not an edge
+        # case - so those rows had no head at all. Requiring one field keeps
+        # the old single-slug behaviour exactly (that field, or nothing) and
+        # stops a tuple dataset losing its common rows.
+        if any(r.get(f) is not None for f in fields):
+            out[identity_of(dataset, r) or ""] = r
     return out

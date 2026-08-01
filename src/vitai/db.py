@@ -101,6 +101,20 @@ from .schema import KEYS
 #     one. And REMOVED IS NOT MISSING: an artifact the athlete deleted leaves a
 #     tombstone with a reason, and a consumer that renders that as broken
 #     evidence has turned a retention decision into a data-loss alarm.
+# 14: the set as an atom (#97) - a `sets` table, one row per SET, because
+#     three facts had nowhere to live: an attempted load that could not be
+#     completed (`reps_attempted` 1, `reps_completed` 0), whether a set was
+#     taken to failure, and what kind of number a load is. Two things a
+#     consumer must not get wrong. A NULL `failure` means UNSTATED and MUST
+#     NOT be read as maximal - a set logged against a stated max read as one
+#     and was not, and that is the defect this dataset exists for. And a
+#     `load` under `load_type: machine_stack` is a PIN NUMBER, not a mass:
+#     66 on two machines is two different loads, so it is never comparable
+#     across machines and never rendered in kilograms.
+#     Also in 14: `rpe` widens from integer to numeric across every dataset
+#     that carries it, `sessions` included. Half points are standard on the
+#     RIR-anchored scale. Strictly looser, so no row that validated before
+#     stops validating.
 # 15: the itemised meal estimate (#96) - a `meals` table, one row per
 #     INGREDIENT of a photographed meal, with a gram estimate, a gram RANGE,
 #     and the per-100 g composition figures as the food table gave them
@@ -162,6 +176,10 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               # opaque token, and REAL affinity would mangle one silently.
               # `bytes` stays numeric so a consumer can sum held storage.
               "sha256", "artifact", "media_type", "captured_at",
+# #97: the set. `exercise`, `machine` and `tempo` are labels;
+              # the reps, loads and counters stay numeric.
+              "exercise", "machine", "load_type", "load_unit", "set_type",
+              "failure", "side", "tempo", "session_start",
 # #96: the itemised meal estimate. The per-100 g figures and the
               # gram range stay numeric; only the labels are TEXT.
               "meal", "item", "food_table"}

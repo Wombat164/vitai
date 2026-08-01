@@ -1,0 +1,83 @@
+# Set types - what ROLE a set played in the session, and only that.
+#
+# A REGISTRY RATHER THAN A CODE ENUM, and the contrast with `load_type` in
+# schema.py is the point. `load_type` answers one question - "how does this
+# number resolve to a resistance" - and there is no sixth answer to discover,
+# so it is complete by construction and lives in code. This axis is the
+# opposite: strength methodology coins set types faster than any developer's
+# sample, and a closed set here would be G85 again, where thirteen categories
+# met 1,502 real activities and put 29% of them in `other`.
+#
+# PRIOR ART. Hevy, Strong and FitNotes converge on the same core - a set is
+# `working`, `warmup` or `drop`, and every logger ships those three. The
+# extensions below are standard methodology terms rather than one app's
+# invention: back-off sets and AMRAP come from general periodisation practice,
+# cluster and rest-pause from the intensity-technique literature, and myo-reps
+# from Borge Fagerli's published method. None of them is this athlete's
+# programme label, which is the mistake #18 made and the reason that check is
+# worth stating.
+#
+# WHAT THIS AXIS IS NOT. It does not say how hard the set was - that is `rir`
+# and `rpe`, stated as whichever the athlete used. It does not say whether the
+# set was taken to failure - that is `failure`, and its three states are the
+# whole reason this dataset exists. A `working` set is not a maximal one, and
+# nothing downstream may read it as one.
+#
+# EXTENDING IT: add a curated entry with its aliases. Nothing is fuzzy-matched
+# at import time - a matcher that turns one unfamiliar term into `working`
+# will also turn something else into `working` silently, and nobody will find
+# out. An unrecognised value resolves to `unknown` with a finding, never an
+# error: an unfamiliar set type is a gap in this file, not a fault in the
+# athlete's record.
+
+version = 1
+
+[types.working]
+label = "Working set"
+aliases = ["work", "main", "top", "straight"]
+
+[types.warmup]
+label = "Warm-up set"
+aliases = ["warm-up", "warm up", "ramp", "prep"]
+
+[types.drop]
+label = "Drop set"
+# The load is reduced and the set continues without rest. Logged as separate
+# rows sharing a block and each carrying its OWN `set_index`, because each
+# segment has its own load and its own rep count - which is exactly what a
+# single row cannot carry. Sharing an index as well would give the segments
+# one identity, so correcting the first would retire all of them.
+aliases = ["dropset", "drop-set", "strip"]
+
+[types.backoff]
+label = "Back-off set"
+# A lighter set after the top set, at a prescribed percentage. Distinct from
+# `working` because reading it as one flattens the intensity profile of a
+# session into an average nobody trained at.
+aliases = ["back-off", "back off", "downset"]
+
+[types.amrap]
+label = "As many reps as possible"
+# The one set type that IS defined by its endpoint, which makes `failure`
+# more informative here rather than redundant: an AMRAP stopped
+# volitionally and one stopped muscularly are different data.
+aliases = ["as many reps as possible", "max reps", "to failure"]
+
+[types.cluster]
+label = "Cluster set"
+# Intra-set rest of a few seconds between small groups of reps.
+aliases = ["clusters", "intra-set rest"]
+
+[types.rest_pause]
+label = "Rest-pause set"
+aliases = ["rest pause", "rest-pause", "restpause"]
+
+[types.myo_rep]
+label = "Myo-rep set"
+aliases = ["myoreps", "myo-reps", "myo rep"]
+
+[types.unknown]
+label = "Unrecognised set type"
+# The landing value, present so an unfamiliar term resolves rather than
+# erroring. A row here is a prompt to curate an alias, not a bad row.
+aliases = []

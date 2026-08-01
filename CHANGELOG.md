@@ -110,6 +110,41 @@ versioning follows [SemVer](https://semver.org/).
   syncs or attaches - storing an artifact is not consent to transmit it - and
   no artifact, manifest row or hash of a real one appears in this repository,
   including in the tests, where the bytes are synthetic.
+- **`sets.jsonl`: the set is the atom** (#97, increment 1 of #59). Three facts
+  had nowhere to live, and all three were being reconstructed from prose.
+
+  **A failed attempt.** `73 FAILED` after `66x12` is the most informative set
+  of a stack progression - an attempted load that could not be completed - and
+  there was no field for it. `reps_attempted: 1, reps_completed: 0` says it,
+  and it is a different fact from a set never attempted, which is the absence
+  of a row.
+
+  **Whether a set was taken to failure.** Push-ups of 13, 12, 10 against a
+  stated max of 12 read as maximal and were not: set 2 held 92% of set 1,
+  where genuine failure leaves 55-70%. `failure` is three states -
+  `technical`, `muscular`, `volitional` - because "to failure" is ambiguous
+  across all three. **Null means UNSTATED and must never be read as maximal.**
+
+  **What kind of number a load is.** `load_type` is a closed enum:
+  `external` is a mass; `bodyweight` means the load IS the athlete, and gets
+  lighter as they cut, for reasons unrelated to strength; `bodyweight_plus`
+  is added mass; `assisted` subtracts; and `machine_stack` is a **pin number,
+  not a mass** - 66 on two machines is two different loads, so it carries its
+  machine and is never rendered in kilograms.
+
+  `set_type` goes in `semantics/set_types.toml` rather than in code, the
+  opposite call from `load_type` and for the opposite reason: methodology
+  coins set types faster than any sample, while "how does this number resolve
+  to a resistance" has no sixth answer to discover.
+
+  `vitai sets [--on DATE] [--json]` and `Vitai.sets()`. `IDENTITY_KEY` now
+  accepts a tuple, and `set_index` is REQUIRED - a tightening of the spec,
+  because a set nobody numbered shares an identity with every other unnumbered
+  set of that exercise, so a correction naming one would retire them all.
+
+  `rpe` widens from integer to numeric wherever it appears, `sessions`
+  included: half points are standard on the RIR-anchored scale. Strictly
+  looser, so nothing that validated before stops validating.
 - **A value can say it was never measured** (#49, #88). The orthogonal
   question to origin and capture: those say which instrument and how it
   reached us, this says whether the number was observed at all.

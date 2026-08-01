@@ -2,28 +2,76 @@
 
 What medical data is for in this engine, what may be said about it, and the
 one exception. Read this before adding any feature, string, or schema field
-that touches injury, pain, symptoms, medication, or care. The one-sentence
-test, from #110:
+that touches injury, pain, symptoms, medication, or care.
 
-> A tool that says "your record shows X, get X assessed" has stated a medical
-> purpose. A tool that declines to program has not.
+## What vitai is for
+
+**vitai logs training, nutrition and body data; builds and adjusts training
+programmes; and lets a user read their own record. It is not intended to
+identify, monitor, explain, treat or compensate for any disease, injury or
+condition. Where the record is incomplete, or where a user has flagged
+something, the engine declines to produce a programme, and says only that.**
+
+Everything below derives from that sentence. If a proposed feature cannot be
+described by it, the feature is out of scope, and the answer is to drop the
+feature rather than to reword it.
 
 ## Why the line sits here
 
-Regulation triggers on THE CLAIM, not the technology. Under the FDA's
-general-wellness guidance (January 2026), a product stays outside device
-regulation as long as it does not claim to diagnose, cure, mitigate, prevent
-or treat disease. Under MDCG 2019-11 and MDR Annex VIII Rule 11, fitness and
-wellness software is not medical device software at all unless it has a
-medical intended purpose. Apple draws the same line inside one product: the
-irregular-rhythm feature names a condition and is a cleared medical device;
-the observation-only notifications are not.
+Because a training log that tells its user to see a doctor is a bad training
+log.
 
-vitai therefore holds the cheapest defensible position: no claim, anywhere,
-that it detects, screens for, monitors, prevents or treats anything, and no
-instruction, anywhere outside the acute tier, to obtain care. This costs
-nothing the engine needs. Every safety behaviour vitai has is expressible as
-an observation about the record plus a refusal to program.
+The concrete failure this came from: a medical to-do sat open in a record for
+weeks and was re-raised at every review, because it had no exit the record's
+owner could reach. It was not resolvable by anything the tool could observe,
+so it never closed, and a gate with no attestable exit is a wall rather than a
+gate. Meanwhile it displaced the thing the record is actually good at.
+
+Three reasons that generalise:
+
+1. **The engine cannot see what it would be judging.** It holds numbers a user
+   typed and a watch reported. Turning that into a view about someone's body
+   is a claim the inputs do not support, and a confident wrong one is worse
+   than a blank.
+2. **An uncompletable item is a permanent failure state.** Anything the tool
+   tracks but cannot close accumulates, and accumulating unresolved items is
+   how a record stops being read.
+3. **The user is the one with standing.** Deciding whether something needs
+   looking at is theirs. A log of runs and weights adds nothing to that
+   decision and should not insert itself into it.
+
+None of this costs the engine anything it needs. Every safety behaviour vitai
+has is expressible as an observation about the record plus a refusal to
+program.
+
+## Withholding is safe; the reason attached to it may not be
+
+Emitting nothing asserts nothing, so declining to produce a programme is
+always available. The claim, if there is one, lives in the sentence that
+explains the refusal:
+
+- *"Training is not advisable while you are symptomatic."* A judgement about
+  a person's body. Out of bounds.
+- *"The engine has no basis to program this week."* A statement about the
+  engine's own inputs. Fine.
+
+Identical behaviour, and only one of them is a claim. Audit every gate message
+against this, not merely against whether it contains an instruction: a
+declarative sentence about what vitai does can assert more than an imperative
+aimed at the reader.
+
+## What other products do
+
+Ordinary competitive observation, recorded because it saves rediscovering it.
+Training platforms generally carry a standing "informational purposes only"
+notice that is always present and never fires at a moment. Consumer wearables
+that stay observation-only describe what was seen and leave the decision to
+the reader; the features that name a condition are regulated, cleared
+products, and at least one vendor draws that line inside a single app. Where a
+product genuinely does route people to care, it employs clinicians rather than
+having an algorithm send users to find one. Nobody in consumer fitness tracks
+a medical appointment as an open item; that belongs to patient portals, where
+a clinician owns the list.
 
 ## What medical data is FOR
 
@@ -145,9 +193,9 @@ Compliant:
 > the episode is resolved in the record.
 
 The first tells the user what to do about their body. The second tells them
-what vitai will not do about its own output, and what the record would have
-to say for that to change. Both are equally safe for the athlete; only one
-is a medical purpose.
+what vitai will not do about its own output, and what the record would have to
+say for that to change. Both are equally safe for the athlete, and the second
+is the only one this engine has any standing to say.
 
 ## Scope
 
@@ -159,7 +207,32 @@ dated design-conversation records) describe what was true when written and
 are not rewritten; normative rows in living documents are. Where an older
 formulation conflicts with this document, this document governs.
 
+## How to write about this boundary
+
+The rationale published alongside a design is itself a public statement about
+the product, and it needs the same care as a claim in the README.
+
+**Explain a boundary by what it is good for, never by how it makes the project
+look.** A document arguing that a term was chosen, or a function removed, for
+the effect on how the project is characterised is a worse artefact than the
+function it removed. It is written by the people responsible for the product's
+own description, it is discoverable, and git history keeps it after any edit.
+
+The corollary is the useful half: **if the only argument for a design choice is
+how it will be characterised, that is the reason not to make the argument in
+writing, and usually a sign the choice is wrong on its own terms.** Adopt a
+boundary because it produces a better tool. Where it also happens to be the
+simpler position to hold, that is a consequence and not a rationale, and it
+does not need saying.
+
+This applies to `docs/`, issue and PR prose, commit messages and the wiki,
+exactly as the scope above does.
+
 ## Changelog
 
+- 2026-08-01: rewritten to lead with what the engine is for, and to explain
+  the boundary as design rationale rather than as a position on how the
+  project is characterised (#122). Added the withholding-versus-reason
+  distinction and the injury framing from #121, and the rule above.
 - 2026-08-01: created, generalising #110 from `safety.py` to the whole
   public surface.

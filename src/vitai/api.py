@@ -179,6 +179,40 @@ class Vitai:
         and what its journey could have done to it (#35/#51)."""
         return self.resolution()["provenance"]
 
+    def sets(self, on: str | None = None) -> list[dict]:
+        """Logged sets, in the order they were performed (#97).
+
+        Ordered by (date, session_start, block, round, set_index) rather than
+        by file position, because the order sets were PERFORMED in is the
+        whole content of a block: 13, 12, 10 is a fatigue curve and 10, 12, 13
+        is a warm-up. A row missing a counter sorts last within its group
+        rather than first - an unnumbered set is one nobody placed, and
+        placing it at the front would invent a claim about when it happened.
+        """
+        rows = [r for r in self.dataset("sets") if not on or r.get("date") == on]
+
+        def where(r: dict) -> tuple:
+            # Everything sorts LAST when unstated, including `session_start`:
+            # a set nobody placed in a session did not therefore happen first,
+            # and putting it at the front invents a claim about when it did.
+            #
+            # Counters are coerced through a (is_number, value) pair rather
+            # than compared raw. `validate` reports a counter of the wrong
+            # type but does not stop the file loading, and comparing an int
+            # with a string raises - so one bad row would take down the whole
+            # listing rather than sorting oddly.
+            def counter(value: object) -> tuple:
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    return (1, 0.0, str(value if value is not None else ""))
+                return (0, float(value), "")
+            return (str(r.get("date") or ""),
+                    (r.get("session_start") is None,
+                     str(r.get("session_start") or "")),
+                    str(r.get("exercise") or ""),
+                    *(counter(r.get(k))
+                      for k in ("block", "round", "set_index")))
+
+        return sorted(rows, key=where)
     def meals(self, on: str | None = None) -> list[dict]:
         """Itemised meal estimates, each with its range and its questions (#96).
 

@@ -7,6 +7,7 @@ is what a photographed plate actually looks like.
 """
 
 import json
+import pathlib
 
 import pytest
 
@@ -421,3 +422,53 @@ def test_the_date_filter_scopes_the_day_comparison_too(tmp_path, capsys):
     main(["meals", "--root", str(root), "--on", "2030-05-02"])
     out = capsys.readouterr().out
     assert "2030-05-01" not in out
+
+
+# ---- one identity renderer, adopted rather than re-implemented -----------------------
+
+def test_a_snack_logged_without_a_meal_name_can_still_be_corrected(tmp_path):
+    """`item` is required and `meal` is not, so an item logged without a meal
+    name got a key from `line_key` and was DROPPED by `heads` - a correction
+    naming it matched nothing and failed silently.
+
+    Narrower than the sets case, since most items carry a meal, but live the
+    moment anything logs a snack.
+    """
+    from vitai.jsonl import heads, identity_of, line_key
+    snack = {"date": "2030-05-01", "meal": None, "item": "olives",
+             "grams": 32, "kcal_100g": 145, "food_table": "usda"}
+    assert line_key("meals", snack) == f"{identity_of('meals', snack)}@2030-05-01"
+    assert list(heads([snack], "meals")) == [identity_of("meals", snack)]
+
+    root = repo(tmp_path)
+    v = Vitai(root)
+    for row in ({**snack, "item": "olives"}, {**snack, "item": "tomato",
+                                              "grams": 70, "kcal_100g": 18}):
+        v.append("meals", row)
+    v.append("meals", {**snack, "grams": 40,
+                       "supersedes": line_key("meals", snack)})
+    live = v.dataset("meals")
+    assert sorted(r["item"] for r in live) == ["olives", "tomato"], (
+        "the correction retired an item it did not name")
+    assert next(r for r in live if r["item"] == "olives")["grams"] == 40
+
+
+def test_meals_uses_the_one_renderer_rather_than_its_own():
+    """Two spellings of the identity renderer in one codebase is precisely
+    the condition that produced the original bug, so this branch adopts
+    `identity_of` instead of re-fixing its own copy."""
+    from vitai import jsonl
+    source = pathlib.Path(jsonl.__file__).read_text()
+    assert source.count("def identity_of") == 1
+    assert "meals" in jsonl._BLANK_NULL
+
+
+def test_a_new_dataset_spells_a_null_as_empty_and_a_legacy_one_does_not():
+    """The rule is "has this dataset ever been written to disk anywhere",
+    not "is the tuple form nicer". `meals` is as new as `sets`, so it gets
+    the readable spelling; `goals` has rows in the wild naming `None@<date>`
+    and cannot move without orphaning them.
+    """
+    from vitai.jsonl import identity_of
+    assert identity_of("meals", {"meal": None, "item": "olives"}) == "/olives"
+    assert identity_of("goals", {"slug": None}) == "None"
