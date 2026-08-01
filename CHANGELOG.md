@@ -6,6 +6,39 @@ versioning follows [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Key custody: an untested backup is not a backup** (#107). `vitai key new`
+  and `vitai key check`, plus a setup that cannot report success without a
+  passing restore drill.
+
+  Under hold-your-own-key there is no recovery path, so the failure mode is
+  not "never stored the key" - it is **believed they stored it**. A key pasted
+  into a note app that later syncs to a dead account feels like storage and is
+  not. So the athlete proves recovery while the record is empty and the cost
+  of failure is zero.
+
+  **Two forms, never either.** A checksummed phrase for paper and the raw key
+  for a manager - a design offering only the second makes the manager a single
+  point of failure for a decade of health history, and `setup` says so when
+  the key exists in only one place.
+
+  The phrase uses a **BCH checksum**, which detects any error of up to four
+  characters, always. A single-character transcription error is reported as a
+  TYPO with the group named, not as a wrong key - which is the difference
+  between a fixable transcription and a lost decade. Crockford's base32 means
+  I, L, O and U cannot occur, so seeing one is always a misreading and is
+  folded rather than rejected.
+
+  **Rotation re-encrypts the whole blob set**, feasible precisely because the
+  record is a few MB. A half-finished rotation leaves every original in place:
+  half a rotation is recoverable, half a rotation with the originals deleted
+  is not.
+
+  BIP-39 words would be a better paper form and are not vendored, because the
+  wordlist's licence has not been checked and this repo checks before
+  vendoring. The engine names no password manager, so there is no referral
+  relationship to disclose.
+
+### Added
 - **Transport, custody and cipher as engine interfaces, with a conformance
   suite** (#108). `vitai conform --transport X --custody Y`. The suite is the
   deliverable, not the prose: a written contract produces implementations that
