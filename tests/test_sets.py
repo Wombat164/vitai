@@ -519,3 +519,64 @@ def test_half_points_are_standard_on_the_rir_anchored_scale():
                "cadence": None, "kcal": None, "location": None, "rpe": 7.5,
                "note": None}
     assert validate_record("sessions", session) == []
+
+
+def test_the_three_renderings_of_a_set_identity_agree():
+    """The invariant the tuple identity exists for, and it did not hold.
+
+    `line_key` spelled a null as `None`, `sets.position` spelled it as
+    empty, and `heads` refused the row outright - so a `supersedes` computed
+    one way named nothing when read another. That is #43 pointing the other
+    way: a correction that matches no line, failing quietly.
+
+    Asserted on a row with nulls in the OPTIONAL identity fields, because
+    that is the case the three disagreed on and it is the ordinary logging
+    path, not an edge one.
+    """
+    from vitai.jsonl import heads, identity_of
+    from vitai.sets import position
+    bare = a_set(session_start=None, block=None, round=None, set_index=1)
+    assert line_key("sets", bare) == f"{identity_of('sets', bare)}@{bare['date']}"
+    assert position(bare) == identity_of("sets", bare)
+    assert list(heads([bare], "sets")) == [identity_of("sets", bare)]
+
+
+def test_a_bodyweight_set_with_no_session_can_still_be_corrected(tmp_path):
+    """Three sets of push-ups, no session row, no circuit: `session_start`,
+    `block` and `round` are all null and that is NORMAL. The correction path
+    silently no-opped for exactly this shape.
+    """
+    root = repo(tmp_path)
+    v = Vitai(root)
+    for i, reps in enumerate((13, 12, 10), start=1):
+        v.append("sets", {k: val for k, val in
+                          a_set(session_start=None, block=None, round=None,
+                                set_index=i, reps_completed=reps,
+                                reps_attempted=reps).items()
+                          if k != "recorded_at"})
+    target = line_key("sets", a_set(session_start=None, block=None,
+                                    round=None, set_index=2))
+    v.append("sets", {**{k: val for k, val in
+                         a_set(session_start=None, block=None, round=None,
+                               set_index=2, reps_completed=11,
+                               reps_attempted=12,
+                               failure="technical").items()
+                         if k != "recorded_at"},
+                      "supersedes": target})
+    live = sorted(v.dataset("sets"), key=lambda r: r["set_index"])
+    assert [r["reps_completed"] for r in live] == [13, 11, 10], (
+        "the correction named no line, or retired the wrong ones")
+
+
+def test_a_legacy_null_slug_keeps_its_own_spelling():
+    """One renderer, but NOT one spelling. The single-slug datasets have rows
+    in the wild whose `supersedes` names `None@<date>`; changing that orphans
+    the reference and un-retires the line it corrected. A dataset with no
+    history to protect gets the readable spelling instead.
+    """
+    from vitai.jsonl import identity_of
+    assert identity_of("goals", {"slug": None}) == "None"
+    assert identity_of("goals", {}) == ""
+    assert identity_of("sets", {"session_start": None, "exercise": "push-up",
+                                "block": None, "round": None,
+                                "set_index": 1}) == "/push-up///1"

@@ -102,16 +102,18 @@ def _num(value: object) -> float | None:
 
 
 def position(rec: dict) -> str:
-    """Where this set sits in the session: the tuple that names it uniquely.
+    """The reference a `supersedes` correcting this set would name.
 
-    Many sets share a date and a source, so without this a `supersedes`
-    correcting set 2 of 4 retires all four - the #43 defect, which cost real
-    data once already. Block, round and set_index are what distinguish them, and
-    the exercise and session start keep two exercises' set 1 apart.
+    Delegates to `jsonl.identity_of`, which is the ONE renderer. This existed
+    as a second implementation and spelled a null differently, so a reference
+    computed here named nothing when `line_key` read it - a correction that
+    matches no line, failing quietly, on the ordinary logging path.
+
+    Imported inside the function because `jsonl` reaches this module through
+    `schema`, and a module-level import would close the cycle.
     """
-    return "/".join(str(rec.get(k) if rec.get(k) is not None else "")
-                    for k in ("session_start", "exercise", "block", "round",
-                              "set_index"))
+    from .jsonl import identity_of
+    return identity_of(DATASET, rec) or ""
 
 
 def attempted(rec: dict) -> int | None:
