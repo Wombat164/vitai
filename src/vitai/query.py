@@ -147,16 +147,21 @@ def day(datasets: dict[str, list[dict]], on: str, claims: list[dict] | None = No
 
 
 def window(datasets: dict[str, list[dict]], days: int,
-           on: str | date | None = None) -> dict:
+           on: str | date | None = None,
+           fallback: date | None = None) -> dict:
     """Totals over the last N CALENDAR days, grouped by session type.
 
     Calendar days, not logged days: a window that silently skipped the empty
     ones would report a fortnight of training as if it were a week.
+
+    `fallback` is the end date for a record with NO sessions, where there is
+    nothing to anchor to. Without it this reached for the wall clock, so a
+    caller that had pinned a viewpoint still got today's real week back.
     """
     sessions = datasets.get("sessions") or []
     end = _as_date(on) or max(
         (d for d in (_as_date(r.get("date")) for r in sessions) if d),
-        default=date.today())
+        default=fallback or date.today())
     start = end - timedelta(days=days - 1)
 
     by_type: dict[str, dict] = {}
