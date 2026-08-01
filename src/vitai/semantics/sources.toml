@@ -1,0 +1,459 @@
+# Sources - WHICH INSTRUMENT this is, and what it can legitimately observe.
+#
+# ## The objection this has to answer first
+#
+# `provenance.toml` says, in its own header: "ROLES, NOT VENDORS. Listing
+# vendors here would be the G85 mistake again." That reasoning is correct FOR
+# THAT FILE and this one does not touch it - hop roles stay roles.
+#
+# This answers a different question. Not "what class of thing is this hop" but
+# "which specific instrument is this, and what can it physically observe".
+#
+# The G85 failure is a CLOSED vocabulary that makes a stranger's device
+# unrepresentable. This one avoids it the way `session_types.toml` did:
+# unrecognised values RESOLVE rather than erroring, catchalls are first-class,
+# custom entries are expected, and the core is lifted from maintained external
+# enums rather than assembled from one author's shelf.
+#
+# Under those rules a catalog is a NORMALIZER, not a constraint. Its job is
+# that `Polar Pacer Pro`, `polar-pacer-pro` and `PacerPro` are one thing.
+#
+# ## `cannot` is what earns this registry its keep - and it is a DENY list
+#
+# It makes a class of error mechanically detectable: a scale claiming
+# distance, a rower console claiming sleep. Those are not resolution ties to
+# adjudicate - they are claims the instrument physically cannot make.
+#
+# It was first written the other way round, as a per-instrument list of what
+# each device CAN observe, and that was wrong in the direction that costs
+# something. A whitelist turns every omission into a FALSE ACCUSATION against
+# a real row: an Oura ring does report calories, a hand-typed row can carry a
+# resting heart rate the athlete read off a watch, a relaying app carries
+# whatever it received, and watch models differ in what they record. Each of
+# those would have been flagged by a list that merely forgot them.
+#
+# So it is a deny list, held at the KIND level, and every entry has to be
+# confidently true of every instrument of that kind. An omission here produces
+# SILENCE, which is the safe direction; there is no entry whose absence
+# accuses anybody. A registry gap must never become a finding against the
+# record - that principle has now been arrived at three times in this
+# codebase, and this is the third.
+#
+# ## Catchalls, applying the lesson already learned
+#
+# `session_types.toml` refused `outdoor_other` because it pre-coordinates two
+# axes, and expressed it as `other` + `setting`. Same here. There is no
+# `other-console`, `other-wearable`, `other-app`. There is `other` - a real
+# source not in the catalog, carrying its own `kind` - and `unknown`, meaning
+# nobody said. The catalog does not multiply by the size of the kind axis.
+#
+# ## Grounding
+#
+# `kind` is Google Fit's `Device.type` (`phone`, `tablet`, `watch`,
+# `chest_strap`, `scale`, `head_mounted`, `unknown`), extended with the kinds
+# this domain needs and Google Fit does not name: a gym console, an app, a
+# platform that only relays, and a person.
+#
+# The device entries are real, publicly documented product families - the FIT
+# SDK's `manufacturer`/`*_product` enums are the maintained reference, and
+# Apple HealthKit's `HKDevice` (manufacturer / model) is the same shape.
+# BLE FTMS (GATT 0x1826) and Concept2's PM5 are the standards behind the gym
+# equipment entries.
+#
+# NOTHING PERSONAL LIVES HERE. A source named for someone's own spreadsheet or
+# their own gym resolves to `other` with its `kind`, which is exactly what the
+# catchall is for. A public registry must never carry a private name, and the
+# `observes` check works on the KIND, so it loses nothing by that.
+#
+# THE CATALOG DOES NOT IMPLY A PRECEDENCE ORDER. Which instrument to believe
+# is a local judgement and stays in the athlete's config: a figure stated in
+# chat outranks a vendor channel in one record and would not in another.
+
+version = 1
+
+# Fields an instrument can observe, named as the schema names them so a
+# violation is checkable rather than rhetorical.
+
+
+
+# --- kinds (Google Fit Device.type, extended) ---------------------------------
+
+
+[kinds.watch]
+label = "Wrist-worn wearable"
+aliases = ["wearable", "smartwatch", "fitness tracker", "band", "wristband"]
+# Wristbands (Charge, Whoop) are deliberately NOT a separate kind. They differ
+# from watches in what they HAVE - many lack GPS, most now lack an altimeter -
+# but a deny list may only hold what is confidently true of EVERY instrument
+# of the kind, and some wristbands have both. Splitting them would produce a
+# kind with an empty `cannot`, which is the same as not splitting them.
+# A ring is different: see [kinds.ring].
+
+[kinds.phone]
+label = "Phone"
+aliases = ["mobile", "handset", "smartphone"]
+
+[kinds.tablet]
+label = "Tablet"
+aliases = []
+
+[kinds.chest_strap]
+label = "Chest strap"
+aliases = ["hr strap", "heart rate strap", "hrm"]
+cannot = ["kg", "body_fat_pct"]
+
+[kinds.scale]
+label = "Body-composition scale"
+aliases = ["bathroom scale", "weighing scale", "smart scale"]
+# It has no GPS, no accelerometer worth the name, and no altimeter. Note HR is
+# NOT here: some connected scales genuinely measure it.
+cannot = ["distance_km", "steps", "cadence", "elevation_m"]
+
+[kinds.ring]
+label = "Finger-worn ring"
+aliases = ["smart ring"]
+# The one wearable kind that can be denied things confidently. A ring sits on
+# a finger, so there is no arm swing to derive cadence from and no wrist
+# platform for GPS or a barometer - no shipping smart ring has either. Steps
+# are NOT denied: rings do estimate them, less well than a wrist, but they
+# report them and denying a value a device genuinely emits would make a
+# registry gap into an accusation.
+cannot = ["distance_km", "cadence", "elevation_m"]
+
+[kinds.head_mounted]
+label = "Head-mounted device"
+aliases = ["earbuds", "headphones"]
+
+[kinds.gym_console]
+label = "Gym equipment console"
+aliases = ["console", "machine", "ergometer", "erg"]
+# It is bolted to a floor and the athlete is on it for an hour. Weight and
+# sleep are the two it cannot possibly have seen.
+cannot = ["kg", "body_fat_pct", "sleep_h"]
+
+[kinds.app]
+label = "An app the athlete enters data into"
+aliases = ["mobile app", "logger"]
+
+[kinds.platform]
+label = "A service that mostly relays other sources"
+aliases = ["service", "aggregator", "hub"]
+
+[kinds.person]
+label = "A person, writing or saying it"
+aliases = ["human", "athlete", "self"]
+
+
+# --- catalogued instruments ---------------------------------------------------
+
+
+[sources.polar-watch]
+label = "Polar wrist wearable"
+kind = "watch"
+role = "device"
+aliases = ["polar", "polar pacer", "polar pacer pro", "pacer pro", "polar vantage", "polar ignite", "polar grit x"]
+
+[sources.garmin-watch]
+label = "Garmin wrist wearable"
+kind = "watch"
+role = "device"
+aliases = ["garmin", "forerunner", "fenix", "venu", "instinct", "vivoactive"]
+
+[sources.fitbit-tracker]
+label = "Fitbit wrist wearable"
+kind = "watch"
+role = "device"
+aliases = ["fitbit", "charge", "inspire", "sense", "versa"]
+
+[sources.apple-watch]
+label = "Apple Watch"
+kind = "watch"
+role = "device"
+aliases = ["watchos"]
+
+[sources.samsung-watch]
+label = "Samsung wrist wearable"
+kind = "watch"
+role = "device"
+aliases = ["galaxy watch"]
+
+[sources.whoop]
+label = "Whoop band"
+kind = "watch"
+role = "device"
+aliases = []
+note = "no display; strap-only"
+
+[sources.oura-ring]
+label = "Oura ring"
+kind = "ring"
+role = "device"
+aliases = ["oura"]
+note = "sleep and recovery; not a training device"
+
+[sources.coros-watch]
+label = "COROS wrist wearable"
+kind = "watch"
+role = "device"
+aliases = ["coros"]
+
+[sources.suunto-watch]
+label = "Suunto wrist wearable"
+kind = "watch"
+role = "device"
+aliases = ["suunto"]
+
+[sources.amazfit-watch]
+label = "Amazfit wrist wearable"
+kind = "watch"
+role = "device"
+aliases = ["amazfit", "zepp"]
+
+[sources.polar-strap]
+label = "Polar chest strap"
+kind = "chest_strap"
+role = "device"
+aliases = ["polar h9", "polar h10", "h10"]
+
+[sources.garmin-strap]
+label = "Garmin chest strap"
+kind = "chest_strap"
+role = "device"
+aliases = ["hrm-pro", "hrm dual"]
+
+[sources.wahoo-strap]
+label = "Wahoo chest strap"
+kind = "chest_strap"
+role = "device"
+aliases = ["tickr", "wahoo"]
+
+[sources.withings-scale]
+label = "Withings body-composition scale"
+kind = "scale"
+role = "device"
+aliases = ["withings", "body+", "body cardio", "nokia scale"]
+
+[sources.fitbit-scale]
+label = "Fitbit body-composition scale"
+kind = "scale"
+role = "device"
+aliases = ["aria", "fitbit aria"]
+
+[sources.garmin-scale]
+label = "Garmin body-composition scale"
+kind = "scale"
+role = "device"
+aliases = ["index scale"]
+
+[sources.tanita-scale]
+label = "Tanita body-composition scale"
+kind = "scale"
+role = "device"
+aliases = ["tanita"]
+
+[sources.renpho-scale]
+label = "Renpho body-composition scale"
+kind = "scale"
+role = "device"
+aliases = ["renpho"]
+
+[sources.mechanical-scale]
+label = "Mechanical or non-connected scale"
+kind = "scale"
+role = "device"
+aliases = ["dial scale", "analogue scale", "bathroom scales"]
+note = "mass only; no impedance"
+
+[sources.dexa]
+label = "DEXA scanner"
+kind = "scale"
+role = "device"
+aliases = ["dxa", "dexa scan", "bodyscan"]
+note = "anchor-class body composition"
+
+[sources.bodpod]
+label = "Air-displacement plethysmograph"
+kind = "scale"
+role = "device"
+aliases = ["bod pod", "adp"]
+
+[sources.tape-measure]
+label = "Tape measure"
+kind = "scale"
+role = "device"
+aliases = ["tape", "measuring tape"]
+note = "circumferences only - they live in `measurements`, not as a daily field"
+
+[sources.concept2-pm]
+label = "Concept2 PM monitor"
+kind = "gym_console"
+role = "device"
+aliases = ["pm5", "pm4", "concept2", "c2"]
+note = "the reference rowing ergometer monitor"
+
+[sources.rower-console]
+label = "Rowing machine console"
+kind = "gym_console"
+role = "device"
+aliases = ["rower", "rowing machine", "ergometer", "matrix rower"]
+
+[sources.treadmill-console]
+label = "Treadmill console"
+kind = "gym_console"
+role = "device"
+aliases = ["treadmill"]
+
+[sources.bike-console]
+label = "Stationary bike console"
+kind = "gym_console"
+role = "device"
+aliases = ["exercise bike", "spin bike", "turbo"]
+
+[sources.elliptical-console]
+label = "Elliptical console"
+kind = "gym_console"
+role = "device"
+aliases = ["cross trainer", "crosstrainer", "elliptical"]
+
+[sources.stair-console]
+label = "Stair climber console"
+kind = "gym_console"
+role = "device"
+aliases = ["stairmaster", "stair machine"]
+
+[sources.gym-console]
+label = "Gym equipment console, unspecified"
+kind = "gym_console"
+role = "device"
+aliases = ["machine console", "console"]
+note = "use when the machine kind is not recorded"
+
+[sources.myfitnesspal]
+label = "MyFitnessPal"
+kind = "app"
+role = "app"
+aliases = ["mfp", "my fitness pal"]
+
+[sources.cronometer]
+label = "Cronometer"
+kind = "app"
+role = "app"
+aliases = ["chronometer"]
+
+[sources.lose-it]
+label = "Lose It!"
+kind = "app"
+role = "app"
+aliases = ["loseit"]
+
+[sources.nutracheck]
+label = "Nutracheck"
+kind = "app"
+role = "app"
+aliases = []
+
+[sources.hevy]
+label = "Hevy"
+kind = "app"
+role = "app"
+aliases = []
+note = "resistance logging"
+
+[sources.strong]
+label = "Strong"
+kind = "app"
+role = "app"
+aliases = []
+note = "resistance logging"
+
+[sources.trainingpeaks]
+label = "TrainingPeaks"
+kind = "app"
+role = "app"
+aliases = ["training peaks"]
+
+[sources.runna]
+label = "Runna"
+kind = "app"
+role = "app"
+aliases = []
+note = "plan source"
+
+[sources.strava]
+label = "Strava"
+kind = "platform"
+role = "aggregator"
+aliases = ["strava export", "strava api"]
+note = "predominantly receives; rarely records"
+
+[sources.polar-flow]
+label = "Polar Flow"
+kind = "platform"
+role = "aggregator"
+aliases = ["flow"]
+
+[sources.garmin-connect]
+label = "Garmin Connect"
+kind = "platform"
+role = "aggregator"
+aliases = ["connect"]
+
+[sources.fitbit-service]
+label = "Fitbit web service"
+kind = "platform"
+role = "aggregator"
+aliases = ["fitbit api", "fitbit takeout", "fitbit export"]
+
+[sources.apple-health]
+label = "Apple Health"
+kind = "platform"
+role = "aggregator"
+aliases = ["healthkit", "health app"]
+note = "per-sample source and device; the best case for a chain"
+
+[sources.google-fit]
+label = "Google Fit / Google Health"
+kind = "platform"
+role = "aggregator"
+aliases = ["google health", "health connect", "takeout"]
+note = "aggregated series; the originating device is often lost entirely"
+
+[sources.samsung-health]
+label = "Samsung Health"
+kind = "platform"
+role = "aggregator"
+aliases = []
+
+[sources.zwift]
+label = "Zwift"
+kind = "platform"
+role = "aggregator"
+aliases = []
+note = "virtual riding and running"
+
+[sources.athlete]
+label = "The athlete, writing or saying it"
+kind = "person"
+role = "manual"
+aliases = ["self", "me", "hand", "manual", "by hand", "stated-in-chat", "spreadsheet", "notebook"]
+note = "first-hand and fallible, but not a pipeline - see #73 on why this must be ranked"
+
+[sources.clinician]
+label = "A clinician's record"
+kind = "person"
+role = "manual"
+aliases = ["gp", "doctor", "physio", "nurse"]
+
+[sources.other]
+label = "A real source not in this catalog"
+kind = "unknown"
+role = "unknown"
+aliases = []
+note = "carries its own `kind`; there is deliberately no other-console or other-app"
+
+[sources.unknown]
+label = "Not stated"
+kind = "unknown"
+role = "unknown"
+aliases = []
+note = "absent, which is not the same as `other`"

@@ -193,6 +193,14 @@ def resolve_setting(written: object) -> str | None:
     return resolve("settings", "settings", written)
 
 
+def sources() -> list[str]:
+    return values("sources", "sources")
+
+
+def source_kinds() -> list[str]:
+    return values("sources", "kinds")
+
+
 # --- restriction axes ---------------------------------------------------------
 
 AXES = ("pattern", "region", "load", "plane", "activity")
