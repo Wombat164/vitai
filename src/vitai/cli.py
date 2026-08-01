@@ -733,6 +733,43 @@ def _resolve_impl(spec: str, kind: str, at: Path):
         sys.exit(f"could not construct {spec!r}: {e}")
 
 
+def cmd_key(args: argparse.Namespace) -> None:
+    """Generate a recovery key, or check a phrase against its checksum (#107).
+
+    `check` is the half that matters. The failure mode is not "never wrote it
+    down" - it is "believed they wrote it down correctly", and a phrase is
+    only a backup once something has confirmed it reads back.
+    """
+    from .recovery import from_phrase, generate, to_phrase
+
+    if args.action == "new":
+        key = generate()
+        print("Write BOTH of these down. They will not be shown again.\n")
+        print(f"  phrase (for paper): {to_phrase(key)}")
+        print(f"  key (for a password manager): {key.hex()}\n")
+        print("Then run `vitai key check` and type the phrase from the PAPER "
+              "copy - not from this screen. A phrase you have not read back "
+              "is not a backup, and there is no recovery path by design.")
+        return
+
+    # STDIN by default. Passing the phrase as an argument writes the key
+    # itself into shell history and shows it in `ps` for the life of the
+    # process - which is a poor way to treat a secret in a module whose
+    # premise is that nobody else can read it.
+    if args.phrase:
+        print("note: a phrase given as an argument is now in your shell "
+              "history and was visible to other processes. Type it at the "
+              "prompt instead next time.", file=sys.stderr)
+        typed = " ".join(args.phrase)
+    else:
+        print("Type the recovery phrase from your paper copy:", file=sys.stderr)
+        typed = sys.stdin.readline()
+    key, problem = from_phrase(typed)
+    if key is None:
+        sys.exit(problem)
+    print("this phrase checks out")
+
+
 def cmd_conform(args: argparse.Namespace) -> None:
     """Run a contract against an implementation (#108).
 
@@ -1132,6 +1169,8 @@ def main(argv: list[str] | None = None) -> None:
          "logged sets, in the order they were performed"),
         ("meals", cmd_meals,
          "itemised meal estimates, with the range and the open questions"),
+        ("key", cmd_key,
+         "generate a recovery key, or check a phrase you have written down"),
         ("conform", cmd_conform,
          "run the transport or custody contract against an implementation"),
         ("journal", cmd_journal,
@@ -1178,6 +1217,10 @@ def main(argv: list[str] | None = None) -> None:
                            help="show the last N per-goal contributions (0 = none)")
         if name == "append":
             p.add_argument("dataset", help="which dataset to append to")
+        if name == "key":
+            p.add_argument("action", choices=("new", "check"))
+            p.add_argument("phrase", nargs="*",
+                           help="the phrase to check, as written down")
         if name == "conform":
             p.add_argument("--transport", metavar="IMPL",
                            help="dotted path to a Transport, or 'directory' "

@@ -9,7 +9,6 @@ interface never exposed.
 
 import ast
 import hashlib
-import hmac
 import os
 from pathlib import Path
 
@@ -17,39 +16,10 @@ import pytest
 
 from vitai import conform, sync
 from vitai.cli import main
+from helpers_cipher import ToyCipher
 from vitai.sync import (DirectoryTransport, EnvCustody, FileCustody,
                         MemoryTransport, MirrorTransport, blob_id, pad,
                         plan_download, plan_upload, unpad)
-
-
-class ToyCipher:
-    """NOT a cipher, and named so nobody mistakes it for one.
-
-    A keyed XOR: it exercises the seam and would not survive a moment's
-    scrutiny as encryption. It exists because the engine ships no cipher on
-    purpose - the standard library has no AEAD and hand-rolling one is how
-    this goes wrong - and a test needs SOMETHING in that slot to prove the
-    slot works.
-    """
-
-    def seal(self, key: bytes, plaintext: bytes) -> bytes:
-        stream = self._stream(key, len(plaintext))
-        body = bytes(a ^ b for a, b in zip(plaintext, stream))
-        return hmac.new(key, body, hashlib.sha256).digest() + body
-
-    def open(self, key: bytes, blob: bytes) -> bytes | None:
-        tag, body = blob[:32], blob[32:]
-        if not hmac.compare_digest(tag, hmac.new(key, body,
-                                                 hashlib.sha256).digest()):
-            return None
-        return bytes(a ^ b for a, b in zip(body, self._stream(key, len(body))))
-
-    @staticmethod
-    def _stream(key: bytes, size: int) -> bytes:
-        out = b""
-        while len(out) < size:
-            out += hashlib.sha256(key + len(out).to_bytes(8, "big")).digest()
-        return out[:size]
 
 
 KEY = bytes(range(32))
