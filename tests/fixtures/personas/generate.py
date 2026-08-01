@@ -18,6 +18,7 @@ No real person's data is ever in this repo.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from datetime import date
 from pathlib import Path
@@ -44,9 +45,8 @@ def _discover() -> dict:
         if info.name.startswith("_") or info.name == "common":
             continue
         mod = importlib.import_module(f"_gen.{info.name}")
-        build = getattr(mod, "build", None)
-        if callable(build):
-            found[info.name] = build
+        if callable(getattr(mod, "build", None)):
+            found[info.name] = mod
     return found
 
 
@@ -70,8 +70,25 @@ def _read_all(root: Path) -> dict[str, str]:
     return out
 
 
+def _files_for(slug: str, end: date) -> dict[str, str]:
+    """A persona's complete generated output: its builder's files plus the
+    emitted persona.toml (doctrine versioning), whose span is computed from
+    the data rows themselves so the file cannot disagree with the record."""
+    mod = SLUGS[slug]
+    files = mod.build(end)
+    dates = sorted(
+        json.loads(line)["date"]
+        for rel, text in files.items()
+        if rel.startswith("data/") and rel.endswith(".jsonl")
+        for line in text.splitlines() if line.strip()
+    )
+    files["persona.toml"] = common.persona_toml(
+        slug, mod.PERSONA_VERSION, mod.SEED, (dates[0], dates[-1]))
+    return files
+
+
 def _write(slug: str, target: Path, end: date) -> None:
-    files = SLUGS[slug](end)
+    files = _files_for(slug, end)
     for rel_path, text in files.items():
         path = target / rel_path
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -81,7 +98,7 @@ def _write(slug: str, target: Path, end: date) -> None:
 def _check(slugs: list[str], end: date) -> int:
     drifted = False
     for slug in slugs:
-        want = SLUGS[slug](end)
+        want = _files_for(slug, end)
         got = _read_all(HERE / slug)
         keys = set(want) | {k for k in got if k.endswith(_COMPARABLE_SUFFIXES)}
         drift = [k for k in sorted(keys) if want.get(k) != got.get(k)]

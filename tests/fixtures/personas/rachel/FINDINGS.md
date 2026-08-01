@@ -1,5 +1,7 @@
 # rachel: what this corpus is designed to break
 
+Findings below were exposed by rachel@1 (see persona.toml; docs/persona-doctrine.md requires findings to record the persona version that exposed them).
+
 A persona whose record is clean and consistent tests almost nothing. Each
 item below names the machinery under test and the expected behaviour, in the
 medical boundary's terms: the engine observes the record and constrains its

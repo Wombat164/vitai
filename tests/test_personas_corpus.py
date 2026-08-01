@@ -33,6 +33,7 @@ from vitai.api import Vitai
 from vitai.schema import validate_record
 
 PERSONAS = Path(__file__).parent / "fixtures" / "personas"
+sys.path.insert(0, str(PERSONAS))
 EXPECTATION_KINDS = {"lie", "behavior", "gap"}
 
 # Phrases whose presence in ground-truth prose would put the corpus itself
@@ -142,6 +143,51 @@ def test_every_documented_lie_has_ground_truth(slug: str) -> None:
         assert lies_md.exists(), (
             f"{slug} ships lie rows but no LIES.md documenting them"
         )
+
+
+@pytest.mark.parametrize("slug", slugs())
+def test_persona_toml_is_the_asserted_identity(slug: str) -> None:
+    """docs/persona-doctrine.md: three things drift and they are not one
+    version. persona.toml is the machine-readable statement of all three,
+    and tests assert on it rather than trusting prose."""
+    import importlib
+    import tomllib
+
+    meta = tomllib.loads(
+        (PERSONAS / slug / "persona.toml").read_text(encoding="utf-8"))
+    mod = importlib.import_module(f"_gen.{slug}")
+
+    assert meta["persona"]["slug"] == slug
+    assert meta["persona"]["version"] == mod.PERSONA_VERSION >= 1
+    assert meta["persona"]["seed"] == mod.SEED
+
+    dates = sorted(
+        json.loads(line)["date"]
+        for path in (PERSONAS / slug / "data").glob("*.jsonl")
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    )
+    assert meta["persona"]["span"] == [dates[0], dates[-1]]
+
+    from _gen import common
+    assert meta["schema"]["contract"] == common.AUTHORED_AGAINST_CONTRACT
+    assert meta["schema"]["generations"] == common.AUTHORED_AGAINST_GENERATIONS
+
+
+@pytest.mark.parametrize("slug", slugs())
+def test_findings_attribute_a_persona_version(slug: str) -> None:
+    """A finding that does not name the persona version that exposed it
+    cannot be checked later for whether the evidence still exists."""
+    text = (PERSONAS / slug / "FINDINGS.md").read_text(encoding="utf-8")
+    import tomllib
+
+    meta = tomllib.loads(
+        (PERSONAS / slug / "persona.toml").read_text(encoding="utf-8"))
+    tag = f"{slug}@{meta['persona']['version']}"
+    assert tag in text, (
+        f"{slug}/FINDINGS.md never cites {tag}; findings must record the "
+        f"persona version that exposed them"
+    )
 
 
 def test_rachel_inflated_walks_resolve_to_device(tmp_path: Path) -> None:

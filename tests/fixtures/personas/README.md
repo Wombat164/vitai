@@ -77,11 +77,19 @@ conclusions, not vibes.
 
 ## Rules
 
-- **Never tidy a persona to make a test pass.** The mess is the point.
-- **Never delete a persona whose findings have not shipped.** Retire only when
-  every gap it raised is built and fixtured.
-- **Personas are synthetic and stay synthetic.** No real person's data enters
-  this directory, ever.
+The rules that used to live here are now `docs/persona-doctrine.md`, which
+governs what makes a persona valid, how personas are versioned, and when a
+finding counts; this README stays the index of who exists and what each one
+stresses. Corpus mechanics the doctrine leaves to us:
+
+- Every persona carries a generator-emitted `persona.toml`: its
+  `persona_version` (bumps only when the history could change an engine
+  output), its seed, its span, and the schema shape (contract version plus
+  per-dataset generations) its corpus was last regenerated under. Tests
+  assert on this file, not on prose.
+- FINDINGS.md attributes every finding to the persona version that exposed
+  it (`rachel@1 exposed ...`), so a later edit can be checked for whether
+  the evidence still exists.
 - **Expected behaviour stays inside the medical boundary.** Personas may
   report anything a person would; `docs/medical-boundary.md` governs every
   "expect" string: observation and self-constraint, nothing else.

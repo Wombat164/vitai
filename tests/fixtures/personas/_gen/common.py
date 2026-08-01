@@ -138,9 +138,11 @@ class Stamper:
     date itself dominates the instant comparison.
     """
 
-    def __init__(self, base_hour: int = 21, step_seconds: int = 45):
+    def __init__(self, base_hour: int = 21, step_seconds: int = 45,
+                 offset=irish_offset):
         self._base_hour = base_hour
         self._step = step_seconds
+        self._offset = offset
         self._counts: dict[date, int] = {}
 
     def stamp(self, d: date) -> str:
@@ -150,7 +152,7 @@ class Stamper:
         hh = self._base_hour + total_seconds // 3600
         mm = (total_seconds // 60) % 60
         ss = total_seconds % 60
-        return f"{d.isoformat()}T{hh:02d}:{mm:02d}:{ss:02d}{irish_offset(d)}"
+        return f"{d.isoformat()}T{hh:02d}:{mm:02d}:{ss:02d}{self._offset(d)}"
 
 
 def _instant(rec: dict) -> datetime:
@@ -187,7 +189,7 @@ def sort_rows(rows: list[dict]) -> list[dict]:
 # --- record skeletons -----------------------------------------------------------
 
 
-def record(dataset: str, **kw) -> dict:
+def record(dataset: str, /, **kw) -> dict:
     """A dataset line with every key from `KEYS[dataset]` present.
 
     Every value defaults to null; `_gen` defaults to the CURRENT_GENERATION
@@ -196,6 +198,11 @@ def record(dataset: str, **kw) -> dict:
     arguments then override whichever fields it actually knows, exactly the
     "skeleton plus override" builder pattern `examples/generate_demo.py`
     uses for its own `_goal`/`_event` helpers.
+
+    The first parameter is positional-only, so a dataset whose own schema
+    carries a field literally named `dataset` (goals does) can set it as an
+    ordinary keyword: `record("goals", dataset="daily")`. Wave one of the
+    persona build lost time to that collision three times over.
     """
     if dataset not in KEYS:
         raise KeyError(f"unknown dataset {dataset!r}; one of {sorted(KEYS)}")
@@ -212,6 +219,40 @@ def jsonl_text(rows: list[dict]) -> str:
     """One `json.dumps` per row, newline-joined, with a trailing newline -
     the exact shape `examples/generate_demo.py` writes and `vitai` reads."""
     return "\n".join(json.dumps(r) for r in rows) + "\n"
+
+
+def persona_toml(slug: str, version: int, seed: int,
+                 span: tuple[str, str]) -> str:
+    """The persona's machine-readable identity, per docs/persona-doctrine.md.
+
+    Three things drift and they are not one version: the schema shape the
+    corpus was last regenerated under (pinned corpus-wide above, restated
+    here so a test can assert on the file), the persona version (bumped in
+    the persona's module only when the history could change an engine
+    output), and the seed (reproducing bytes). The [schema] block is
+    deliberately the shape a content repo would embed to pin the engine it
+    was authored against; the known "no engine-version pin in the content
+    repo" gap is this same problem one level up.
+    """
+    lines = [
+        "# Emitted by generate.py; do not edit by hand. Bump PERSONA_VERSION",
+        "# in _gen/" + slug + ".py only when the history could change an",
+        "# engine output (docs/persona-doctrine.md).",
+        "",
+        "[persona]",
+        f'slug = "{slug}"',
+        f"version = {version}",
+        f"seed = {seed}",
+        f'span = ["{span[0]}", "{span[1]}"]',
+        "",
+        "[schema]",
+        f'contract = "{AUTHORED_AGAINST_CONTRACT}"',
+        "",
+        "[schema.generations]",
+    ]
+    for name in sorted(AUTHORED_AGAINST_GENERATIONS):
+        lines.append(f"{name} = {AUTHORED_AGAINST_GENERATIONS[name]}")
+    return chr(10).join(lines) + chr(10)
 
 
 def write_text(path: Path, text: str) -> None:

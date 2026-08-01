@@ -1,0 +1,14 @@
+# priya: synthetic persona corpus, thresholds tuned to her record.
+[tripwires]
+sleep_floor_h = 6.0
+
+# Exactly one source appears anywhere in this record: hand-typed, no
+# wearable, ever. Once [resolution] exists at all, an unlisted source is a
+# hard validate failure, not a warning (handbook pitfall 4).
+[resolution]
+source_order = ["hand"]
+
+[preferences]
+suppressed_metrics = []
+nudge_ok = false
+check_tolerance = 0.02

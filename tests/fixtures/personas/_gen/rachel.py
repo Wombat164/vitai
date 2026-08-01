@@ -28,6 +28,9 @@ from datetime import date, timedelta
 from . import common
 
 SEED = 108
+# Bumped only when the history could change an engine output
+# (docs/persona-doctrine.md); never for prose, typos, or findings.
+PERSONA_VERSION: int = 1
 
 # The record's own calendar. These are prose facts (PROFILE.md, WORLD.md),
 # not derived from the CLI's `--end`, because the story - nine months flat,
