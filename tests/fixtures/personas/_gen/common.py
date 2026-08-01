@@ -49,7 +49,13 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # row - which is the correct reading for a corpus that predates multi-device
 # support, and nothing here should assert a machine it never had. The contract
 # is unchanged at 15; only the generations moved.
-AUTHORED_AGAINST_CONTRACT = "16"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #148, which added a `policy` row to the read model's `meta`
+# table. REVIEWED rather than bumped: no builder here reads `meta` or builds
+# a read model at all - they write JSONL - and no dataset shape moved, so
+# every generation below is unchanged. Confirmed by regenerating: the
+# committed corpora came back byte-identical, which is the evidence that the
+# contract move did not reach them.
+AUTHORED_AGAINST_CONTRACT = "17"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,

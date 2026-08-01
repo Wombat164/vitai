@@ -6,6 +6,29 @@ versioning follows [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **A policy digest on the read model, contract 17** (#148). `as_of`
+  reconstructs the record by filtering `recorded_at`. That is right for
+  everything the record holds and wrong for everything it does not, and
+  threshold baselines are in the second category: they live in `vitai.toml`,
+  a mutable file with no history.
+
+  `thresholds.jsonl` overlays five keys per week, which was the G14 fix, but
+  a week carrying no dated row is still judged against whatever the toml says
+  **today** - and the rest of the config (rate phases, the resolution ladder,
+  suppressed metrics, the check tolerance, the intake buffer) has no dated
+  history at all. So editing a threshold in September silently re-judges
+  every historical week that lacked an explicit row. A reconstruction of
+  March returns March's data under September's policy.
+
+  This does not fix that. It makes it **detectable**: `meta.policy` carries a
+  content hash of the policy the record does not hold, so a reconstruction
+  taken under one config and one taken under another can be known to be
+  incomparable rather than quietly differing. Build systems put the
+  environment in an action's identity for the same reason. The claims in
+  `policy.py`, `jsonl.load` and `Vitai.as_of` are narrowed to match what they
+  actually deliver; finishing G14, so a toml change is snapshotted into the
+  record and `state` becomes total, remains open.
+
 - **Key custody: an untested backup is not a backup** (#107). `vitai key new`
   and `vitai key check`, plus a setup that cannot report success without a
   passing restore drill.
