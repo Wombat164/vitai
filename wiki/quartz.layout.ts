@@ -1,4 +1,4 @@
-// quartz.layout.ts -- Quartz v4 layout for the vitai documentation site.
+// quartz.layout.ts: Quartz v4 layout for the vitai documentation site.
 //
 // Verified against the official Quartz v4 docs + the canonical v4 branch (June 2026):
 //   - Layout reference:        https://quartz.jzhao.xyz/layout
@@ -12,6 +12,8 @@
 
 import { PageLayout, SharedLayout } from "./quartz/cfg"
 import * as Component from "./quartz/components"
+// Custom, copied into quartz/components/ by the deploy workflow's overlay step.
+import RepoLink from "./quartz/components/RepoLink"
 
 // components shared across all pages
 export const sharedPageComponents: SharedLayout = {
@@ -20,7 +22,6 @@ export const sharedPageComponents: SharedLayout = {
   afterBody: [],
   footer: Component.Footer({
     links: {
-      // PLACEHOLDER -- replace with the public vitai repo URL once published.
       GitHub: "https://github.com/Wombat164/vitai",
       "Built with Quartz": "https://quartz.jzhao.xyz/",
     },
@@ -40,6 +41,9 @@ export const defaultContentPageLayout: PageLayout = {
   ],
   left: [
     Component.PageTitle(),
+    // Directly under the site title, so the way back to the engine this
+    // documents is visible without scrolling to the footer.
+    RepoLink(),
     Component.MobileOnly(Component.Spacer()),
     Component.Flex({
       components: [
@@ -65,6 +69,9 @@ export const defaultListPageLayout: PageLayout = {
   beforeBody: [Component.Breadcrumbs(), Component.ArticleTitle(), Component.ContentMeta()],
   left: [
     Component.PageTitle(),
+    // Directly under the site title, so the way back to the engine this
+    // documents is visible without scrolling to the footer.
+    RepoLink(),
     Component.MobileOnly(Component.Spacer()),
     Component.Flex({
       components: [

@@ -2,35 +2,93 @@
 title: Data model
 ---
 
-Three health-domain datasets, one JSON object per line, keys never omitted
-(`null` for unknown), units in the key name, ISO-8601 dates.
+Sixteen datasets, one JSON object per line, keys never omitted (`null` for
+unknown), units in the key name, ISO-8601 dates. Append-only: a line is never
+edited in place.
 
-## data/weight.jsonl
+## What happened
+
+| File | One line per | Example keys |
+|---|---|---|
+| `weight.jsonl` | weigh-in | `kg`, `source`, `measured_at`, `body_fat_pct` |
+| `daily.jsonl` | day | `steps`, `kcal_in`, `kcal_out`, `sleep_h`, `rhr`, `pain`, `pain_site` |
+| `sessions.jsonl` | training session | `type`, `distance_km`, `duration_s`, `avg_hr`, `rpe`, `track` |
+| `sets.jsonl` | **one set** | `exercise`, `reps_completed`, `reps_attempted`, `load`, `failure` |
+| `meals.jsonl` | **one item** | `item`, `grams`, `grams_lo`, `grams_hi`, `food_table` |
+| `measurements.jsonl` | instrument reading | `kind`, `value`, `source` |
+
+## What you were aiming at, and what you were told
+
+| File | One line per | Example keys |
+|---|---|---|
+| `goals.jsonl` | goal declaration or edit | `slug`, `metric`, `target`, `policy` |
+| `thresholds.jsonl` | threshold change | `key`, `value`, `change_kind`, `reason` |
+| `achievements.jsonl` | recorded accomplishment | `title`, `goal`, `occurred_date` |
+| `events.jsonl` | dated real-world fixture | `slug`, `event_date`, `priority`, `immovable` |
+| `context.jsonl` | situational mode change | `mode`, `facilities`, `place` |
+| `medical.jsonl` | step in one episode's lifecycle | `slug`, `kind`, `status`, `restricts` |
+| `checks.jsonl` | a check performed | `slug`, `result`, `value` |
+| `journal.jsonl` | something said or decided | `kind`, `text`, `about`, `status` |
+| `inferences.jsonl` | a MODEL-inferred claim | `statement`, `confidence`, `model`, `depends_on` |
+| `artifacts.jsonl` | evidence kept for a value | `sha256`, `media_type`, `bytes`, `removed` |
+
+## Two datasets are finer-grained than they look
+
+**A set, not an exercise.** Anything coarser cannot say that a load was
+attempted and not completed, or that a set stopped short of failure.
 
 ```json
-{"date":"2030-05-01","kg":80.0,"source":"app","note":null}
+{"date":"2030-05-01","exercise":"push-up","set_index":1,
+ "reps_completed":13,"reps_attempted":13,"failure":null}
 ```
 
-## data/daily.jsonl
+`failure` is three states, `technical`, `muscular` or `volitional`, because
+"to failure" is ambiguous across all three. **`null` means UNSTATED and is
+never read as a maximum.** A load under `load_type: machine_stack` is a pin
+number, not a mass: 66 on two machines is two different loads.
+
+**An item, not a dish.** A dish-level number cannot be corrected, questioned,
+or say which part of it is uncertain.
 
 ```json
-{"date":"2030-05-01","steps":12000,"distance_km":9.1,"active_min":300,
- "kcal_out":2900,"kcal_in":2200,"protein_g":150,"sleep_h":7.5,"rhr":52,
- "hip_pain":0,"alcohol":false,"note":null}
+{"date":"2030-05-01","meal":"lunch","item":"chicken thigh",
+ "grams":150,"grams_lo":130,"grams_hi":180,"kcal_100g":209,
+ "food_table":"usda-fdc"}
 ```
 
-`hip_pain` is a 0-10 scale and drives the pain-gate tripwire.
+There is no confidence field. No corpus of photo-estimated meals scored
+against weighed truth exists, so a number there would be a decimal point
+pretending to be calibration. **The range is the confidence statement.**
 
-## data/sessions.jsonl
+## How a value says where it came from
 
-```json
-{"date":"2030-05-01","type":"run","distance_km":8.0,"duration_s":2700,
- "avg_hr":148,"max_hr":null,"cadence":170,"kcal":500,"location":null,
- "rpe":6,"note":null}
-```
+Every observation dataset carries the provenance chain:
 
-`type` is one of `run`, `gym_a`, `gym_b`, `walk`, `test`, `other`. Pace and
-averages are derived on build, never stored.
+- **`source`** is the terminus: which app, device or person the value reached
+  us from. A catalogued registry, not free text.
+- **`origin`** is what actually observed it, and **`path`** the hops in
+  between. A step count relayed by three apps has one origin and three hops.
+- **`capture`** is HOW it was acquired: `narrative`, `photo`, `ble`,
+  `connector`, `file_export`, `manual_entry`, `derived`, `unknown`. Plus
+  `read_by` when somebody else entered it.
+- **`modelled`** names the fields on a row that are model output rather than
+  observation. **A consumer summing a column must check it**: an inflated
+  estimate reaching a deficit reads ON TARGET while the scale goes up.
+- **`artifact`** is a content address (`sha256:...`) for the evidence the
+  value was read from.
+
+## Three clocks
+
+| Clock | Question | Set by |
+|---|---|---|
+| `date` | when did this become true | you, and legitimately backdated |
+| `recorded_at` | when was this line written | the machine, never by hand |
+| `measured_at` / `start_time` | when was it measured | the device |
+
+`recorded_at` makes the record **bitemporal**, which is what lets
+`Vitai(root, as_of=...)` reconstruct what the record said at a past instant
+rather than what it says now with hindsight applied. That is a different
+question from which goals applied on a given date.
 
 ## Corrections: append, never mutate
 
@@ -40,7 +98,18 @@ averages are derived on build, never stored.
 ```
 
 The loader drops superseded lines; git history plus the supersedes chain is
-the audit trail.
+the audit trail. Datasets whose rows are not unique per date key on an
+identity tuple instead, so a correction can name one set out of four rather
+than retiring the whole block.
+
+## Retired keys stay legal
+
+A generalised key is retired, not removed: an old line carrying it keeps
+validating, and the engine reads it forward. `daily.hip_pain` became
+`pain` + `pain_site`; `sessions.location` became `place` + `route`.
+
+Write the current names on new lines. Retiring is a three-part change, and the
+part that gets missed is that every reader must prefer the successor.
 
 ## Thresholds (`vitai.toml`)
 
@@ -54,4 +123,7 @@ the audit trail.
 # steps_floor = 10000
 # sleep_floor_h = 7.0
 # pain_gate = 3
+
+[preferences]
+# intake_buffer_pct = 15   # margin on ESTIMATED intake, applied to all or none
 ```

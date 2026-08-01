@@ -5,6 +5,26 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-01
+
+The increment where the record learned to say how it knows things, and the
+engine learned to stop talking.
+
+Three threads ran together. **Provenance became total**: origin, path, capture,
+value-kind, a catalogued source registry, a content-addressed store for the
+evidence behind a value, and transaction time on every dataset, so a number can
+now say which instrument produced it, how it was acquired, whether it was
+measured at all, and what the record said about it at any past instant.
+**Strength training became first-class**: the set is the atom, with an exercise
+registry, modifier axes and reads that refuse rather than guess. And **the
+medical boundary was drawn and enforced**: the engine states what the record
+shows, declines to issue a plan, and routes nobody, with a deterministic lint
+over the whole public surface so the line cannot erode quietly.
+
+Nine synthetic athletes now live in the test suite, each built to break
+something, each carrying deliberate falsehoods with their ground truth.
+
+
 ### Added
 - **A deterministic medical-boundary lint over the public surface** (#117).
   `scripts/boundary_gate.py`, blocking in CI beside the personal-content gate.

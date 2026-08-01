@@ -47,6 +47,11 @@ jobs:
           cp wiki/quartz.layout.ts .quartz-build/quartz.layout.ts
           rm -rf .quartz-build/content
           cp -r wiki/content .quartz-build/content
+          # Custom components. Quartz ships no external-link component and
+          # quartz.layout.ts is a .ts file, so it cannot define JSX itself.
+          # Anything added under wiki/components/ must be copied here or the
+          # layout's import resolves to nothing and the build fails.
+          cp wiki/components/*.tsx .quartz-build/quartz/components/
 
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0

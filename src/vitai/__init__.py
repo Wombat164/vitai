@@ -4,4 +4,4 @@ Three layers: private content repo (markdown + JSONL), deterministic engine
 (this package), skill-driven intelligence (skills/). See ARCHITECTURE.md.
 """
 
-__version__ = "0.2.3"
+__version__ = "0.3.0"

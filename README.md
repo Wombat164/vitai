@@ -106,21 +106,34 @@ the key name. Three datasets record what happened:
 
 | File | One line per | Example keys |
 |---|---|---|
-| `data/weight.jsonl` | weigh-in | `kg`, `source` |
-| `data/daily.jsonl` | day | `steps`, `kcal_in`, `kcal_out`, `sleep_h`, `rhr`, `hip_pain` |
-| `data/sessions.jsonl` | training session | `type`, `distance_km`, `duration_s`, `avg_hr`, `rpe` |
+| `data/weight.jsonl` | weigh-in | `kg`, `source`, `measured_at` |
+| `data/daily.jsonl` | day | `steps`, `kcal_in`, `kcal_out`, `sleep_h`, `rhr`, `pain`, `pain_site` |
+| `data/sessions.jsonl` | training session | `type`, `distance_km`, `duration_s`, `avg_hr`, `rpe`, `track` |
+| `data/sets.jsonl` | **one SET**, not one exercise | `exercise`, `reps_completed`, `reps_attempted`, `load`, `failure` |
+| `data/meals.jsonl` | **one ITEM**, not one dish | `item`, `grams`, `grams_lo`, `grams_hi`, `food_table` |
+| `data/measurements.jsonl` | anchor read off an instrument | `kind`, `value`, `source` |
 
-...and three record what you were aiming at, dated:
+...and these record what you were aiming at, or what the engine was told, dated:
 
 | File | One line per | Example keys |
 |---|---|---|
 | `data/goals.jsonl` | goal declaration or edit | `slug`, `metric`, `target`, `policy`, `motivator` |
 | `data/thresholds.jsonl` | threshold change | `key`, `value`, `change_kind`, `reason` |
 | `data/achievements.jsonl` | recorded accomplishment | `title`, `goal`, `source` |
-| `data/measurements.jsonl` | anchor read off the scale | `kind`, `value`, `source` |
 | `data/context.jsonl` | situational mode change | `mode`, `facilities`, `place` |
 | `data/medical.jsonl` | step in one condition's lifecycle | `slug`, `kind`, `severity`, `status`, `restricts` |
 | `data/events.jsonl` | dated real-world fixture | `slug`, `kind`, `event_date`, `priority`, `immovable` |
+| `data/checks.jsonl` | a check performed and its result | `slug`, `result`, `value` |
+| `data/journal.jsonl` | something said, worried about, decided | `kind`, `text`, `about`, `status` |
+| `data/inferences.jsonl` | a MODEL-inferred claim | `statement`, `confidence`, `model`, `depends_on` |
+| `data/artifacts.jsonl` | evidence kept for a value | `sha256`, `media_type`, `bytes`, `removed` |
+
+Two of those are deliberately finer-grained than they look. **A set, not an
+exercise**: anything coarser cannot say that a load was attempted and not
+completed, or that a set stopped short of failure, and `failure: null` means
+UNSTATED and is never read as a maximum. **An item, not a dish**: a dish-level
+number cannot be corrected, cannot be questioned, and cannot say which part of
+it is uncertain.
 
 `sessions.start_time` should carry a UTC offset. Naive local time is still
 legal - existing rows are history, not mistakes - but two shapes cannot be
@@ -286,21 +299,33 @@ proven durable.
 
 ## Status
 
-Early scaffold (July 2026). The engine and skills work; connectors are
-doctrine plus stubs. Built from a real, in-use personal deployment.
+0.3.0 (August 2026). The engine, the skills and the boundary enforcement work;
+connectors are doctrine plus stubs. Built from a real, in-use personal
+deployment, and validated against nine synthetic athletes who each break
+something.
 
 > [!NOTE]
-> vitai is not a medical device and provides no medical advice. It is a
-> record, an arithmetic engine, and coaching heuristics; decisions about
-> injury, medication or symptoms belong with a clinician. See
-> [SECURITY.md](SECURITY.md) for the full threat model and data-privacy
-> notes.
+> **vitai logs training, nutrition and body data; builds and adjusts training
+> programmes; and lets you read your own record.** It is not intended to
+> identify, monitor, explain, treat or compensate for any disease, injury or
+> condition. Where the record is incomplete, or where you have flagged
+> something, the engine declines to produce a programme and says only that.
+> What you do about your health is yours to decide.
+>
+> See [the medical boundary](https://wombat164.github.io/vitai/explanation/medical-boundary)
+> for what that means in practice and how it is enforced, and
+> [SECURITY.md](SECURITY.md) for the threat model and data-privacy notes.
 
 ## Documentation
 
 - Docs site: <https://wombat164.github.io/vitai/> (built from `wiki/`)
 - **Model spine: [docs/model.md](docs/model.md)** - eight core principles,
   five artifact kinds, the full gap map. Read this first.
+- **The line: [docs/medical-boundary.md](docs/medical-boundary.md)** - what
+  the engine is for, what it may say, and the one exception. Read before
+  adding any feature, string or field that touches injury, pain or care.
+- Validation: [docs/persona-doctrine.md](docs/persona-doctrine.md) - how the
+  nine synthetic athletes work, and what makes one valid.
 - Design: [ARCHITECTURE.md](ARCHITECTURE.md) - the layers and what is
   deliberately not built
 - The design conversation: [docs/the-loop.md](docs/the-loop.md) (185+
