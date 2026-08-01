@@ -104,7 +104,8 @@ be interrogated for costs more than it returns:
   can only ever raise an escalation, never lower one - the engine has its own
   triggers and will fire regardless of what you conclude. Erring toward the
   flag is the cheap direction. Never write a medical line that reads as a
-  diagnosis; record what they said and let the engine route it.
+  diagnosis; record what they said and let the engine decide what it will
+  not program.
 
 If the athlete VOLUNTEERS context ("rainy, went with my partner"), capture
 it. That is the difference between a day that is legible in six months and a

@@ -192,18 +192,18 @@ for the weekly rollup, and `vitai safety` exits non-zero while it stands.
 Some rules fire with **no configuration at all** - absolute resting-heart-rate
 bounds, an intake floor, a protein floor - because a safety net you have to
 switch on protects only the people who already knew they needed it. The
-symptom net reads free-text notes too, since frightened people write "it's
+text rules read free-text notes too, since frightened people write "it's
 nothing, not really worth going on about" rather than filling in a field.
 
-The most serious finding raises a **clinical hold**: not a louder warning but
+The most serious finding raises a **hold**: not a louder warning but
 a suspension, routed through the same gate mechanism, so no plan or session is
 issued while the record still shows the pattern.
 
 None of it is diagnosis. Every escalation states what was observed and what
-vitai will therefore not do, and the
-thresholds are deliberately conservative screening bounds - the resting-heart-
-rate floor sits below a trained athlete's genuinely low rate, because a safety
-layer that cries wolf at normal physiology teaches people to ignore it.
+vitai will therefore not do, and the thresholds are deliberately conservative
+bounds outside which no training is programmed - the resting-heart-rate floor
+sits below a trained athlete's genuinely low rate, because a layer that
+refuses at normal physiology teaches people to ignore it.
 
 ### Where it hurts
 
