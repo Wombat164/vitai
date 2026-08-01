@@ -15,6 +15,23 @@ Increment 1 adds the goal story the contribution model exists to show:
 - a goal edit and a threshold change, so the record has an audit trail to
   reconstruct - including one loosening timed right after a missed week.
 
+The three newest datasets are here for the same reason: each one holds a fact
+the coarser datasets structurally could not.
+
+- `sets` (#97/#99/#60) gives the weekend gym sessions their sets, including an
+  attempted load that was not completed, a block nobody ever said was maximal,
+  a bodyweight movement whose load is the athlete, and one stack number that
+  looks comparable across two machines and is not.
+- `meals` (#96) itemises one photographed plate, with the range carried on the
+  part a photograph cannot settle and a zero-width one on the part a printed
+  pack already did, plus an item nobody has priced yet.
+- `journal` holds what the athlete SAID, including a claim the rest of the
+  record contradicts.
+
+`artifacts` is deliberately absent: the manifest is a pointer to a blob store,
+so a demo of it means committing blobs and a store to put them in, and a
+manifest with nothing behind it would demonstrate the opposite of the point.
+
     python examples/generate_demo.py          # (re)write examples/demo/
     python examples/generate_demo.py --check  # fail if committed data drifts
 
@@ -359,6 +376,15 @@ def _build(target: Path) -> None:
     context, measurements = _situational(start, END)
     medical = _medical(start, END)
     checks = _checks(END)
+    # Built AFTER the session and weight lists are final: the sets hang off
+    # sessions that exist and resolve their bodyweight against weigh-ins that
+    # exist, so neither can be chosen before both are.
+    sets = _strength(sessions, weight)
+    # On the two-source day on purpose, so the itemised partial day meets the
+    # athlete's own whole-day log and the record has to report the pair rather
+    # than pick one.
+    meals = _plates(two_source_day)
+    journal = _said(start, END)
 
     # The provenance pair above appends out of order, and `recorded_at` is
     # derived from the date, so file order must follow date order or the
@@ -371,7 +397,9 @@ def _build(target: Path) -> None:
                        ("goals", goals), ("thresholds", thresholds),
                        ("achievements", achievements), ("context", context),
                        ("measurements", measurements), ("medical", medical),
-                       ("checks", checks), ("events", events)):
+                       ("checks", checks), ("events", events),
+                       ("sets", sets), ("meals", meals),
+                       ("journal", journal)):
         (target / "data" / f"{name}.jsonl").write_text(
             _jsonl(rows), encoding="utf-8", newline="\n")
 
@@ -455,6 +483,85 @@ def _goal2(date: str, slug: str, title: str, metric, target, policy: str,
     rec = _goal(date, slug, title, metric, target, policy)
     rec.update({"_gen": 2, "event": None, "deadline_kind": None,
                 "verification": None, "change_kind": None})
+    rec.update(kw)
+    return rec
+
+
+def _stamp(rows: list[dict], hour: int) -> list[dict]:
+    """One strictly increasing `recorded_at` per row, in file order.
+
+    Transaction time is machine-set on append and monotonic by construction,
+    and `vitai validate` checks that across the WHOLE file: a repeated stamp
+    orders nothing, and one out of order is how a hand-written line gives
+    itself away. A demo that authored these by hand would fail the very check
+    it is meant to show working, so they are generated from file position.
+    """
+    for n, row in enumerate(rows):
+        row["recorded_at"] = f"{row['date']}T{hour:02d}:{n:02d}:00+02:00"
+    return rows
+
+
+# The seven configuration fields arrived at generation 3 (#99). A gen-2 line
+# does not owe them and must not carry them - that is the whole G25 property,
+# and `sets` is the only dataset here where both shapes can be shown inside
+# one increment rather than across the athlete's tracker changing hands.
+_SET_CONFIG_KEYS = ("equipment", "angle_class", "angle_deg",
+                    "resistance_level", "seat_pos", "pad_pos", "lever_pos")
+
+
+def _set(date: str, start: str, exercise: str, index: int, gen: int,
+         **kw) -> dict:
+    """A sets.jsonl line with every key its generation owes (null for unknown).
+
+    `set_index` is required rather than optional: it is what lets a correction
+    name one set out of five, and without it every unnumbered set of the same
+    exercise shares an identity, so retiring one retires them all.
+    """
+    rec = {"date": date, "session_start": start, "exercise": exercise,
+           "block": 1, "round": None, "set_index": index,
+           "reps_completed": None, "reps_attempted": None,
+           "load": None, "load_type": None, "load_unit": None, "machine": None,
+           "set_type": "working", "failure": None, "rir": None, "rpe": None,
+           "rest_s": None, "tempo": None, "duration_s": None, "side": None,
+           "note": None, "source": "app", "recorded_at": None,
+           "origin": None, "path": None, "origin_evidence": None,
+           "capture": None, "read_by": None}
+    if gen >= 3:
+        rec.update(dict.fromkeys(_SET_CONFIG_KEYS))
+    rec["_gen"] = gen
+    rec.update(kw)
+    return rec
+
+
+def _item(date: str, meal: str, item: str, **kw) -> dict:
+    """A meals.jsonl line: one ITEM of a plate, never a dish.
+
+    The per-100 g figures are what the table said, stored beside the table's
+    name, because a composition table is an external fact that gets revised -
+    a row holding only a gram count would silently re-price this plate the day
+    an update shipped. The energy is derived from the grams and never stored.
+    """
+    rec = {"date": date, "meal": meal, "item": item,
+           "grams": None, "grams_lo": None, "grams_hi": None,
+           "kcal_100g": None, "protein_100g": None, "fat_100g": None,
+           "carb_100g": None, "food_table": None, "note": None,
+           "source": "hand", "recorded_at": None, "origin": "athlete",
+           "path": None, "origin_evidence": None, "capture": None,
+           "read_by": None, "_gen": 2}
+    rec.update(kw)
+    return rec
+
+
+def _entry(date: str, kind: str, text: str, **kw) -> dict:
+    """A journal.jsonl line: what the ATHLETE said, in their own words.
+
+    Deliberately not an inference: an inference carries a `model` and is the
+    engine's output, so filing a first-hand statement there would launder the
+    athlete's own claim as something the engine worked out.
+    """
+    rec = {"date": date, "kind": kind, "text": text, "about": None,
+           "source": "athlete", "confidence": None, "status": "open",
+           "note": None, "recorded_at": None, "_gen": 2}
     rec.update(kw)
     return rec
 
@@ -678,6 +785,266 @@ def _checks(end: date) -> list[dict]:
         {"date": (end - timedelta(days=1)).isoformat(), "slug": "hop-test",
          "result": "pass", "value": 5, "source": "athlete", "note": None},
     ]
+
+
+def _strength(sessions: list[dict], weight: list[dict]) -> list[dict]:
+    """Sets for gym sessions the record ALREADY holds (#97/#99/#60).
+
+    Hung off existing sessions rather than invented beside them. A set whose
+    `session_start` names no session is a set nobody can put in a session, and
+    a demo arguing for this dataset with rows the rest of the file does not
+    corroborate would be arguing for nothing.
+
+    The three days are chosen by RULE rather than written down, so the block
+    survives a reseed: the earliest gym session that carries both a start_time
+    and a same-day weigh-in (the bodyweight block needs both to resolve), and
+    the last two gym weekends.
+
+    No RNG. Every draw in this file feeds one shared stream, so a single extra
+    `rng.random()` here would rewrite twelve committed datasets. The narrative
+    is hand-tuned anyway - these numbers are an argument, not a sample.
+    """
+    weighed = {row["date"] for row in weight}
+    # Only sessions past the provenance cutover carry a `start_time`, which is
+    # the leading identity field: without it a set can name its date but not
+    # its session, and two sessions on one day become indistinguishable.
+    gym = [s for s in sessions if s["type"] == "strength" and s.get("start_time")]
+    early = next(s for s in gym if s["date"] in weighed)
+    last = gym[-1]
+    # A week back, not simply the one before: the two stack readings below have
+    # to sit far enough apart to READ as a progression, because the point is
+    # that they are not one.
+    cutoff = (date.fromisoformat(last["date"]) - timedelta(days=5)).isoformat()
+    prior = [s for s in gym if s["date"] <= cutoff][-1]
+
+    rows: list[dict] = []
+    # --- the block nobody said was maximal -----------------------------------
+    # 13, 12, 10 with `failure` null throughout. Set 1 LOOKS like a maximum and
+    # set 2 holds 92% of it, where a set taken to genuine failure leaves 55-70%
+    # - so the real max is nearer 15 than 13, and the only reason anyone can
+    # tell is that the record says nobody stated an endpoint. Null is UNSTATED,
+    # and a reader that treats it as "to failure" gets the athlete's ceiling
+    # wrong by three reps.
+    #
+    # `bodyweight` means the load IS the athlete: `load` is null and resolves
+    # against the weigh-in on the day, which is also why push-ups get easier
+    # across a cut for reasons that have nothing to do with strength.
+    #
+    # Generation 2, and this is the honest half of the coexistence story: these
+    # were logged before the configuration columns existed, and a push-up would
+    # have had nothing to put in them anyway.
+    for index, reps in ((1, 13), (2, 12), (3, 10)):
+        rows.append(_set(
+            early["date"], early["start_time"], "push-up", index, 2,
+            reps_completed=reps, reps_attempted=reps, load_type="bodyweight",
+            rest_s=90, source="hand", origin="athlete",
+            origin_evidence="written in the notebook between sets",
+            capture="manual_entry"))
+
+    # --- the attempt that was not completed ----------------------------------
+    # Two different shapes, and they are different facts. Set 3 initiated five
+    # reps and finished four: the fifth stalled halfway, which is data about
+    # where the ceiling is. Set 4 initiated one and finished none - the
+    # `75 FAILED` line that is the single most informative set of a session and
+    # had nowhere to live until this dataset. Neither is the same fact as no
+    # row at all, which is what a set that was never attempted looks like.
+    #
+    # The back-off set closes the block on a `volitional` stop, so the file
+    # holds all three endpoint states beside each other: reps left by choice,
+    # reps that could not be completed, and nobody saying.
+    #
+    # Every set below is the athlete ASSERTING it - what changed since the
+    # notebook block is only where it was written down. The app is the
+    # terminus, never the observer, which is the whole distinction `source`
+    # alone was being asked to carry and could not.
+    logged = {"origin": "athlete", "capture": "manual_entry",
+              "origin_evidence": "typed into the gym app between sets"}
+    bench = [
+        _set(prior["date"], prior["start_time"], "bench-press", 1, 3,
+             set_type="warmup", reps_completed=8, reps_attempted=8,
+             load=40, load_type="external", load_unit="kg", rest_s=120,
+             equipment="barbell", angle_class="flat", **logged),
+        _set(prior["date"], prior["start_time"], "bench-press", 2, 3,
+             reps_completed=6, reps_attempted=6, load=60, load_type="external",
+             load_unit="kg", rir=2, rest_s=180, equipment="barbell",
+             angle_class="flat", **logged),
+        _set(prior["date"], prior["start_time"], "bench-press", 3, 3,
+             reps_completed=4, reps_attempted=5, load=70, load_type="external",
+             load_unit="kg", failure="muscular", rir=0, rest_s=180,
+             equipment="barbell", angle_class="flat", **logged,
+             note="the fifth stalled halfway up and came back down"),
+        _set(prior["date"], prior["start_time"], "bench-press", 4, 3,
+             reps_completed=0, reps_attempted=1, load=75, load_type="external",
+             load_unit="kg", failure="muscular", rir=0, rest_s=180,
+             equipment="barbell", angle_class="flat", **logged),
+        _set(prior["date"], prior["start_time"], "bench-press", 5, 3,
+             set_type="backoff", reps_completed=8, reps_attempted=8, load=60,
+             load_type="external", load_unit="kg", failure="volitional",
+             rir=2, rest_s=180, equipment="barbell", angle_class="flat",
+             **logged),
+    ]
+    rows += bench
+
+    # --- the number that is not a mass ---------------------------------------
+    # 66 on the blue-frame leg press, and 66 on the grey one a week later. A
+    # naive reader sees a load held flat across a week; there is no such fact
+    # here, because a stack number is a PIN POSITION on one manufacturer's
+    # scale and 66 on two machines is two different loads. `load_unit` is null
+    # for the same reason: stating kilograms would make the value look
+    # comparable, which is the one thing it is not.
+    #
+    # `seat_pos` differs between them, which is a second machine-scoped ordinal
+    # and travels with its machine for exactly the same reason.
+    rows.append(_set(
+        prior["date"], prior["start_time"], "leg-press", 1, 3, block=2,
+        reps_completed=12, reps_attempted=12, load=66,
+        load_type="machine_stack", machine="leg press (blue frame)",
+        rest_s=120, equipment="machine", seat_pos=4, **logged))
+    # --- a load the athlete carries, plus one they added ---------------------
+    # `bodyweight_plus` records the ADDED mass only, so the resolved load is
+    # the weigh-in plus ten - which makes it a MODELLED figure that must never
+    # sit beside barbell kilos as an equal number.
+    rows.append(_set(
+        last["date"], last["start_time"], "dip", 1, 3,
+        reps_completed=6, reps_attempted=7, load=10,
+        load_type="bodyweight_plus", load_unit="kg", failure="technical",
+        rest_s=150, equipment="plate", **logged,
+        note="the seventh went crooked and I racked it"))
+    rows.append(_set(
+        last["date"], last["start_time"], "leg-press", 1, 3, block=2,
+        reps_completed=12, reps_attempted=12, load=66,
+        load_type="machine_stack", machine="leg press (grey frame)",
+        rest_s=120, equipment="machine", seat_pos=3, **logged))
+
+    rows.sort(key=lambda r: (r["date"], r["block"], r["set_index"]))
+    return _stamp(rows, 20)
+
+
+def _plates(day: str) -> list[dict]:
+    """One photographed plate, itemised, plus a snack nobody has priced (#96).
+
+    Deliberately on the day the calorie app already logged a whole-day intake.
+    A partial day and a whole day are DIFFERENT QUANTITIES - the meals the
+    athlete did not photograph are missing from one and present in the other -
+    so the pair is reported and never resolved. Resolving it is the trap:
+    `stated-in-chat` outranks an app export in the precedence ladder, so
+    writing a photo estimate into `kcal_in` would displace the athlete's own
+    itemised log with a model's guess.
+
+    What the photograph settles and what it does not is the whole split. It
+    settles COMPOSITION well - skin-on thigh rather than breaded, which is 40
+    kcal/100 g of difference - and PORTIONS badly, which is what the ranges
+    carry. There is no confidence number anywhere here: no corpus of
+    photo-estimated meals scored against weighed truth exists, so a decimal
+    would be a calibration nobody has ever measured. The range IS the
+    confidence statement.
+    """
+    rows = [
+        # The item the photograph genuinely cannot settle, and the widest
+        # contributor by a distance: 80 g of chicken either way is ~190 kcal,
+        # and no amount of model effort on the pixels recovers it. One question
+        # does, which is why asking is a step rather than a fallback.
+        _item(day, "lunch", "chicken thigh, skin on, roasted",
+              grams=150, grams_lo=110, grams_hi=190,
+              kcal_100g=240, protein_100g=25.0, fat_100g=15.0, carb_100g=0.0,
+              food_table="ciqual", capture="photo", read_by="model",
+              origin_evidence="a photograph of the plate, taken before eating"),
+        _item(day, "lunch", "mixed leaves",
+              grams=80, grams_lo=60, grams_hi=100,
+              kcal_100g=17, protein_100g=1.4, fat_100g=0.3, carb_100g=1.5,
+              food_table="ciqual", capture="photo", read_by="model",
+              origin_evidence="a photograph of the plate, taken before eating",
+              note="matte leaves, no dressing - the second bowl in the same "
+                   "frame has obvious dressing on it"),
+        # The smallest thing on the plate and the second-widest number on it.
+        # A photograph cannot see poured oil at all, and at 884 kcal/100 g the
+        # 13 g nobody can bound is worth more than the entire salad.
+        _item(day, "lunch", "olive oil",
+              grams=10, grams_lo=5, grams_hi=18,
+              kcal_100g=884, protein_100g=0.0, fat_100g=100.0, carb_100g=0.0,
+              food_table="ciqual", capture="photo", read_by="model",
+              origin_evidence="a photograph of the plate, taken before eating"),
+        # The packaged one. Its range is stated and ZERO-WIDTH, which is not
+        # the same as absent: the pack settled the quantity, so the bounds are
+        # an assertion rather than an omission. Its composition comes off the
+        # label rather than a food table, which is why `food_table` is per-item
+        # - two items of one meal can legitimately come from different tables,
+        # and a figure whose source is unrecorded cannot be rechecked when that
+        # table is revised.
+        _item(day, "lunch", "rye crispbread",
+              grams=20, grams_lo=20, grams_hi=20,
+              kcal_100g=336, protein_100g=9.5, fat_100g=1.7, carb_100g=63.0,
+              food_table="pack-label", capture="manual_entry",
+              origin_evidence="the figures printed on the pack"),
+        # An item with no composition at all. NAMED rather than dropped: a
+        # total that silently omits something is wrong in the direction that
+        # matters most, and an unpriced item is a lookup that has not happened
+        # yet rather than an item that contributes nothing. It is what makes
+        # this day's total report itself as incomplete.
+        _item(day, "snack", "mixed nuts, a handful",
+              grams=30, grams_lo=20, grams_hi=45,
+              capture="narrative", read_by="athlete"),
+    ]
+    return _stamp(rows, 21)
+
+
+def _said(start: date, end: date) -> list[dict]:
+    """What the athlete said, and what became of it.
+
+    The dataset earns its place on the last row: a CLAIM the rest of the
+    record contradicts. Everything else here could be inferred from the
+    numbers eventually; that a thing was said, on a date, cannot be, and it is
+    ground truth even when what was said is wrong.
+
+    `status` is what stops this becoming a diary nobody reads back. A worry
+    that is still open is a thing to raise; one that resolved is not, and an
+    idea that grew into a real goal must be able to say so rather than sitting
+    there looking un-acted-on forever.
+
+    `confidence` is how FIRMLY it was expressed, never how likely it is to be
+    true - a passing "maybe I should" is not a decision, and the difference is
+    what keeps an athlete from being held to something they never chose.
+    """
+    return _stamp([
+        # Superseded by the running goal anchoring to the autumn half. The
+        # grain of a goal has to be able to close, or the coach keeps asking
+        # about a musing that has already become a commitment.
+        _entry((start + timedelta(days=14)).isoformat(), "idea",
+               "Maybe I should point all of this at a race in the autumn "
+               "instead of just running.",
+               about="running", confidence=0.3, status="superseded",
+               note="became the running goal once the autumn half was entered"),
+        # A preference constrains what may be PROPOSED. Without it the obvious
+        # advice on a stalling cut is to cut harder, which is precisely the
+        # thing this athlete has said they will not trade.
+        _entry((start + timedelta(days=35)).isoformat(), "preference",
+               "I would rather the weight came off slowly than lose the part "
+               "where the running is fun.",
+               about="weight", confidence=0.9),
+        # Answered by the pattern inference of the same date, so it closes.
+        _entry((end - timedelta(days=9)).isoformat(), "question",
+               "Is the easy-run heart rate creeping up because of the short "
+               "nights, or is it just the weather?",
+               about="avg_hr", status="resolved",
+               note="the sleep half is answered by the inference recorded the "
+                    "same day; nothing here explains the weather half"),
+        # Still open, and it is the athlete talking themselves out of a
+        # symptom that is currently gating impact work.
+        _entry((end - timedelta(days=4)).isoformat(), "worry",
+               "The achilles is stiff first thing and I keep telling myself "
+               "it eases once I am warm.",
+               about="achilles", confidence=0.6),
+        # THE ONE THAT EARNS THE DATASET. Said firmly, and the weigh-ins
+        # disagree: the travel week has none at all, and the routine after it
+        # is split between 07:00 and 19:00 - which is the same artifact that
+        # makes the current rate unreadable. A record that held only the
+        # numbers could show the gap; only this can show that the athlete
+        # believes otherwise, which is the thing worth raising with them.
+        _entry((end - timedelta(days=2)).isoformat(), "claim",
+               "I weigh myself every morning, same time, before anything "
+               "else.",
+               about="kg", confidence=0.8),
+    ], 22)
 
 
 def _situational(start: date, end: date) -> tuple[list[dict], list[dict]]:
