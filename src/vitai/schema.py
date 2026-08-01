@@ -453,6 +453,18 @@ KEY_GENERATION: dict[str, dict[str, int]] = {
 # retirement generation is not expected to carry it. Without this, replacing
 # `hip_pain` with `pain` would force every new line to keep writing the field
 # it replaced - a schema that can only ever grow.
+# G89: RETIRING A KEY IS A THREE-PART CHANGE. Listing it here is part one and
+# it is the easy part. Part two is that forward mapping happens in exactly ONE
+# canonicaliser, not re-implemented at each reader. Part three is that every
+# lookup, filter, dispatch key and comparison naming the old key tries the
+# SUCCESSOR FIRST, with the old name as fallback.
+#
+# Part three is the one that gets missed, and it fails silently: the pain
+# verdict resolved its goal by exact match on `hip_pain`, so an athlete who
+# had only ever written `pain` got the right number with no goal attached,
+# which renders identically to having declared no goal. The legacy path is
+# always the one under test, because retirement exists to keep it working.
+# Grep the retired name across the whole tree before calling this done.
 KEY_RETIREMENT: dict[str, dict[str, int]] = {
     "daily": {"hip_pain": 2},
     "sessions": {"location": 2},

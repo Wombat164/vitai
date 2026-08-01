@@ -163,9 +163,18 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
                      if d.get("pain") is not None or d.get("hip_pain") is not None]
             if pains:
                 worst = max(pains)
+                # CURRENT NAME FIRST. `_goal_for` matches `metric` exactly, so
+                # looking up only the retired name linked this verdict to a
+                # goal nobody writes any more: an athlete who has only ever
+                # recorded `pain` got the right number with `goal: None`, and
+                # a missing linkage looks identical to having declared no
+                # goal at all. Only the record that predates the gen-2
+                # generalization still declares `hip_pain`, so it is the
+                # fallback and never the first choice.
                 rows.append(_row(wk, "pain_gate", float(worst), float(eff.pain_gate),
                                  ON if worst <= eff.pain_gate else BEHIND,
-                                 _goal_for(active, "hip_pain")))
+                                 _goal_for(active, "pain")
+                                 or _goal_for(active, "hip_pain")))
         if eff.rhr_baseline is not None:
             rhrs = [d["rhr"] for d in days if d.get("rhr") is not None]
             if rhrs:
