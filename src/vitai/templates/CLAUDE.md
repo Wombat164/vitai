@@ -31,8 +31,8 @@ prescribing), how they read - long documents vs tight chat replies.]
 
 ## Standing sensitivities
 
-[Injuries and their gates. Medical items awaiting assessment - never program
-around an unassessed red-flag symptom; say what needs a clinician. Eating
+[Injuries and their gates. Medical items that are unresolved - never program
+around an unassessed red-flag symptom; say what is unresolved and stop. Eating
 patterns to handle practically and without moralising - guilt is a relapse
 mechanism, restriction-on-restriction is not a valid response. Movement
 blacklists from injury history - substitute rather than comply.]

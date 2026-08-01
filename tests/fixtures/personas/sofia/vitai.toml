@@ -1,0 +1,21 @@
+# sofia: synthetic persona corpus, thresholds tuned to her record.
+[targets]
+phases = [[76.0, 66.0, 0.35]]
+
+[tripwires]
+sleep_floor_h = 5.0
+
+# Only four sources appear anywhere in this record; every one of them is
+# listed here. Once [resolution] exists at all, an unlisted source is a hard
+# validate failure, not a warning (handbook pitfall 4).
+[resolution]
+source_order = ["scale", "myfitnesspal", "phone", "athlete"]
+
+[resolution.precedence]
+kg = ["scale"]
+kcal_in = ["myfitnesspal"]
+
+[preferences]
+suppressed_metrics = []
+nudge_ok = false
+check_tolerance = 0.02

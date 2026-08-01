@@ -83,8 +83,8 @@ ones stated in full.
    and food-transit noise, so the rolling trend is the measurement and no
    verdict ever consumes a single morning.
 7. **Safety escalation is deterministic, and the one loud exception.** The
-   highest-stakes decision - recognizing danger and escalating ("see a
-   clinician, now") - must be an engine-enforced tripwire-severity-to-action
+   highest-stakes decision - recognising danger and refusing to program
+   against it - must be an engine-enforced tripwire-severity-to-action
    mapping, never LLM prose that may or may not fire that session. A tool
    that coaches calorie deficits owes a duty to watch deterministically for
    what its own coaching can cause (RED-S / low energy availability), for

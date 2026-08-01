@@ -153,12 +153,6 @@ MESSAGES: dict[str, str] = {
     "severe_pain": (
         "Pain at this level is recorded as unresolved. No plan here will "
         "suggest training through it or working around it."),
-    "red_s": (
-        "Your logged intake, rate of loss and training load together match a "
-        "low-energy-availability pattern (RED-S), which is associated with "
-        "bone, hormonal and cardiac harm. This is the syndrome a deficit plus "
-        "hard training can cause, so it is not a target met. No progression "
-        "is issued against this pattern."),
     "red_flag_declared": (
         "This was recorded as a red flag, so it is treated as unresolved. "
         "No training is programmed against the affected activity."),
@@ -295,9 +289,11 @@ CLAUSE_BREAKS = (" but ", " though ", " although ", " however ", ";", ":",
 # NegEx shape, where scope is a small token window terminated by a conjunction.
 NEGATION_WINDOW = 24
 
-# --- RED-S / low energy availability -----------------------------------------
-# The syndrome a tool that coaches deficits can itself cause, which is why it
-# is the engine's job to watch for it rather than the athlete's.
+# --- low energy availability --------------------------------------------------
+# A tool that coaches a deficit can produce this pattern itself, so the engine
+# declines to keep programming into it. That is a constraint on vitai's own
+# output, not a claim to monitor anyone: it states what the record shows and
+# stops issuing plans, and the athlete decides everything after that.
 #
 # THE CORRECTION (issue #12). The first version required deficit AND rate of
 # loss AND load - all three. That reasoning holds for an athlete who is losing,
@@ -593,7 +589,7 @@ def _escalation(when: str, level: str, trigger: str, detail: str) -> dict:
 
 def escalations(medical: list[dict], daily: list[dict], weight: list[dict],
                 sessions: list[dict], on: str | date | None = None,
-                include_red_s: bool = True) -> list[dict]:
+                include_low_energy_availability: bool = True) -> list[dict]:
     """Every safety escalation the record justifies, most urgent first.
 
     Computed over the whole record rather than the current week: an escalation
@@ -606,8 +602,8 @@ def escalations(medical: list[dict], daily: list[dict], weight: list[dict],
     out += _absolute_thresholds(daily)
     out += _prose_symptoms(daily, sessions, medical, on)
     out += _intake_and_protein_floors(daily, weight, medical, sessions)
-    if include_red_s:
-        out += _red_s(daily, weight, sessions, medical)
+    if include_low_energy_availability:
+        out += _low_energy_availability(daily, weight, sessions, medical)
 
     if (limit := _as_date(on)) is not None:
         out = [e for e in out if (d := _as_date(e["date"])) and d <= limit]
@@ -1053,7 +1049,7 @@ def _corroborating_markers(daily: list[dict], weight: list[dict],
     return markers
 
 
-def _red_s(daily: list[dict], weight: list[dict], sessions: list[dict],
+def _low_energy_availability(daily: list[dict], weight: list[dict], sessions: list[dict],
            medical: list[dict]) -> list[dict]:
     """Low-energy-availability screening over the most recent window.
 

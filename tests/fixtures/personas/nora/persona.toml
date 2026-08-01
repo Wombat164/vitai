@@ -1,0 +1,30 @@
+# Emitted by generate.py; do not edit by hand. Bump PERSONA_VERSION
+# in _gen/nora.py only when the history could change an
+# engine output (docs/persona-doctrine.md).
+
+[persona]
+slug = "nora"
+version = 1
+seed = 104
+span = ["2027-07-01", "2030-06-30"]
+
+[schema]
+contract = "15"
+
+[schema.generations]
+achievements = 3
+artifacts = 2
+checks = 2
+context = 2
+daily = 7
+events = 2
+goals = 3
+inferences = 3
+journal = 2
+meals = 2
+measurements = 6
+medical = 4
+sessions = 8
+sets = 3
+thresholds = 2
+weight = 7

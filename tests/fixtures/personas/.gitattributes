@@ -1,0 +1,5 @@
+# Everything under the persona corpus is generator-emitted or hand-authored
+# with LF endings; pin them so Windows autocrlf cannot manufacture phantom
+# modifications of byte-identical regenerated files.
+* text eol=lf
+*.db binary

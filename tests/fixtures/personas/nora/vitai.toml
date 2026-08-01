@@ -1,0 +1,30 @@
+# nora: synthetic persona corpus, thresholds tuned to her record.
+#
+# No [targets] phases: the eighteen-month weight decline this record shows
+# is involuntary and physiologically concerning, not a deliberate cut, and
+# giving it a target phase would read as the engine endorsing continued
+# weight loss. See docs/medical-boundary.md and expectation nora-E1.
+
+[tripwires]
+easy_hr_cap = 158
+rhr_baseline = 42
+steps_floor = 8000
+sleep_floor_h = 7.0
+
+# Three sources appear anywhere in weight/daily/sessions/measurements in
+# this record; every one of them is listed here. Once [resolution] exists
+# at all, an unlisted source is a hard validate failure, not a warning
+# (handbook pitfall 4).
+[resolution]
+source_order = ["garmin-watch", "withings-scale", "myfitnesspal"]
+
+[resolution.precedence]
+kcal_out = ["garmin-watch"]
+kcal_in = ["myfitnesspal"]
+steps = ["garmin-watch"]
+kg = ["withings-scale"]
+
+[preferences]
+suppressed_metrics = []
+nudge_ok = false
+check_tolerance = 0.02

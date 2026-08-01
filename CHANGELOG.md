@@ -5,6 +5,34 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **A deterministic medical-boundary lint over the public surface** (#117).
+  `scripts/boundary_gate.py`, blocking in CI beside the personal-content gate.
+  #110 fixed `safety.py`; a boundary that lives only in a document regresses
+  the first time somebody writes a helpful string, so this is the mechanical
+  complement.
+
+  It fails on care directives ("see a doctor", "seek medical attention") and
+  on medical-purpose claims ("detects a disease"). Both are the same mistake
+  in different grammar: one asserts an instruction the tool cannot help anyone
+  carry out, the other asserts a medical purpose, and under FDA general
+  wellness and MDCG 2019-11 the trigger is the claim rather than the
+  technology.
+
+  **The allowlist is hashed sentences keyed by file, never file paths.**
+  Sparing a file would spare whatever is written into it next; sparing a
+  hashed sentence means an edit re-triggers review. The acute tier is read
+  from `safety.ACUTE` directly, so the two guards cannot drift apart.
+
+  Deliberately narrow. `flag`, `spot` and bare `condition` are not matched:
+  this codebase says "red flag" and "precondition" constantly, and a lint that
+  cries wolf gets deleted - after which it catches nothing at all.
+
+  Seven sentences in `docs/` are recorded as exemptions with reasons: three
+  because the doctrine cannot be written without quoting the rule, and four
+  as visible DEBT - they describe routing that #110 removed, so they are now
+  false as well as over the line, and #116 owns the rewrite.
+
 ### Changed
 - **The engine states the observation and refuses to prescribe; it no longer
   routes anybody to care** (#110). `safety.py` was doing three things under one
@@ -81,6 +109,32 @@ versioning follows [SemVer](https://semver.org/).
   direction of looking fine.
 
 ### Added
+- **`red_s` retired from the code, and two boundary guards that would have
+  caught it** (#115, #110). Renamed to `low_energy_availability` throughout,
+  and the message keyed `red_s` is DELETED rather than renamed.
+
+  It named a syndrome outright ("a low-energy-availability pattern (RED-S) ...
+  this is the syndrome"), which is class (c) of the medical boundary, and it
+  survived #133's rewrite for two independent reasons. The boundary test
+  asserted class (d), care directives, so it looked for the wrong thing. And
+  the string was UNREACHABLE: `_escalation` reads `MESSAGES[trigger]` and
+  nothing ever emitted `trigger == "red_s"`, so no behavioural test could see
+  it either. Its live successor `clinical_hold` describes the same pattern
+  without naming it, which is why deleting rather than renaming is right.
+
+  Two new guards. One asserts no message the athlete READS names a condition,
+  scoped to messages on purpose: describing an observable state is fine and
+  `clinical_hold` does it, while source comments citing the literature to
+  justify a threshold are engineering rationale. The other asserts the module
+  never claims to WATCH for anything, over comments as well as strings, and it
+  found a live one: a section header read "it is the engine's job to watch for
+  it rather than the athlete's". Monitoring for a named condition is the
+  strongest assertion of a medical purpose a file can make, and it is worse in
+  a comment, which reads as the authors describing what they built.
+
+  Also asserts every `MESSAGES` key is reachable. An unreachable entry in a
+  constants table looks like coverage in review and is worth nothing at
+  runtime, which is the worst combination available.
 - **A knowledge cutoff: what the record said THEN** (#130). `Vitai(root,
   as_of=...)` and `load(..., as_of=...)` reconstruct the record at an instant,
   using only lines whose `recorded_at` precedes it.

@@ -1,0 +1,19 @@
+# derek: synthetic persona corpus, thresholds tuned to his record.
+#
+# No tripwires are configured: he has no wearable, no steps, no sleep, no
+# resting heart rate and no daily kcal anywhere in the record, so every
+# standard numeric tripwire (easy_hr_cap, rhr_baseline, steps_floor,
+# sleep_floor_h) would gate on a channel this record never populates.
+# That absence is itself an observation about the record (FINDINGS.md),
+# not an oversight in this file.
+
+# Only three sources appear anywhere in this record; every one of them is
+# listed here. Once [resolution] exists at all, an unlisted source is a hard
+# validate failure, not a warning (handbook pitfall 4).
+[resolution]
+source_order = ["mechanical-scale", "phone", "athlete"]
+
+[preferences]
+suppressed_metrics = []
+nudge_ok = false
+check_tolerance = 0.02
