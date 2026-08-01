@@ -21,7 +21,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from pathlib import Path
 
-from .config import Config, load_config
+from .config import Config, load_config, policy_digest
 from .contributions import compute_contributions, goal_progress
 from .db import build_db
 from .clocks import is_aware
@@ -42,7 +42,8 @@ from .verdicts import compute_verdicts
 class Vitai:
     """Read/derive interface over one user's content repo."""
 
-    def __init__(self, root: Path | str, as_of: datetime | None = None):
+    def __init__(self, root: Path | str, as_of: datetime | None = None,
+                 on: date | None = None):
         """`as_of` is a KNOWLEDGE CUTOFF, not a date filter.
 
         Without it the engine answers with everything it knows now. With it,
@@ -60,9 +61,58 @@ class Vitai:
 
         Threaded through `dataset()`, so resolution, verdicts, safety and the
         build all inherit it rather than each needing to remember.
+
+        `on` is the SECOND clock, and it is a different question: the
+        valid-time viewpoint, the day the engine is answering AS. `as_of`
+        says what was known; `on` says when. Staleness needs both, because
+        recomputing an old artifact varies the cutoff and must hold the
+        viewpoint - otherwise every week-old report diffs against its
+        month-later self trivially, because life continued, and "later" gets
+        reported as "the record no longer supports this" (#134).
+
+        RESOLVED ONCE, here. Eleven call sites across ten methods read
+        `date.today()` for themselves, which meant a single build straddling
+        midnight answered two different questions, no caller could pin the
+        viewpoint without passing it to every method, and there was nothing
+        for an artifact to record. This class is the boundary: below it,
+        nothing reachable from here reads the wall clock.
+
+        One exception, named because an unnamed one is a lie: `window()`
+        defaults to the last logged session rather than to a viewpoint, which
+        is deliberate - a window over a record that stops in March should not
+        be seven empty days in August. The viewpoint is only its fallback for
+        a record with no sessions at all.
+
+        And `as_of` reconstructs DATA, with policy covered only as far as
+        policy is data. A threshold with a dated `thresholds.jsonl` row on or
+        before the date IS in the record and IS filtered by the cutoff. A key
+        with no such row falls through to `vitai.toml`, which has no history,
+        so that part of the answer is judged by today - see `policy_digest`
+        and #148.
         """
         self.root = Path(root)
         self.as_of = as_of
+        # VALIDATED, for the same reason `as_of` is. A `str` viewpoint is the
+        # natural call - every per-call `on` in this class takes `date | str`
+        # - and it left half the engine working and half raising
+        # `AttributeError: 'str' object has no attribute 'isoformat'` from
+        # somewhere with no mention of the constructor. A `datetime` is the
+        # other obvious slip, because `as_of` right next door is one, and it
+        # is worse: `datetime` subclasses `date`, so it passes every
+        # `isinstance(on, date)` check in the codebase and dies much later
+        # comparing a datetime to a date.
+        if isinstance(on, str):
+            on = date.fromisoformat(on)
+        elif isinstance(on, datetime):
+            raise TypeError(
+                "on must be a date, not a datetime: it is the valid-time "
+                "viewpoint - the DAY the engine answers as - and a time of "
+                "day would compare against dates it can never equal. The "
+                "cutoff that does take an instant is as_of")
+        elif on is not None and not isinstance(on, date):
+            raise TypeError(f"on must be a date or an ISO date string, "
+                            f"not {type(on).__name__}")
+        self.on = on or date.today()
         if as_of is not None and not is_aware(as_of):
             # A naive cutoff compares against aware stamps by guessing a zone,
             # and the guess is the local one, which makes the same call return
@@ -78,6 +128,17 @@ class Vitai:
     @property
     def config(self) -> Config:
         return load_config(self.root)
+
+    @property
+    def policy(self) -> str:
+        """The digest of the policy this record does NOT hold (#148).
+
+        `as_of` reconstructs data. It cannot reconstruct `vitai.toml`, which
+        has no history, so two reconstructions taken under different configs
+        differ for a reason that is not in the record. This is what makes
+        that detectable.
+        """
+        return policy_digest(self.config)
 
     def append(self, name: str, record: dict) -> dict:
         """Append one line to a dataset, stamping the machine-owned clocks.
@@ -164,7 +225,7 @@ class Vitai:
         first is recoverable; destroying the evidence first is not.
         """
         when = on.isoformat() if isinstance(on, date) else (
-            on or date.today().isoformat())
+            on or self.on.isoformat())
         row = self.append("artifacts", {"date": when, "sha256": ref,
                                         "removed": True, "reason": reason})
         self.artifacts.drop(ref)
@@ -463,7 +524,7 @@ class Vitai:
     def context(self, on: date | str | None = None) -> dict | None:
         """The situational mode in force on a date (G34)."""
         return context_on(self.dataset("context"),
-                          on or date.today())
+                          on or self.on)
 
     # --- factual query verbs --------------------------------------------------
     # A number should never be stated from memory - not by a person, and not by
@@ -490,8 +551,15 @@ class Vitai:
                          claims=resolved["claims"], gates=self.gates(when))
 
     def window(self, days: int = 7, on: date | str | None = None) -> dict:
-        """Totals over the last N calendar days, grouped by session type."""
-        return query.window(self.canonical(), days, on=on)
+        """Totals over the last N calendar days, grouped by session type.
+
+        The end defaults to the last logged session, NOT to the viewpoint: a
+        window over a record that stops in March should not be seven empty
+        days in August. `fallback` is only for a record with no sessions at
+        all, where the function otherwise read the wall clock - a pinned
+        instance on an empty repo returned today's real week.
+        """
+        return query.window(self.canonical(), days, on=on, fallback=self.on)
 
     def ramp(self, type: str = "run", metric: str = "distance_km") -> dict:
         """Week-on-week volume with its base-size caveat attached (G27)."""
@@ -503,7 +571,7 @@ class Vitai:
 
     def episodes(self, on: date | str | None = None) -> list[dict]:
         """Medical episodes open on a date."""
-        return active_episodes(self.dataset("medical"), on or date.today())
+        return active_episodes(self.dataset("medical"), on or self.on)
 
     def gates(self, on: date | str | None = None) -> list[dict]:
         """What is blocked on a date, and why. Deterministic, not advisory.
@@ -516,7 +584,7 @@ class Vitai:
         or `check_not_done` - three states, because "your leg said no today"
         and "you have not asked it yet" are different facts.
         """
-        when = on or date.today()
+        when = on or self.on
         rows = gates_on(self.dataset("medical"), when,
                         pain_gate=self.config.pain_gate,
                         daily=self.dataset("daily"),
@@ -552,7 +620,7 @@ class Vitai:
 
     def urgent(self, on: date | str | None = None) -> list[dict]:
         """The fast path: escalations that must not wait for the weekly rollup."""
-        return urgent_now(self.safety(on), on=on or date.today())
+        return urgent_now(self.safety(on), on=on or self.on)
 
     def safety_banner(self, on: date | str | None = None) -> str:
         """The fixed escalation text for the fast path; empty when clear."""
@@ -567,15 +635,26 @@ class Vitai:
 
     def rollup(self, today: date | None = None) -> str:
         d = self.canonical()
-        on = today or date.today()
+        on = today or self.on
+        # `today=on`, not `today=today`. Passing the un-defaulted parameter
+        # left `build_report` to fall back to its own `date.today()`, so the
+        # report itself was still dated by the wall clock while every table
+        # around it honoured the pinned viewpoint - a rollup that disagreed
+        # with its own contents, and the one artifact #134 most needs to be
+        # reproducible.
         return build_report(self.config, d["weight"], d["daily"],
-                            d["sessions"], today=today,
+                            d["sessions"], today=on,
                             gates=self.gates(on),
                             escalations=self.urgent(on),
                             events=self.events(on))
 
     def state(self, on: date | str) -> State:
         """The goals and thresholds in force on a date - as-of reconstruction.
+
+        PARTIAL: it returns the dated rows in force, and a key with no dated
+        row on or before this date is simply absent rather than falling back
+        to `vitai.toml`. The caller that overlays it onto the config gets the
+        toml value for that key - today's, not the date's (#148).
 
         The question this exists to answer: "looking at a day three months
         ago, what was I actually aiming at THEN?"
@@ -586,7 +665,7 @@ class Vitai:
     def goals(self, today: date | None = None) -> list[dict]:
         """Per-goal standing as of `today`: counted progress, %, dates."""
         d = self.datasets()
-        on = (today or date.today()).isoformat()
+        on = (today or self.on).isoformat()
         return goal_progress(d["goals"], d["thresholds"], d["daily"],
                              d["sessions"], on, events=d["events"])
 
@@ -600,7 +679,7 @@ class Vitai:
         """
         d = self.datasets()
         when = on.isoformat() if isinstance(on, date) else (on or
-                                                            date.today().isoformat())
+                                                            self.on.isoformat())
         return [dict(e, days_away=days_between(when, e.get("event_date")))
                 for e in events_on(d["events"], when)]
 
@@ -622,16 +701,17 @@ class Vitai:
         return plan_churn(d["goals"], d["thresholds"], self.verdicts(today=today),
                           events=d["events"])
 
-    def _derivations(self, resolved: dict,
-                     today: date | None = None) -> dict[str, list[dict]]:
+    def _derivations(self, resolved: dict, today: date | None = None,
+                     cfg: Config | None = None) -> dict[str, list[dict]]:
         d = resolved["canonical"]
+        cfg = self.config if cfg is None else cfg
         contributions, milestones = compute_contributions(
             d["goals"], d["thresholds"], d["daily"], d["sessions"])
-        verdicts = compute_verdicts(self.config, d["weight"], d["daily"],
+        verdicts = compute_verdicts(cfg, d["weight"], d["daily"],
                                     d["sessions"], today=today,
                                     goals=d["goals"], thresholds=d["thresholds"],
                                     medical=d["medical"])
-        on = (today or date.today()).isoformat()
+        on = (today or self.on).isoformat()
         return {
             "verdicts": verdicts,
             "contributions": contributions,
@@ -661,21 +741,28 @@ class Vitai:
         rows, so a consumer reading `daily` gets adjudicated truth without
         having to know the resolution rules.
         """
+        on = today or self.on
         resolved = self.resolution()
         d = dict(resolved["canonical"])
         # An inference whose justification was retracted stops being presented
         # as current knowledge, though the line itself remains in the file.
         d["inferences"] = live_inferences(self.datasets())
-        derivations = self._derivations(resolved, today=today)
+        # ONE config for the whole build. `self.config` re-reads vitai.toml on
+        # every access, so the verdicts were computed under one read and
+        # stamped with the digest of a later one. Edit the toml between them
+        # and the read model records an identity claim that is simply false -
+        # worse than the absence this is careful not to be misread as.
+        cfg = self.config
+        derivations = self._derivations(resolved, today=today, cfg=cfg)
         derived = self.root / "derived"
         db = build_db(derived, d, verdicts=derivations["verdicts"],
-                      derivations=derivations)
+                      derivations=derivations, policy=policy_digest(cfg))
         (derived / "weekly.md").write_text(
             build_report(self.config, d["weight"], d["daily"], d["sessions"],
-                         today=today, gates=derivations["gates"],
+                         today=on, gates=derivations["gates"],
                          escalations=urgent_now(derivations["escalations"],
-                                                on=today or date.today()),
-                         events=self.events(today or date.today())),
+                                                on=on),
+                         events=self.events(on)),
             encoding="utf-8", newline="\n")
         return db
 

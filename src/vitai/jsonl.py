@@ -314,8 +314,10 @@ def load(data_dir: Path, name: str,
     Malformed lines are QUARANTINED (dropped) so a build proceeds from the
     good rows; use `load_report` if you need to know what was quarantined.
 
-    `as_of` reconstructs what the record contained at an instant. See
-    `load_report`.
+    `as_of` reconstructs what the RECORD contained at an instant. That covers
+    the dated `thresholds.jsonl` rows too, which are as-of like any dataset.
+    What it cannot cover is the `vitai.toml` FALLBACK a key with no dated row
+    lands on, because the toml has no history (#148). See `load_report`.
     """
     records, _ = load_report(data_dir, name, as_of=as_of)
     return records
@@ -341,21 +343,32 @@ def load_report(data_dir: Path, name: str,
     rows, errors = _read_streams(data_dir, name)
     if as_of is not None:
         rows = [(i, r) for i, r in rows if known_by(r, as_of)]
-    # Walk backwards so a line can only be superseded by a LATER one. This
-    # matters for the identity datasets, where a same-day correction shares its
-    # slug and date with the line it replaces and would otherwise supersede
-    # itself. A superseded line still passes its own reference on, so a chain
-    # (A superseded by B, B superseded by C) retires A as well as B.
+    return retire(name, [r for _, r in rows]), errors
+
+
+def retire(dataset: str, rows: list[dict]) -> list[dict]:
+    """`rows` with every superseded line dropped, in order.
+
+    Walk backwards so a line can only be superseded by a LATER one. This
+    matters for the identity datasets, where a same-day correction shares its
+    slug and date with the line it replaces and would otherwise supersede
+    itself. A superseded line still passes its own reference on, so a chain
+    (A superseded by B, B superseded by C) retires A as well as B.
+
+    Shared with `schema.supersedes_problems`, which needs to know which
+    corrections ACTUALLY APPLIED. Deriving that from the ordering rules a
+    second time got three cases wrong; asking the same function is exact.
+    """
     records: list[dict] = []
     refs: set[str] = set()
-    for _, r in reversed(rows):
-        dropped = line_key(name, r) in refs
+    for r in reversed(rows):
+        dropped = line_key(dataset, r) in refs
         if r.get("supersedes"):
             refs.add(r["supersedes"])
         if not dropped:
             records.append(r)
     records.reverse()
-    return records, errors
+    return records
 
 
 def heads(records: list[dict], dataset: str) -> dict[str, dict]:

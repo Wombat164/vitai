@@ -6,6 +6,54 @@ versioning follows [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **A policy digest on the read model, contract 17** (#148). `as_of`
+  reconstructs the record by filtering `recorded_at`. That is right for
+  everything the record holds and wrong for everything it does not, and
+  threshold baselines are in the second category: they live in `vitai.toml`,
+  a mutable file with no history.
+
+  `thresholds.jsonl` overlays five keys per week, which was the G14 fix, but
+  a week carrying no dated row is still judged against whatever the toml says
+  **today** - and the rest of the config (rate phases, the resolution ladder,
+  suppressed metrics, the check tolerance, the intake buffer) has no dated
+  history at all. So editing a threshold in September silently re-judges
+  every historical week that lacked an explicit row. A reconstruction of
+  March returns March's data under September's policy.
+
+  This does not fix that. It makes it **detectable**: `meta.policy` carries a
+  content hash of the policy the record does not hold, so a reconstruction
+  taken under one config and one taken under another can be known to be
+  incomparable rather than quietly differing. Build systems put the
+  environment in an action's identity for the same reason. The claims in
+  `policy.py`, `jsonl.load` and `Vitai.as_of` are narrowed to match what they
+  actually deliver; finishing G14, so a toml change is snapshotted into the
+  record and `state` becomes total, remains open.
+
+- **A correction that does nothing now says so.** `load` walks the record
+  backwards so a line can only be superseded by a LATER one, which is what
+  stops a same-day correction sharing its target's key from superseding
+  itself. "Later" means later in the MERGED order - `(recorded_at, device,
+  position)`, with an unstamped row sorting first - and that is not always
+  the order the athlete wrote things in.
+
+  So a correction can sort BEFORE the line it corrects: an unstamped
+  correction of a stamped line, a correction stamped a minute earlier by a
+  second device's clock, an unstamped correction in a device file whose slug
+  sorts first. The walk reaches the target before it ever sees the reference,
+  the target survives, and the correction validates, reads correctly to a
+  human and does nothing. A typo fixed from 8.04 to 80.4 left 8.04 in the
+  record.
+
+  `vitai validate` now reports it, as an ADVISORY: the lines are already on
+  disk, they are not malformed, and the record still builds. What was wrong
+  was that nothing said so. It asks whether the correction APPLIED - running
+  the same retirement `load` runs - rather than looking for the shape, which
+  makes it exact and, more importantly, self-clearing: the append that
+  repairs the record retires the dead line along with the value it was aiming
+  at. The ordering itself is unchanged, because deciding what "later" means
+  for a row that declined to say when it was written is a question for the
+  clocks doctrine rather than a validator.
+
 - **Key custody: an untested backup is not a backup** (#107). `vitai key new`
   and `vitai key check`, plus a setup that cannot report success without a
   passing restore drill.
