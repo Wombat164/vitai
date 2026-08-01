@@ -280,6 +280,35 @@ class Vitai:
         # superseded number is worse than not comparing.
         return day_disagreements(self.dataset("meals"), self.canonical("daily"))
 
+    def set_progression(self, exercise: str, machine: str | None = None) -> dict:
+        """The (load, reps, failure) trajectory for one exercise (#100).
+
+        Machine-scoped by default: sets of one exercise across two machines
+        are two series, and splicing them describes neither.
+        """
+        from .progression import progression
+        return progression(self.sets(), exercise, machine)
+
+    def working_weight(self, exercise: str) -> dict:
+        """The load currently being worked at, with its failure state."""
+        from .progression import working_weight
+        return working_weight(self.sets(), exercise)
+
+    def set_volume(self, on: str | None = None) -> dict:
+        """Sets and completed reps per exercise - the one scale-free figure."""
+        from .progression import volume
+        return volume(self.sets(on))
+
+    def set_tonnage(self, on: str | None = None) -> dict:
+        """Load x reps PER SCALE, with no grand total (#60).
+
+        Bodyweight resolves against the athlete's weight TREND, through the
+        resolution ladder, and the result is marked modelled rather than
+        measured - it must never sit beside barbell kilos as an equal.
+        """
+        from .progression import tonnage
+        return tonnage(self.sets(on), self.canonical("weight"))
+
     def explanations(self) -> list[dict]:
         """Which source won a contested field, and why (G29).
 

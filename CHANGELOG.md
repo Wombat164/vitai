@@ -73,6 +73,42 @@ versioning follows [SemVer](https://semver.org/).
   carries the weight precisely because it never fires.
 
 ### Added
+- **Reads over sets, and the numbers that refuse to be computed** (#100,
+  increment 4 of #59). `vitai sets progression | working-weight | volume |
+  tonnage`, plus the matching API methods. The arithmetic is ordinary; half
+  the increment is refusals.
+
+  Every load resolves to a SCALE: `mass` (kilograms, comparable anywhere),
+  `stack(machine M)` (a pin number, comparable within M only), and
+  `ordinal(machine M)` (a resistance level, comparable within M and only as
+  ORDER). A stack number and a mass are both spelled in kilograms and are not
+  the same kind of thing, which is exactly why summing them looks reasonable
+  until someone acts on the total.
+
+  **Tonnage has no grand total, and no `total` key at all** - absent rather
+  than `None`, so a consumer asking for one raises instead of rendering zero.
+  Per-scale subtotals, with a finding saying they do not add up.
+
+  **A set with `failure: null` is never evidence of a maximum.** Null means
+  nobody said, `volitional` means reps were left, and reading either as a
+  limit is what gave a real record a max several reps below the truth. Such a
+  set still counts fully as volume: the work happened.
+
+  **Bodyweight resolves against the weight trend, or declines.** No weight
+  data near the date and the derivation says so rather than assuming a mass.
+  A resolved bodyweight tonnage is MODELLED (P3) and gets its own bucket -
+  summed with barbell kilos it would dominate the figure with a number nobody
+  weighed, and then move when the athlete cuts.
+
+  **Progression is machine-scoped**, and an ordinal difference is reported in
+  STEPS, never as a ratio: the scale is not established to be linear or to
+  have a zero.
+
+  Every refusal is a named finding carrying the rows. A derivation that
+  quietly skips what it cannot handle produces a total that is wrong in the
+  direction of looking fine.
+
+### Added
 - **`red_s` retired from the code, and two boundary guards that would have
   caught it** (#115, #110). Renamed to `low_energy_availability` throughout,
   and the message keyed `red_s` is DELETED rather than renamed.
