@@ -127,7 +127,19 @@ from .schema import KEYS
 #     never feed `daily.kcal_in`, a total must never be rendered without its
 #     range, and a consumer that sums meals into a day is asserting the
 #     athlete ate nothing they did not photograph.
-CONTRACT_VERSION = "15"
+# 16: multi-device writes (#105) - `device` on EVERY dataset, naming the
+#     machine that wrote the line down. Distinct from `source`, which names
+#     the instrument that observed the value: a phone and a laptop are not two
+#     instruments, and conflating them would manufacture corroboration out of
+#     a sync (#35). Readers now take `<dataset>.<device>.jsonl` alongside
+#     `<dataset>.jsonl` and union them, so ONE consumer-visible thing changes:
+#     a dataset may contain rows written by several machines, ordered by
+#     (recorded_at, device, position), and that order is TOTAL - two devices
+#     rebuilding the same file set produce byte-identical output. A consumer
+#     must not treat two rows describing one event from two devices as two
+#     events; `duplicate_captures()` reports them and the engine never merges
+#     them silently.
+CONTRACT_VERSION = "16"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
@@ -171,6 +183,8 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               "verification",
               # #37: the three clocks
               "recorded_at", "measured_at",
+              # #105: which machine wrote the line down
+              "device",
               # #80: the artifact store. `sha256` and `artifact` MUST be TEXT
               # for the same reason `activity_id` is - a content address is an
               # opaque token, and REAL affinity would mangle one silently.

@@ -60,6 +60,46 @@ something, each carrying deliberate falsehoods with their ground truth.
 
 
 ### Added
+- **Multi-device writes: one writer per file, so a merge is a set union**
+  (#105). `data/daily.laptop.jsonl` and `data/daily.phone.jsonl` are disjoint,
+  so **no two devices ever write the same file and a conflict cannot occur** -
+  not "conflicts are resolved", structurally cannot happen. Readers union
+  `<dataset>.*.jsonl` alongside the plain `<dataset>.jsonl`; a single-file
+  record is simply an actor whose name is nothing, and keeps working
+  untouched.
+
+  **Which makes the sync layer content-blind, and that is the point.** A
+  transport built on this moves opaque files: it never parses a row, never
+  knows a schema, cannot corrupt data it cannot read, and needs no contract
+  bump when the schema moves. Holding the athlete's own key becomes nearly
+  trivial as a consequence - a server that never could read the content has
+  nothing to be trusted with. The property a zero-knowledge design buys with
+  cryptography, this buys by never looking.
+
+  `device` on every dataset, machine-set like `recorded_at` and refused when a
+  caller supplies it. Beside `source`, never inside it: `source` says which
+  INSTRUMENT observed the value, `device` says which MACHINE wrote it down,
+  and conflating them would make a phone and a laptop look like two
+  instruments (#35).
+
+  The union is ordered by (recorded_at as an INSTANT, device, position), which
+  is total - two devices rebuilding the same file set produce byte-identical
+  output. `CLOCK_SKEW_TOLERANCE` now compares against the writing device's own
+  history only: actor-per-file dissolves the skew problem rather than solving
+  it, because a lagging phone never reads the laptop's stamps. A device whose
+  OWN clock jumped backwards is still refused.
+
+  **Duplicate capture** - one workout pulled by both devices - is reported by
+  `duplicate_captures()` and converges to one row in the DERIVED numbers, at
+  build rather than at write, so a device that was offline still converges.
+  The record keeps both lines: both are legitimate appends and an append-only
+  file cannot un-append.
+
+  `vitai init` now stamps a `.gitignore` covering `derived/` and `artifacts/`.
+  The database is rebuildable in seconds, and a synced SQLite file is corrupt
+  rather than merely stale - its main file and WAL must stay consistent.
+
+### Added
 - **A deterministic medical-boundary lint over the public surface** (#117).
   `scripts/boundary_gate.py`, blocking in CI beside the personal-content gate.
   #110 fixed `safety.py`; a boundary that lives only in a document regresses

@@ -1,11 +1,11 @@
-{"date": "2030-02-06", "slug": "stairs-check", "result": "fail", "value": 8, "source": "athlete", "note": "8 of 14", "recorded_at": "2030-02-06T21:00:00+00:00", "_gen": 2}
-{"date": "2030-02-20", "slug": "stairs-check", "result": "fail", "value": 8, "source": "athlete", "note": "8 of 14", "recorded_at": "2030-02-20T21:00:00+00:00", "_gen": 2}
-{"date": "2030-03-06", "slug": "stairs-check", "result": "fail", "value": 9, "source": "athlete", "note": "9 of 14", "recorded_at": "2030-03-06T21:00:00+00:00", "_gen": 2}
-{"date": "2030-03-20", "slug": "stairs-check", "result": "fail", "value": 9, "source": "athlete", "note": "9 of 14", "recorded_at": "2030-03-20T21:00:00+00:00", "_gen": 2}
-{"date": "2030-04-03", "slug": "stairs-check", "result": "fail", "value": 10, "source": "athlete", "note": "10 of 14", "recorded_at": "2030-04-03T21:00:00+01:00", "_gen": 2}
-{"date": "2030-04-17", "slug": "stairs-check", "result": "fail", "value": 10, "source": "athlete", "note": "10 of 14", "recorded_at": "2030-04-17T21:00:00+01:00", "_gen": 2}
-{"date": "2030-05-01", "slug": "stairs-check", "result": "fail", "value": 11, "source": "athlete", "note": "11 of 14", "recorded_at": "2030-05-01T21:00:00+01:00", "_gen": 2}
-{"date": "2030-05-15", "slug": "stairs-check", "result": "fail", "value": 11, "source": "athlete", "note": "11 of 14", "recorded_at": "2030-05-15T21:00:00+01:00", "_gen": 2}
-{"date": "2030-05-29", "slug": "stairs-check", "result": "fail", "value": 11, "source": "athlete", "note": "11 of 14", "recorded_at": "2030-05-29T21:00:00+01:00", "_gen": 2}
-{"date": "2030-06-12", "slug": "stairs-check", "result": "fail", "value": 12, "source": "athlete", "note": "12 of 14", "recorded_at": "2030-06-12T21:00:00+01:00", "_gen": 2}
-{"date": "2030-06-26", "slug": "stairs-check", "result": "fail", "value": 12, "source": "athlete", "note": "12 of 14, twice this week", "recorded_at": "2030-06-26T21:00:00+01:00", "_gen": 2}
+{"date": "2030-02-06", "slug": "stairs-check", "result": "fail", "value": 8, "source": "athlete", "note": "8 of 14", "recorded_at": "2030-02-06T21:00:00+00:00", "device": null, "_gen": 3}
+{"date": "2030-02-20", "slug": "stairs-check", "result": "fail", "value": 8, "source": "athlete", "note": "8 of 14", "recorded_at": "2030-02-20T21:00:00+00:00", "device": null, "_gen": 3}
+{"date": "2030-03-06", "slug": "stairs-check", "result": "fail", "value": 9, "source": "athlete", "note": "9 of 14", "recorded_at": "2030-03-06T21:00:00+00:00", "device": null, "_gen": 3}
+{"date": "2030-03-20", "slug": "stairs-check", "result": "fail", "value": 9, "source": "athlete", "note": "9 of 14", "recorded_at": "2030-03-20T21:00:00+00:00", "device": null, "_gen": 3}
+{"date": "2030-04-03", "slug": "stairs-check", "result": "fail", "value": 10, "source": "athlete", "note": "10 of 14", "recorded_at": "2030-04-03T21:00:00+01:00", "device": null, "_gen": 3}
+{"date": "2030-04-17", "slug": "stairs-check", "result": "fail", "value": 10, "source": "athlete", "note": "10 of 14", "recorded_at": "2030-04-17T21:00:00+01:00", "device": null, "_gen": 3}
+{"date": "2030-05-01", "slug": "stairs-check", "result": "fail", "value": 11, "source": "athlete", "note": "11 of 14", "recorded_at": "2030-05-01T21:00:00+01:00", "device": null, "_gen": 3}
+{"date": "2030-05-15", "slug": "stairs-check", "result": "fail", "value": 11, "source": "athlete", "note": "11 of 14", "recorded_at": "2030-05-15T21:00:00+01:00", "device": null, "_gen": 3}
+{"date": "2030-05-29", "slug": "stairs-check", "result": "fail", "value": 11, "source": "athlete", "note": "11 of 14", "recorded_at": "2030-05-29T21:00:00+01:00", "device": null, "_gen": 3}
+{"date": "2030-06-12", "slug": "stairs-check", "result": "fail", "value": 12, "source": "athlete", "note": "12 of 14", "recorded_at": "2030-06-12T21:00:00+01:00", "device": null, "_gen": 3}
+{"date": "2030-06-26", "slug": "stairs-check", "result": "fail", "value": 12, "source": "athlete", "note": "12 of 14, twice this week", "recorded_at": "2030-06-26T21:00:00+01:00", "device": null, "_gen": 3}
