@@ -289,8 +289,24 @@ schema. Everything funnels through append + validate + build.
 
 ## 4. What is deliberately not built
 
-- **No server, no daemon, no database service.** ~20 numbers a week do not
-  need infrastructure. SQLite is a derived read model, not a store.
+- **No server, no daemon, no database service.** SQLite is a derived read
+  model, not a store, and multi-device writes need no coordinator: one writer
+  per file, merged on read, so two devices offline cannot conflict.
+
+  This used to say "~20 numbers a week do not need infrastructure". That is
+  true of the CLAIMS and badly wrong about the system. Measured on a real
+  record: the claims are 3.7 MB across 4,927 rows, and the raw evidence behind
+  them is 231 MB. A single 10 km run is 3,577 per-second records carrying
+  time, distance, speed, heart rate, cadence, power and temperature: 96 KB as
+  FIT, 391 KB as a vendor TCX, 583 KB as JSONL. Four sessions a week is
+  18 MB/year of FIT or 79 MB/year of TCX, and continuous heart rate adds
+  ~144 MB/year on its own.
+
+  The conclusion survives the correction, for a better reason. It is not that
+  there is little data; it is that the data is **append-only and
+  content-addressed**, so it needs a dumb store rather than a service. But an
+  architecture doctrine resting on a figure three orders of magnitude out is
+  one nobody can check, so the figure is now measured.
 - **No app (yet).** If one ever exists it reads this schema; it does not
   invent another. The failure mode to avoid: four weekends on the tool
   instead of training.
