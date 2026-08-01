@@ -88,7 +88,7 @@ def test_a_stray_filename_is_not_a_device_stream(tmp_path):
     root = repo(tmp_path)
     data = root / "data"
     strays = ("weight.backup.2030.jsonl", "weight.my backup.jsonl",
-              "weight..jsonl", "weight.Laptop.jsonl")
+              "weight..jsonl")
     for name in strays:
         (data / name).write_text("{}\n", encoding="utf-8")
     assert [p.name for p in stream_paths(data, "weight")] == ["weight.jsonl"]
@@ -471,3 +471,23 @@ def test_validate_reads_every_device_file(tmp_path, capsys):
         pass
     out = capsys.readouterr().out
     assert "MALFORMED" in out and "weight.laptop.jsonl" in out
+
+
+def test_a_device_file_is_never_silently_ignored_for_its_case(tmp_path):
+    """Writers are strict; readers must not be. A case-insensitive
+    filesystem hands `weight.laptop.jsonl` back as `weight.Laptop.jsonl`, and
+    excluding it made the device's whole stream vanish from the union -
+    silently, which is the worst outcome available for a file full of real
+    data. Windows CI caught it.
+    """
+    from pathlib import Path
+    root = repo(tmp_path)
+    data = root / "data"
+    (data / "weight.Laptop.jsonl").write_text(json.dumps(weight(
+        kg=80.0, device="laptop",
+        recorded_at="2030-05-01T09:00:00+02:00")) + "\n", encoding="utf-8")
+    assert len(load(data, "weight")) == 1
+    assert device_of(Path("weight.Laptop.jsonl"), "weight") == "laptop"
+    # And the writer stays strict, so nothing produces that name here.
+    with pytest.raises(ValueError):
+        write_path(data, "weight", "Laptop")

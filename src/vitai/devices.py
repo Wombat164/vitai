@@ -86,14 +86,26 @@ def stream_paths(data_dir: Path, name: str) -> list[Path]:
     plain = data_dir / f"{name}.jsonl"
     out = [plain] if plain.exists() else []
     for path in sorted(data_dir.glob(f"{name}.*.jsonl")):
-        if is_slug(path.name[len(name) + 1:-len(".jsonl")]):
+        # LOWERCASED before the check. Writers are strict - `write_path`
+        # refuses anything but a lowercase slug - but a reader that silently
+        # ignores a file full of real data is the worst outcome available,
+        # and on a case-insensitive filesystem `weight.laptop.jsonl` can come
+        # back from the directory as `weight.Laptop.jsonl`. Windows CI caught
+        # exactly that: the device's whole stream vanished from the union.
+        if is_slug(path.name[len(name) + 1:-len(".jsonl")].lower()):
             out.append(path)
     return out
 
 
 def device_of(path: Path, name: str) -> str:
-    """The device a file belongs to, or "" for the unsuffixed one."""
-    stem = path.name[len(name) + 1:-len(".jsonl")]
+    """The device a file belongs to, or "" for the unsuffixed one.
+
+    Lowercased, so one device is one device however the filesystem hands its
+    name back. The slug is also the ORDERING tiebreak, and a build that
+    ordered by `Laptop` on one machine and `laptop` on another would stop
+    being reproducible.
+    """
+    stem = path.name[len(name) + 1:-len(".jsonl")].lower()
     return stem if path.name != f"{name}.jsonl" and is_slug(stem) else ""
 
 
