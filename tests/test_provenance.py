@@ -708,3 +708,208 @@ def test_the_remedy_in_the_message_actually_works(tmp_path):
 
     assert Vitai(root).canonical()["weight"][0]["kg"] == 80.4
     main(["validate", "--root", str(root)])
+
+
+def test_a_remembered_number_loses_to_a_device_reading_of_the_same_source():
+    from vitai.resolution import resolve as resolve_claims
+    rows = [weight(kg=83.0, capture="narrative", read_by="athlete",
+                   recorded_at="2030-05-01T21:00:00+02:00"),
+            weight(kg=80.4, capture="ble",
+                   recorded_at="2030-05-01T07:00:00+02:00")]
+    got = resolve_claims({"weight": rows})
+    assert got["canonical"]["weight"][0]["kg"] == 80.4
+
+
+def test_it_wins_even_when_the_recollection_is_the_LATER_line():
+    """The whole finding. Recency exists so a re-export can correct itself,
+    and it would hand the record to whichever restatement came last - which
+    is exactly the shape the athlete meant to distinguish when they wrote
+    down how they got the number.
+    """
+    from vitai.resolution import resolve as resolve_claims
+    rows = [weight(kg=80.4, capture="file_export",
+                   recorded_at="2030-05-01T07:00:00+02:00"),
+            weight(kg=83.0, capture="manual_entry",
+                   recorded_at="2030-05-09T21:00:00+02:00")]
+    got = resolve_claims({"weight": rows})
+    assert got["canonical"]["weight"][0]["kg"] == 80.4
+
+
+def test_an_explicit_correction_still_wins():
+    """`supersedes` is the deliberate correction path and is applied at load,
+    so a correction retires the line it corrects and never reaches this
+    contest. Without that, "the scale said 82.4, I mistyped it" would have
+    become unsayable.
+    """
+    from vitai.api import Vitai
+    from vitai.cli import main as cli
+    import tempfile
+    from pathlib import Path
+    root = Path(tempfile.mkdtemp()) / "content"
+    cli(["init", str(root)])
+    write(root, [
+        weight(kg=80.4, source="scale", capture="ble",
+               recorded_at="2030-05-01T07:00:00+02:00"),
+        weight(kg=82.4, source="scale", capture="manual_entry",
+               supersedes="2030-05-01/scale",
+               recorded_at="2030-05-02T09:00:00+02:00"),
+    ])
+    assert Vitai(root).canonical()["weight"][0]["kg"] == 82.4
+
+
+def test_capture_never_overrules_the_configured_precedence():
+    """It breaks a tie the SOURCE ladder left, and nothing more. Precedence
+    is the athlete's own judgement about their instruments; a registry
+    default is not entitled to overturn it."""
+    from vitai.resolution import resolve as resolve_claims
+    rows = [weight(kg=83.0, source="mfp-export", capture="narrative"),
+            weight(kg=80.4, source="scale", capture="ble")]
+    got = resolve_claims({"weight": rows}, {"kg": ("mfp-export", "scale")})
+    assert got["canonical"]["weight"][0]["kg"] == 83.0
+
+
+def test_the_audit_trail_names_capture_when_capture_decided():
+    """A resolution nobody can explain is one nobody can dispute. Saying
+    "the later-written scale claim supersedes the earlier" would have been
+    false in the one place the record explains itself."""
+    from vitai.resolution import resolve as resolve_claims
+    rows = [weight(kg=83.0, capture="narrative", read_by="athlete"),
+            weight(kg=80.4, capture="ble")]
+    got = resolve_claims({"weight": rows})
+    reason = got["explanations"][0]["reason"]
+    assert "closer to the instrument" in reason
+    assert "ble" in reason and "narrative" in reason
+
+
+def test_two_recollections_still_tie_and_that_is_the_honest_answer():
+    """`sofia`, the persona that motivated this, is NOT resolved by it: she
+    records every weight as `manual_entry` or `narrative` under one source,
+    so there is no device claim for a recollection to lose to and capture
+    cannot separate them. Recency decides, as before.
+
+    Recording this so the change is not read as fixing her case. What it
+    fixes is a record that mixes a device capture with a recollection.
+    """
+    from vitai.provenance import restatements
+    assert restatements({"capture": "manual_entry"}) == restatements(
+        {"capture": "narrative"})
+
+
+def test_an_unstated_capture_assumes_the_costly_side():
+    """As everything else about `unknown` does. It TIES with a stated
+    recollection, because we know nothing worse about an unstated capture
+    than about a stated one."""
+    from vitai.provenance import MOST_RESTATED, restatements
+    assert restatements({}) == MOST_RESTATED
+    assert restatements({"capture": "narrative"}) == MOST_RESTATED
+
+
+def test_every_registered_capture_carries_a_rank():
+    """A capture added later without one would silently take the costly
+    default and lose every contest, which is a decision somebody should make
+    rather than inherit."""
+    from vitai.vocab import registry
+    entries = registry("capture")["capture"]
+    missing = [k for k, v in entries.items() if "restatements" not in v]
+    assert missing == [], missing
+
+
+def test_the_rank_is_not_a_quality_ordering():
+    """`capture.toml` says so in capitals and this holds it to it: `ble` has
+    no human in the loop and no durable artifact, `file_export` leaves an
+    archive that survives. Different virtues, same distance from the
+    instrument, and nothing here says which is better."""
+    from vitai.provenance import restatements
+    assert (restatements({"capture": "ble"})
+            == restatements({"capture": "file_export"})
+            == restatements({"capture": "connector"}))
+
+
+def test_a_silent_line_is_not_a_worst_case():
+    """UNSTATED IS NOT ABSENT. Defaulting silence to the worst rank made a
+    line that said nothing lose to a line that said `file_export`, so a food
+    log re-exported the next morning without a capture lost to the previous
+    morning's annotated export - the 1,700 kcal error #70 exists to prevent,
+    reintroduced by the fix for #140.
+
+    The cost of "assume the costly side" lands on the OTHER claim here:
+    penalising the silent row promotes the stale annotated one.
+    """
+    from vitai.resolution import resolve as resolve_claims
+
+    def daily(**kw):
+        rec = {"date": "2030-05-01", "kcal_in": None, "source": "mfp-export",
+               "note": None, "steps": None, "recorded_at": None,
+               "capture": None, "_gen": 8}
+        rec.update(kw)
+        return rec
+
+    rows = [daily(kcal_in=1354, capture="export",
+                  recorded_at="2030-05-01T08:00:00+02:00"),
+            daily(kcal_in=3091, recorded_at="2030-05-02T08:00:00+02:00")]
+    got = resolve_claims({"daily": rows})
+    assert got["canonical"]["daily"][0]["kcal_in"] == 3091
+
+
+def test_it_engages_once_every_claim_in_the_contest_says():
+    """The premise of the test above: a record part-way through adopting
+    `capture` is the normal case and must behave exactly as before, and a
+    record that has adopted it gets the ranking it asked for."""
+    from vitai.resolution import resolve as resolve_claims
+
+    def daily(**kw):
+        rec = {"date": "2030-05-01", "kcal_in": None, "source": "mfp-export",
+               "note": None, "steps": None, "recorded_at": None,
+               "capture": None, "_gen": 8}
+        rec.update(kw)
+        return rec
+
+    rows = [daily(kcal_in=1354, capture="file_export",
+                  recorded_at="2030-05-01T08:00:00+02:00"),
+            daily(kcal_in=3091, capture="narrative",
+                  recorded_at="2030-05-02T08:00:00+02:00")]
+    got = resolve_claims({"daily": rows})
+    assert got["canonical"]["daily"][0]["kcal_in"] == 1354
+
+
+def test_a_capture_decided_disagreement_raises_a_tripwire():
+    """A correction is not a disagreement (#70), so contests sharing a source
+    are skipped - and that swallowed the one #140 is about, at any spread. A
+    device reading and a recollection of the same instrument disagreeing is
+    not the correction mechanism working."""
+    from vitai.resolution import resolve as resolve_claims
+    got = resolve_claims({"weight": [weight(kg=80.4, capture="ble"),
+                                     weight(kg=68.0, capture="narrative")]})
+    assert [t["kind"] for t in got["tripwires"]] == ["source_disagreement"]
+
+
+def test_an_ordinary_same_source_correction_stays_silent():
+    """The premise. Raising "mfp-export says 3091, mfp-export says 1354"
+    reports the correction mechanism working as a fault."""
+    from vitai.resolution import resolve as resolve_claims
+    got = resolve_claims({"weight": [
+        weight(kg=80.4, recorded_at="2030-05-01T07:00:00+02:00"),
+        weight(kg=68.0, recorded_at="2030-05-02T07:00:00+02:00")]})
+    assert got["tripwires"] == []
+
+
+def test_the_trail_never_states_the_reverse_of_what_happened():
+    """`_why` tested only that the two ranks DIFFERED, which read correctly
+    when the sort had already put the closer claim first and stated the exact
+    reverse whenever anything else decided. The reason must name the winner's
+    capture as the closer one, or it is a false sentence in the one place the
+    record explains itself."""
+    from vitai.resolution import _why
+    closer = weight(kg=80.4, capture="ble")
+    further = weight(kg=83.0, capture="narrative")
+    assert "closer to the instrument" in _why(closer, further, ())
+    # Reversed: capture did NOT decide, so it must not claim it did.
+    assert "closer to the instrument" not in _why(further, closer, ())
+
+
+def test_derived_does_not_assert_a_rank_it_cannot_know():
+    """The count is the count of its INPUTS, which the registry cannot see: a
+    computation over a remembered number is that remembered number wearing
+    arithmetic."""
+    from vitai.provenance import MOST_RESTATED, restatements
+    assert restatements({"capture": "derived"}) == MOST_RESTATED

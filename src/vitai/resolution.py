@@ -39,8 +39,9 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from .clocks import comparable, is_aware, parse_time, stamp_instant
-from .provenance import (TRUST_ORDER, describe, distinct_origins,
-                         independent_witnesses, shares_origin, trust_ceiling)
+from .provenance import (TRUST_ORDER, capture_of, describe, distinct_origins,
+                         independent_witnesses, restatements, shares_origin,
+                         states_capture, trust_ceiling)
 
 from .schema import KEYS
 
@@ -213,7 +214,28 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
             canonical[field] = None
             continue
         ladder = _ladder(field, precedence, default)
+        # AFTER the source ladder and BEFORE recency (#140).
+        #
+        # After, because precedence is the athlete's configured judgement and
+        # this is not entitled to overrule it: two different sources still
+        # resolve the way they were told to.
+        #
+        # Before recency, because the failure this fixes is a later claim
+        # carrying a MORE restated number - a weight logged from memory as
+        # `source: scale` beside the scale's own reading. Ranking recency
+        # first would let the recollection win for being newer, which is the
+        # whole finding.
+        #
+        # AND ONLY WHEN EVERY CLAIM IN THE CONTEST SAYS. Unstated is not
+        # absent: defaulting silence to the worst rank made a line that said
+        # nothing lose to a line that said `file_export`, so a re-export
+        # carrying no capture lost to the previous morning's annotated one -
+        # #70's error, reintroduced by the fix for #140. A record part-way
+        # through adopting `capture` is the normal case, and there it decides
+        # nothing and recency behaves exactly as before.
+        stated = all(states_capture(rec) for _, rec in witnesses)
         witnesses.sort(key=lambda w: (_rank(w[1].get("source"), ladder),
+                                      restatements(w[1]) if stated else 0,
                                       *_recency(w[1])))
         winner_id, winner = witnesses[0]
         canonical[field] = winner[field]
@@ -252,7 +274,13 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
                 "over_source": loser.get("source") or UNKNOWN_SOURCE,
                 "over_value": loser[field],
                 "witnesses": independent_witnesses(witness_recs),
-                "reason": _why(winner.get("source"), loser.get("source"), ladder),
+                "reason": _why(winner, loser, ladder),
+                # Which axis actually decided. `_contradictions` needs it: a
+                # capture-decided contest shares a source and is NOT the
+                # correction mechanism, so the same-source skip would
+                # swallow a device reading and a recollection disagreeing by
+                # any amount at all.
+                "by_capture": _by_capture(winner, loser),
                 "disagreed": _disagrees(winner[field], loser[field]),
                 # Same origin means these are one measurement seen at two
                 # points on one pipe. The spread then measures PIPELINE
@@ -303,17 +331,44 @@ def _recency(rec: dict) -> tuple[int, float]:
     An unstamped claim sorts LAST, so any stamped claim beats it, and among
     unstamped claims the stable sort preserves file order - which is exactly
     what a legacy record does today.
+
+    NARROWED BY #140, and only where the record asked for it: when every
+    claim in the contest STATES a capture, the one closest to the instrument
+    is preferred before this runs. So an informal same-source correction -
+    retyping a value with no `supersedes` - no longer wins by being newer if
+    it is also more restated than what it corrects. That is the point (a
+    weight logged from memory beside the scale's own reading), and the
+    deliberate correction path is `supersedes`, which retires its target at
+    load. Where any claim is silent about capture, nothing changes here.
     """
     when = stamp_instant(rec.get("recorded_at"))
     return (1, 0.0) if when is None else (0, -when.timestamp())
 
 
-def _why(winner: object, loser: object, ladder: tuple[str, ...]) -> str:
-    w, ll = str(winner or UNKNOWN_SOURCE), str(loser or UNKNOWN_SOURCE)
+def _by_capture(winner: dict, loser: dict) -> bool:
+    """Did capture decide this, rather than precedence or recency?"""
+    return (states_capture(winner) and states_capture(loser)
+            and restatements(winner) < restatements(loser))
+
+
+def _why(winner: dict, loser: dict, ladder: tuple[str, ...]) -> str:
+    w = str(winner.get("source") or UNKNOWN_SOURCE)
+    ll = str(loser.get("source") or UNKNOWN_SOURCE)
     # Same source on both sides means precedence decided nothing - recency
     # did. Saying "mfp-export outranks mfp-export" is false, and it is false
     # in the audit trail, which is the one place the record explains itself.
     if w == ll:
+        # ...unless capture did, which is the case precedence cannot see. The
+        # audit trail has to name the reason it actually used, or a resolution
+        # nobody can explain is one nobody can dispute.
+        #
+        # DIRECTIONAL. Testing only that the ranks differ read correctly when
+        # the sort had already put the closer claim first, and stated the
+        # exact reverse when anything else decided - a false sentence in the
+        # one place the record explains itself.
+        if _by_capture(winner, loser):
+            return (f"same source; {capture_of(winner)} is closer to the "
+                    f"instrument than {capture_of(loser)}")
         return f"same source; the later-written {w} claim supersedes the earlier"
     if w in ladder and ll not in ladder:
         return f"{w} is ranked for this quantity, {ll} is not"
@@ -843,9 +898,16 @@ def _contradictions(explanations: list[dict]) -> list[dict]:
     the same instrument twice, and the later one supersedes the earlier - so
     raising "mfp-export says 3091, mfp-export says 1354" reports the
     correction mechanism working as a fault.
+
+    But a CAPTURE-decided contest is not the correction mechanism (#140). It
+    is a device reading and a recollection of the same instrument disagreeing,
+    which is the thing that issue is about - and it shared a source, so the
+    skip above swallowed it at any spread. A scale reading of 80.4 and a
+    remembered 74.0 left nothing but an explanations row.
     """
     for e in explanations:
-        if e.get("chosen_source") == e.get("over_source"):
+        if (e.get("chosen_source") == e.get("over_source")
+                and not e.get("by_capture")):
             continue
         if e.get("disagreed") and _numeric(e.get("chosen_value")) \
                 and _numeric(e.get("over_value")):
