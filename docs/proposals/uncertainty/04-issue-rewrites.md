@@ -119,6 +119,15 @@ mass feeding a vendor energy model unanchors a week of derived energy
 figures. Declared lineage is sufficient to FLAG those stale; no
 recomputation. That is the derivation-lineage issue's concrete trigger.
 
+The same applies one level up, and it is the larger half: over the interval
+the engine produced plans, warnings and attainment assessments that were
+acted on. Emptying the input retracts the observation and leaves every
+consequence standing. The consequence side (recompute forward-looking
+outputs from the anchor; refuse backward-looking ones over the gap; audit
+fired warnings) is a separate piece of work with its own prerequisite (the
+engine remembering what it asserted), filed with the derivation-lineage
+issue's cascade as its mechanism.
+
 ## Related
 
 - per-observation qualifications (distinct: one reading vs an interval)
@@ -377,6 +386,21 @@ Consequences wired into resolution:
   than an observation, exactly as the problem statement put it.
 - **Row identity** comes from #169 and is a prerequisite; this issue lands
   immediately after it.
+
+## Blast radius, restated upward
+
+As filed, this issue is about a VALUE derived from other rows. The real
+extent is a level higher: verdicts, plans, warnings and required-rate
+calculations are all values derived from the whole record, and a retraction
+of their inputs currently stops at the input. The staleness cascade
+proposed here is therefore the mechanism for a much larger consumer than
+the one that motivated it - the engine's own assertions - which needs one
+additional piece this issue does not provide: a durable memory of what was
+asserted and when (today verdicts are rebuilt and overwritten, so there is
+nothing to mark stale). That memory, the forward/backward recompute-or-
+refuse split, and the audit of already-fired warnings are specced as the
+consequence side of the regimes issue and depend on this issue's lineage
+machinery plus policy-as-of reconstruction (#148).
 ```
 
 ---
@@ -560,6 +584,36 @@ a per-hop figure worth using exists.
 - #170 derived values (uncertainty of a derived value needs named inputs)
 - the regimes issue (the worked proof of the axis split; definitional
   uncertainty as the dominant term for body mass)
+```
+
+---
+
+## #148: PROMOTE from known defect to prerequisite (comment to post)
+
+Not in the original scope of this pass; promoted because the retraction
+cascade cannot exist without it. Comment text, ready to paste:
+
+```
+Promoting this from a known defect to a PREREQUISITE of the retraction
+cascade (the consequence side of the regimes proposal).
+
+`as_of` currently reconstructs past DATA under today's policy. To answer
+"what did the engine actually tell the athlete, and does it still hold",
+data-as-of is not enough: a faithful data reconstruction under today's
+thresholds produces a verdict the engine never issued. Retraction auditing
+replays past assertions, so it needs POLICY-as-of - the thresholds, config
+overlay values, resolution ordering and registry state in force at the
+assertion's date.
+
+Partial precedent already in the engine: weekly verdicts are judged against
+the thresholds in force on their Monday (G14/G20), so goals and thresholds
+are already policy-as-of. The gap is everything outside those two datasets:
+config file values, resolution precedence, and registries (the G31
+effective-dating territory).
+
+Concretely required by the cascade: each recorded assertion carries the
+policy date it was computed under, and this issue makes that date
+replayable. Until it lands, the assertion log can record but not verify.
 ```
 
 ---

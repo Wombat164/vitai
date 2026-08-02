@@ -334,6 +334,54 @@ when the protocol started or the device changed, and a declared boundary
 needs no statistics. Changepoint detection (CUSUM, Page 1954; PELT, Killick
 et al. 2012) is an optional later audit, not built now.
 
+## 8b. Emissions: the engine's memory of what it asserted
+
+The asymmetry the regime spec left open: emptying an interval retracts the
+INPUT, but the interval was consumed - plans, warnings, thresholds and
+attainment verdicts were computed from it and are still being acted on.
+Retraction currently propagates to the input and stops. Structural blocker,
+verified: there is no `verdicts` dataset; verdicts are computed into the DB
+at build and overwritten on every rebuild, so the engine has no durable
+memory of what it previously asserted and nothing can answer "what did it
+tell me last week, and does it still hold".
+
+### The decision: record SURFACED assertions only
+
+Two options weighed:
+
+| option | verdict |
+|---|---|
+| append-only log of every computed verdict per build | REJECTED. A computed verdict is REBUILDABLE, and recording derivable output in the record duplicates the derived tier into the ground-truth tier; worse, a build that appends to the record makes rebuild non-idempotent, breaking the record-is-input / db-is-disposable split (`devices.py` doctrine). Also unbounded: every rebuild re-emits the full verdict set. |
+| append-only log of assertions DELIVERED to the athlete | CHOSEN. "The engine asserted X to the athlete at time T" is an EVENT in the world - not rebuildable, exactly what the record stores. An unseen verdict has no consequence to retract; the surfaced ones are the only ones that were acted on. Bounded by actual use. |
+
+New dataset `emissions.jsonl` (pass-through, never resolved; append-only):
+
+| field | type | null | vocabulary | notes |
+|---|---|---|---|---|
+| `date` | ISO date | no | | the day the assertion was surfaced |
+| `kind` | string | no | `verdict \| warning \| plan \| requirement` | closed vocab |
+| `metric` | string | yes | verdict metric or warning trigger | |
+| `week` | string | yes | ISO Monday | for verdict kinds |
+| `statement` | string | no | compact machine payload (verdict word, value, target; or the requirement figure) | what was actually said, quotable later without recompute |
+| `basis_claims` | list of claim ids | yes | | the input rows the assertion rested on (verdicts: the week's contributing claims; warnings: the triggering rows) |
+| `policy_asof` | ISO date | no | | the policy date the computation used (the #148 hook) |
+| `contract` | integer | no | | CONTRACT_VERSION at emission |
+| `surface` | string | no | slug (`cli`, client name) | which consumer delivered it |
+| `recorded_at`, `device` | as elsewhere | | | standard machinery |
+
+Write path: `api.assert_delivery(rows, surface)` at DELIVERY time, never at
+build (build stays a pure function of the record). The bundled client MUST
+call it for every judgement it renders (the write-visibility mirror of
+loadline I25); a third-party consumer that skips it produces assertions the
+record cannot later retract - stated as the accepted residual risk, because
+the alternative (logging computation instead of delivery) records the wrong
+event.
+
+Derived at read (never stored on the row): `basis_retracted` (any basis
+claim now regime-superseded or retracted) and `still_holds` (recompute under
+current knowledge matches `statement`). Label, never delete: a fired warning
+stays in history, marked.
+
 ## 9. Expected-variation registry (restatement-run detector input)
 
 `semantics/variation.toml` (engine registry, versioned):

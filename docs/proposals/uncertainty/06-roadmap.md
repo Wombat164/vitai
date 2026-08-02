@@ -10,6 +10,8 @@ P0b phase-0 refusal count --------+--> GATE A --> P2 uncertainty machinery [C]
 P1  partial-order resolution [C] -/              (scope set by GATE A)
 P1b identity primitive (#169) --> P1c derived_from (#170) --> P1d qualifications (#168)
                                                           --> P1e capture-class dominance (#167)
+P0a + P1c + #148 policy-as-of + P2 refusal shape --> P3 emission memory
+                                                     + retraction cascade [C]
 issue hygiene (04) first, independent of everything
 ```
 
@@ -95,6 +97,33 @@ The countermeasures are behavioural (protocol + routine) and the weekly-mean
 trend filter; no metadata touches it. Recorded so nobody builds a field for
 it.
 
+## Phase 3: emission memory + retraction cascade `[C]`
+
+The largest single item in the whole proposal, sized honestly: it is the
+first requirement that needs the engine to REMEMBER ITS OWN OUTPUTS, which
+is an architectural addition (a new event-class dataset plus an API delivery
+surface), not a field. Verified blocker: no `verdicts` dataset exists;
+verdicts are rebuilt and overwritten, so today nothing can answer "what did
+the engine tell me last week, and does it still hold".
+
+| item | effort | notes |
+|---|---|---|
+| `emissions.jsonl` + `api.assert_delivery` | days | surfaced-assertions-only decision recorded in 01-schema 8b (build purity forces it, cost seconds it) |
+| forward/backward direction table + recompute-or-refuse split | days | the core rule: forward-looking recomputes from the anchor; backward-looking refuses over an emptied interval with reason; totality enforced by test |
+| `basis_retracted` join + warning counterfactual backtest | days | extends the G24/G36 anchor-audit loop with a retraction trigger; output "N fired on a basis later retracted; M would still fire" |
+| materiality gate | afternoon | the phase-0 guard-band predicate REUSED verbatim as the surfacing gate: a recompute surfaces only when it crosses a decision boundary. One predicate, two callers, no second calibration to drift. |
+| #148 policy-as-of | week | PROMOTED from known defect to PREREQUISITE (see 04-issue-rewrites): replaying an assertion needs the policy in force at its date, not today's. Partial precedent exists (week-Monday thresholds, G14/G20); the gap is config overlay, resolution ordering and registries (G31). Until it lands, the emission log records but cannot verify (`still_holds` blocked; everything else in this phase proceeds). |
+
+**GATE B (phase 3 entry):** P0a shipped (regimes exist to retract), P1c
+shipped (lineage names an emission's basis), P2's refusal payload shape
+shipped (the backward-looking refusal reuses it). #148 gates only the
+verification half; do not hold the whole phase on it.
+
+Failure mode of the phase: unlogged surfacing by a non-bundled consumer
+leaves assertions invisible to retraction; accepted residual risk, recorded
+in 01-schema 8b with the reason (logging computation instead of delivery
+records the wrong event).
+
 ## Standing NOT-BUILDING decisions (recorded so they are not revisited)
 
 | item | reason | citation |
@@ -125,7 +154,8 @@ checks, not a substitute for running it.
 
 ## Loadline
 
-I36-I44 (05-loadline.md) adopt in lockstep with the phase that emits each
+I36-I50 (05-loadline.md) adopt in lockstep with the phase that emits each
 payload: I37/I38 with phase 0a, I43 with phase 1, I36/I39/I40/I41/I42/I44
-with phase 2. A rule adopted before its payload exists is a fiction; the
-changelog entry lands per phase.
+with phase 2, I45-I47 with the phase-2 report layer, I48-I50 with phase 3.
+A rule adopted before its payload exists is a fiction; the changelog entry
+lands per phase.

@@ -112,6 +112,22 @@ All fixtures synthetic: "an athlete", generic values.
 | `test_constant_run_ignores_unregistered_fields` | 6 identical rhr values with no variation entry for rhr | no advisory (open registry accuses nobody) |
 | `test_true_flat_series_is_only_advisory` | flat run plus an explicit note | advisory still emitted, nothing refused, no value nulled (detector never mutates) |
 
+## 8b. Emissions and retraction cascade (`test_emissions.py`, new)
+
+| test | fixture | assertion |
+|---|---|---|
+| `test_emission_logged_on_delivery` | `api.assert_delivery` over two verdict rows, surface `cli` | two emission rows appended with kind, statement, basis_claims, policy_asof, contract |
+| `test_build_never_writes_emissions` | full build over a record containing an emissions file | emissions file byte-identical after build; build output contains no emission writes (purity: the record is input, the db is output) |
+| `test_backward_refuses_over_emptied_interval` | attainment/progress computation whose window intersects a regime interval | refusal with reason `unanchored_basis`; no number at the verdict surface; the gap is never silently spanned |
+| `test_forward_recomputes_from_anchor` | required-rate-to-deadline over the same record | computed from the post-anchor data alone; no refusal; the emptied interval does not block it |
+| `test_direction_table_is_total` | enumerate every computed output kind | each is classified forward or backward in the one table; an unclassified kind fails the test (forces the classification to stay total as outputs are added) |
+| `test_fired_warning_labelled_not_deleted` | warning emission whose basis_claims are later regime-superseded | emission row unchanged on disk; read model flags `basis_retracted: true`; nothing removed from history |
+| `test_counterfactual_audit_counts` | two warning emissions on a retracted basis: one whose trigger still fires under current knowledge, one whose does not | backtest reports fired=2, would_still_fire=1, with per-warning rows naming which |
+| `test_materiality_gate_sub_boundary` | anchor correction moving a required rate within the same decision region | no surfaced delta; audit-trail entry only |
+| `test_materiality_gate_boundary_cross` | correction flipping a verdict word / crossing a feasibility bound | delta surfaced, cause named (the regime/anchor claim id) |
+| `test_materiality_gate_is_phase0_predicate` | same inputs fed to the guard-band predicate and the materiality gate | identical decisions (one predicate, two callers - the reuse is asserted, not assumed) |
+| `test_emission_replay_needs_policy_asof` | emission with `policy_asof` D; thresholds edited after D | `still_holds` recomputation uses policy in force at D, not today's (gated on #148; until it lands this test is the acceptance test FOR it) |
+
 ## 9. Monotonicity invariants (property, seeded)
 
 | invariant | statement checked over generated cases |

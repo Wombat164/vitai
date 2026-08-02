@@ -121,6 +121,23 @@ Gated on phase 0 (see thresholds in `00-phase0-experiment.md`). Shipped form:
 | untouched | pain_gate, symptom rows, safety floors (G68): safety fires on points, never refuses on uncertainty; a floor breach with wide u still fires (costly side). |
 | per-field scope (stream 2 settled it) | weight_rate and rhr ship first (own-record Type A). Steps and sleep: trend windows only. kcal_out at day resolution and body-fat-percent levels: never scored, encoded as policy data, not conditionals. Intake floors keep firing on points (safety, above). |
 
+## 6a. New module `emissions.py`: retraction reaches the consequences
+
+The largest single architectural item in this proposal (06-roadmap sizes it):
+the first requirement that needs the engine to remember its own outputs.
+
+| piece | detail |
+|---|---|
+| `api.assert_delivery(rows, surface)` | appends one `emissions.jsonl` row per delivered judgement (01-schema 8b). Called by the surfacing path at delivery, NEVER by build: build stays a pure function of the record, and the event being recorded is "this was asserted to the athlete", which is an observation, not a computation. |
+| THE DIRECTIONAL RULE (the core) | Do not backfill the OBSERVATION; DO recompute the CONSEQUENCE - split by direction because they behave oppositely. **Forward-looking** outputs (required rate to a deadline, next-step plan, revised threshold): computable from the current anchor alone; recompute from current best knowledge; an emptied interval never blocks them. **Backward-looking** outputs (progress to date, attainment so far, did-last-week-hit): NOT computable over an emptied interval; REFUSE with reason `unanchored_basis`, using the refusal machinery of section 6 (word + reason, no number at the verdict surface). Silently spanning the gap is the forbidden third behaviour. |
+| where the split lives | each computed output kind is classified `forward \| backward` in one table in `emissions.py` (data, not scattered conditionals), consumed by verdicts/report/plan surfaces. |
+| `basis_retracted` join | read-model view over `emissions` x current claim status: an emission whose `basis_claims` intersect regime-superseded or retracted claims is flagged. Label, never delete - the row is untouched; the flag is derived. |
+| counterfactual audit `warning_backtest()` | for each `kind: warning` emission with `basis_retracted`: recompute the trigger under current knowledge; output `{fired: N, would_still_fire: M}` plus per-warning rows. This EXTENDS the existing anchor-audit backtest concept (G24/G36 anchor-audits-source loop) with a retraction trigger, rather than inventing a parallel mechanism - same loop, new entry point. A warning that would still fire is reassurance; one that would not is the concrete harm the athlete should hear about. |
+| MATERIALITY GATE (reuses phase 0) | `material(old, new, boundaries) -> bool`: a recomputed consequence is surfaced only when the change CROSSES A DECISION BOUNDARY (verdict word flips, a threshold or feasibility bound is crossed), not whenever the number moves. This is the guard-band predicate from `00-phase0-experiment.md` reused verbatim - the same "is this distinguishable across a boundary" test serving refusal and surfacing both, which is a point in its favour: one predicate, one set of thresholds, no second calibration to drift. Sub-boundary deltas land in the audit trail only. Alarm-fatigue rationale per loadline I2. |
+| #148 dependency (HARD) | answering "does an emission still hold" requires recomputing what the engine said THEN, which needs policy-as-of, not only data-as-of. Week-Monday policy already exists for goals/thresholds (G14/G20 in verdicts.py); the gap is everything else: vitai.toml overlay values, resolution edges, registries (G31 territory). `emissions.policy_asof` records the date; #148 makes it replayable. PREREQUISITE, promoted in 06-roadmap. |
+| effort | week-plus: new dataset + API surface + directional classification of every output kind + backtest + gate. Honest sizing in 06-roadmap. |
+| failure mode | unlogged surfacing (a consumer skips `assert_delivery`): that assertion is invisible to retraction. Accepted residual risk (01-schema 8b) - logging computation instead would record the wrong event; the bundled client is bound by rule (loadline I50 family), third parties by documentation. |
+
 ## 6b. Report layer: the render-only envelope (I45 hook)
 
 The client never recomputes (loadline I22), so the chart envelope across
