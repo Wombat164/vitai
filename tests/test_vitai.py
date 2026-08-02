@@ -1621,3 +1621,36 @@ def test_the_reason_reaches_the_read_model(tmp_path):
         con.close()
     assert rows, "premise: this record produces refusals"
     assert all(reason for _, reason in rows), "a refusal reached the read model bare"
+
+
+def test_mcp_refuses_an_argument_its_schema_does_not_declare(tmp_path):
+    """The declared surface is the WHOLE surface.
+
+    `inputSchema` is advisory to the client, so before this was enforced a
+    caller that ignored it reached every remaining parameter of the underlying
+    method. `claim` does not offer `corrects`, which retires a line, and that
+    is a decision about what the tool IS rather than a hint to well-behaved
+    callers. An adapter whose real surface is wider than its described one
+    cannot be audited from its description.
+    """
+    import pytest
+
+    from vitai.cli import main
+    from vitai.mcp import call, tool_list
+
+    root = tmp_path / "r"
+    main(["init", str(root)])
+
+    advertised = {t["name"]: set(t["inputSchema"]["properties"])
+                  for t in tool_list()}
+    assert "corrects" not in advertised["claim"]
+
+    with pytest.raises(KeyError) as caught:
+        call(root, "claim", {"dataset": "weight", "values": {"kg": 80},
+                             "said": "x", "corrects": "weight:2020-01-01:manual"})
+    assert "corrects" in str(caught.value)
+
+    # and the advertised ones still work
+    row = call(root, "claim", {"dataset": "weight", "values": {"kg": 80},
+                               "said": "about eighty"})
+    assert row["kg"] == 80
