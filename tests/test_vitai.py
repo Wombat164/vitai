@@ -403,7 +403,7 @@ def test_api_build_projects_verdicts_and_contract(tmp_path):
             "justifications", "conservation", "retractions",
             "medical", "gates", "escalations", "checks"} <= tables
     assert con.execute("SELECT COUNT(*) FROM inferences").fetchone()[0] == 1
-    assert con.execute("SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "21"
+    assert con.execute("SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "22"
     con.close()
     assert v.status_line().startswith("77.3 kg")
     assert isinstance(v.verdicts(), list)
@@ -1585,16 +1585,24 @@ def test_the_reason_is_readable_without_inspecting_null_fields():
     for row in refusals:
         assert row["reason"], row
         assert row["reason"] in {"no_input", "no_policy", "not_supported",
-                                 "contraindicated", "suppressed"}
+                                 "contraindicated", "suppressed", "pending"}
 
 
 def test_a_consumer_ignoring_the_reason_sees_the_previous_behaviour():
     """Additive and appended, so a reader by name is unaffected and one
-    reading positionally sees the new column last."""
+    reading positionally sees the new columns last.
+
+    The RULE rather than a snapshot of it: what a positional reader needs is
+    that the columns it already knew keep their places, not that the list ends
+    on any particular word. Pinning the final name made every later addition
+    look like a breach of a promise it actually keeps - `due` arrived after
+    `reason` (#202) and the invariant held throughout.
+    """
     from vitai.db import VERDICT_KEYS
-    assert VERDICT_KEYS[-1] == "reason"
-    assert VERDICT_KEYS[:-1] == ["week", "metric", "value", "target",
-                                 "verdict", "goal"]
+    ORIGINAL = ["week", "metric", "value", "target", "verdict", "goal"]
+    assert VERDICT_KEYS[:len(ORIGINAL)] == ORIGINAL
+    # And the appended ones are known, so a column cannot arrive unnoticed.
+    assert VERDICT_KEYS[len(ORIGINAL):] == ["reason", "due"]
 
 
 def test_the_reason_reaches_the_read_model(tmp_path):
@@ -1613,7 +1621,9 @@ def test_the_reason_reaches_the_read_model(tmp_path):
     con = sqlite3.connect(Vitai(root).build())
     try:
         cols = [c[1] for c in con.execute("PRAGMA table_info(verdicts)")]
-        assert cols[-1] == "reason"
+        # Present, not last: `due` was appended after it (#202). What this
+        # test is about is that the reason survives the projection.
+        assert "reason" in cols
         rows = con.execute(
             "SELECT verdict, reason FROM verdicts WHERE verdict='no_data'"
         ).fetchall()

@@ -1010,6 +1010,12 @@ def test_no_module_reads_the_wall_clock_during_a_build(tmp_path):
         engine.goals()
         engine.churn()
         engine.events()
+        # Added when `compute_verdicts` began reading its viewpoint (#202):
+        # it now derives when a source is next due, which is a question about
+        # a moment. Reading the VIEWPOINT is correct; reading the wall clock
+        # would make the same build answer differently tomorrow, which is what
+        # this probe exists to catch.
+        engine.verdicts()
         assert reads == [], reads
     finally:
         for module in patched:
@@ -1038,24 +1044,3 @@ def test_the_viewpoint_reaches_the_context_lookup(tmp_path):
     assert Vitai(root, on=date(2030, 7, 15)).context()["mode"] == "home"
 
 
-def test_verdicts_take_a_viewpoint_they_do_not_read():
-    """A parameter nothing consumes is worse than no parameter: `verdicts`,
-    `churn` and the `today=` threaded through `build` all reach
-    `compute_verdicts`, which never references it.
-
-    So the viewpoint does NOT govern verdicts, and this records that rather
-    than letting the signature imply otherwise. Delete this test when
-    `compute_verdicts` starts reading its clock - it will fail then, which is
-    the point.
-    """
-    import ast
-    import inspect
-
-    from vitai import verdicts
-    tree = ast.parse(inspect.getsource(verdicts.compute_verdicts))
-    fn = tree.body[0]
-    used = {n.id for n in ast.walk(fn) if isinstance(n, ast.Name)}
-    assert "today" in {a.arg for a in fn.args.args}
-    assert "today" not in used, (
-        "compute_verdicts now reads its viewpoint - good; delete this test "
-        "and add verdicts back to the threading test above")

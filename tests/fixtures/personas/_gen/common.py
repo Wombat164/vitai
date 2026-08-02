@@ -84,7 +84,6 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # builders only write datasets they have content for, and an absent file is an
 # empty dataset - and their existing lines are untouched, because a new
 # dataset appends nothing to the datasets already in the wild.
-AUTHORED_AGAINST_CONTRACT = "21"  # vitai.db.CONTRACT_VERSION is a string
 # Re-pinned for #188 and #190, which added five macro totals plus two sleep
 # instants to daily (two generations - unrelated facts) and three per-100 g
 # figures to meals. REVIEWED rather than bumped, and the reading differs
@@ -109,6 +108,12 @@ AUTHORED_AGAINST_CONTRACT = "21"  # vitai.db.CONTRACT_VERSION is a string
 #
 # The corpora DO change: daily gains seven null columns, meals three, and
 # `_gen` moves on both.
+
+# Re-pinned for #202, which adds the `pending` refusal reason and `due`. Both
+# live on VERDICT rows, which are computed rather than recorded, so no builder
+# here writes either and no persona line changes. The pin moves because the
+# read model did.
+AUTHORED_AGAINST_CONTRACT = "22"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,
