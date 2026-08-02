@@ -913,3 +913,97 @@ def test_derived_does_not_assert_a_rank_it_cannot_know():
     arithmetic."""
     from vitai.provenance import MOST_RESTATED, restatements
     assert restatements({"capture": "derived"}) == MOST_RESTATED
+
+
+# ---- the restatement detector: the same concept, from the other side -------
+#
+# `provenance.restatements` ranks what the record SAYS about how a value was
+# acquired. This asks why a quantity that should move did not. Neither
+# replaces the other: a record can be wrong about its capture, and a restated
+# series can be honestly labelled.
+
+def _kg_run(dates, value=80.0):
+    return [{"date": d, "kg": value} for d in dates]
+
+
+def test_a_flat_week_of_bodyweight_is_reported():
+    """A number repeated unchanged across days, in a quantity hydration and
+    glycogen make move, is evidence it was restated rather than observed."""
+    from vitai.resolution import restatement_runs
+    days = [f"2030-05-{d:02d}" for d in range(1, 8)]
+    found = restatement_runs({"weight": _kg_run(days)})
+    assert len(found) == 1
+    assert found[0]["kind"] == "constant_value_run"
+    assert "2030-05-01" in found[0]["detail"]
+    assert "2030-05-07" in found[0]["detail"]
+
+
+def test_a_series_that_moves_is_not_reported():
+    """The premise. If a moving series tripped this, it would fire on every
+    record and teach people to ignore it."""
+    from vitai.resolution import restatement_runs
+    rows = [{"date": f"2030-05-{d:02d}", "kg": 80.0 + d * 0.1}
+            for d in range(1, 8)]
+    assert restatement_runs({"weight": rows}) == []
+
+
+def test_several_readings_in_one_morning_are_not_a_flat_week():
+    """The rule is a span in DAYS, not a count of rows. Three readings on one
+    morning are one observation restated twice, and a row-count rule would
+    have called that a flat week."""
+    from vitai.resolution import restatement_runs
+    assert restatement_runs({"weight": _kg_run(["2030-05-01"] * 6)}) == []
+
+
+def test_a_run_shorter_than_the_window_is_left_alone():
+    """Two identical mornings are ordinary. The window is what makes a run
+    evidence rather than a coincidence."""
+    from vitai.resolution import restatement_runs
+    assert restatement_runs(
+        {"weight": _kg_run(["2030-05-01", "2030-05-02", "2030-05-03"])}) == []
+
+
+def test_a_field_absent_from_the_registry_is_never_checked():
+    """An open registry, in the deny-list direction `cannot_observe` uses: an
+    omission accuses nobody. Adding a field is a claim about the world and
+    should be made deliberately."""
+    from vitai.resolution import restatement_runs
+    flat = [{"date": f"2030-05-{d:02d}", "sleep_h": 8.0} for d in range(1, 15)]
+    assert restatement_runs({"daily": flat}) == []
+
+
+def test_it_is_advisory_and_never_fails_a_build():
+    """Some true series are genuinely flat: a maintenance phase on a coarse
+    scale, a layoff. A detector that failed a build on one would be asserting
+    that a record is wrong for being boring."""
+    import json
+
+    from vitai.api import Vitai
+    from vitai.cli import main
+    import tempfile
+    from pathlib import Path
+    root = Path(tempfile.mkdtemp()) / "content"
+    main(["init", str(root)])
+    rows = [{"date": f"2026-05-{d:02d}", "kg": 80.0, "source": "scale",
+             "note": None, "body_fat_pct": None, "kg_lo": None, "kg_hi": None,
+             "body_fat_lo": None, "body_fat_hi": None, "measured_at": None}
+            for d in range(1, 8)]
+    (root / "data" / "weight.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    found = [t for t in Vitai(root).resolution()["tripwires"]
+             if t["kind"] == "constant_value_run"]
+    assert found, "it must fire through the real pipeline, not only in unit"
+    assert found[0]["severity"] == "review"
+    # And the build still succeeds.
+    assert Vitai(root).build().exists()
+
+
+def test_the_registry_and_the_capture_rank_stay_cross_referenced():
+    """One phenomenon, two evidence routes, and each docstring points at the
+    other. A reader who finds one and not the other will build the second."""
+    import inspect
+
+    from vitai.provenance import restatements
+    from vitai.resolution import restatement_runs
+    assert "restatement_runs" in inspect.getdoc(restatements)
+    assert "restatements" in inspect.getdoc(restatement_runs)

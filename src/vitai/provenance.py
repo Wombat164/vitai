@@ -211,6 +211,13 @@ def restatements(rec: dict) -> int:
     virtues differ completely, and nothing here says which is better - see
     `semantics/capture.toml`, which exists partly to stop that reading.
 
+    THE OTHER EVIDENCE ROUTE is `resolution.restatement_runs`, which detects
+    the same phenomenon from the SHAPE of a series when the record says
+    nothing about capture at all. This one ranks what the record SAYS; that
+    one asks why a quantity that should move did not. Neither replaces the
+    other: a record can be wrong about its capture, and a restated series can
+    be honestly labelled.
+
     It exists because the resolution ladder had nothing to rank by when a lie
     and the truth SHARE A SOURCE. An athlete who logs a weight from memory and
     records it as `source: scale` produces two claims precedence cannot tell
