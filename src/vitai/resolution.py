@@ -36,6 +36,7 @@ the record exists to expose.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
 
 from .clocks import comparable, is_aware, parse_time, stamp_instant
@@ -112,7 +113,16 @@ UNKNOWN_SOURCE = "unknown"
 # Left in, `origin` and `path` were being reported as contested fields whose
 # sources "disagreed" - which is true and meaningless: of course two chains
 # differ, that is what makes them two chains.
-NON_QUANTITY_FIELDS = {"date", "source", "origin", "path", "origin_evidence"}
+# Fields that describe WHERE A CLAIM CAME FROM rather than what it says. They
+# travel with their claim and are never adjudicated field-wise: merging them
+# separately lets a canonical row take its value from one source and its
+# provenance from another, which produces a row whose every provenance
+# statement is false for the number it holds. `derived_from` and `derived_op`
+# are here for that reason (#170) - an observed value wearing a derived row's
+# lineage is precisely the laundering this layer exists to prevent, and the
+# engine manufacturing it is worse than an athlete doing so.
+NON_QUANTITY_FIELDS = {"date", "source", "origin", "path", "origin_evidence",
+                       "derived_from", "derived_op"}
 
 
 def claim_id(dataset: str, rec: dict, ordinal: int = 0) -> str:
@@ -194,6 +204,13 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
         canonical["path"] = single.get("path") if single else None
         canonical["origin_evidence"] = (single.get("origin_evidence")
                                         if single else None)
+        # Same rule as `path`, for the same reason (#170). One claim keeps its
+        # lineage; a merged row has none, because the value it ended up
+        # holding was not solely computed from any one claim's inputs. A
+        # merged row that kept one contributor's lineage would state a false
+        # basis for a number that contributor did not supply.
+        canonical["derived_from"] = single.get("derived_from") if single else None
+        canonical["derived_op"] = single.get("derived_op") if single else None
         canonical["_provenance"] = {
             "independent_sources": independent_witnesses(recs),
             # Trust is bounded by the WEAKEST hop, not by the origin: a
@@ -723,6 +740,14 @@ def resolve(datasets: dict[str, list[dict]],
     # claims still resolve, and then the days a declared regime covers stop
     # standing as values.
     tripwires += apply_regimes(canonical, datasets.get("regimes") or [])
+    # A value standing on an input the record has retracted (#170). Detected
+    # from DECLARED lineage, reported rather than recomputed: `derived_op` is
+    # free text and non-executable, so the engine cannot produce a corrected
+    # number and will not invent one.
+    tripwires += derivation_cycles(datasets)
+    tripwires += stale_derivations(
+        datasets, {str(r.get("claim_id")) for r in (retractions(datasets) or [])
+                   if r.get("claim_id")})
     # ADVISORY, and last: a constant run is a question about how a number was
     # acquired, never a fault in the arithmetic above it. AFTER apply_regimes
     # deliberately: a declared regime has already emptied its interval, so the
@@ -898,6 +923,187 @@ def _unattributed_losses(explanations: list[dict]) -> list[dict]:
                     "enters"),
                 "severity": "review",
             }
+
+
+def _lineage_to_claim_id(ref: str) -> str | None:
+    """A `derived_from` row reference as the claim id that can retire it.
+
+    THE TWO GRAMMARS ARE NOT THE SAME and conflating them is a defect this
+    engine has already shipped once. `derived_from` carries `identity.row_ref`
+    (`dataset:date:source`, plus an ordinal when a date and source name more
+    than one row); the retraction ledger carries `claim_id`
+    (`dataset:date:source`, no ordinal). So the ordinal is dropped here and
+    nothing else is assumed.
+
+    Returns None for a reference that is not a claim id at all - an
+    identity-keyed `sets` or `meals` row, whose middle part is a slug rather
+    than a date -
+    and the caller then declines to judge it. That is a deliberate
+    false-negative: a ref this cannot translate is one whose retraction status
+    is unknown, and reporting unknown as stale would be inventing a finding.
+    """
+    parts = ref.split(":")
+    if len(parts) >= 4 and parts[-1].isdigit():
+        parts = parts[:-1]
+    if len(parts) != 3:
+        return None
+    # `sets` and `meals` key on an identity tuple rather than a date, so their
+    # references are also three parts and are NOT claim ids. Requiring the
+    # middle part to be a date is what tells the two shapes apart; without it
+    # a meal reference translated into a plausible-looking id that could only
+    # ever match by accident.
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", parts[1]):
+        return None
+    return ":".join(parts)
+
+
+def derivation_cycles(datasets: dict) -> list[dict]:
+    """Lineage that leads back to where it started (#170).
+
+    A row deriving from itself, or from something that derives from it, states
+    a value it needs its own value to compute. It is the one lineage that can
+    never be true, and it is what a naive exporter writes when it stamps a
+    whole file with one reference.
+
+    THIS IS SET-AWARE ON PURPOSE. `validate_record` sees one record and would
+    compute ordinal 0 for every row, so it cannot tell a second same-day
+    same-source reading deriving from the FIRST apart from a row deriving from
+    itself, and rejecting the honest one is worse than missing the absurd one.
+    With every row in hand the ordinals are real and the two can be told apart.
+
+    One consequence worth knowing: an unnumbered reference means ordinal 0, so
+    where a date and a source name several rows, a lineage that omits the
+    ordinal points at the FIRST of them. A derived row that is itself first
+    therefore names itself and is reported here, which is the right answer to
+    what was written rather than a false positive - the fix is to write the
+    ordinal.
+    """
+    from .identity import refs
+
+    edges: dict[str, set] = {}
+    where: dict[str, dict] = {}
+    for dataset, rows in sorted(datasets.items()):
+        if not rows or "derived_from" not in KEYS.get(dataset, []):
+            continue
+        for ref, row in zip(refs(dataset, rows), rows):
+            lineage = row.get("derived_from") or []
+            if lineage:
+                edges[ref] = {str(x) for x in lineage}
+                where[ref] = row
+
+    def reaches(start: str, goal: str) -> bool:
+        """Iterative on purpose. A recursive walk raised RecursionError at
+        around a thousand links, and an honest daily derived series reaches
+        that in three years - a build that dies on a long record is a worse
+        failure than the loop it was looking for."""
+        stack, seen = [start], set()
+        while stack:
+            for nxt in edges.get(stack.pop(), ()):  # declared lineage; no I/O
+                if nxt == goal:
+                    return True
+                if nxt not in seen:
+                    seen.add(nxt)
+                    stack.append(nxt)
+        return False
+
+    out = []
+    for ref in sorted(edges):
+        if not reaches(ref, ref):
+            continue
+        out.append({
+            "date": where[ref].get("date"),
+            "kind": "derivation_cycle",
+            "severity": "error",
+            "detail": (
+                f"{ref} is derived, directly or through other rows, from "
+                f"itself. A value cannot be an input to its own computation, "
+                f"so one of the references in this loop is wrong"),
+        })
+    return out
+
+
+def stale_derivations(datasets: dict, retracted: set) -> list[dict]:
+    """Values standing on an input the record has since restated (#170).
+
+    Declared lineage is enough to DETECT this, which is the whole reason
+    `derived_from` is a list of references rather than a re-execution plan:
+    declared lineage suffices for staleness detection, and re-execution would
+    only be needed to CORRECT the drift, which this engine does not do.
+
+    REPORTED, NEVER RECOMPUTED, and the value is left exactly where it is. The
+    engine does not know how the number was derived - `derived_op` is free text
+    and declared non-executable - so it cannot produce a corrected one, and
+    inventing one would be the confident wrong answer a visible flag beats.
+
+    WHAT IT CAN AND CANNOT TELL, stated plainly because the wording of the
+    finding depends on it. A row reference names a date and a source, not a
+    particular version of that row, so a lineage naming a corrected input reads
+    identically whether it was computed from the old value or the new one. The
+    engine cannot distinguish those, so the finding does not claim to: it
+    reports that the value behind the reference was restated and leaves the
+    reader to check which version this derivation used. Saying "this is stale"
+    would be a guess wearing the engine's voice.
+    """
+    from .identity import refs
+
+    # Every derived row, by its own reference, with what it stands on.
+    stands_on: dict[str, set] = {}
+    rows_by_ref: dict[str, tuple] = {}
+    for dataset, rows in sorted(datasets.items()):
+        if not rows or "derived_from" not in KEYS.get(dataset, []):
+            continue
+        for ref, row in zip(refs(dataset, rows), rows):
+            if row.get("derived_from"):
+                stands_on[ref] = {str(x) for x in row["derived_from"]}
+                rows_by_ref[ref] = (dataset, row)
+
+    # Seed with rows standing DIRECTLY on something restated, then propagate:
+    # a value computed from a stale value is stale too. This is the cascade
+    # `retractions` already runs for inferences, on the same reasoning - a
+    # belief resting on a belief whose evidence moved has to move with it -
+    # and without it "everything computed from this" would mean "one hop".
+    direct = {ref: sorted({r for r in lineage
+                           if _lineage_to_claim_id(r) in retracted})
+              for ref, lineage in stands_on.items()}
+    stale = {ref: list(hits) for ref, hits in direct.items() if hits}
+    changed = True
+    while changed:                      # terminates: `stale` only ever grows
+        changed = False
+        for ref, lineage in stands_on.items():
+            if ref in stale:
+                continue
+            if via := sorted(lineage & set(stale)):
+                stale[ref] = via
+                changed = True
+
+    out = []
+    for ref in sorted(stale):
+        dataset, row = rows_by_ref[ref]
+        moved = stale[ref]
+        # Built outside the f-string: a conditional spanning lines inside one
+        # is 3.12 syntax, and this package supports 3.11.
+        one = len(moved) == 1
+        if direct.get(ref):
+            what = ("the value behind that reference has"
+                    if one else "the values behind those references have")
+            what += " been restated"
+        else:
+            # Inherited. Saying "restated" here would be false: this row's own
+            # inputs are untouched, and what moved is further back.
+            what = ("that reference is itself stale"
+                    if one else "those references are themselves stale")
+        out.append({
+            "date": row.get("date"),
+            "kind": "stale_derivation",
+            "severity": "review",
+            "detail": (
+                f"{ref} was computed from {', '.join(moved)}, and {what}."
+                f" Check which version this derivation used: a row reference"
+                f" names a date and a source rather than a version, so the"
+                f" engine cannot tell. It is not recomputed either -"
+                f" `derived_op` is declared rather than executable"),
+        })
+    return out
 
 
 def apply_regimes(canonical: dict, regimes: list[dict]) -> list[dict]:

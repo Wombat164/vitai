@@ -28,6 +28,13 @@ the coarser datasets structurally could not.
 - `journal` holds what the athlete SAID, including a claim the rest of the
   record contradicts.
 
+- `weight` carries one DERIVED value (#170): the athlete's own average, kept
+  in a notebook. A number they act on that nobody observed, declaring which
+  weigh-ins it stands on and who did the arithmetic. It does not contest any
+  other claim, so it changes no count here - what it shows is the shape of a
+  declared lineage in a real record, and a value the engine can tell apart
+  from an observation without being told twice.
+
 `artifacts` is deliberately absent: the manifest is a pointer to a blob store,
 so a demo of it means committing blobs and a store to put them in, and a
 manifest with nothing behind it would demonstrate the opposite of the point.
@@ -46,6 +53,8 @@ import sys
 import tempfile
 from datetime import date, timedelta
 from pathlib import Path
+
+from vitai.schema import CURRENT_GENERATION, KEYS
 
 HERE = Path(__file__).resolve().parent
 DEMO = HERE / "demo"
@@ -80,8 +89,11 @@ TOML = (
     "# reading losing to a relayed vendor figure is the ladder inverted at\n"
     "# exactly the point it exists for.\n"
     "[resolution]\n"
+    # `notebook` sits LAST deliberately: it is the athlete's own arithmetic
+    # over readings already in this ladder, so where it disagrees with them it
+    # is the sum that is wrong, not the scale.
     'source_order = ["dexa", "tape", "scale", "hand", "watch", '
-    '"gym-console", "vendor-api", "vendor-export", "app"]\n\n'
+    '"gym-console", "vendor-api", "vendor-export", "app", "notebook"]\n\n'
     "[resolution.precedence]\n"
     'kcal_out = ["watch", "app"]\n'
     'kcal_in = ["app"]\n'
@@ -385,6 +397,49 @@ def _build(target: Path) -> None:
     # than pick one.
     meals = _plates(two_source_day)
     journal = _said(start, END)
+
+    # THE DERIVED CASE (#170). The athlete keeps their own average in a
+    # notebook. It is a real number they act on, and it is not an observation:
+    # it is two weigh-ins with arithmetic on top. Declaring that is what makes
+    # it checkable - a reader can see which readings it stands on and that
+    # nothing in this repo did the sum.
+    #
+    # It does not contest another claim on its date, so no count moves in this
+    # corpus. The collapse it exists to enable (a written average agreeing
+    # with the readings it was computed from is arithmetic agreeing with
+    # itself) is exercised in `tests/test_lineage.py`.
+    #
+    # The RESTATEMENT half of the feature (correct an input, everything
+    # standing on it is flagged) is exercised in `tests/test_lineage.py`
+    # rather than here: it needs a superseded weigh-in, and dropping a line
+    # from this record's weight series would move the weekly rates the whole
+    # demo narrative is built on. Better a smaller demo than a demo whose
+    # headline story shifted to make room for a second one.
+    # Dated the day AFTER the last weigh-in, and deliberately: on a day that
+    # already has a reading the two claims merge, and a merged row keeps no
+    # lineage (the value it ends up holding was not solely computed from any
+    # one claim's inputs). Standing alone is what lets the demo show a
+    # declared lineage in the read model rather than just in the data file.
+    avg_inputs = sorted(weighed_days)[-2:]
+    avg_day = (date.fromisoformat(sorted(weighed_days)[-1])
+               + timedelta(days=1)).isoformat()
+    weight.append({
+        **{k: None for k in KEYS["weight"]},
+        "date": avg_day,
+        "kg": round(sum(weighed_days[d]["kg"] for d in avg_inputs)
+                    / len(avg_inputs), 2),
+        "source": "notebook", "measured_at": None,
+        "recorded_at": f"{avg_day}T21:32:00+02:00",
+        "origin": "athlete", "origin_evidence": "written in a notebook",
+        # The athlete did the arithmetic, not the engine. That is the whole
+        # distinction between the two derived captures - they carry identical
+        # properties, and what `derived_external` says is that nothing in this
+        # repo can reproduce the number from its inputs.
+        "capture": "derived_external", "read_by": "athlete",
+        "derived_from": [f"weight:{d}:{weighed_days[d].get('source') or 'unstated'}"
+                         for d in avg_inputs],
+        "derived_op": "mean of the last two weigh-ins, done on paper",
+        "_gen": CURRENT_GENERATION["weight"]})
 
     # The provenance pair above appends out of order, and `recorded_at` is
     # derived from the date, so file order must follow date order or the

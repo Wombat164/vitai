@@ -239,6 +239,41 @@ Each canonical value carries a justification, so a correction cascades:
 retract the observation and anything that stood on it retracts too, rather
 than lingering as a belief whose evidence no longer exists.
 
+### What a computed value stands on
+
+Some numbers are observed and some are worked out from other numbers, and the
+record says which. A row that was computed names its inputs in `derived_from`
+and describes the arithmetic in `derived_op`, in the athlete's own words.
+
+Both are DECLARED, not executable. `derived_op` is a description rather than a
+formula, and nothing re-runs it - not a consumer, and not the engine. That is
+deliberate: a lineage you can read is checkable by a person, where a lineage
+you can execute quietly becomes a second implementation of the number that
+drifts from the first.
+
+Declaring the inputs buys two things that are hard to get any other way.
+
+**A derived value never corroborates its own inputs.** Two rows computed from
+one scale reading are that reading twice with arithmetic on top, so they count
+as ONE witness rather than two, and agreement between them raises no
+confidence. Sharing is transitive: a value derived from a value derived from a
+reading is still not a second look at the athlete.
+
+**A restated input flags everything standing on it.** Correct a reading and
+every value computed from it raises a `stale_derivation` finding. The stale
+number is left exactly where it is, visibly flagged - the engine cannot re-run
+a description, so it cannot produce a corrected value, and a confident wrong
+one is worse than an old one you can see is old.
+
+The finding says the input was RESTATED and asks which version was used. It
+does not claim to know: a row reference names a date and a source rather than
+a version of that row, so a derivation from the corrected value reads the same
+as one from the original. Where the engine cannot tell, it says so instead of
+guessing.
+
+Lineage that leads back to itself, directly or around a loop, is an error
+rather than a finding - a value cannot be an input to its own computation.
+
 ### Schema migrations
 
 | Contract | Version | Change | What an existing repo must do |
@@ -262,6 +297,7 @@ than lingering as a belief whose evidence no longer exists.
 | 17 | unreleased | `meta` gains a `policy` row: a content hash of the config that is NOT in the append-only record | Nothing required, and nothing to adopt. It exists so two reconstructions taken under different `vitai.toml` files can be known to be incomparable. **The row is optional** - a read model built without a digest omits it, so absence means "built without one", never "pre-17" |
 | 18 | unreleased | `verdicts` gains `reason`: `no_data` was one word for four states, distinguishable only by which fields were null | Nothing required, and a reader that ignores the column sees the previous behaviour. **One change to notice**: a contraindicated or suppressed metric now appears as a labelled row rather than as an absence, so a consumer counting rows will see more of them. A removed row and an uncomputed metric were different facts rendered identically |
 | 19 | unreleased | `protocol` on weight and measurements (the CONDITIONS a measurement was taken under); the `protocols` and `regimes` datasets | Nothing required. **A consumer must not read an emptied interval as missing data**: a regime declares that a span of claims was UNANCHORED, the claims stay in `claims`, what ends is their standing as values, and nothing is filled in behind them. A row with no `protocol` is a different epistemic class from one with a protocol, not a row with a field missing |
+| 20 | unreleased | `derived_from` and `derived_op` on weight, daily, sessions, measurements, sets and meals: which rows a computed value stands on, and how, in the athlete's own words | Nothing required. **Both are DECLARED, not executable** - `derived_op` is a description, so do not re-run it and do not assume the engine did. Two behaviours to expect: rows standing on a shared input now count as ONE witness in `independent_sources` however many rows they are, so a consumer reading that field may see it fall; and a value whose input the record later retracted raises a `stale_derivation` tripwire and is left in place, flagged rather than corrected |
 
 This table is the summary and `src/vitai/db.py` is the source: the same
 history lives beside `CONTRACT_VERSION`, at more length and with the

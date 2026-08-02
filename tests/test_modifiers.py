@@ -32,6 +32,13 @@ def a_set(**kw):
            "resistance_level": None, "seat_pos": None, "pad_pos": None,
            "lever_pos": None, "device": None,
            "_gen": CURRENT_GENERATION["sets"]}
+    # Fill any key this helper does not name explicitly. A helper that
+    # hardcodes the full key list has to be edited by every generation block
+    # that ever appends a field, and a mechanical edit repeated across files
+    # is one that eventually gets done wrong; this stays correct by
+    # construction instead.
+    for _k in KEYS["sets"]:
+        row.setdefault(_k, None)
     row.update(kw)
     return row
 

@@ -8,6 +8,7 @@ policy digest of the config the record does not hold).
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -184,9 +185,24 @@ from .schema import KEYS
 #     rather than evidence of what the true values were.
 #     RENUMBERED from 18: #177 merged first, and the contract follows
 #     MERGE order rather than issue order.
-CONTRACT_VERSION = "19"
+# 20: DECLARED derivation lineage. `derived_from` names the row references an
+#     emitted value stands on and `derived_op` says how, in the athlete's own
+#     words. Both are declared rather than executable: a consumer must not
+#     read `derived_op` as a formula it can re-run, and the engine does not
+#     re-run it either. Two consequences a consumer may rely on. A derived
+#     value NEVER corroborates its own inputs, so rows standing on a shared
+#     input count as one witness in `independent_sources` however many rows
+#     they are. And a value whose input the record later retracted raises a
+#     `stale_derivation` tripwire, which reports rather than corrects: the
+#     stale number stays, visibly flagged, because an engine that cannot
+#     re-run the derivation cannot produce a right answer and a confident
+#     wrong one is worse than a flagged old one.
+CONTRACT_VERSION = "20"
 
-_TEXT_COLS = {"date", "type", "source", "location", "note",
+_TEXT_COLS = {"derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
+              # under REAL affinity silently becomes 7.0, which is the defect
+              # the `activity_id` note below already warns about
+              "date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
               "week", "metric", "verdict",
               # policy datasets
@@ -358,4 +374,12 @@ def _table(con: sqlite3.Connection, table: str, keys: list[str],
 def _cell(v: object) -> object:
     if isinstance(v, bool):
         return int(v)
+    if isinstance(v, (list, tuple)):
+        # `derived_from` is the first list-valued column (#170). JSON, with
+        # separators pinned so the text does not depend on a default that can
+        # change, and SORTED so that two rows naming the same inputs in a
+        # different order compare equal as strings - the order an author
+        # happened to type is not part of what the lineage says. A consumer
+        # reads it with `json.loads`.
+        return json.dumps(sorted(str(x) for x in v), separators=(",", ":"))
     return v

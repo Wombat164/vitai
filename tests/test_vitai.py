@@ -403,7 +403,7 @@ def test_api_build_projects_verdicts_and_contract(tmp_path):
             "justifications", "conservation", "retractions",
             "medical", "gates", "escalations", "checks"} <= tables
     assert con.execute("SELECT COUNT(*) FROM inferences").fetchone()[0] == 1
-    assert con.execute("SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "19"
+    assert con.execute("SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "20"
     con.close()
     assert v.status_line().startswith("77.3 kg")
     assert isinstance(v.verdicts(), list)

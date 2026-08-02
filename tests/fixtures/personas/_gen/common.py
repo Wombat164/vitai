@@ -65,26 +65,35 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # and measurement files gained `"protocol": null` and a bumped `_gen` - which
 # is the ordinary consequence of regenerating a corpus against a wider schema,
 # and is reviewed here rather than waved through.
-AUTHORED_AGAINST_CONTRACT = "19"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #170, which added `derived_from` and `derived_op` to weight,
+# daily, sessions, measurements, sets and meals. REVIEWED rather than bumped,
+# on the same reading as `protocol` above: no builder here emits a computed
+# value, the builders None-fill from `KEYS[dataset]`, so both fields land
+# absent on every persona row and `_gen` moves with them. Absent is the honest
+# answer - every quantity these athletes record is observed rather than
+# derived, and declaring a lineage none of them has would be inventing exactly
+# the evidence the field exists to make checkable. The corpora DO change: six
+# datasets gain two null columns and a bumped `_gen`.
+AUTHORED_AGAINST_CONTRACT = "20"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,
     "checks": 3,
     "context": 3,
-    "daily": 8,
+    "daily": 9,
     "events": 3,
     "goals": 4,
     "inferences": 4,
     "journal": 3,
-    "meals": 3,
-    "measurements": 8,
+    "meals": 4,
+    "measurements": 9,
     "medical": 5,
-    "sessions": 9,
-    "sets": 4,
+    "sessions": 10,
+    "sets": 5,
     "protocols": 1,
     "regimes": 1,
     "thresholds": 3,
-    "weight": 9,
+    "weight": 10,
 }
 
 

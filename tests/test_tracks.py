@@ -16,7 +16,7 @@ import pytest
 from vitai.api import Vitai
 from vitai.cli import main
 from vitai.jsonl import line_key, load
-from vitai.schema import CURRENT_GENERATION, supersedes_problems, validate_record
+from vitai.schema import KEYS, CURRENT_GENERATION, supersedes_problems, validate_record
 
 
 def session(date="2030-05-01", type="run", distance_km=5.0, source="watch",
@@ -35,6 +35,13 @@ def session(date="2030-05-01", type="run", distance_km=5.0, source="watch",
            "artifact": None,
            "device": None,
            "_gen": gen or CURRENT_GENERATION["sessions"]}
+    # Fill any key this helper does not name explicitly. A helper that
+    # hardcodes the full key list has to be edited by every generation block
+    # that ever appends a field, and a mechanical edit repeated across files
+    # is one that eventually gets done wrong; this stays correct by
+    # construction instead.
+    for _k in KEYS["sessions"]:
+        rec.setdefault(_k, None)
     rec.update(kw)
     return rec
 

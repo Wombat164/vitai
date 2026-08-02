@@ -102,6 +102,41 @@ the audit trail. Datasets whose rows are not unique per date key on an
 identity tuple instead, so a correction can name one set out of four rather
 than retiring the whole block.
 
+## Computed values declare what they stand on
+
+```json
+{"date":"2030-05-08","kg":79.5,"source":"calc","capture":"derived",
+ "derived_from":["weight:2030-05-01:scale"],"derived_op":"seven day mean"}
+```
+
+| key | says |
+|---|---|
+| `derived_from` | the rows this value was computed from, as `dataset:date:source` references (plus an ordinal where a date and source name more than one row) |
+| `derived_op` | how, in the athlete's own words |
+
+Both are **declared, not executable**. `derived_op` is a description; nothing
+re-runs it, and a consumer must not treat it as a formula. A row carrying
+`derived_from` must also carry a derived `capture` - a computed value that
+renders as an observation is exactly the laundering the provenance layer
+exists to prevent.
+
+In the read model `derived_from` is stored as a JSON array in a TEXT column,
+so a consumer reads it with `json.loads`.
+
+Two behaviours follow, and both are contract promises:
+
+- rows standing on a shared input count as **one** witness in
+  `independent_sources`, however many rows they are, and the sharing is
+  transitive through a chain;
+- restating an input raises a `stale_derivation` finding on everything
+  computed from it. The value is flagged, never recomputed, and the finding
+  reports that the input was restated rather than claiming to know which
+  version the derivation used - a row reference names a date and a source,
+  not a version.
+
+Lineage that loops back to itself raises `derivation_cycle`, which is an
+error rather than a finding.
+
 ## Retired keys stay legal
 
 A generalised key is retired, not removed: an old line carrying it keeps
