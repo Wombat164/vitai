@@ -168,9 +168,9 @@ def test_an_exempt_string_is_scoped_and_re_triggers():
     import hashlib
     from pathlib import Path
     where, digest = next(iter(gate.EXEMPT_COORD_SHAPED))
-    line = next(l for l in (Path(where).read_text(encoding="utf-8")
-                            .splitlines())
-                if hashlib.sha256(" ".join(l.split()).encode()).hexdigest()
+    lines = Path(where).read_text(encoding="utf-8").splitlines()
+    line = next(row for row in lines
+                if hashlib.sha256(" ".join(row.split()).encode()).hexdigest()
                 == digest)
     assert not gate._coordinate_shaped(where, line)
     # the same words in another file inherit nothing
@@ -188,6 +188,7 @@ def test_every_coordinate_exemption_records_why_and_still_matches():
     assert gate.EXEMPT_COORD_SHAPED
     for (where, digest), reason in gate.EXEMPT_COORD_SHAPED.items():
         assert len(reason) > 20, (where, reason)
-        live = {hashlib.sha256(" ".join(l.split()).encode()).hexdigest()
-                for l in Path(where).read_text(encoding="utf-8").splitlines()}
+        live = {hashlib.sha256(" ".join(row.split()).encode()).hexdigest()
+                for row in
+                Path(where).read_text(encoding="utf-8").splitlines()}
         assert digest in live, f"{where}: no live line hashes to {digest}"
