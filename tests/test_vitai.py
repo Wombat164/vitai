@@ -974,3 +974,219 @@ def test_schema_is_reachable_through_both_doors(capsys):
     main(["schema", "--json"])
     printed = _json.loads(capsys.readouterr().out)
     assert printed == schema()
+
+
+# ---- #158 rung 2: the situation, in one call ------------------------------
+#
+# The alternative this replaces is fifteen calls a consumer stitches together,
+# which is fifteen chances to stitch it wrong. The stitching is the work that
+# must not be duplicated per consumer, because each one gets it subtly
+# differently and none of them is the engine.
+
+def test_the_situation_carries_what_a_decision_needs(tmp_path):
+    from vitai.api import Vitai
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    got = Vitai(root).situation()
+    for key in ("schema", "policy", "on", "gates", "escalations", "banner",
+                "worries", "status", "goals", "context", "sessions", "rollup",
+                "unresolved"):
+        assert key in got, key
+
+
+def test_it_gates_on_the_two_numbers_before_anything_else(tmp_path):
+    """A consumer that trusts the body without checking the contract is a
+    consumer that will misread it after the next bump. Both numbers travel
+    with the brief so there is no second call to forget."""
+    from vitai.api import Vitai, schema
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    got = Vitai(root).situation()
+    assert got["schema"] == schema()
+    assert got["policy"] == Vitai(root).policy
+
+
+def test_unresolved_is_present_even_when_empty(tmp_path):
+    """Absence is a claim everywhere else in this engine, and it is one here:
+    a consumer rendering an empty section knows it asked, where a missing key
+    only tells it nothing was said."""
+    from vitai.api import Vitai
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    unresolved = Vitai(root).situation()["unresolved"]
+    for key in ("problems", "advisories", "last_seen", "duplicate_captures",
+                "conservation", "retracted"):
+        assert key in unresolved, key
+
+
+def test_it_computes_nothing_a_caller_could_not_have_asked_for(tmp_path):
+    """Every value is an existing surface, assembled. If this ever grows a
+    number of its own, the deterministic path has sprouted a second
+    implementation, which is the whole subject of #158."""
+    import json
+
+    from vitai.api import Vitai
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    engine = Vitai(root)
+    got = engine.situation()
+    assert got["status"] == engine.status()
+    assert got["goals"] == engine.goals()
+    assert got["gates"] == engine.gates()
+    assert got["rollup"] == engine.rollup(engine.on)
+    assert got["unresolved"]["advisories"] == engine.validate()["advisories"]
+    # Serialisable, because the only consumer that matters is not in Python.
+    assert json.loads(json.dumps(got, default=str))
+
+
+def test_a_refusal_travels_with_the_brief(tmp_path):
+    """It leads with what would STOP a decision. A brief that opens with a
+    rate line and mentions the gate further down has already failed the one
+    job it has, because the reader may act on the first paragraph."""
+    import json
+
+    from vitai.api import Vitai
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    (root / "data" / "medical.jsonl").write_text(json.dumps(
+        {"date": "2026-05-01", "slug": "chest", "kind": "symptom",
+         "title": "chest tightness", "body_site": "chest",
+         "severity": "red_flag", "status": "open", "resolved_date": None,
+         "restricts": "all", "provider_type": None, "source": "athlete",
+         "note": None, "expects": None, "onset_date": "2026-05-01",
+         "precondition": None, "restriction": None}) + "\n", encoding="utf-8")
+    got = Vitai(root, on="2026-05-02").situation()
+    assert got["gates"], "a gated record must say so in the brief"
+    assert got["escalations"], "an escalation must be in the brief"
+    # The engine's own sentence, not a paraphrase.
+    assert got["banner"]
+
+
+def test_the_viewpoint_argument_reaches_the_numbers_not_just_the_label(tmp_path):
+    """`status` took no viewpoint at all, so a brief pinned to May carried a
+    rate computed over June weigh-ins and reported `on` twice with two
+    different answers in one document."""
+    import json
+
+    from vitai.api import Vitai
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    (root / "data" / "weight.jsonl").write_text("\n".join(json.dumps(
+        {"date": f"2026-05-{n:02d}", "kg": 80.0 - n * 0.1, "source": "scale",
+         "note": None}) for n in range(1, 25)) + "\n", encoding="utf-8")
+    got = Vitai(root, on="2026-06-01").situation(on="2026-05-10")
+    assert got["on"] == "2026-05-10"
+    assert got["status"]["on"] == got["on"], "the brief reported two dates"
+    # And the numbers moved with it, rather than only the label.
+    early = Vitai(root).situation(on="2026-05-10")["status"]
+    late = Vitai(root).situation(on="2026-05-24")["status"]
+    assert early["mean_kg_7d"] != late["mean_kg_7d"]
+
+
+def test_recent_sessions_are_at_or_before_the_viewpoint(tmp_path):
+    """"Recent sessions" in a brief pinned to May must not contain June."""
+    import json
+
+    from vitai.api import Vitai
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    rows = [{"date": d, "type": "run", "distance_km": 5.0, "duration_min": 30,
+             "avg_hr": None, "note": None, "source": "watch", "rpe": None,
+             "start_time": None, "place": None, "route": None}
+            for d in ("2026-05-01", "2026-06-15")]
+    (root / "data" / "sessions.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    got = Vitai(root).situation(on="2026-05-02")
+    assert [r["date"] for r in got["sessions"]] == ["2026-05-01"]
+    assert got["unresolved"]["last_seen"]["sessions"] == "2026-05-01"
+
+
+def test_asking_for_no_sessions_returns_none_of_them(tmp_path):
+    """`[-0:]` is the whole list, not an empty one."""
+    from vitai.api import Vitai
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    assert Vitai(root).situation(recent=0)["sessions"] == []
+
+
+def test_a_datetime_is_refused_at_this_door_too(tmp_path):
+    """The constructor rejects a `datetime` for a stated reason, and this
+    normalised its own viewpoint inline without that guard - the same value
+    refused at one door and taken at the next."""
+    from datetime import datetime
+
+    import pytest
+
+    from vitai.api import Vitai
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    with pytest.raises(TypeError, match="as_of"):
+        Vitai(root).situation(on=datetime(2026, 5, 2, 13, 0))
+
+
+def test_the_brief_survives_a_record_it_has_just_diagnosed(tmp_path):
+    """`validate()` was deliberately made non-raising. A brief that crashed
+    while formatting the same bad value would be withholding the diagnosis it
+    is holding, on exactly the record that needs it."""
+    import json
+
+    from vitai.api import Vitai
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    (root / "data" / "weight.jsonl").write_text(json.dumps(
+        {"date": "2026-05-01", "kg": "eighty", "source": "manual"}) + "\n",
+        encoding="utf-8")
+    got = Vitai(root).situation()
+    assert got["unresolved"]["problems"], "the diagnosis must survive"
+    # Named, never swallowed: a consumer can tell "could not answer" from
+    # "the answer is empty".
+    assert "status" in got["unresolved"]["unavailable"]
+
+
+def test_the_situation_is_reachable_through_both_doors(tmp_path, capsys):
+    """P9. The CLI door was untested, and it was the door with the defect:
+    it built the engine at today's viewpoint and passed the date only to
+    `situation()`, so every surface reading `self.on` answered as today."""
+    import json
+
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    capsys.readouterr()
+    main(["situation", "--root", str(root), "--on", "2026-05-02",
+          "--recent", "3"])
+    got = json.loads(capsys.readouterr().out)
+    assert got["on"] == "2026-05-02"
+    assert got["status"]["on"] == "2026-05-02"
+
+
+def test_the_viewpoint_reaches_the_whole_brief(tmp_path):
+    """One `on` for the entire answer. A brief assembled from calls made at
+    two different viewpoints is a brief that contradicts itself."""
+    import json
+    from datetime import date
+
+    from vitai.api import Vitai
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    (root / "data" / "events.jsonl").write_text(json.dumps(
+        {"date": "2026-05-01", "slug": "spring-10k", "title": "a 10k",
+         "kind": "race", "event_date": "2026-07-01", "priority": "a",
+         "immovable": True, "place": None, "status": "planned",
+         "set_by": "athlete", "reason": None, "note": None}) + "\n",
+        encoding="utf-8")
+    early = Vitai(root, on=date(2026, 5, 2)).situation()
+    late = Vitai(root, on=date(2026, 6, 2)).situation()
+    assert early["on"] == "2026-05-02" and late["on"] == "2026-06-02"
+    assert early["rollup"] != late["rollup"]
