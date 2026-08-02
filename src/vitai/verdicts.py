@@ -50,8 +50,76 @@ NOT_SUPPORTED = "not_supported"      # the measurement cannot support a verdict
 CONTRAINDICATED = "contraindicated"  # judging it would be actively harmful
 SUPPRESSED = "suppressed"            # the athlete asked not to be scored
 
+PENDING = "pending"                  # answerable, and not yet: a source is due
 REFUSAL_REASONS = {NO_INPUT, NO_POLICY, NOT_SUPPORTED, CONTRAINDICATED,
-                   SUPPRESSED}
+                   SUPPRESSED, PENDING}
+
+# How many gaps a source must have supplied before its cadence is worth
+# believing. Four gaps means five arrivals, which is thin, and thin is why the
+# refusal below is the CONSERVATIVE direction: with no established cadence the
+# engine says `no_input`, which is what it says today. A guessed cadence would
+# promise an athlete that something is coming when nothing is.
+MIN_GAPS_FOR_CADENCE = 4
+
+
+def expected_next(rows: list[dict], on: date, field: str) -> date | None:
+    """When the next reading of `field` is due, from its source's OWN
+    arrivals, or None when the record cannot say (#202).
+
+    EARNED FROM THE RECORD, NOT DECLARED. Nothing tells the engine that a
+    connector syncs nightly or that an export is taken weekly, and asking an
+    importer to declare it would put a promise in config that the data can
+    already demonstrate. A source that has landed every day for a month is due
+    tomorrow, and the record says so without being told.
+
+    PER SOURCE, and only counting rows that actually carry the value. Pooling
+    every source would average a nightly device with a monthly clinic visit
+    into a cadence neither of them has, and a row whose field is null is not an
+    arrival of that field however well-formed the line is. The answer is the
+    soonest arrival still AHEAD across the sources that have an established
+    cadence, because the question is when this metric next lands rather than
+    which source wins. Where every source is already late, it is the least
+    stale expectation, which is the one that says most accurately how overdue
+    this metric is.
+
+    The median gap rather than the mean: one holiday, one flat battery or one
+    forgotten week would drag a mean far enough to make the estimate useless,
+    and those are the normal shape of a person's logging rather than outliers
+    to be cleaned.
+
+    Returns None below `MIN_GAPS_FOR_CADENCE`, on the same discipline the
+    verdict layer already applies to weigh-in timing: where the reference is
+    thin, decline rather than average.
+    """
+    by_source: dict[str, set] = defaultdict(set)
+    for r in rows:
+        if r.get(field) is None or not r.get("date"):
+            continue
+        # `datetime` rather than `date`, matching `_week_key` and the rest of
+        # the engine: a time-bearing `date` is a schema WARNING and still
+        # loads, so parsing it strictly here would take down a build that
+        # worked yesterday.
+        when = datetime.fromisoformat(str(r["date"])).date()
+        if when <= on:
+            by_source[str(r.get("source") or "")].add(when)
+
+    due = []
+    for days in by_source.values():
+        days = sorted(days)
+        if len(days) < MIN_GAPS_FOR_CADENCE + 1:
+            continue
+        gaps = sorted((b - a).days for a, b in zip(days, days[1:]))
+        due.append(days[-1] + timedelta(days=gaps[len(gaps) // 2]))
+    if not due:
+        return None
+    # The soonest arrival STILL AHEAD. A plain minimum picked whichever source
+    # was furthest overdue and reported it as the next thing to land, so a
+    # monthly visit missed in May outranked a scale due tomorrow. A source
+    # that has already failed to deliver is not the soonest answer.
+    ahead = [d for d in due if d >= on]
+    # If every source is late, the LEAST stale expectation: it is the one that
+    # says most accurately how overdue this metric is.
+    return min(ahead) if ahead else max(due)
 
 
 def _week_key(d: str) -> str:
@@ -66,7 +134,7 @@ def _weeks_covered(*datasets: list[dict]) -> list[str]:
 
 def _row(week: str, metric: str, value: float | None, target: float | None,
          verdict: str, goal: str | None = None,
-         reason: str | None = None) -> dict:
+         reason: str | None = None, due: str | None = None) -> dict:
     # A reason is REQUIRED with a refusal and forbidden without one, so a new
     # refusal site cannot ship unlabelled and a judged row cannot carry a
     # reason nobody asked for. This is the totality the issue asks for, held
@@ -80,10 +148,61 @@ def _row(week: str, metric: str, value: float | None, target: float | None,
     if verdict != NODATA and reason is not None:
         raise ValueError(f"{verdict} is a judgement, not a refusal; it has no "
                          f"reason to carry (got {reason!r})")
+    # `due` says when the source that has been supplying this metric is next
+    # expected. It belongs to a REFUSAL and never to a judgement: a verdict
+    # the engine reached needs no promise about what arrives later.
+    if due is not None and verdict != NODATA:
+        raise ValueError(f"{verdict} is a judgement and carries no due date "
+                         f"(got {due!r})")
+    if reason == PENDING and due is None:
+        raise ValueError(
+            f"{PENDING} means the answer is coming, so it carries WHEN. "
+            "Without an instant it is `no_input` wearing optimism, and a "
+            "metric that is pending forever is a broken connector nobody "
+            "will notice")
     return {"week": week, "metric": metric,
             "value": round(value, 3) if value is not None else None,
             "target": target, "verdict": verdict, "goal": goal,
-            "reason": reason}
+            "reason": reason, "due": due}
+
+
+def _awaiting(rows: list[dict], field: str, week: str,
+              today: date | None) -> dict:
+    """Is this an empty week, or a week whose data has not landed yet? (#202)
+
+    `no_input` says the record holds nothing. True, and useless on its own: it
+    cannot tell an athlete that nothing will ever come apart from a source that
+    delivers in four hours, and the honest client sentence built on it is
+    "check again later", which is the most robotic thing this engine makes
+    anyone say.
+
+    THE DEGRADATION IS THE POINT, and it is what stops `pending` becoming an
+    excuse. A refusal is pending only while the expected arrival is still
+    ahead. Once that day is past, the reason drops back to `no_input` and the
+    row KEEPS the date it was due, so a consumer can say the source is two days
+    late rather than repeating that the answer is coming. A metric that stayed
+    hopeful forever would be a broken connector nobody noticed.
+
+    `week` is the week whose data is MISSING, which is not always the week
+    being judged: a rate needs two weeks, and a future arrival cannot fill the
+    earlier one.
+    """
+    if today is None:
+        return {"reason": NO_INPUT}
+    due = expected_next(rows, today, field)
+    if due is None:
+        return {"reason": NO_INPUT}          # its own history cannot say
+    start = date.fromisoformat(week)
+    if not (start <= due <= start + timedelta(days=6)):
+        # An arrival that lands outside this week cannot fill it, whichever
+        # side it falls. Waiting for it would be waiting for the wrong thing.
+        return {"reason": NO_INPUT}
+    if due < today:
+        # Expected, and it did not come. Still a refusal, and now an overdue
+        # one: the date rides along so the lateness is visible. Due TODAY is
+        # not late - "arrives in four hours" is the case this exists for.
+        return {"reason": NO_INPUT, "due": due.isoformat()}
+    return {"reason": PENDING, "due": due.isoformat()}
 
 
 def _goal_for(goals_in_force: tuple[dict, ...], metric: str) -> str | None:
@@ -128,8 +247,14 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
         prev = by_week_kg.get(prev_wk)
         if not vals or not prev:
             if vals or prev:
+                # The MISSING side. When this week has weigh-ins and the
+                # previous one does not, no future arrival can fill the
+                # earlier week, and calling that pending promises something
+                # that cannot happen.
                 rows.append(_row(wk, "weight_rate", None, None, NODATA,
-                                 reason=NO_INPUT))
+                                 **_awaiting(weight, "kg",
+                                             wk if not vals else prev_wk,
+                                             today)))
             continue
         rate = mean(prev) - mean(vals)  # positive = losing
         target = phase_rate_for(cfg_for[wk], mean(vals))

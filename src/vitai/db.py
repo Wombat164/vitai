@@ -197,11 +197,28 @@ from .schema import KEYS
 #     stale number stays, visibly flagged, because an engine that cannot
 #     re-run the derivation cannot produce a right answer and a confident
 #     wrong one is worse than a flagged old one.
-CONTRACT_VERSION = "20"
+# 21: a `pending` refusal reason, and `due` on a refusal row. `no_input` said
+#     the record holds nothing, which is true and cannot tell an athlete that
+#     nothing will ever come apart from a source that delivers in four hours.
+#     `pending` says the question is answerable and not yet, and carries WHEN.
+#
+#     THE DEGRADATION IS PART OF THE CONTRACT. A refusal is `pending` only
+#     while the expected arrival is ahead. Once it passes, the reason drops
+#     back to `no_input` and KEEPS `due`, so a consumer can report a source as
+#     late rather than repeating that the answer is coming. A metric that
+#     stayed pending forever would be a broken connector nobody noticed.
+#
+#     `due` is derived from the source's OWN arrivals, never declared: a
+#     source with no established cadence produces `no_input`, exactly as
+#     today.
+CONTRACT_VERSION = "21"
 
 _TEXT_COLS = {"derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
               # under REAL affinity silently becomes 7.0, which is the defect
               # the `activity_id` note below already warns about
+              # `due` is an ISO date; REAL affinity would turn it into a
+              # float and lose the day.
+              "due",
               "date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
               "week", "metric", "verdict",
@@ -267,7 +284,7 @@ _TEXT_COLS = {"derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
 # reading positionally sees the new column last (#177). It is null on every
 # judged row and never null on a refusal.
 VERDICT_KEYS = ["week", "metric", "value", "target", "verdict", "goal",
-                "reason"]
+                "reason", "due"]
 
 # Derived tables (rebuilt every build, like everything else in derived/).
 CONTRIBUTION_KEYS = ["date", "goal", "metric", "dataset", "period", "value",

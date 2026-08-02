@@ -98,7 +98,11 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 #
 # The corpora DO change: daily gains seven null columns, meals three, and
 # `_gen` moves on both.
-AUTHORED_AGAINST_CONTRACT = "20"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #202, which adds the `pending` refusal reason and `due`. Both
+# live on VERDICT rows, which are computed rather than recorded, so no builder
+# here writes either and no persona line changes. The pin moves because the
+# read model did.
+AUTHORED_AGAINST_CONTRACT = "21"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,

@@ -56,6 +56,7 @@ which is what a UI needs to answer "why did this run not move my bar".
 | 18 | unreleased | `verdicts` gains `reason`: `no_data` was one word for four states, distinguishable only by which fields were null |
 | 19 | unreleased | `protocol` on weight and measurements (the CONDITIONS a measurement was taken under); the `protocols` and `regimes` datasets |
 | 20 | unreleased | `derived_from` and `derived_op`: which rows a computed value stands on, and how. Both DECLARED rather than executable - do not re-run `derived_op`, and do not assume the engine did. Rows standing on a shared input count as ONE witness in `independent_sources`, so that number may fall. A value whose input was later restated raises `stale_derivation` and is left in place, flagged rather than corrected |
+| 21 | unreleased | `verdicts` gains a `pending` reason and a `due` date: the question is answerable and not yet. `pending` is NOT permanent - once `due` is past the reason degrades to `no_input` and the row keeps `due`, so a late source reads as late rather than as still coming. `due` is earned from the source's own arrivals, so a source with no established cadence refuses with `no_input` exactly as before |
 
 `db.py` carries the same history beside `CONTRACT_VERSION`, at more length
 and with the reasoning. This table is the summary; that comment is the

@@ -777,8 +777,15 @@ class Vitai:
 
     def verdicts(self, today: date | None = None) -> list[dict]:
         d = self.canonical()
+        # `today=on`, not `today=today`, for the reason `rollup` records
+        # below: the un-defaulted parameter leaves the pinned viewpoint on the
+        # floor. It mattered less when nothing downstream read the clock; it
+        # matters now, because a refusal cannot say whether a source is still
+        # due without knowing when "still" is, and with no viewpoint every one
+        # of them silently answers `no_input` (#202).
+        on = today or self.on
         return compute_verdicts(self.config, d["weight"], d["daily"],
-                                d["sessions"], today=today,
+                                d["sessions"], today=on,
                                 goals=d["goals"], thresholds=d["thresholds"],
                                 medical=d["medical"])
 
@@ -902,7 +909,7 @@ class Vitai:
         # and the read model records an identity claim that is simply false -
         # worse than the absence this is careful not to be misread as.
         cfg = self.config
-        derivations = self._derivations(resolved, today=today, cfg=cfg)
+        derivations = self._derivations(resolved, today=on, cfg=cfg)
         derived = self.root / "derived"
         db = build_db(derived, d, verdicts=derivations["verdicts"],
                       derivations=derivations, policy=policy_digest(cfg))
