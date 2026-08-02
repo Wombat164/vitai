@@ -375,3 +375,66 @@ def test_an_unnumbered_reference_points_at_the_first_row():
                          "derived_from": ["weight:2030-05-01:scale"]},
                         {"date": "2030-05-01", "source": "scale"}]
     assert len(derivation_cycles({"weight": first_is_derived})) == 1
+
+
+# --- a derived value is not an observation, in every layer that counts them --
+
+def test_a_computed_row_is_not_a_weigh_in():
+    """It has no `measured_at` because nobody stood on a scale to produce it,
+    and that is an INAPPLICABLE time rather than a missing one. Counting it as
+    unknown made the engine report that part of a rate could not be checked
+    for time-of-day drift while every actual weigh-in behind it was timed."""
+    from vitai.clocks import weigh_in_timing
+
+    weighed = [{"date": "2030-05-01", "measured_at": "07:10"},
+               {"date": "2030-05-02", "measured_at": "19:10"}]
+    alone = weigh_in_timing(weighed)
+    with_average = weigh_in_timing(weighed + [
+        {"date": "2030-05-03", "measured_at": None,
+         "derived_from": ["weight:2030-05-01:scale"]}])
+
+    assert with_average == alone
+    assert with_average["unknown"] == 0
+    # The spread the readings actually show is preserved, not diluted.
+    assert with_average["spread_h"] == 12.0
+
+
+def test_an_untimed_observation_is_still_unknown():
+    """The exclusion is for COMPUTED rows only. A weigh-in nobody wrote a time
+    against is a real gap and must keep saying so."""
+    from vitai.clocks import weigh_in_timing
+
+    timing = weigh_in_timing([{"date": "2030-05-01", "measured_at": "07:10"},
+                              {"date": "2030-05-02", "measured_at": None}])
+    assert timing["unknown"] == 1
+
+
+def test_the_demo_lineage_row_stays_inside_the_final_week():
+    """A demonstration row for one feature must not switch off another.
+
+    Dated one day past the last weigh-in it looked adjacent and was not: that
+    weigh-in fell on a Sunday, so the next day opened an ISO week holding a
+    single row, that week became the one the rollup reports on, and the
+    weigh-in-spread refusal #37 exists to demonstrate stopped appearing. The
+    suite was green throughout, which is the whole reason this is pinned here
+    rather than left to the eye.
+    """
+    import json
+    from datetime import date as _date
+    from pathlib import Path as _Path
+
+    rows = [json.loads(line) for line in
+            (_Path(__file__).parent.parent / "examples" / "demo" / "data"
+             / "weight.jsonl").read_text().splitlines() if line.strip()]
+    derived = [r for r in rows if r.get("derived_from")]
+    assert len(derived) == 1
+
+    weighed = sorted(r["date"] for r in rows if not r.get("derived_from"))
+    week = _date.fromisoformat(weighed[-1]).isocalendar()[:2]
+    assert _date.fromisoformat(derived[0]["date"]).isocalendar()[:2] == week
+
+    # And it stands alone, or it would merge and a merged row keeps no lineage.
+    assert derived[0]["date"] not in weighed
+    # Nothing is derived from a reading taken after it.
+    assert all(ref.split(":")[1] < derived[0]["date"]
+               for ref in derived[0]["derived_from"])

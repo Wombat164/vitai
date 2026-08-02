@@ -179,9 +179,17 @@ def weigh_in_timing(rows: list[dict]) -> dict:
     and the arithmetic consequence, and lets the caller compare it against the
     rate actually being claimed.
     """
-    times = [m for m in (_minutes(r.get("measured_at")) for r in rows)
+    # A DERIVED VALUE IS NOT A WEIGH-IN (#170). It has no measurement time
+    # because nobody stood on a scale to produce it, and that is an
+    # inapplicable time rather than a missing one. Counting it as unknown made
+    # the engine report that part of a rate could not be checked for
+    # time-of-day drift, when in fact every actual weigh-in behind that rate
+    # was timed - a computed row cannot drift with the clock, so it has
+    # nothing to say about whether the readings did.
+    weighed = [r for r in rows if not r.get("derived_from")]
+    times = [m for m in (_minutes(r.get("measured_at")) for r in weighed)
              if m is not None]
-    unknown = len(rows) - len(times)
+    unknown = len(weighed) - len(times)
     spread_h = (max(times) - min(times)) / 60.0 if len(times) > 1 else 0.0
     return {
         "known": len(times),

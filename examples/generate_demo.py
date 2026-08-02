@@ -415,14 +415,38 @@ def _build(target: Path) -> None:
     # from this record's weight series would move the weekly rates the whole
     # demo narrative is built on. Better a smaller demo than a demo whose
     # headline story shifted to make room for a second one.
-    # Dated the day AFTER the last weigh-in, and deliberately: on a day that
-    # already has a reading the two claims merge, and a merged row keeps no
-    # lineage (the value it ends up holding was not solely computed from any
-    # one claim's inputs). Standing alone is what lets the demo show a
-    # declared lineage in the read model rather than just in the data file.
-    avg_inputs = sorted(weighed_days)[-2:]
-    avg_day = (date.fromisoformat(sorted(weighed_days)[-1])
-               + timedelta(days=1)).isoformat()
+    # WHERE THIS ROW SITS IS LOAD-BEARING, in two directions that pull against
+    # each other, and getting it wrong switched off another demonstration
+    # without failing a single test.
+    #
+    # It must stand ALONE: on a day that already has a reading the two claims
+    # merge, and a merged row keeps no lineage, so the read model would show
+    # none and the demo would demonstrate nothing.
+    #
+    # It must also stay INSIDE THE FINAL ISO WEEK. Dating it one day past the
+    # last weigh-in looked adjacent and was not - the last weigh-in fell on a
+    # Sunday, so the next day opened a new week holding one row, that week
+    # became the one the rollup reports on, and the weigh-in-spread refusal
+    # #37 exists to show stopped appearing in weekly.md. Nothing about the
+    # lineage work was wrong; a demonstration row for one feature silently
+    # turned off the demonstration of another.
+    #
+    # So the week is CHECKED rather than assumed. A date that looks adjacent
+    # is exactly the trap.
+    weighed_sorted = sorted(weighed_days)
+    final_week = date.fromisoformat(weighed_sorted[-1]).isocalendar()[:2]
+    avg_day = next(
+        d.isoformat() for d in (
+            date.fromisoformat(weighed_sorted[-1]) - timedelta(days=n)
+            for n in range(7))
+        if d.isocalendar()[:2] == final_week
+        and d.isoformat() not in weighed_days
+        and sum(1 for w in weighed_sorted if w < d.isoformat()) >= 2)
+    assert date.fromisoformat(avg_day).isocalendar()[:2] == final_week, (
+        "the notebook row must not open a week of its own")
+    # The two most recent weigh-ins BEFORE it, so `derived_op` saying "the last
+    # two" is true and nothing is derived from a reading taken afterwards.
+    avg_inputs = [w for w in weighed_sorted if w < avg_day][-2:]
     weight.append({
         **{k: None for k in KEYS["weight"]},
         "date": avg_day,
