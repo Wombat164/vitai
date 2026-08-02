@@ -3,7 +3,92 @@
 All notable changes to vitai. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.4.0] - 2026-08-02
+
+The increment where the engine grew a surface a client can build on.
+
+Everything before this assumed the consumer was a person at a terminal or an
+agent that had read the source. A client application cannot be either. It needs
+the whole state in one call, a way to write back that stamps its own
+provenance, a version to pin against, and refusals that say WHICH kind of no.
+All four landed here.
+
+### Added
+- **The whole situation, in one call** (#158 rung 2). `Vitai.situation()` and
+  `vitai situation`. The alternative it replaces is fifteen calls a consumer
+  stitches together, which is fifteen chances to stitch it wrong, and the
+  stitching is exactly the work that must not be duplicated per consumer:
+  each one gets it subtly differently and none of them is the engine.
+
+  Shaped for something that has to DECIDE rather than display. It leads with
+  what would stop a decision, then what is true now, then what the engine will
+  not vouch for. `unresolved` is present even when empty, because a consumer
+  rendering an empty section knows it asked, where a missing key tells it
+  nothing was said.
+
+- **Write parity: an agent appends a claim and the engine stamps it**
+  (#158 rung 4). Two shapes, because there are two acts: a stated quantity,
+  and an utterance no quantity can honestly be taken from. Writing nothing for
+  the second is what hands the record to whichever tool is willing to write the
+  sentence down.
+
+  **The caller supplies what was stated and nothing else.** Provenance is
+  stamped by the engine, and a caller that could set it could file a
+  recollection as a device reading or manufacture an independent witness out
+  of nothing.
+
+- **An MCP adapter** (#158 rung 5). A second harness, never a second surface.
+  Tools are DERIVED from the API: each names a method, its description is that
+  method's own first docstring line, and a name that does not resolve raises at
+  import. So the adapter structurally cannot expose a capability the API lacks,
+  nor document one differently. Stdlib only; MCP's stdio transport is a few
+  dozen lines of newline-delimited JSON-RPC.
+
+- **`no_data` says which kind of no**, contract 18 (#177). It was one word for
+  four states, separable only by inspecting which fields were null: the input
+  was missing, no policy was configured, the measurement could not support a
+  judgement, or the metric was suppressed and the row vanished entirely.
+
+  A `reason` column now answers "why not" while the verdict answers "can a
+  judgement be rendered", which is one question with one answer. **A reason is
+  required with a refusal and forbidden without one**, so a new refusal cannot
+  ship unlabelled. A reader that ignores the column sees the previous
+  behaviour. Suppression also stops being an absence: a removed row and an
+  uncomputed metric were different facts rendered identically.
+
+- **Protocol and regimes**, contract 19 (#179). `protocol` names the conditions
+  a measurement was taken under, defined in the athlete's own words. **A row
+  with no protocol is a different epistemic class**, not a row missing an
+  optional field.
+
+  A regime declares a bounded interval during which a class of claims was
+  UNANCHORED: honestly restated, never measured under stated conditions. The
+  interval **resolves empty and nothing is backfilled** - the measurement that
+  ended it is evidence the earlier claims were unanchored, not evidence of what
+  the true values were. The claims stay on disk; what ends is their standing as
+  values. **No trust parameter moves, and there is none to move**: discovering
+  your own error must not cost you standing.
+
+- **Row identity** (#181), the primitive #168, #169 and #170 were all waiting
+  on. A qualification has to name the observation it qualifies, a relayed
+  reading has to name which reading it relayed, and a derived value has to name
+  its inputs. None of them can be built on a reference that points at more than
+  one row.
+
+- **The restatement detector** (#176). A number repeated unchanged across days,
+  in a quantity the world makes vary, is evidence it was RESTATED rather than
+  observed. Advisory, never a fault: it names the run and says that a regime
+  declaration is the answer if the athlete meant it.
+
+  It runs AFTER regime application, deliberately: a declared regime has already
+  emptied its interval, so the detector cannot re-flag a restatement the
+  athlete has already named.
+
+### Changed
+- **The MCP adapter's declared surface is now its whole surface** (#183). The
+  advertised JSON schema was advisory to the client and the server splatted
+  whatever arrived, so a caller could reach parameters the tool deliberately
+  did not offer.
 
 ### Added
 - **A public accessor for the shape this engine emits** (#147). `vitai schema`
