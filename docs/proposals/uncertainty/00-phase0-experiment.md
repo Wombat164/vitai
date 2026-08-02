@@ -12,6 +12,34 @@ dispersion. No new verdict vocabulary is needed for the experiment (a shipped
 version would add one word to the closed vocabulary and bump the contract; see
 `01-schema.md`).
 
+## 0. RESULT (run 2026-08-02)
+
+**This experiment has been run. It answered the question, and the answer is: do
+not build the registry for verdicts.**
+
+| measure | result |
+|---|---|
+| scored weight-rate weeks | 52 |
+| refusal rate under variant B (total dispersion) | **76.9 %** |
+| straddle rate (interval covers the whole band) | 53.8 % |
+| refusal rate under variant A (per-row bands) | 7.7 %, but unavailable for 47 of 52 weeks |
+| verdict flips | **12** |
+| median u_rate / half-band | **1.74** |
+| band coverage | 20.4 % overall, 0 % on every device and connector source |
+
+`R_B >= 0.60` fired, so per the pre-stated rule the decision unit is wrong
+rather than the metadata. `flips > 0` also fired, so the refusal predicate ships
+regardless. The record's own dispersion landed inside the literature range, so
+the per-field table in section 1b becomes shipped policy.
+
+Full reasoning, the F2 finding and the scope consequences are recorded at
+GATE A in `06-roadmap.md` and in the comment on #171. The counting script lives
+in the private record's tooling and never here.
+
+**The method below is retained as written**, because a later re-run must use the
+same predicate and the same pre-stated thresholds for its result to mean
+anything.
+
 ## 1. Code changes (experiment branch, not master)
 
 ### 1.1 Uncertainty of a weekly mean, two variants

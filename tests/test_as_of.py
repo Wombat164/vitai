@@ -315,7 +315,7 @@ def test_the_read_model_carries_the_policy_it_was_built_under(tmp_path):
     finally:
         con.close()
     assert meta["policy"] == engine.policy
-    assert meta["contract"] == "18"
+    assert meta["contract"] == "19"
 
 
 def test_a_read_model_built_without_a_policy_omits_the_row(tmp_path):
@@ -339,10 +339,8 @@ def test_a_read_model_built_without_a_policy_omits_the_row(tmp_path):
             con.close()
 
     assert set(meta()) == {"contract"}
-    assert meta(policy="abc") == {"contract": "18", "policy": "abc"}
+    assert meta(policy="abc") == {"contract": "19", "policy": "abc"}
 
-
-# ---- #171 track 2: regimes invalidate without replacing --------------------
 
 def test_a_regime_empties_its_interval_and_backfills_nothing():
     """The measurement that ENDED a regime is evidence the earlier claims were

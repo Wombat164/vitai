@@ -65,7 +65,7 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # and measurement files gained `"protocol": null` and a bumped `_gen` - which
 # is the ordinary consequence of regenerating a corpus against a wider schema,
 # and is reviewed here rather than waved through.
-AUTHORED_AGAINST_CONTRACT = "18"  # vitai.db.CONTRACT_VERSION is a string
+AUTHORED_AGAINST_CONTRACT = "19"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,

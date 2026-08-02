@@ -631,3 +631,31 @@ replayable. Until it lands, the assertion log can record but not verify.
 - [ ] Post order: NEW regimes issue first, then edit #169 and #170
       (prerequisites), then #168, then #167, then #171, so no issue ever
       references a not-yet-corrected body.
+
+---
+
+## #177: FILED 2026-08-02 (new, blocks the refusal work)
+
+`no_data is one word for four states, and the uncertainty work adds two: widen
+it first, with a reason`
+
+Filed after phase 0 ran, because the gate's outcome created the ordering
+constraint. Recommends a **reason field** rather than more verdict words: the
+verdict answers "can a judgement be rendered", which is one question with one
+answer, and cramming the why into the same token is what produced the problem.
+Also requires suppression to stop being an absence.
+
+**Sequencing: this takes contract 18 and lands before any refusal-emitting
+work.** If refusals ship under the existing token the reason is unrecoverable
+from the rows afterwards, and reconstructing it later would need the policy of
+the day (#148).
+
+## The condition-scope question: SETTLED, no issue needed
+
+Whether resolution and capability are stated per field or per field AND
+condition was researched and answered on 2026-08-02. **Per field.** `condition`
+stays a nullable slot behind a legality gate and is populated with nothing.
+
+Recorded in 01-schema s4b, 02-engine's NOT-BUILDING table, and the client-side
+proposal. No issue was filed because nothing is outstanding: the decision is
+made and the gate that keeps it honest is specified.

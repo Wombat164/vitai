@@ -155,7 +155,22 @@ from .schema import KEYS
 #     NOT "pre-17" and not "no policy". Every build the engine itself drives
 #     writes it; a consumer must read `contract` to know the shape and must
 #     not infer a build's age from this row missing.
-# 18: protocol and regimes (#171 track 2) - `protocol` on weight and
+# 18: `verdicts.reason` (#177) - `no_data` was one word for four states, and
+#     the distinction was recoverable only by inspecting which fields were
+#     null: both absent meant the input was missing, target absent meant no
+#     policy was configured, both present meant the measurement could not
+#     support a judgement. A fourth state did not use the word at all: a
+#     contraindicated or suppressed metric had its row DELETED, which a
+#     consumer cannot tell from a metric nobody computed.
+#
+#     Now the verdict answers "can a judgement be rendered" and `reason`
+#     answers "why not": one of no_input, no_policy, not_supported,
+#     contraindicated, suppressed. ADDITIVE and appended, so a consumer that
+#     ignores it sees exactly the previous behaviour - except that a
+#     suppressed metric now appears as a labelled row rather than as an
+#     absence, which is the doctrine everywhere else in this engine and was
+#     not honoured at the verdict layer.
+# 19: protocol and regimes (#171 track 2) - `protocol` on weight and
 #     measurements names the CONDITIONS a measurement was taken under, and a
 #     row without one is a different epistemic class rather than a row with a
 #     missing optional field: it carries the measurand's full definitional
@@ -167,7 +182,9 @@ from .schema import KEYS
 #     values, and nothing is filled in behind them because the measurement
 #     that ended a regime is evidence the earlier claims were unanchored
 #     rather than evidence of what the true values were.
-CONTRACT_VERSION = "18"
+#     RENUMBERED from 18: #177 merged first, and the contract follows
+#     MERGE order rather than issue order.
+CONTRACT_VERSION = "19"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
@@ -230,7 +247,11 @@ _TEXT_COLS = {"date", "type", "source", "location", "note",
               # numbers, just not comparable ones.
               "equipment", "angle_class"}
 
-VERDICT_KEYS = ["week", "metric", "value", "target", "verdict", "goal"]
+# `reason` is APPENDED, so a consumer reading by name is unaffected and one
+# reading positionally sees the new column last (#177). It is null on every
+# judged row and never null on a refusal.
+VERDICT_KEYS = ["week", "metric", "value", "target", "verdict", "goal",
+                "reason"]
 
 # Derived tables (rebuilt every build, like everything else in derived/).
 CONTRIBUTION_KEYS = ["date", "goal", "metric", "dataset", "period", "value",
