@@ -12,23 +12,14 @@ import argparse
 import json
 import shutil
 import sys
-from datetime import date, datetime
+from datetime import date
 from importlib import resources
 from pathlib import Path
-from statistics import mean
 
 from . import __version__
 from .api import Vitai
-from .config import load_inference_config
-from .inference import append_inferences, backend_from_config, run_inference
-from .devices import stream_paths
-from .jsonl import DataError, load_report, read_lines
-from .safety import DISCLAIMER, banner
-from .schema import (KEYS, corrections_that_did_not_apply,
-                     impossible_claim_problems, recorded_at_problems,
-                     supersedes_problems, timestamp_advisories,
-                     unranked_source_problems,
-                     unstamped_after_the_clock_started, validate_record)
+from .jsonl import DataError
+from .schema import (KEYS)
 
 DATASETS = list(KEYS)
 
@@ -84,38 +75,24 @@ def cmd_init(args: argparse.Namespace) -> None:
           "then append data lines and run `vitai build`.")
 
 
-def _load_all(root: Path) -> tuple[dict[str, list[dict]], list[str]]:
-    """Load every dataset, quarantining malformed lines (G26). Returns the
-    records plus the list of parse errors that were skipped, so the build
-    proceeds from the good rows instead of one bad byte aborting everything."""
-    data, quarantined = {}, []
-    for name in DATASETS:
-        recs, errors = load_report(root / "data", name)
-        data[name] = recs
-        quarantined += errors
-    return data, quarantined
-
-
 def cmd_build(args: argparse.Namespace) -> None:
-    root = _root(args)
-    data, quarantined = _load_all(root)
-    for q in quarantined:
+    """A harness over `Vitai.load_report()` and `Vitai.build()`."""
+    v = Vitai(_root(args))
+    report = v.load_report()
+    for q in report["quarantined"]:
         print(f"quarantined (malformed, skipped): {q}", file=sys.stderr)
-    warned = 0
-    for name in DATASETS:
-        for rec in data[name]:
-            for p in validate_record(name, rec):
-                print(f"warning: {name}.jsonl {rec.get('date')}: {p}", file=sys.stderr)
-                warned += 1
-    v = Vitai(root)
+    for w in report["warnings"]:
+        print(f"warning: {w}", file=sys.stderr)
     on = date.fromisoformat(args.on) if getattr(args, "on", None) else None
     db = v.build(today=on)
-    counts = " - ".join(f"{name}: {len(data[name])}" for name in DATASETS)
+    counts = " - ".join(f"{name}: {n}" for name, n in report["counts"].items())
     tail = ""
-    if quarantined:
-        tail += f"; {len(quarantined)} malformed line(s) quarantined"
-    if warned:
-        tail += f"; {warned} schema warning(s), run `vitai validate`"
+    if report["quarantined"]:
+        tail += (f"; {len(report['quarantined'])} malformed line(s) "
+                 "quarantined")
+    if report["warnings"]:
+        tail += (f"; {len(report['warnings'])} schema warning(s), run "
+                 "`vitai validate`")
     print(f"Built {db.name} (incl. verdicts) and weekly.md ({counts}){tail}")
 
     # THE FAST PATH (G28). The weekly rollup is the right cadence for coaching
@@ -123,8 +100,8 @@ def cmd_build(args: argparse.Namespace) -> None:
     # until Sunday to be read. Anything urgent dated today prints here, on
     # stderr, the moment the record is rebuilt - before any coaching output
     # exists to bury it.
-    if urgent := v.urgent(on):
-        print(banner(urgent), file=sys.stderr)
+    if fast := v.safety_banner(on):
+        print(fast, file=sys.stderr)
     gates = v.gates(on)
     if gates:
         blocked = sorted({c for g in gates
@@ -367,8 +344,8 @@ def cmd_safety(args: argparse.Namespace) -> None:
     if args.json:
         for row in rows:
             print(json.dumps(row))
-    elif rows:
-        print(banner(rows), end="")
+    elif text := v.safety_banner(on, every=args.all):
+        print(text, end="")
     else:
         print("no active safety escalations")
 
@@ -396,29 +373,13 @@ def cmd_safety(args: argparse.Namespace) -> None:
         raise SystemExit(2)
 
 
-def _why_absent(ref: str, rows: list[dict]) -> str:
-    """Deleted, lost, or never here - three different facts, said plainly."""
-    from .artifacts import live_manifest, removed_refs
-    if ref in removed_refs(rows):
-        removal = [r for r in rows if r.get("sha256") == ref and r.get("removed")]
-        why = (removal[-1].get("reason") or "no reason recorded") if removal else ""
-        return f"the athlete deleted it ({why}). The value it backed stands"
-    if ref in live_manifest(rows):
-        return ("the manifest holds it and the store does not, so the bytes "
-                "were lost rather than deleted. Adding the same artifact "
-                "again repairs it")
-    return "no manifest row has ever mentioned this hash"
-
-
 def cmd_artifact(args: argparse.Namespace) -> None:
-    """Keep, retrieve and check the evidence a value was read from (#80)."""
-    from .artifacts import faults, is_reference, live_manifest
-    root = _root(args)
-    v = Vitai(root)
-    rows = v.dataset("artifacts")
+    """A harness over the artifact surface. Keep, retrieve and check the
+    evidence a value was read from (#80)."""
+    v = Vitai(_root(args))
 
     if args.action == "ls":
-        held = live_manifest(rows)
+        held = v.manifest()
         wanted = [r for r in held.values()
                   if not args.date or r.get("date") == args.date]
         if not wanted:
@@ -436,7 +397,7 @@ def cmd_artifact(args: argparse.Namespace) -> None:
         return
 
     if args.action == "get":
-        if not is_reference(args.ref):
+        if not v.is_reference(args.ref):
             sys.exit(f"{args.ref!r} is not a content address. An artifact is "
                      f"addressed by 'sha256:<64 lowercase hex>' and never by "
                      "a path - see `vitai artifact ls`")
@@ -449,13 +410,13 @@ def cmd_artifact(args: argparse.Namespace) -> None:
             # Answered here rather than pointing at `verify`, which has
             # nothing to say about a hash no row mentions.
             sys.exit(f"{args.ref[:19]}... is not in the store: "
-                     + _why_absent(args.ref, rows))
+                     + v.why_absent(args.ref))
         Path(args.out).write_bytes(payload)
         print(f"wrote {len(payload):,} bytes to {args.out}")
         return
 
     findings = v.verify_artifacts()
-    held = len(live_manifest(rows))
+    held = len(v.manifest())
     if not findings:
         print(f"{held} artifact(s), all present and intact")
         return
@@ -464,7 +425,7 @@ def cmd_artifact(args: argparse.Namespace) -> None:
     # Only a claim the evidence can no longer back is a failure. A deliberate
     # removal, an orphan and a not-yet-cited artifact all get printed and none
     # of them exits non-zero: see FAULTS in artifacts.py for why.
-    broken = faults(findings)
+    broken = v.artifact_faults(findings)
     if not broken:
         print(f"{held} artifact(s), all present and intact; "
               f"{len(findings)} note(s) above")
@@ -554,10 +515,9 @@ def _maturity(sessions: int) -> None:
 
 def _set_line(row: dict) -> str:
     """One set, said the way the athlete would say it."""
-    from .sets import is_failed_attempt
     done = row.get("reps_completed")
     tried = row.get("reps_attempted")
-    if is_failed_attempt(row):
+    if Vitai.is_failed_attempt(row):
         # THE case this dataset exists for. "0 reps" reads as nothing
         # happened; a failed attempt is the most informative set in a stack
         # progression and has to read like one.
@@ -655,9 +615,8 @@ def cmd_meals(args: argparse.Namespace) -> None:
 
 
 def _item_line(row: dict) -> str:
-    from .meals import item_energy, quantity_range
-    grams = quantity_range(row)
-    energy = item_energy(row)
+    grams = Vitai.quantity_range(row)
+    energy = Vitai.item_energy(row)
     where = f" [{row['food_table']}]" if row.get("food_table") else ""
     if grams is None:
         return f"{row.get('item')}: quantity unknown{where}"
@@ -684,7 +643,8 @@ def _config(row: dict) -> str:
     its own is the confident wrong answer #60 was filed about, and the
     rendering is where a reader would pick it up.
     """
-    from .modifiers import CATEGORICAL, MACHINE_SCOPED
+    axes = Vitai.modifier_axes()
+
     def number(value: object) -> str:
         # `validate` reports a modifier of the wrong type but does not stop
         # the file loading, so `:g` on a string raised and took down the whole
@@ -694,44 +654,16 @@ def _config(row: dict) -> str:
             return f"{value!r} (not a number)"
         return f"{value:g}"
 
-    bits = [str(row[axis]) for axis in CATEGORICAL if row.get(axis)]
+    bits = [str(row[axis]) for axis in axes["categorical"]
+            if row.get(axis)]
     if row.get("angle_deg") is not None:
         bits.append(f"{number(row['angle_deg'])} deg")
-    for field in MACHINE_SCOPED:
+    for field in axes["machine_scoped"]:
         if row.get(field) is None:
             continue
         where = row.get("machine") or "an unnamed machine"
         bits.append(f"{field.replace('_', ' ')} {number(row[field])} on {where}")
     return f", {', '.join(bits)}" if bits else ""
-
-
-def _resolve_impl(spec: str, kind: str, at: Path):
-    """A bundled name or a dotted path, with no difference in privilege.
-
-    The bundled implementations are reached the same way anyone else's are -
-    resolved by name, constructed, handed to the same suite. If the golden
-    path had a shortcut here, the interface would be decoration.
-    """
-    from . import sync
-    bundled = {
-        "transport": {"directory": lambda: sync.DirectoryTransport(at),
-                      "memory": sync.MemoryTransport,
-                      "mirror": lambda: sync.MirrorTransport(
-                          sync.DirectoryTransport(at), sync.MemoryTransport())},
-        "custody": {"file": lambda: sync.FileCustody(at / "key"),
-                    "env": lambda: sync.EnvCustody("VITAI_KEY")},
-    }[kind]
-    if spec in bundled:
-        return bundled[spec]()
-    module, _, attr = spec.rpartition(".")
-    if not module:
-        sys.exit(f"{spec!r} is neither a bundled {kind} "
-                 f"({', '.join(sorted(bundled))}) nor a dotted path to one")
-    import importlib
-    try:
-        return getattr(importlib.import_module(module), attr)()
-    except (ImportError, AttributeError, TypeError) as e:
-        sys.exit(f"could not construct {spec!r}: {e}")
 
 
 def cmd_key(args: argparse.Namespace) -> None:
@@ -741,12 +673,10 @@ def cmd_key(args: argparse.Namespace) -> None:
     down" - it is "believed they wrote it down correctly", and a phrase is
     only a backup once something has confirmed it reads back.
     """
-    from .recovery import from_phrase, generate, to_phrase
-
     if args.action == "new":
-        key = generate()
+        key, phrase = Vitai.new_recovery_key()
         print("Write BOTH of these down. They will not be shown again.\n")
-        print(f"  phrase (for paper): {to_phrase(key)}")
+        print(f"  phrase (for paper): {phrase}")
         print(f"  key (for a password manager): {key.hex()}\n")
         print("Then run `vitai key check` and type the phrase from the PAPER "
               "copy - not from this screen. A phrase you have not read back "
@@ -765,14 +695,15 @@ def cmd_key(args: argparse.Namespace) -> None:
     else:
         print("Type the recovery phrase from your paper copy:", file=sys.stderr)
         typed = sys.stdin.readline()
-    key, problem = from_phrase(typed)
+    key, problem = Vitai.key_from_phrase(typed)
     if key is None:
         sys.exit(problem)
     print("this phrase checks out")
 
 
 def cmd_conform(args: argparse.Namespace) -> None:
-    """Run a contract against an implementation (#108).
+    """A harness over `Vitai.conform()`. Runs a contract against an
+    implementation (#108).
 
     The deliverable of the whole layering: a written contract produces
     implementations that mostly work and fail strangely; a suite produces
@@ -780,21 +711,31 @@ def cmd_conform(args: argparse.Namespace) -> None:
     """
     import tempfile
 
-    from . import conform
     if not args.transport and not args.custody:
         sys.exit("`vitai conform` needs --transport or --custody")
     at = Path(args.at) if args.at else Path(tempfile.mkdtemp())
     failed = 0
-    for kind, spec, suite in (("transport", args.transport, conform.transport),
-                              ("custody", args.custody, conform.custody)):
+    for kind, spec in (("transport", args.transport),
+                       ("custody", args.custody)):
         if not spec:
             continue
-        findings = suite(_resolve_impl(spec, kind, at))
-        for finding in findings:
+        # Two failures, two messages. A name that is neither bundled nor a
+        # dotted path is a typo and already says so; wrapping it in "could not
+        # construct" printed the spec twice and named the wrong problem. And
+        # only CONSTRUCTION is guarded: an error from inside the suite is an
+        # implementation defect and deserves its traceback.
+        try:
+            impl = Vitai.implementation(kind, spec, at)
+        except ValueError as e:
+            sys.exit(str(e))
+        except (ImportError, AttributeError, TypeError) as e:
+            sys.exit(f"could not construct {spec!r}: {e}")
+        result = Vitai.conform(kind, impl)
+        for finding in result["findings"]:
             mark = "ok  " if finding["ok"] else "FAIL"
             print(f"{mark} {kind}: {finding['case']}"
                   + (f" - {finding['detail']}" if finding["detail"] else ""))
-        failed += len(conform.failures(findings))
+        failed += len(result["failures"])
     if failed:
         sys.exit(f"{failed} contract case(s) failed. An implementation that "
                  "does not pass is one the engine cannot use safely, and the "
@@ -804,7 +745,6 @@ def cmd_conform(args: argparse.Namespace) -> None:
 
 def cmd_route(args: argparse.Namespace) -> None:
     """Tier-1 geometry for a GPS track, with the parameters that produced it."""
-    from .route import compass
     v = Vitai(args.root)
     if not args.gpx and not args.session:
         sys.exit("give a .gpx path or --session <activity_id|date>")
@@ -848,7 +788,7 @@ def cmd_route(args: argparse.Namespace) -> None:
     print(f"shape: {s.shape}  (retrace similarity {s.retrace_similarity:.2f})")
     print(f"start-end gap {s.start_end_gap_m:.0f} m; furthest "
           f"{s.furthest_m:.0f} m"
-          + (f" {compass(s.bearing_deg)}" if s.bearing_deg is not None else ""))
+          + (f" {v.compass(s.bearing_deg)}" if s.bearing_deg is not None else ""))
     if s.elevation_gain_m is not None:
         print(f"elevation gain {s.elevation_gain_m:.0f} m "
               f"(climbs under {s.params['climb_threshold_m']:.0f} m ignored)")
@@ -994,150 +934,77 @@ def cmd_ramp(args: argparse.Namespace) -> None:
 
 
 def cmd_infer(args: argparse.Namespace) -> None:
-    """Opt-in intelligence layer: a model reads the record, validated new
-    knowledge is appended to data/inferences.jsonl. Never touches numbers."""
-    root = _root(args)
-    inf_cfg = load_inference_config(root)
-    if not inf_cfg:
-        sys.exit("no [inference] section in vitai.toml - inference is opt-in; "
-                 "see the template for claude-cli / openai-compatible examples")
-    backend = backend_from_config(inf_cfg)
-    v = Vitai(root)
-    data = v.datasets()
-    valid, errors = run_inference(
-        root, backend, v.rollup(), data["daily"], data["sessions"],
-        data["inferences"], date.today(),
-        max_items=int(inf_cfg.get("max_items", 5)))
-    for e in errors:
+    """A harness over `Vitai.infer()`. Opt-in intelligence layer: a model
+    reads the record, validated new knowledge is appended to
+    data/inferences.jsonl. Never touches numbers."""
+    engine = Vitai(_root(args))
+    try:
+        out = engine.infer()
+    except ValueError as e:
+        sys.exit(str(e))
+    for e in out["rejected"]:
         print(f"rejected: {e}", file=sys.stderr)
-    if not valid:
-        sys.exit("no valid inferences produced" + (f" ({len(errors)} rejected)" if errors else ""))
-    for rec in valid:
+    if not out["accepted"]:
+        sys.exit("no valid inferences produced"
+                 + (f" ({len(out['rejected'])} rejected)"
+                    if out["rejected"] else ""))
+    # ECHOED BEFORE COMMITTED. This ordering is the point of the echo: a
+    # script logs exactly what it committed, and rows that landed before
+    # anything printed them are rows nobody can reconcile if the rebuild
+    # then fails.
+    for rec in out["accepted"]:
         print(json.dumps(rec))
     if args.dry_run:
-        print(f"(dry run: {len(valid)} inference(s) NOT appended)", file=sys.stderr)
+        print(f"(dry run: {len(out['accepted'])} inference(s) NOT appended)",
+              file=sys.stderr)
         return
-    n = append_inferences(root, valid)
-    v.build()
-    print(f"appended {n} inference(s) to data/inferences.jsonl and rebuilt derived/",
-          file=sys.stderr)
+    n = engine.accept_inferences(out["accepted"])
+    print(f"appended {n} inference(s) to data/inferences.jsonl "
+          "and rebuilt derived/", file=sys.stderr)
 
 
 def cmd_validate(args: argparse.Namespace) -> None:
-    root = _root(args)
-    problems = 0
-    advisories: list[str] = []
-    cfg = Vitai(root).config
-    ranked = set(cfg.source_order) | {
-        s for ladder in cfg.precedence.values() for s in ladder}
-    for name in DATASETS:
-        # EVERY device file, not just the plain one (#105). Reading only
-        # `<name>.jsonl` meant a malformed or invalid line in
-        # `<name>.laptop.jsonl` passed validate clean and was then quarantined
-        # by the build - and monotonicity, unranked sources and supersedes
-        # ambiguity were all skipped for every device stream, precisely when
-        # the union makes cross-file reference collisions likelier.
-        #
-        # Per FILE for the per-line checks, so a message names the file the
-        # reader has to open. The file-level checks below run over the merged
-        # stream, because monotonicity across a union is the question that
-        # actually matters once a second device exists.
-        rows = []
-        for path in stream_paths(root / "data", name):
-            found, parse_errors = read_lines(path)
-            for e in parse_errors:  # G26: report EVERY malformed line
-                print(f"MALFORMED: {e}")
-                problems += 1
-            for n, rec in found:
-                for p in validate_record(name, rec):
-                    print(f"{path.name} line {n}: {p}")
-                    problems += 1
-            # PER FILE, unlike the checks below. The rule is "this file's
-            # clock started, and these rows are dated after it with no
-            # stamp", and a file is what has a clock: run on the merged
-            # stream, a legacy device file that is wholly unstamped - the
-            # case the rule's first guard exists to exempt - gets outvoted
-            # by a stamped sibling and every one of its rows is flagged.
-            advisories += unstamped_after_the_clock_started(path.name, found)
-            rows += found
-        # File-level: transaction time must be monotonic and tie-free (#37).
-        # Neither is a property of any single line, so neither can be caught
-        # by validate_record - and monotonicity is the check that actually
-        # detects a hand-authored stamp.
-        for p in recorded_at_problems(name, rows):
-            print(p)
-            problems += 1
-        for p in unranked_source_problems(name, rows, ranked):
-            print(p)
-            problems += 1
-        for p in impossible_claim_problems(name, rows):
-            print(p)
-            problems += 1
-        for p in supersedes_problems(name, rows):
-            print(p)
-            problems += 1
-        # ADVISORY, not a problem: the lines are on disk, they are not
-        # malformed, and the record still builds. What was wrong is that a
-        # correction could do nothing and nothing said so.
-        advisories += corrections_that_did_not_apply(name, rows)
-        advisories += timestamp_advisories(name, rows)
-        # A missing track file is NOT a missing session: the session is the
-        # fact and the track is an attachment, so a broken pointer is
-        # reported and never fails the build (#43).
-        for n, rec in rows:
-            if (t := rec.get("track")) and not (root / str(t)).exists():
-                advisories.append(f"{name}.jsonl line {n}: track {t!r} is not "
-                                  "in this repo - the session stands, but its "
-                                  "geometry cannot be rebuilt")
-    # Advisories are NOT problems and never fail the build: they describe
-    # rows that are legal but not what new writes should look like. Printed
-    # after the errors so a real failure is not buried under housekeeping.
-    for a in advisories:
-        print(f"ADVISORY: {a}")
-    if problems:
-        sys.exit(f"{problems} problem(s). Fix by APPENDING corrections "
-                 f"(supersedes), never by editing lines.")
-    print("all data lines valid"
-          + (f" ({len(advisories)} advisory/advisories)" if advisories else ""))
+    """A harness over `Vitai.validate()`. Every rule lives there (#158)."""
+    report = Vitai(_root(args)).validate()
+    for problem in report["problems"]:
+        print(problem)
+    # Advisories are NOT problems and never fail the build: they describe rows
+    # that are legal but not what new writes should look like. Printed after
+    # the errors so a real failure is not buried under housekeeping.
+    for advisory in report["advisories"]:
+        print(f"ADVISORY: {advisory}")
+    if not report["ok"]:
+        sys.exit(f"{len(report['problems'])} problem(s). Fix by APPENDING "
+                 f"corrections (supersedes), never by editing lines.")
+    n = len(report["advisories"])
+    print("all data lines valid" + (f" ({n} advisory/advisories)" if n else ""))
 
 
 def cmd_status(args: argparse.Namespace) -> None:
-    root = _root(args)
-    data, _ = _load_all(root)
-    pts = sorted((w["date"], w["kg"]) for w in data["weight"] if w.get("kg") is not None)
-    if not pts:
-        print("no weight data yet - weight.jsonl alone still carries the primary goal")
-        # The early return skipped the disclaimer, so the line described as
-        # "always present" was absent exactly when the record was new - which
-        # is the first thing anybody sees.
-        print(DISCLAIMER)
-        return
-    d, kg = pts[-1]
-    line = f"{kg:.1f} kg ({d})"
-    if len(pts) >= 8:
-        vals = [v for _, v in pts[-7:]]
-        prev = [v for _, v in pts[-14:-7]] or vals
-        days = (datetime.fromisoformat(pts[-1][0]) - datetime.fromisoformat(pts[-8][0])).days
-        if days:
-            rate = (mean(prev) - mean(vals)) / days * 7
-            # G69, same rule as the rollup: a bare signed rate reads backwards
-            # to anyone who has not memorised that positive means losing.
-            direction = ("losing" if rate > 0 else
-                         "gaining" if rate < 0 else "holding")
-            trend = (f"{direction} {abs(rate):.2f} kg/week" if rate
-                     else "holding steady")
-            line += f" - 7d avg {mean(vals):.1f}, {trend}"
-    weekly = root / "derived" / "weekly.md"
-    if weekly.exists():
-        firing = [ln[2:] for ln in weekly.read_text(encoding="utf-8").splitlines()
-                  if ln.startswith("- **")]
-        line += f" - tripwires: {len(firing) or 'none'}"
+    """A harness over `Vitai.status()`.
+
+    This function was #158's named counter-example to P9: it loaded the
+    datasets itself, derived the rate and the direction word, and read the
+    tripwire count out of `derived/weekly.md` by string prefix. None of that
+    existed in the API, so no agent could obtain what this printed without
+    reimplementing it - and the copy had DIVERGED, still opening with "no
+    weight data yet" on an empty record, which is the weight-first behaviour
+    `status_line` was rewritten to remove (G62/G64).
+    """
+    st = Vitai(_root(args)).status()
+    line = st["line"]
+    if st["rate_kg_per_week"] is not None:
+        trend = (f"{st['direction']} {abs(st['rate_kg_per_week']):.2f} kg/week"
+                 if st["rate_kg_per_week"] else "holding steady")
+        line += f" - 7d avg {st['mean_kg_7d']:.1f}, {trend}"
+    if st["tripwires"] is not None:
+        line += f" - tripwires: {st['tripwires'] or 'none'}"
     print(line)
     # Tier 1 (#110): always present, never fires. A disclaimer that interrupts
-    # gets dismissed; one that is simply always there gets read once and
-    # stays true. This is the artefact carrying the weight, so it goes where
-    # the athlete looks most often rather than where it is least in the way.
-    print(DISCLAIMER)
+    # gets dismissed; one that is simply always there gets read once and stays
+    # true. This is the artefact carrying the weight, so it goes where the
+    # athlete looks most often rather than where it is least in the way.
+    print(st["disclaimer"])
 
 
 def main(argv: list[str] | None = None) -> None:
