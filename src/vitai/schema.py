@@ -754,6 +754,49 @@ for _ds in ("weight", "daily", "sessions", "measurements", "sets", "meals"):
         KEY_GENERATION.setdefault(_ds, {})[_k] = CURRENT_GENERATION[_ds]
         KEYS[_ds].append(_k)
 
+# --- the rest of the macros, and the two sleep instants -----------------------
+# MACROS (#188). Energy and protein were the founding pair because they are what
+# a cut is steered by. Everything else the athlete actually logs - fat,
+# carbohydrate, fibre, sugar, sodium - had nowhere to land and ended up in
+# `note` as prose, which is where data goes when the schema has no room. The
+# day-level figures are TOTALS; per-item composition lives on `meals`.
+#
+# `sodium_mg` and `sodium_mg_100g` carry the unit in the name because sodium is
+# conventionally reported in milligrams while every macro beside it is grams,
+# and a bare `sodium_g` would be misread by exactly the reader not thinking
+# about it. The `meals` half costs nothing today - the dataset is empty on every
+# record we know of - and would cost a real migration later, which is the whole
+# argument for doing both halves in one change.
+#
+# NOT a polarity, and deliberately not one: a floor (protein, fibre) and a
+# ceiling (sodium, added sugar) are the same shape HERE, because this is an
+# observation, not a target. Which direction is good belongs to the goal that
+# names the metric, and is a separate piece of work.
+for _ds, _keys in (
+    ("daily", ("fat_g", "carb_g", "fibre_g", "sugar_g", "sodium_mg")),
+    ("meals", ("fibre_100g", "sugar_100g", "sodium_mg_100g")),
+):
+    CURRENT_GENERATION[_ds] += 1
+    for _k in _keys:
+        KEY_GENERATION.setdefault(_ds, {})[_k] = CURRENT_GENERATION[_ds]
+        KEYS[_ds].append(_k)
+
+# SLEEP INSTANTS (#190). `sleep_h` is a duration and throws away WHEN. These two
+# are what a day boundary can be anchored to (G61), and what makes "how much of
+# tonight is left to eat in" answerable at all. Offset-bearing, the same shape
+# as `sessions.start_time`, because 23:40 local means a different thing in two
+# zones - and a night that crosses a zone is exactly when the anchor matters.
+#
+# A SEPARATE generation from the macros above, though they ship together: they
+# are unrelated facts, and a row that carries one has said nothing about the
+# other. Keeping these is additive and cheap; SPENDING them on a subjective day
+# boundary rewrites every bucketed number in the engine and is deliberately a
+# different piece of work (#203).
+CURRENT_GENERATION["daily"] += 1
+for _k in ("sleep_start", "sleep_end"):
+    KEY_GENERATION["daily"][_k] = CURRENT_GENERATION["daily"]
+    KEYS["daily"].append(_k)
+
 
 def key_generation(dataset: str, key: str) -> int:
     """Generation a key was introduced in (1 = founding)."""
@@ -786,6 +829,10 @@ _TYPES: dict[str, tuple[type, ...]] = {
     "grams": _NUMERIC, "grams_lo": _NUMERIC, "grams_hi": _NUMERIC,
     "kcal_100g": _NUMERIC, "protein_100g": _NUMERIC,
     "fat_100g": _NUMERIC, "carb_100g": _NUMERIC,
+    "fibre_100g": _NUMERIC, "sugar_100g": _NUMERIC, "sodium_mg_100g": _NUMERIC,
+    # Day totals. `sodium_mg` is milligrams; every other macro here is grams.
+    "fat_g": _NUMERIC, "carb_g": _NUMERIC, "fibre_g": _NUMERIC,
+    "sugar_g": _NUMERIC, "sodium_mg": _NUMERIC,
     "body_fat_pct": _NUMERIC, "kg_lo": _NUMERIC, "kg_hi": _NUMERIC,
     "body_fat_lo": _NUMERIC, "body_fat_hi": _NUMERIC,
     "target": _NUMERIC, "guard_pct": _NUMERIC, "value": _NUMERIC,
@@ -1094,6 +1141,23 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
                 problems.append(f"'{k}' is a 0-10 scale, got {p!r}")
         problems += _enum(rec, "feel", FEELS, optional=True)
         problems += _enum(rec, "coverage", COVERAGES, optional=True)
+        # The sleep instants take the same shape as `sessions.start_time`.
+        # Checked here rather than trusted, because a sleep boundary that
+        # cannot be parsed is worse than one that is absent: absence is
+        # honest, and a bad instant would be silently dropped to null by every
+        # reader and then read as "the athlete did not sleep".
+        for k in ("sleep_start", "sleep_end"):
+            if (t := rec.get(k)) is not None and _bad_time(t):
+                problems.append(f"bad {k} {t!r} (ISO-8601, e.g. "
+                                "2026-08-01T23:40:00+02:00)")
+        # A sleep that ends before it starts is a transcription error, not a
+        # short night. Deliberately NOT a duration check: the engine has no
+        # business saying how long a night should be, and a 3-hour night is a
+        # fact about the athlete rather than a fault in the row.
+        _ss, _se = rec.get("sleep_start"), rec.get("sleep_end")
+        if _ss and _se and not _bad_time(_ss) and not _bad_time(_se) \
+                and parse_time(_se) <= parse_time(_ss):
+            problems.append(f"'sleep_end' {_se!r} is not after 'sleep_start' {_ss!r}")
         # A site without a score says nothing, and a NON-ZERO score without a
         # site is the ambiguity `pain_site` exists to remove. Zero needs no
         # body part: "nothing hurt today" is a complete statement, and it is

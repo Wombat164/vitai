@@ -165,12 +165,23 @@ def _build(target: Path) -> None:
                "distance_km": round(max(2.5, steps) * 0.00075, 1),
                "active_min": int(max(60, rng.gauss(300, 70))),
                "kcal_out": int(rng.gauss(2850, 220)),
-               "kcal_in": int(rng.gauss(2150, 260)),
-               "protein_g": int(rng.gauss(145, 25)),
+               # Intake is centred BELOW the declared targets (2150 kcal,
+               # 145 g), not on them. Generating it at exactly the target made
+               # the synthetic athlete permanently on plan, so the nutrition
+               # rows were decorative: there was no shortfall to ask about, and
+               # a demo that only shows the satisfied case teaches that
+               # nutrition is logged and never spoken about. A typical day here
+               # now falls a little short, and some days do not.
+               "kcal_in": int(rng.gauss(2065, 260)),
+               "protein_g": int(rng.gauss(128, 24)),
                "sleep_h": round(max(4.5, rng.gauss(7.3, 0.7)), 1),
                "rhr": int(rng.gauss(51, 2.2)),
                "alcohol": rng.random() < 0.12, "note": None}
         pain = rng.choice([0] * 10 + [1, 1, 2])
+        # Roughly one day in nine the watch spent part of the day on the
+        # charger. It is a fact about the LOG, not about the athlete, which is
+        # exactly the distinction `coverage` carries.
+        _charge_day = rng.random() < 0.11
         if gen2:
             # The athlete's tracker gained provenance mid-block. Both shapes
             # live in one file from here on, which is the point: the migration
@@ -182,7 +193,19 @@ def _build(target: Path) -> None:
                         "pain_side": "right" if pain else None,
                         "mood": max(1, min(10, int(rng.gauss(7, 1.5)))),
                         "feel": rng.choice(["fun", "neutral", "neutral", "chore"]),
-                        "coverage": "full"})
+                        # `coverage` is a claim about how completely the day was
+                        # LOGGED, and this generator does not know that - it is
+                        # inventing a day, not observing one. Stamping "full" on
+                        # every row taught the field's first consumer that
+                        # coverage is a constant, and `partial` never appeared in
+                        # the demo at all, so the one distinction the field
+                        # exists to draw was untestable against the fixture.
+                        #
+                        # A watch that is worn all day is a defensible "full". A
+                        # day the athlete took it off to charge is `partial`, and
+                        # the demo now contains both, because a fixture that only
+                        # holds the easy case proves nothing (#186).
+                        "coverage": "partial" if _charge_day else "full"})
         else:
             row["hip_pain"] = pain
         daily.append(row)
