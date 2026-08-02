@@ -744,7 +744,23 @@ def test_neither_table_invents_a_contract():
 # exception type to catch. Anything else is a capability, and a capability the
 # CLI can reach directly is one an agent cannot.
 CLI_MAY_IMPORT = {
-    "api": {"Vitai"},
+    # `Vitai` is the record-scoped door. `schema` is the ENGINE-scoped one: it
+    # reports the contract and the dataset generations, which are properties of
+    # the installed engine rather than of anyone's record, so it takes no root
+    # and cannot hang off a class that represents one (#147).
+    #
+    # Widening this entry is safe in a way widening the others is not, and the
+    # reason is worth stating: the property #158 wants is that a capability the
+    # CLI can reach, an agent can reach. Anything in `api` satisfies that by
+    # construction. The entries below are different, because `jsonl` and
+    # `schema` are engine internals where reachability is exactly what is in
+    # question.
+    #
+    # Still listed by name rather than wildcarded, so each addition stays a
+    # decision. A blanket "anything from api" would let CLI-shaped logic be
+    # parked in api.py to get past this test, which is the failure one layer
+    # along.
+    "api": {"Vitai", "schema"},
     "jsonl": {"DataError"},
     "schema": {"KEYS"},
     "": {"__version__"},          # `from . import __version__`
@@ -904,3 +920,57 @@ def test_validate_returns_a_report_rather_than_exiting(tmp_path):
     assert report["ok"] is False
     assert report["problems"]
     assert isinstance(report["advisories"], list)
+
+
+# ---- the schema accessor (#147) ----------------------------------------------
+
+def test_the_accessor_reports_the_constants_it_claims_to():
+    """The point of #147 is that pinning code stopped reaching into private
+    surface. That only holds if the public answer IS the private one: an
+    accessor that drifts from `db.CONTRACT_VERSION` is worse than none,
+    because a pin built on it fails silently, which is the exact failure a pin
+    exists to prevent."""
+    from vitai.api import schema
+    from vitai.db import CONTRACT_VERSION
+    from vitai.schema import CURRENT_GENERATION
+    s = schema()
+    assert s["contract"] == CONTRACT_VERSION
+    assert s["generations"] == CURRENT_GENERATION
+
+
+def test_the_generations_are_a_copy_a_caller_cannot_corrupt():
+    """`CURRENT_GENERATION` is module state the whole engine reads. Handing a
+    caller the live dict means one careless consumer can silently change what
+    generation every subsequent row is stamped with."""
+    from vitai.api import schema
+    from vitai.schema import CURRENT_GENERATION
+    schema()["generations"]["daily"] = 999
+    assert CURRENT_GENERATION["daily"] != 999
+
+
+def test_every_dataset_has_a_generation():
+    """A dataset missing from the map is one a pin cannot check, and it would
+    be missing silently."""
+    from vitai.api import schema
+    from vitai.schema import KEYS
+    assert set(schema()["generations"]) == set(KEYS)
+
+
+def test_the_engine_version_is_not_offered_as_a_gate():
+    """Provenance only. `__version__` rises for a docs fix with no schema
+    change and stands still while the schema moves: both directions have
+    happened in this project. A pin gating on it tells itself a comforting
+    lie, so the docstring says so and this test pins the docstring."""
+    from vitai.api import schema
+    assert "never a gate" in (schema.__doc__ or "") or "NOT a gate" in (schema.__doc__ or "")
+
+
+def test_schema_is_reachable_through_both_doors(capsys):
+    """P9: every capability ships as CLI and API together."""
+    import json as _json
+
+    from vitai.api import schema
+    from vitai.cli import main
+    main(["schema", "--json"])
+    printed = _json.loads(capsys.readouterr().out)
+    assert printed == schema()

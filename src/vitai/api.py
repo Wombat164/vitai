@@ -22,9 +22,10 @@ from datetime import date, datetime
 from pathlib import Path
 from statistics import mean
 
+from . import __version__
 from .config import Config, load_config, policy_digest
 from .contributions import compute_contributions, goal_progress
-from .db import build_db
+from .db import CONTRACT_VERSION, build_db
 from .clocks import is_aware
 from .jsonl import append, append_many, load
 from . import query
@@ -36,7 +37,7 @@ from .safety import (
     DISCLAIMER, active_episodes, banner, escalations, gates_on, hold_gates,
     is_gated, urgent_now,
 )
-from .schema import KEYS
+from .schema import CURRENT_GENERATION, KEYS
 from .verdicts import compute_verdicts
 
 
@@ -1193,3 +1194,35 @@ class Vitai:
         if days:
             return f"{len(days)} days logged (latest {days[-1]['date']})"
         return "nothing logged yet - one number is a complete day"
+
+
+def schema() -> dict:
+    """The SHAPE this engine emits: contract version and dataset generations.
+
+    A property of the installed ENGINE rather than of any one record, so it
+    takes no root and is a module function rather than a method on `Vitai`.
+
+    #147. Anything that PINS against this engine needs these two numbers: a
+    fixture corpus that must refuse to regenerate when the shape has moved
+    past what it was authored against, a content repo recording which engine
+    wrote it, a client checking an artifact is still readable. Every one of
+    them had to reach into `db.CONTRACT_VERSION` and
+    `schema.CURRENT_GENERATION`, which are private and will move.
+
+    That is worse than inconvenient. A pin that reads private surface is a pin
+    that breaks silently on an engine upgrade, which is exactly the failure the
+    pin exists to prevent - the guard and the thing it guards against sharing a
+    failure mode.
+
+    `contract` versions the READ MODEL, the built SQLite shape a consumer gates
+    on. `generations` versions the LINE SHAPE per dataset, which keys a row
+    owed when it was written. They answer different questions and a consumer
+    usually needs both. `engine` is provenance for a bug report and is
+    deliberately NOT a gate: it moves for a docs fix and stands still while the
+    schema moves, so a pin that gates on it is telling itself a comforting lie.
+    """
+    return {
+        "engine": __version__,
+        "contract": CONTRACT_VERSION,
+        "generations": dict(CURRENT_GENERATION),
+    }
