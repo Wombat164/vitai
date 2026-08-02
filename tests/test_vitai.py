@@ -403,7 +403,7 @@ def test_api_build_projects_verdicts_and_contract(tmp_path):
             "justifications", "conservation", "retractions",
             "medical", "gates", "escalations", "checks"} <= tables
     assert con.execute("SELECT COUNT(*) FROM inferences").fetchone()[0] == 1
-    assert con.execute("SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "17"
+    assert con.execute("SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "18"
     con.close()
     assert v.status_line().startswith("77.3 kg")
     assert isinstance(v.verdicts(), list)
@@ -1534,3 +1534,90 @@ def test_an_unknown_tool_is_refused_by_name(tmp_path):
     with contextlib.redirect_stdout(out):
         serve(root, stdin=stdin)
     assert "no such tool" in json.loads(out.getvalue())["error"]["message"]
+
+
+# ---- #177: no_data was one word for four states ---------------------------
+#
+# The distinction already existed in the data and was recoverable only by
+# inspecting which fields were null. Every consumer would have
+# reverse-engineered it from row shape, each slightly differently, and none of
+# them is the engine.
+
+def _verdict_rows(**kw):
+    from vitai.config import Config
+    from vitai.verdicts import compute_verdicts
+    return compute_verdicts(kw.pop("cfg", Config()), kw.pop("weight", []),
+                            kw.pop("daily", []), kw.pop("sessions", []), **kw)
+
+
+def test_a_refusal_cannot_ship_without_a_reason():
+    """The totality the issue asks for, held where every row is BUILT rather
+    than at each caller, so a new refusal site cannot ship unlabelled."""
+    import pytest
+
+    from vitai.verdicts import NODATA, _row
+    with pytest.raises(ValueError, match="needs a reason"):
+        _row("2030-04-01", "weight_rate", None, None, NODATA)
+    with pytest.raises(ValueError, match="needs a reason"):
+        _row("2030-04-01", "weight_rate", None, None, NODATA, reason="made up")
+
+
+def test_a_judgement_carries_no_reason():
+    """The other half. A reason on a judged row would mean the field answers
+    two different questions depending on the verdict beside it."""
+    import pytest
+
+    from vitai.verdicts import ON, _row
+    with pytest.raises(ValueError, match="not a refusal"):
+        _row("2030-04-01", "steps", 9000, 8000, ON, reason="no_input")
+
+
+def test_the_reason_is_readable_without_inspecting_null_fields():
+    """The complaint in one sentence: a consumer had to reverse-engineer why
+    from the shape of the row."""
+    from vitai.config import Config
+    weight = [{"date": "2030-04-01", "kg": 80.0, "source": "scale",
+               "note": None, "body_fat_pct": None, "kg_lo": None,
+               "kg_hi": None, "body_fat_lo": None, "body_fat_hi": None}]
+    # A rate with no phase configured: the rate is real, the policy is not.
+    rows = _verdict_rows(cfg=Config(), weight=weight * 2)
+    refusals = [r for r in rows if r["verdict"] == "no_data"]
+    for row in refusals:
+        assert row["reason"], row
+        assert row["reason"] in {"no_input", "no_policy", "not_supported",
+                                 "contraindicated", "suppressed"}
+
+
+def test_a_consumer_ignoring_the_reason_sees_the_previous_behaviour():
+    """Additive and appended, so a reader by name is unaffected and one
+    reading positionally sees the new column last."""
+    from vitai.db import VERDICT_KEYS
+    assert VERDICT_KEYS[-1] == "reason"
+    assert VERDICT_KEYS[:-1] == ["week", "metric", "value", "target",
+                                 "verdict", "goal"]
+
+
+def test_the_reason_reaches_the_read_model(tmp_path):
+    import json
+    import sqlite3
+
+    from vitai.api import Vitai
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    (root / "data" / "weight.jsonl").write_text("\n".join(json.dumps(
+        {"date": f"2026-04-{d:02d}", "kg": 80.0, "source": "scale",
+         "note": None, "body_fat_pct": None, "kg_lo": None, "kg_hi": None,
+         "body_fat_lo": None, "body_fat_hi": None, "measured_at": None})
+        for d in range(1, 15)) + "\n", encoding="utf-8")
+    con = sqlite3.connect(Vitai(root).build())
+    try:
+        cols = [c[1] for c in con.execute("PRAGMA table_info(verdicts)")]
+        assert cols[-1] == "reason"
+        rows = con.execute(
+            "SELECT verdict, reason FROM verdicts WHERE verdict='no_data'"
+        ).fetchall()
+    finally:
+        con.close()
+    assert rows, "premise: this record produces refusals"
+    assert all(reason for _, reason in rows), "a refusal reached the read model bare"

@@ -55,7 +55,7 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # every generation below is unchanged. Confirmed by regenerating: the
 # committed corpora came back byte-identical, which is the evidence that the
 # contract move did not reach them.
-AUTHORED_AGAINST_CONTRACT = "17"  # vitai.db.CONTRACT_VERSION is a string
+AUTHORED_AGAINST_CONTRACT = "18"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,
