@@ -18,17 +18,32 @@ against those numbers without ever recomputing them.
 - What it will not do, and why: [[explanation/medical-boundary|the medical boundary]].
 - Building on it: [[explanation/platform|the platform contract]].
 
-## What is new in 0.3.0
+## What is new in 0.4.0
 
-**Provenance became total.** A number can now say which instrument produced
-it, how it was acquired, whether it was measured at all, and what the record
-said about it at any past instant.
+**The engine grew a surface a client application can build on.** Everything
+before this assumed the consumer was a person at a terminal or an agent that
+had read the source. A client is neither.
 
-**Strength training became first-class.** The set is the atom, with an
-exercise registry, modifier axes, and reads that refuse rather than guess.
+**The whole situation, in one call.** What would stop a decision, then what is
+true now, then what the engine will not vouch for. It replaces fifteen calls a
+consumer would otherwise stitch together, each one a chance to stitch it wrong.
 
-**The boundary was drawn and enforced.** The engine states what the record
-shows, declines to issue a plan, and routes nobody, with a deterministic lint
-over the whole public surface so the line cannot erode quietly.
+**Writing back, with provenance the engine stamps.** A caller supplies what was
+stated and nothing else, because a caller that could set provenance could file
+a recollection as a device reading.
+
+**An MCP adapter**, derived from the API rather than written beside it, so it
+structurally cannot expose a capability the API lacks.
+
+**Refusals say which kind of no.** A reason is required with a refusal and
+forbidden without one, so a new refusal cannot ship unlabelled.
+
+**Protocol, and the unanchored interval.** A measurement can name the
+conditions it was taken under, and a bounded interval of honest but unanchored
+claims resolves EMPTY rather than being backfilled. Discovering your own error
+never costs you standing.
+
+Earlier increments brought total provenance, the set as the atom of strength
+training, and the medical boundary drawn and enforced. See the changelog.
 
 > Sparse and continuous beats rich and abandoned.
