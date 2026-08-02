@@ -74,18 +74,42 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # derived, and declaring a lineage none of them has would be inventing exactly
 # the evidence the field exists to make checkable. The corpora DO change: six
 # datasets gain two null columns and a bumped `_gen`.
+# Re-pinned for #188 and #190, which added five macro totals plus two sleep
+# instants to daily (two generations - unrelated facts) and three per-100 g
+# figures to meals. REVIEWED rather than bumped, and the reading differs
+# between the two halves, so both are stated rather than reusing the sentence
+# above.
+#
+# MACROS: absent is honest and also uncomfortable. No builder writes fat,
+# carbohydrate, fibre, sugar or sodium, so they land null - but this is not the
+# same "none of these athletes did this" that `protocol` was. Nine personas
+# already carry protein on ZERO of 4530 daily rows, so the corpus has no
+# athlete who eats deliberately and tracks it, and the new columns EXTEND that
+# gap rather than record one. Null-filling is still correct today: no shipped
+# behaviour reads these fields, and a persona built from the schema would only
+# confirm the schema. The fixture work belongs with the behaviour; until then a
+# null column honestly says nobody logged it.
+#
+# SLEEP INSTANTS: absent is honest without qualification. Every persona records
+# `sleep_h` as a duration because that is what their sources give; not one has
+# a device or export that reports when the night began. Inventing a bedtime to
+# fill the column would fabricate exactly the evidence a day anchor would later
+# be built on.
+#
+# The corpora DO change: daily gains seven null columns, meals three, and
+# `_gen` moves on both.
 AUTHORED_AGAINST_CONTRACT = "20"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,
     "checks": 3,
     "context": 3,
-    "daily": 9,
+    "daily": 11,
     "events": 3,
     "goals": 4,
     "inferences": 4,
     "journal": 3,
-    "meals": 4,
+    "meals": 5,
     "measurements": 9,
     "medical": 5,
     "sessions": 10,
