@@ -9,8 +9,6 @@ built on a reference that points at more than one row.
 
 import json
 
-import pytest
-
 from vitai.api import Vitai
 from vitai.cli import main
 from vitai.identity import (ambiguous, identifiable, refs, row_ref,
