@@ -94,27 +94,15 @@ class Vitai:
         """
         self.root = Path(root)
         self.as_of = as_of
-        # VALIDATED, for the same reason `as_of` is. A `str` viewpoint is the
-        # natural call - every per-call `on` in this class takes `date | str`
-        # - and it left half the engine working and half raising
-        # `AttributeError: 'str' object has no attribute 'isoformat'` from
-        # somewhere with no mention of the constructor. A `datetime` is the
-        # other obvious slip, because `as_of` right next door is one, and it
-        # is worse: `datetime` subclasses `date`, so it passes every
-        # `isinstance(on, date)` check in the codebase and dies much later
-        # comparing a datetime to a date.
-        if isinstance(on, str):
-            on = date.fromisoformat(on)
-        elif isinstance(on, datetime):
-            raise TypeError(
-                "on must be a date, not a datetime: it is the valid-time "
-                "viewpoint - the DAY the engine answers as - and a time of "
-                "day would compare against dates it can never equal. The "
-                "cutoff that does take an instant is as_of")
-        elif on is not None and not isinstance(on, date):
-            raise TypeError(f"on must be a date or an ISO date string, "
-                            f"not {type(on).__name__}")
-        self.on = on or date.today()
+        # VALIDATED, for the same reason `as_of` is, and by a shared function
+        # so that every door onto the viewpoint applies the same rule. The
+        # first cut validated here and re-normalised inline in `situation()`,
+        # which accepted a `datetime` the constructor rejects for a stated
+        # reason - the same value refused at one door and taken at the next.
+        self.on = _viewpoint(on) or date.today()
+        # Per-instance read cache. See `_forget`.
+        self._loaded: dict[str, list[dict]] = {}
+        self._resolved: dict | None = None
         if as_of is not None and not is_aware(as_of):
             # A naive cutoff compares against aware stamps by guessing a zone,
             # and the guess is the local one, which makes the same call return
@@ -151,6 +139,7 @@ class Vitai:
         keys with null, stamps `_gen`, and validates before writing - an
         append-only file cannot be un-appended.
         """
+        self._forget()
         return append(self.root / "data", name, record,
                       device=self.config.device)
 
@@ -161,6 +150,7 @@ class Vitai:
         validates every row before writing any, and writes in a single open.
         Looping over `append` re-parses a growing file per row.
         """
+        self._forget()
         return append_many(self.root / "data", name, records,
                            device=self.config.device)
 
@@ -333,6 +323,7 @@ class Vitai:
             "sha256": ref, "media_type": media_type,
             "bytes": len(payload), **fields})
         self.artifacts.put(payload)
+        self._forget()
         return row
 
     def remove_artifact(self, ref: str, reason: str,
@@ -355,6 +346,7 @@ class Vitai:
         row = self.append("artifacts", {"date": when, "sha256": ref,
                                         "removed": True, "reason": reason})
         self.artifacts.drop(ref)
+        self._forget()
         return row
 
     def verify_artifacts(self) -> list[dict]:
@@ -365,11 +357,28 @@ class Vitai:
     def dataset(self, name: str) -> list[dict]:
         if name not in KEYS:
             raise KeyError(f"unknown dataset {name!r}; one of {sorted(KEYS)}")
-        return load(self.root / "data", name, as_of=self.as_of)
+        if name not in self._loaded:
+            self._loaded[name] = load(self.root / "data", name,
+                                      as_of=self.as_of)
+        return self._loaded[name]
 
     def datasets(self) -> dict[str, list[dict]]:
         """Raw claims, exactly as recorded. See `canonical()` for adjudicated."""
         return {name: self.dataset(name) for name in KEYS}
+
+    def _forget(self) -> None:
+        """Drop the per-instance read cache. Called by every write path.
+
+        The cache exists because `situation()` is meant to be called per agent
+        turn, and one call was loading every dataset file over two hundred
+        times and running full resolution three times - each of those counts
+        scaling with the record. An instance is a VIEW of the record at one
+        cutoff, so caching a read is honest; a write through this instance is
+        the one thing that makes the view stale, and it says so here rather
+        than leaving the next reader to discover it.
+        """
+        self._loaded.clear()
+        self._resolved = None
 
     def _converged(self) -> dict[str, list[dict]]:
         """Datasets with duplicate CAPTURES resolved to one row each (#105).
@@ -396,9 +405,12 @@ class Vitai:
         `datasets()` - a verdict computed over unresolved claims would double
         count every day the athlete happens to own two devices.
         """
-        cfg = self.config
-        return resolve(self._converged(), precedence=cfg.precedence,
-                       source_order=cfg.source_order)
+        if self._resolved is None:
+            cfg = self.config
+            self._resolved = resolve(self._converged(),
+                                     precedence=cfg.precedence,
+                                     source_order=cfg.source_order)
+        return self._resolved
 
     def canonical(self, name: str | None = None):
         """Adjudicated rows: one canonical record per quantity per date."""
@@ -1118,7 +1130,129 @@ class Vitai:
             max_items=int(cfg.get("max_items", 5)))
         return {"accepted": valid, "rejected": errors}
 
-    def status(self) -> dict:
+    def situation(self, on: date | str | None = None,
+                  recent: int = 14) -> dict:  # noqa: C901
+        """Everything a consumer needs before it says anything. ONE call.
+
+        #158's second rung. The alternative it replaces is fifteen calls a
+        consumer stitches together, which is fifteen chances to stitch it
+        wrong - and the stitching is exactly the work that must not be
+        duplicated per consumer, because each one gets it subtly differently
+        and none of them is the engine.
+
+        Shaped for something that has to DECIDE, not for something that has to
+        display. So it leads with what would stop a decision (the refusals),
+        it says what it could not answer rather than omitting it, and it
+        carries the two numbers a consumer must gate on before trusting any of
+        the rest.
+
+        ALMOST NOTHING HERE IS NEW, and the exception is named rather than
+        glossed: every value is an existing engine surface, assembled, except
+        `unresolved.last_seen`, which is a max over dates computed here. That
+        one is engine-side arithmetic over engine data, which is allowed - the
+        rule is that the CLIENT does not derive - but it is new, and a
+        docstring claiming otherwise would be the kind of small false sentence
+        this codebase spends its comments preventing.
+
+        `last_seen` answers HOW STALE, not what is missing. The coverage
+        ledger that could answer the second question is #93 and does not
+        exist; inventing one here would be a number nobody authorised.
+
+        If a consumer wants something this does not carry, the answer is a
+        change to the engine rather than arithmetic on the way out, which is
+        the same rule the read model already lives under.
+        """
+        when = _viewpoint(on) or self.on
+        report = self.validate()
+
+        # LEADS with what stops a decision. A brief that opens with a rate
+        # line and mentions the gate further down has already failed the one
+        # job it has, because the reader may act on the first paragraph.
+        gates = self.gates(when)
+        escalations = self.safety(when)
+
+        # EVERY derived section is guarded, not just one. `validate()` above
+        # has already enumerated a non-numeric weight WITHOUT raising, by
+        # design; a brief that then crashed while formatting that same value
+        # would be withholding the diagnosis it is holding, on exactly the
+        # record that needs it most. The first cut guarded `status` alone and
+        # the crash simply moved to `rollup`.
+        #
+        # Guarded, never swallowed: each failure is named in `unavailable`, so
+        # a consumer can tell "the engine could not answer this" from "the
+        # answer is empty". Absence is a claim here as everywhere else.
+        unavailable: dict[str, str] = {}
+
+        def section(name, fn, empty):
+            try:
+                return fn()
+            except (ValueError, TypeError, KeyError, ZeroDivisionError) as e:
+                unavailable[name] = f"{type(e).__name__}: {e}"
+                return empty
+
+        status = section("status", lambda: self.status(when),
+                         {"line": None, "on": when.isoformat()})
+
+        canonical = self.canonical()
+        # AT OR BEFORE the viewpoint, and `recent > 0` guarded. "Recent
+        # sessions" in a brief pinned to May must not contain June, and
+        # `[-0:]` is the whole list rather than none of it.
+        horizon = when.isoformat()
+        dated = [r for r in canonical.get("sessions") or []
+                 if str(r.get("date") or "") <= horizon]
+        sessions = dated[-recent:] if recent > 0 else []
+
+        # "What is stale and what is missing", per the issue. Stated as the
+        # engine's own advisories plus the last date each dataset carries -
+        # NOT as a coverage verdict, because a coverage ledger is #93 and does
+        # not exist yet, and inventing one here would be a number nobody
+        # authorised.
+        last_seen = {}
+        for name, rows in canonical.items():
+            dates = [d for r in rows
+                     if (d := str(r.get("date") or "")) and d <= horizon]
+            last_seen[name] = max(dates) if dates else None
+
+        return {
+            # A consumer gates on these before trusting anything below.
+            "schema": schema(),
+            "policy": self.policy,
+            "on": when.isoformat(),
+            "as_of": self.as_of.isoformat() if self.as_of else None,
+
+            # What would stop a decision, first.
+            "gates": gates,
+            "escalations": escalations,
+            "banner": self.safety_banner(when),
+            "worries": self.open_worries(),
+
+            # What is true now. `status` is guarded because it formats
+            # numbers, and `validate()` above has ALREADY reported a
+            # non-numeric weight without raising - so a brief that crashed
+            # here would be withholding the very problems it is holding, on a
+            # record whose damage it had just finished enumerating.
+            "status": status,
+            "goals": section("goals", lambda: self.goals(when), []),
+            "context": section("context", lambda: self.context(when), None),
+            "sessions": sessions,
+            "rollup": section("rollup", lambda: self.rollup(when), None),
+
+            # What the engine will not vouch for. Present even when empty, so
+            # a consumer that renders it cannot mistake "no problems" for "not
+            # asked" - the same reason absence is a claim everywhere else.
+            "unresolved": {
+                "problems": report["problems"],
+                "advisories": report["advisories"],
+                "last_seen": last_seen,
+                "duplicate_captures": self.duplicate_captures(),
+                "conservation": self.conservation(),
+                "retracted": self.retractions(),
+                # Which sections the engine could not compute, and why.
+                "unavailable": unavailable,
+            },
+        }
+
+    def status(self, on: date | str | None = None) -> dict:
         """The one-line state, with everything the line used to compute itself.
 
         P9 says the CLI is a thin harness over this API and never a separate
@@ -1137,11 +1271,17 @@ class Vitai:
         Returns the parts, not a sentence, because a consumer that has to
         decide something needs the rate rather than the phrase containing it.
         """
+        when = _viewpoint(on) or self.on
+        # THE VIEWPOINT REACHES THE NUMBERS, not just the label. The first cut
+        # took no argument at all, so a brief pinned to May carried a rate
+        # computed over weight points dated in June and reported `on` twice
+        # with two different answers in one document.
         pts = sorted((w["date"], w["kg"]) for w in self.dataset("weight")
-                     if w.get("kg") is not None)
+                     if w.get("kg") is not None
+                     and str(w.get("date") or "") <= when.isoformat())
         out = {
             "line": self.status_line(),
-            "on": self.on.isoformat(),
+            "on": when.isoformat(),
             "rate_kg_per_week": None,
             "direction": None,
             "mean_kg_7d": None,
@@ -1194,6 +1334,31 @@ class Vitai:
         if days:
             return f"{len(days)} days logged (latest {days[-1]['date']})"
         return "nothing logged yet - one number is a complete day"
+
+
+def _viewpoint(on):
+    """Normalise and validate a valid-time viewpoint. Shared by every door.
+
+    A `str` is the natural call, since every per-call `on` in this class takes
+    `date | str`. A `datetime` is the obvious slip, because `as_of` right next
+    door is one, and it is worse: `datetime` subclasses `date`, so it passes
+    every `isinstance(on, date)` check in the codebase and dies much later
+    comparing a datetime to a date.
+    """
+    if on is None:
+        return None
+    if isinstance(on, str):
+        return date.fromisoformat(on)
+    if isinstance(on, datetime):
+        raise TypeError(
+            "on must be a date, not a datetime: it is the valid-time "
+            "viewpoint - the DAY the engine answers as - and a time of day "
+            "would compare against dates it can never equal. The cutoff that "
+            "does take an instant is as_of")
+    if not isinstance(on, date):
+        raise TypeError(f"on must be a date or an ISO date string, "
+                        f"not {type(on).__name__}")
+    return on
 
 
 def schema() -> dict:

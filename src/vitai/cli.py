@@ -980,6 +980,22 @@ def cmd_validate(args: argparse.Namespace) -> None:
     print("all data lines valid" + (f" ({n} advisory/advisories)" if n else ""))
 
 
+def cmd_situation(args: argparse.Namespace) -> None:
+    """A harness over `Vitai.situation()`. The whole brief, as JSON.
+
+    JSON and not prose, because the caller is an agent or a client rather than
+    a reader: #158's complaint is that the only way to obtain this today is to
+    shell out and parse sentences, and printing sentences here would leave
+    that exactly where it was.
+    """
+    # The viewpoint goes to the CONSTRUCTOR as well. Passing it only to
+    # `situation()` left every surface that reads `self.on` answering as today
+    # inside a brief labelled with another date.
+    on = date.fromisoformat(args.on) if args.on else None
+    print(json.dumps(Vitai(_root(args), on=on).situation(recent=args.recent),
+                     indent=2, sort_keys=True, default=str))
+
+
 def cmd_status(args: argparse.Namespace) -> None:
     """A harness over `Vitai.status()`.
 
@@ -1039,6 +1055,9 @@ def main(argv: list[str] | None = None) -> None:
         ("build", cmd_build, "data/*.jsonl -> derived/ (SQLite incl. verdicts + weekly rollup)"),
         ("validate", cmd_validate, "schema-check every data line"),
         ("status", cmd_status, "one-line state: latest weight, rate, tripwires"),
+        ("situation", cmd_situation,
+         "the whole brief as JSON: refusals first, then state, then what is "
+         "unresolved (#158)"),
         ("verdicts", cmd_verdicts, "weekly goal-attainment rows as JSONL (the platform contract)"),
         ("goals", cmd_goals, "active goals: progress, dates, contributions, flagged edits"),
         ("append", cmd_append,
@@ -1070,6 +1089,11 @@ def main(argv: list[str] | None = None) -> None:
     ]:
         p = sub.add_parser(name, help=help_)
         p.add_argument("--root", default=".", help="content repo root (default: cwd)")
+        if name == "situation":
+            p.add_argument("--on", metavar="YYYY-MM-DD",
+                           help="the valid-time viewpoint (default: today)")
+            p.add_argument("--recent", type=int, default=14,
+                           help="how many recent sessions to carry (default: 14)")
         if name == "infer":
             p.add_argument("--dry-run", action="store_true",
                            help="print validated inferences without appending")
