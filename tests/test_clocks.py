@@ -335,10 +335,19 @@ def test_recorded_at_never_lands_on_the_founding_generation():
     on every dataset forever, which no schema can promise. The durable
     property is that it postdates the founding generation and does not claim
     to be newer than its own dataset.
+
+    NARROWED AGAIN for the two datasets #171 added, and the docstring above
+    already contains the reason: "no EXISTING line can be required to carry
+    it". A dataset at generation 1 has no existing lines, so its first line
+    and every line after it carries the field and there is nothing to break.
+    The invariant is about datasets with a history rather than about the
+    field's number.
     """
     for name in KEYS:
         gen = key_generation(name, "recorded_at")
-        assert gen > 1, f"{name}: no existing line can be required to carry it"
+        if CURRENT_GENERATION[name] > 1:
+            assert gen > 1, f"{name}: an existing line would be required to "\
+                            "carry a field that postdates it"
         assert gen <= CURRENT_GENERATION[name], name
 
 

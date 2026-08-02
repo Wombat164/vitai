@@ -11,6 +11,8 @@ session types - not to enforce ceremony.
 
 from __future__ import annotations
 
+import re
+
 from datetime import date, datetime
 
 from .clocks import (is_aware, is_stamp, order_key,  # noqa: F401
@@ -364,6 +366,11 @@ IDENTITY_KEY: dict[str, str | tuple[str, ...]] = {
 MEDICAL_KINDS = {"visit", "injury", "symptom", "lab", "medication",
                  "restriction", "state"}
 
+# One value for now, and closed on purpose: a regime says a span of claims was
+# unanchored. Widening it is a claim about a NEW way a record can be wrong,
+# which should be argued rather than typed.
+REGIME_KINDS = {"unanchored"}
+
 # What a state or medication tells the engine to EXPECT (G57/G72). This is the
 # difference between a number that is alarming and the same number that is the
 # treatment working: rapid loss on a GLP-1 agonist is the drug doing its job,
@@ -638,6 +645,61 @@ for _ds in KEYS:
     KEY_GENERATION.setdefault(_ds, {})["device"] = CURRENT_GENERATION[_ds]
 
 
+# --- two new datasets (#171 track 2) -----------------------------------------
+#
+# DECLARED AFTER the generation blocks above, deliberately. Those loops append
+# a generation to every dataset in `KEYS`, which is right for a field arriving
+# into a dataset already in the wild and wrong for a dataset that has never
+# existed: a new one has nothing in the wild, so every key of it is founding,
+# and letting the loops reach it would have stamped `regimes` at generation 3
+# with keys claiming to be later additions to a history it does not have.
+KEYS["protocols"] = [
+    # What a measurement's CONDITIONS were. A slug naming the procedure,
+    # defined here in the athlete's own words. Optional and OPEN: a slug used
+    # before it is defined is legal and validate advises, because a record
+    # that refused an undefined slug would make writing one down cost more
+    # than not bothering.
+    "date", "slug", "text", "supersedes", "recorded_at", "device",
+]
+KEYS["regimes"] = [
+    # An interval during which a whole class of claims was UNANCHORED: an
+    # ill-defined measurand honestly restated, ending at a discoverable
+    # instant. High trust, low accuracy, sustained, which is the empirical
+    # proof that those two axes are separate.
+    #
+    # Distinct from a per-observation qualification (#168): that is one
+    # suspect reading, this is a bounded span of them.
+    "date", "from_date", "to_date", "dataset", "field", "kind", "source",
+    "text", "anchored_by", "note", "recorded_at", "device", "supersedes",
+]
+for _ds in ("protocols", "regimes"):
+    CURRENT_GENERATION[_ds] = 1
+
+IDENTITY_KEY["protocols"] = "slug"
+
+
+# --- protocol: the conditions a measurement was taken under (#171) -----------
+#
+# The distinguishing feature of a well-anchored measurement is that it names
+# its conditions. This extends the anchor concept the engine already has
+# (`resolution.QUANTITY_CLASS` marks weight and measurements as anchors): a
+# protocol-anchored measurement is an anchor, and a span between anchors under
+# no protocol is an unanchored interval.
+#
+# THE EPISTEMIC RULE, and it is load-bearing: a row with NO protocol is a
+# different epistemic class from one with a protocol, not a row with a missing
+# optional field. The unprotocolled row carries the measurand's full
+# DEFINITIONAL uncertainty, which for body mass dominates instrument error by
+# an order of magnitude - phase 0 measured exactly that.
+#
+# Appended last, per the standing rule: a generation block appends, and a new
+# field never lands ahead of one already in the wild.
+for _ds in ("weight", "measurements"):
+    CURRENT_GENERATION[_ds] += 1
+    KEY_GENERATION.setdefault(_ds, {})["protocol"] = CURRENT_GENERATION[_ds]
+    KEYS[_ds].append("protocol")
+
+
 def key_generation(dataset: str, key: str) -> int:
     """Generation a key was introduced in (1 = founding)."""
     return KEY_GENERATION.get(dataset, {}).get(key, 1)
@@ -736,6 +798,49 @@ def _bad_time(v: object) -> bool:
         return True
 
 
+SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _protocol_problems(rec: dict) -> list[str]:
+    out = []
+    if not SLUG_RE.match(str(rec.get("slug") or "")):
+        out.append(f"'slug' is a lowercase-kebab identifier, got "
+                   f"{rec.get('slug')!r}")
+    if not str(rec.get("text") or "").strip():
+        out.append("'text' says what the procedure IS, in the athlete's own "
+                   "words. A slug with no definition is a name for something "
+                   "nobody wrote down")
+    return out
+
+
+def _regime_problems(rec: dict) -> list[str]:
+    """A regime is a bounded interval, and the bounds are the whole point."""
+    out = []
+    if rec.get("kind") not in REGIME_KINDS:
+        out.append(f"'kind' is one of {', '.join(sorted(REGIME_KINDS))}, got "
+                   f"{rec.get('kind')!r}")
+    first, last = rec.get("from_date"), rec.get("to_date")
+    for name, value in (("from_date", first), ("to_date", last)):
+        if not isinstance(value, str) or not DATE_RE.match(value):
+            out.append(f"'{name}' is an ISO date, got {value!r}")
+    if isinstance(first, str) and isinstance(last, str) and last < first:
+        out.append(f"'to_date' {last} is before 'from_date' {first}; a regime "
+                   "is an interval and an interval that ends before it starts "
+                   "empties nothing")
+    if rec.get("dataset") not in KEYS:
+        out.append(f"'dataset' names a dataset to scope to, got "
+                   f"{rec.get('dataset')!r}")
+    elif rec.get("field") not in KEYS[str(rec["dataset"])]:
+        out.append(f"'field' {rec.get('field')!r} is not a column of "
+                   f"{rec['dataset']}")
+    if not str(rec.get("text") or "").strip():
+        out.append("'text' is the athlete's own account of the interval. A "
+                   "regime empties real days, and doing that without saying "
+                   "why leaves a hole nobody can read later")
+    return out
+
+
 def validate_record(dataset: str, rec: dict) -> list[str]:
     """Problems with one record; empty list means valid."""
     problems: list[str] = []
@@ -787,6 +892,17 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
                    for v in (p, a, b)) and not a <= p <= b:
                 problems.append(f"band out of order: {lo}<={point}<={hi} "
                                 f"violated ({a} <= {p} <= {b})")
+    if dataset == "protocols":
+        problems += _protocol_problems(rec)
+    if dataset == "regimes":
+        problems += _regime_problems(rec)
+    if dataset in ("weight", "measurements") and rec.get("protocol") is not None:
+        if not SLUG_RE.match(str(rec["protocol"])):
+            problems.append(
+                f"'protocol' is a lowercase-kebab slug, got "
+                f"{rec['protocol']!r}. The slug does not have to be DEFINED "
+                "yet - an undefined one is legal and validate only advises - "
+                "but it has to be a slug")
     if dataset == "daily" and (a := rec.get("alcohol")) is not None:
         if not isinstance(a, bool):
             problems.append(f"'alcohol' should be true/false/null, got {a!r}")

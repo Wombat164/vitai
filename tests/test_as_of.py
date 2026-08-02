@@ -315,7 +315,7 @@ def test_the_read_model_carries_the_policy_it_was_built_under(tmp_path):
     finally:
         con.close()
     assert meta["policy"] == engine.policy
-    assert meta["contract"] == "17"
+    assert meta["contract"] == "18"
 
 
 def test_a_read_model_built_without_a_policy_omits_the_row(tmp_path):
@@ -339,4 +339,119 @@ def test_a_read_model_built_without_a_policy_omits_the_row(tmp_path):
             con.close()
 
     assert set(meta()) == {"contract"}
-    assert meta(policy="abc") == {"contract": "17", "policy": "abc"}
+    assert meta(policy="abc") == {"contract": "18", "policy": "abc"}
+
+
+# ---- #171 track 2: regimes invalidate without replacing --------------------
+
+def test_a_regime_empties_its_interval_and_backfills_nothing():
+    """The measurement that ENDED a regime is evidence the earlier claims were
+    unanchored. It is NOT evidence of what the true values were, so nothing is
+    interpolated, extrapolated or carried back: a blank beats a confident
+    wrong number, applied to an interval instead of to a cell."""
+    from vitai.resolution import apply_regimes
+    rows = [{"date": f"2026-0{m}-01", "kg": 80.0 + m, "source": "scale"}
+            for m in range(1, 6)]
+    canonical = {"weight": rows}
+    fired = apply_regimes(canonical, [{
+        "dataset": "weight", "field": "kg", "from_date": "2026-01-01",
+        "to_date": "2026-03-31", "kind": "unanchored",
+        "text": "weighed at random times, clothed, no protocol."}])
+    assert [r["kg"] for r in rows] == [None, None, None, 84.0, 85.0]
+    assert fired and fired[0]["kind"] == "unanchored_interval"
+    assert fired[0]["severity"] == "review"
+
+
+def test_the_claims_themselves_are_never_deleted(tmp_path):
+    """Append-only means a record never loses what it was told. What ends is
+    the standing of those readings as values, not their existence."""
+    import json
+
+    from vitai.api import Vitai
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    (root / "data" / "weight.jsonl").write_text("\n".join(json.dumps(
+        {"date": f"2026-0{m}-01", "kg": 80.0 + m, "source": "scale",
+         "note": None, "body_fat_pct": None, "kg_lo": None, "kg_hi": None,
+         "body_fat_lo": None, "body_fat_hi": None, "measured_at": None})
+        for m in range(1, 6)) + "\n", encoding="utf-8")
+    (root / "data" / "regimes.jsonl").write_text(json.dumps(
+        {"date": "2026-06-01", "from_date": "2026-01-01",
+         "to_date": "2026-03-31", "dataset": "weight", "field": "kg",
+         "kind": "unanchored", "source": None,
+         "text": "no protocol until June", "anchored_by": "morning-fasted",
+         "note": None, "supersedes": None}) + "\n", encoding="utf-8")
+    engine = Vitai(root)
+    assert len(engine.dataset("weight")) == 5, "the lines are still there"
+    canonical = engine.canonical()["weight"]
+    assert [r["kg"] for r in canonical][:3] == [None, None, None]
+    assert [r["kg"] for r in canonical][3:] == [84.0, 85.0]
+
+
+def test_a_regime_can_be_scoped_to_one_source():
+    """A regime about a bathroom scale must not empty a clinic measurement
+    taken in the same weeks."""
+    from vitai.resolution import apply_regimes
+    rows = [{"date": "2026-02-01", "kg": 80.0, "source": "scale"},
+            {"date": "2026-02-02", "kg": 81.0, "source": "clinic"}]
+    apply_regimes({"weight": rows}, [{
+        "dataset": "weight", "field": "kg", "from_date": "2026-01-01",
+        "to_date": "2026-03-31", "kind": "unanchored", "source": "scale",
+        "text": "the bathroom scale years"}])
+    assert rows[0]["kg"] is None and rows[1]["kg"] == 81.0
+
+
+def test_applying_a_regime_touches_no_trust_parameter():
+    """A HARD CONSTRAINT. Discovering your own error must never cost you
+    standing: trust is about intent and care, accuracy is about the number,
+    and self-correction is evidence of care rather than against it.
+
+    Asserted structurally, because the property worth keeping is that the
+    engine has no learned trust parameter at all: `apply_regimes` reads and
+    writes only the scoped field, so there is nothing for it to demote.
+    """
+    import inspect
+
+    from vitai.resolution import apply_regimes
+    body = inspect.getsource(apply_regimes)
+    for forbidden in ("trust", "credibility", "reliability", "demote",
+                      "penal", "score"):
+        assert forbidden not in body.split('"""')[2].lower(), forbidden
+
+
+def test_a_regime_that_ends_before_it_starts_is_refused():
+    from vitai.schema import validate_record
+    base = {"date": "2026-06-01", "from_date": "2026-05-31",
+            "to_date": "2026-01-01", "dataset": "weight", "field": "kg",
+            "kind": "unanchored", "source": None, "text": "backwards",
+            "anchored_by": None, "note": None, "supersedes": None,
+            "recorded_at": None, "device": None}
+    assert any("before" in p for p in validate_record("regimes", base))
+
+
+def test_a_protocol_slug_is_a_slug_and_need_not_be_defined_yet():
+    """Open registry: an undefined slug is legal and validate advises. A
+    record that refused one would make writing a protocol down cost more than
+    not bothering."""
+    from vitai.schema import validate_record
+    row = {"date": "2026-05-01", "kg": 80.0, "source": "scale", "note": None,
+           "body_fat_pct": None, "kg_lo": None, "kg_hi": None,
+           "body_fat_lo": None, "body_fat_hi": None, "measured_at": None,
+           "recorded_at": None, "origin": None, "path": None,
+           "origin_evidence": None, "capture": None, "read_by": None,
+           "modelled": None, "artifact": None, "device": None,
+           "protocol": "never-defined-anywhere"}
+    assert validate_record("weight", row) == []
+    assert validate_record("weight", dict(row, protocol="Not A Slug"))
+
+
+def test_the_new_datasets_start_at_generation_one():
+    """A dataset that has never existed has no lines in the wild, so every key
+    of it is founding. Letting the retro-bump loops reach it would have
+    stamped `regimes` at generation 3 with keys claiming to be later additions
+    to a history it does not have."""
+    from vitai.schema import CURRENT_GENERATION, key_generation
+    for name in ("protocols", "regimes"):
+        assert CURRENT_GENERATION[name] == 1, name
+        assert key_generation(name, "recorded_at") == 1, name

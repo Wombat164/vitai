@@ -155,7 +155,19 @@ from .schema import KEYS
 #     NOT "pre-17" and not "no policy". Every build the engine itself drives
 #     writes it; a consumer must read `contract` to know the shape and must
 #     not infer a build's age from this row missing.
-CONTRACT_VERSION = "17"
+# 18: protocol and regimes (#171 track 2) - `protocol` on weight and
+#     measurements names the CONDITIONS a measurement was taken under, and a
+#     row without one is a different epistemic class rather than a row with a
+#     missing optional field: it carries the measurand's full definitional
+#     uncertainty, which for body mass dominates instrument error. Plus two
+#     policy datasets: `protocols` defines the slugs in the athlete's own
+#     words, and `regimes` declares a bounded interval whose claims were
+#     UNANCHORED. A consumer must not read an emptied interval as missing
+#     data: the claims are still in `claims`, what ended is their standing as
+#     values, and nothing is filled in behind them because the measurement
+#     that ended a regime is evidence the earlier claims were unanchored
+#     rather than evidence of what the true values were.
+CONTRACT_VERSION = "18"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",

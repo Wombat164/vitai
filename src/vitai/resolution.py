@@ -719,6 +719,10 @@ def resolve(datasets: dict[str, list[dict]],
     tripwires += _unattributed_losses(explanations)
     tripwires += _conservation(canonical["daily"], canonical["sessions"])
     tripwires += [t for t in _contradictions(explanations)]
+    # AFTER resolution, because a regime empties what resolution produced: the
+    # claims still resolve, and then the days a declared regime covers stop
+    # standing as values.
+    tripwires += apply_regimes(canonical, datasets.get("regimes") or [])
     tripwires.sort(key=lambda t: (t["date"] or "", t["kind"], t["detail"]))
     explanations.sort(key=lambda e: (e["date"] or "", e["dataset"], e["field"]))
     justifications.sort(key=lambda j: (j["date"] or "", j["dataset"], j["field"]))
@@ -889,6 +893,69 @@ def _unattributed_losses(explanations: list[dict]) -> list[dict]:
                     "enters"),
                 "severity": "review",
             }
+
+
+def apply_regimes(canonical: dict, regimes: list[dict]) -> list[dict]:
+    """Empty the days a declared regime covers. Never backfill them.
+
+    A regime is a bounded interval during which a class of claims was
+    UNANCHORED: an ill-defined measurand honestly restated. High trust, low
+    accuracy, sustained, which is the empirical proof that trust and accuracy
+    are different axes (#171).
+
+    INVALIDATES WITHOUT REPLACING, and this is the part that is easy to get
+    wrong. The measurement that ENDED the regime is evidence that the earlier
+    claims were unanchored. It is NOT evidence of what the true values were.
+    So the covered field goes null and nothing is interpolated, extrapolated
+    or carried back: a blank beats a confident wrong number, applied to an
+    interval instead of to a cell.
+
+    THE CLAIMS ARE NOT DELETED. They stay where they are, in the file and in
+    `claims`, because append-only means a record never loses what it was told.
+    What ends is their standing as values.
+
+    TRUST INVARIANCE, a hard constraint: applying a regime touches no trust,
+    credibility or dominance parameter of the athlete or of any source. There
+    is no such parameter in this engine, by design, and this rule is part of
+    what keeps it that way. Discovering your own error must never cost you
+    standing: trust is about intent and care, accuracy is about the number,
+    and self-correction is evidence of care rather than against it.
+
+    Returns tripwires. `canonical` is edited in place; the caller owns it.
+    """
+    out = []
+    for regime in regimes:
+        dataset, field = regime.get("dataset"), regime.get("field")
+        first, last = regime.get("from_date"), regime.get("to_date")
+        if not (dataset and field and first and last):
+            continue
+        emptied = 0
+        for row in canonical.get(dataset) or []:
+            when = str(row.get("date") or "")
+            if not (first <= when <= last) or row.get(field) is None:
+                continue
+            # Scoped to one source where the athlete narrowed it: a regime
+            # about a bathroom scale must not empty a clinic measurement
+            # taken in the same weeks.
+            if regime.get("source") and row.get("source") != regime["source"]:
+                continue
+            row[field] = None
+            emptied += 1
+        if emptied:
+            out.append({
+                "date": first,
+                "kind": "unanchored_interval",
+                "severity": "review",
+                "detail": (
+                    f"{dataset}.{field} is empty from {first} to {last} "
+                    f"({emptied} day(s)): a declared regime says those claims "
+                    f"were unanchored. {regime.get('text') or ''} The readings "
+                    f"are still in the record and nothing was filled in behind "
+                    f"them, because what ended the regime is evidence the "
+                    f"earlier claims were unanchored rather than evidence of "
+                    f"what the true values were"),
+            })
+    return out
 
 
 def _contradictions(explanations: list[dict]) -> list[dict]:
