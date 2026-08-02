@@ -42,6 +42,50 @@ tests before merge.
 interval verdicts weekly, guard-banded/two-week, or refusal-only; and whether
 the capability dataset is needed for verdicts at all or only for seams (#33).
 
+### GATE A: RUN AND RESOLVED, 2026-08-02
+
+Ran over the private record. Numbers are in the comment on #171; only rates and
+counts leave that repository.
+
+| measure | result | pre-stated row |
+|---|---|---|
+| refusal rate, total dispersion | **76.9 %** | `R_B >= 0.60` **FIRED** |
+| straddle rate (interval covers the whole band) | 53.8 % | |
+| median u_rate / half-band | **1.74** | |
+| verdict flips | **12**, 23 % of scored weeks | `flips > 0` **FIRED** |
+| band coverage | 20.4 % overall | variant A unavailable for 47 of 52 weeks |
+
+**Decision, per the rule stated before the run: the decision unit is wrong, not
+the metadata.** A capability registry prices instrument noise, which is not the
+term that dominates this measurand, so it cannot rescue a single weekly verdict.
+The margin is not marginal: the median half-width is 1.74 times the entire
+decision half-band, and more than half of scored weeks admit no verdict word at
+all.
+
+**Phase 2 scope is therefore set:**
+
+- **DROP** the capability dataset as a route to better verdicts. It survives
+  only for seam detection (#33), where the term is bias, is permanent, and is
+  the one thing a longer window cannot fix.
+- **SHIP** the refusal predicate regardless of the rate, on the flips alone.
+  Each flip is a false all-clear or false alarm in the engine today.
+- **CHANGE THE DECISION UNIT.** This is the actual remedy and needs no new
+  schema: a fortnightly rate with a guard band, or refuse-by-default weekly.
+- The per-field expected-outcome table in `00` becomes **shipped policy**. The
+  record's own dispersion landed inside the literature range, which was the
+  pre-stated condition for adopting it with no further data collection.
+
+**F2 confirmed, by a sharper route than the coverage threshold.** Coverage is
+20.4 % overall, above the 0.10 floor, but the split by source is the finding:
+every device and connector source sits at 0 %, and the only fully banded source
+is a hand-kept sheet. Because a partial budget understates, a week computes
+under variant A only when every row in it carries a band. Uncertainty metadata
+is absent exactly where the contested data arrives, and present only where a
+human already wrote it down.
+
+**Blocker discovered downstream of the gate:** the verdict vocabulary must be
+widened BEFORE any refusal ships. Filed as #177, sequenced in phase 2 below.
+
 ## Phase 1: partial-order resolution `[C]`
 
 | item | effort | notes |
@@ -72,9 +116,24 @@ overlooked. Therefore the categorical, self-computable and identity-based
 mechanisms lead, and anything requiring borrowed numeric parameters is cut
 (reversal recorded in 01-schema s4).
 
+**Scope after GATE A (see above), which has run:** the capability dataset is
+**cut as a route to better verdicts** and survives only for seam detection.
+The refusal predicate ships regardless, on the flips. The decision unit changes
+rather than the metadata. Rows below are re-scoped accordingly.
+
+**Ordering constraint discovered after the gate:** `no_data` already carries
+four distinct states, distinguishable today only by inspecting which fields are
+null, and a fifth case removes the row entirely. The refusal work adds two more.
+**#177 must land first, as its own contract bump.** If refusals ship under the
+existing token the reason is unrecoverable from the rows afterwards, and
+recovering it later would need the policy of the day (#148). The `undecidable`
+word below is the coarse half of that answer; the reason field is the other
+half, and it is the half that keeps cases 7 and 8 from repeating this.
+
 | item | effort | notes |
 |---|---|---|
-| capabilities dataset: competence flag + construct notes + `accuracy` ban | days | categorical payload first; u only from own data |
+| **#177 verdict-vocabulary widening: reason field + suppression stops being an absence** | days | **BLOCKS every refusal-emitting row below**; own contract bump |
+| capabilities dataset: competence flag + construct notes + `accuracy` ban | days | **re-scoped by GATE A: seam detection only, not verdicts.** Categorical payload; u only from own data |
 | `comparability.jsonl` + `overlap_calibration` + cross-instrument refusal | days | the #33 machinery; overlap is the only route |
 | per-row `algo_version`, `coverage_pct`, `client_record_id`/`_version` | afternoon | cheap, shipped-design cribs; identity fields feed 1b |
 | `uncertainty.py` (conversions, combine, fuse, discount) | days | stdlib-trivial; ships regardless of gate (meals/EA propagation uses it) |

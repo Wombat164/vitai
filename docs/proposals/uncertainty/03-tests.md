@@ -137,3 +137,21 @@ All fixtures synthetic: "an athlete", generic values.
 | discounting monotone in path length | appending an untrusted hop never decreases u and never changes the value |
 | derivation floor | combined u >= every single \|c_i\|*u_i term |
 | tie stability | any permutation + any duplicate-edge addition leaves resolve() output identical |
+
+## 8c. Condition legality gate and refusal reasons (added 2026-08-02)
+
+Settled by research (01-schema s4b) and by #177. These tests hold the two
+decisions in place, since both are the kind that erode quietly.
+
+| test | fixture | assertion |
+|---|---|---|
+| `test_condition_must_be_registered` | capability row with a `condition` not in `conditions.jsonl` | rejected at validation; free text is never accepted |
+| `test_condition_mapping_rejects_a_predicate` | `conditions.jsonl` entry mapping via a numeric comparison rather than literal values | rejected: a predicate over a number is inference wearing a lookup's clothes |
+| `test_condition_mapping_is_a_total_function` | source value absent from the entry's `values` list | resolves to `unknown`, never to a nearest or default condition |
+| `test_no_condition_rows_ship` | the shipped corpus | `conditions.jsonl` is empty or absent; the slot exists and is unpopulated by design |
+| `test_instrument_mode_is_not_a_condition` | an indoor-machine distance row | carried by a distinct `system` with `competence: proxy`, NOT by a condition on a GPS row |
+| `test_u_obs_never_computed` | observation with no vendor-supplied per-observation figure | `u_obs` stays null; it is never derived, and never converted from a geometry factor |
+| `test_refusal_requires_a_reason` | every refusal-emitting site | a reason is required with a refusal and forbidden without one (the totality #177 asks for) |
+| `test_reason_is_additive` | consumer reading verdicts by column name, ignoring `reason` | sees exactly the pre-#177 behaviour |
+| `test_suppressed_metric_is_a_row_not_an_absence` | contraindicated or athlete-suppressed metric | appears as a labelled row; a removed row and an uncomputed metric must not render identically |
+| `test_emptied_interval_is_not_no_input` | regime-emptied interval | distinguishable from a never-recorded one; recorded-then-retracted is a different fact |

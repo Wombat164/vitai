@@ -1,7 +1,25 @@
 # Uncertainty, precedence and provenance: a proposal
 
-**Status: PROPOSAL, not doctrine.** Nothing here is decided. Phase 0 exists
-specifically to decide whether most of it should be built at all.
+**Status: PROPOSAL, not doctrine**, except where marked settled below.
+
+**Phase 0 has run (2026-08-02) and it cut the largest item in this proposal.**
+The experiment that gated the work refused more than three quarters of scored
+weeks under the record's own dispersion, and more than half admitted no verdict
+word at all, so the capability registry is **dropped as a route to better
+verdicts** and survives only for seam detection. Twelve verdicts in the shipped
+engine were found to flip, so the refusal predicate ships regardless. The actual
+remedy is to change the decision unit, which needs no new schema. Numbers and
+reasoning are at GATE A in `06-roadmap.md`.
+
+Three further questions are settled rather than open:
+
+- **Condition scoping** is per field. The slot is gated and stays unpopulated
+  (`01-schema.md` s4b).
+- **The #73 precedence conflict does not exist.** #73's dominant instance was a
+  device losing to a device through a stamping bug, and its tripwire fires on
+  unattributed rows rather than on low-ranked ones (comment on #167).
+- **`no_data` must be widened before any refusal ships** (#177), because it
+  already carried four states separable only by which fields were null.
 
 These documents came out of one working session: an adversarial review of
 issues #167 to #171, three prior-art surveys (measurement science, computer
