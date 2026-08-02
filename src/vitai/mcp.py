@@ -141,6 +141,20 @@ def call(root: Path, name: str, arguments: dict) -> object:
     if spec is None:
         raise KeyError(f"no such tool {name!r}; one of {sorted(TOOLS)}")
     args = dict(arguments or {})
+    # The declared schema is the WHOLE surface, enforced here rather than
+    # advertised and hoped for. `inputSchema` is advisory to the client: a
+    # caller that ignores it used to have every remaining parameter of the
+    # underlying method available, so `claim` accepted `corrects` - the
+    # destructive retire path - which the tool deliberately does not offer.
+    # An adapter whose real surface is wider than its described one is one
+    # nobody can audit from its description, which is the same defect the
+    # import-time method check exists to prevent, from the other side.
+    unknown = sorted(set(args) - set(spec["properties"]))
+    if unknown:
+        raise KeyError(
+            f"tool {name!r} takes {sorted(spec['properties'])}, got unexpected "
+            f"{unknown}. If a capability belongs on this tool it is added to "
+            f"TOOLS where it can be seen, never reached through the call")
     if spec["method"] is None:
         return schema()
     # The VIEWPOINT goes to the constructor as well as the call, or a brief

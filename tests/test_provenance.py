@@ -1007,3 +1007,36 @@ def test_the_registry_and_the_capture_rank_stay_cross_referenced():
     from vitai.resolution import restatement_runs
     assert "restatement_runs" in inspect.getdoc(restatements)
     assert "restatements" in inspect.getdoc(restatement_runs)
+
+
+def test_an_emptied_interval_is_not_also_reported_as_a_flat_run():
+    """The regimes and this detector met in a merge, and the ORDER is
+    semantic rather than cosmetic. A regime nulls the days it covers and this
+    detector skips nulls, so running it after the regimes stops one interval
+    producing two findings, the second of which the athlete has already
+    explained by writing the declaration.
+
+    The rebase that brought the two together got the order right. This is
+    here because an order that is correct by accident is one a later edit can
+    silently invert.
+    """
+    from vitai.resolution import apply_regimes, restatement_runs
+    rows = [{"date": f"2026-05-{d:02d}", "kg": 80.0, "source": "scale"}
+            for d in range(1, 9)]
+    canonical = {"weight": rows}
+    assert restatement_runs(canonical), "premise: this is a flat run"
+    apply_regimes(canonical, [{
+        "dataset": "weight", "field": "kg", "from_date": "2026-05-01",
+        "to_date": "2026-05-08", "kind": "unanchored",
+        "text": "no protocol in this period"}])
+    assert restatement_runs(canonical) == []
+
+
+def test_resolve_runs_the_regimes_before_the_detector():
+    """The property the test above depends on, asserted where it is decided
+    rather than only where it shows."""
+    import inspect
+
+    from vitai.resolution import resolve
+    body = inspect.getsource(resolve)
+    assert body.index("apply_regimes(") < body.index("restatement_runs(")
