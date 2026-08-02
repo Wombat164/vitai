@@ -760,7 +760,7 @@ CLI_MAY_IMPORT = {
     # decision. A blanket "anything from api" would let CLI-shaped logic be
     # parked in api.py to get past this test, which is the failure one layer
     # along.
-    "api": {"Vitai", "schema"},
+    "api": {"Vitai", "init", "schema"},
     # `mcp` is a second HARNESS, not engine logic, which is the distinction
     # this table exists to police. It is allowed for the same reason `api` is
     # and `jsonl` is not: it structurally cannot exceed the API, because its
@@ -1654,3 +1654,69 @@ def test_mcp_refuses_an_argument_its_schema_does_not_declare(tmp_path):
     row = call(root, "claim", {"dataset": "weight", "values": {"kg": 80},
                                "said": "about eighty"})
     assert row["kg"] == 80
+
+
+def _door_calls(fn) -> set:
+    """Door names this function actually CALLS.
+
+    Calls, not mentions. The first cut asked whether the body named a door
+    anywhere, and that is satisfied by a return annotation, by a local
+    variable that happens to be spelled `init`, and by naming `Vitai` once
+    beside arbitrary engine work - none of which is delegation. A guard that a
+    comment can satisfy is not a guard.
+    """
+    import ast
+
+    def root(node):
+        while isinstance(node, ast.Attribute):
+            node = node.value
+        if isinstance(node, ast.Call):
+            return root(node.func)
+        return node.id if isinstance(node, ast.Name) else None
+
+    out = set()
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Call) and (name := root(node.func)):
+            out.add(name)
+    return out
+
+
+def test_every_cli_command_delegates_to_the_api():
+    """The import guard above is a PROXY, and `init` walked past it.
+
+    A command cannot reimplement `resolution` without importing it, which is
+    what that test catches. But `cmd_init` scaffolded a whole content repo out
+    of `shutil` and `importlib.resources` - no engine import, nothing tripped,
+    and it was the one capability a caller could not reach without a
+    subprocess. Creating a record is where a client STARTS, so needing to
+    shell out for it is tier 1 failing at the first step.
+
+    So this asks the other question: does the command CALL into the API? A
+    `cmd_*` that never does is doing the work itself, and whatever it does, a
+    consumer of the API cannot.
+
+    What it does NOT check, so nobody reads more into a green run than is
+    there: that the command does nothing BESIDE the call. Presence of a
+    delegation is mechanical; absence of logic beside it is not, and a test
+    claiming to prove the second would be the overstatement this replaced.
+    """
+    import ast
+    from pathlib import Path
+
+    tree = ast.parse((Path(__file__).resolve().parents[1] / "src" / "vitai"
+                      / "cli.py").read_text(encoding="utf-8"))
+    # The imported NAMES, plus the module names themselves: `api.init(...)` is
+    # delegation just as much as `init(...)` is, and a guard that only accepts
+    # the house `from .api import` style would fail the day someone writes the
+    # other one correctly. `jsonl` and `schema` are deliberately NOT doors -
+    # reachability is exactly what is in question for those two.
+    doors = CLI_MAY_IMPORT["api"] | CLI_MAY_IMPORT["mcp"] | {"api", "mcp"}
+    commands = [n for n in ast.walk(tree)
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and n.name.startswith("cmd_")]
+    assert len(commands) > 20, "the walk stopped finding the commands"
+    for fn in commands:
+        assert _door_calls(fn) & doors, (
+            f"{fn.name} calls nothing from the API, so whatever it does, a "
+            f"consumer of the API cannot. Move the capability into vitai.api "
+            f"and harness it.")

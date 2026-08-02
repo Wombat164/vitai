@@ -18,7 +18,9 @@ verdicts - never by joining raw health records across users.
 
 from __future__ import annotations
 
+import shutil
 from datetime import date, datetime
+from importlib import resources
 from pathlib import Path
 from statistics import mean
 
@@ -1513,6 +1515,75 @@ def _viewpoint(on):
         raise TypeError(f"on must be a date or an ISO date string, "
                         f"not {type(on).__name__}")
     return on
+
+
+def init(path: str | Path) -> Path:
+    """Stamp a new content repo, and return where it landed.
+
+    #158, acceptance criterion 1: no CLI command may hold logic the API lacks,
+    because a capability the CLI can reach is one an agent cannot. This one hid
+    from the import-surface guard for a while - it scaffolds with `shutil` and
+    `importlib.resources` rather than by importing an engine module, so it
+    tripped nothing while being the one capability an agent had to shell out
+    for. Creating a record is where a client STARTS, so needing a subprocess
+    for it is tier 1 failing at the first step.
+
+    Scoped honestly: this closes the gap for a caller that can import the
+    engine. `mcp.TOOLS` names METHODS on `Vitai`, so an MCP-attached agent
+    still cannot reach this one, and whether it should be able to create
+    directories at a path of its choosing is a policy question rather than an
+    oversight.
+
+    A module function rather than a method, and NOT for the reason `schema` is
+    one: `schema` takes no root, while a root is this function's whole
+    argument. The reason here is that `Vitai` represents an existing record,
+    and this is what runs when there is not one yet.
+
+    REFUSES a non-empty directory rather than merging into it. Initialising
+    over a record could bury an append-only history under a template.
+    """
+    target = Path(path).resolve()
+    if target.exists() and any(p.name != ".git" for p in target.iterdir()):
+        raise FileExistsError(
+            f"{target} exists and is not empty - refusing to overwrite. "
+            "Initialising over an existing record could bury an append-only "
+            "history under a template, which is the one thing this engine "
+            "must never do.")
+    target.mkdir(parents=True, exist_ok=True)
+    tpl = resources.files("vitai") / "templates"
+    for entry in tpl.iterdir():
+        with resources.as_file(entry) as src:
+            shutil.copy(src, target / entry.name)
+    # G26: pin LF on the append-only JSONL so a Windows<->Linux repo does not
+    # bury the supersedes audit trail under CRLF phantom diffs. Written here
+    # rather than shipped as a template dotfile (packaging globs skip dotfiles).
+    (target / ".gitattributes").write_text(
+        "* text=auto\n*.jsonl text eol=lf\n*.md text eol=lf\n",
+        encoding="utf-8", newline="\n")
+    # `derived/` is REBUILDABLE and must never be synced or committed (#105).
+    # The database rebuilds from `data/*.jsonl` in seconds, so syncing it
+    # would make a disposable file load-bearing - and SQLite's main file and
+    # its WAL are separate files that must stay consistent, so a client that
+    # uploads them independently produces a database that is corrupt rather
+    # than merely stale. Written here rather than shipped as a template
+    # dotfile, for the same reason `.gitattributes` is: packaging globs skip
+    # dotfiles.
+    (target / ".gitignore").write_text(
+        "# Rebuilt by `vitai build` from data/*.jsonl. Never sync or commit\n"
+        "# this: it is derived, and a synced SQLite file is corrupt rather\n"
+        "# than merely stale.\n"
+        "derived/\n"
+        "\n"
+        "# Artifacts are personal data (#80). Keep them, but decide\n"
+        "# deliberately how - git-lfs, a sibling directory, an object store -\n"
+        "# rather than by a default nobody chose.\n"
+        "artifacts/\n",
+        encoding="utf-8", newline="\n")
+    (target / "data").mkdir(exist_ok=True)
+    for name in KEYS:
+        (target / "data" / f"{name}.jsonl").touch()
+    (target / "derived").mkdir(exist_ok=True)
+    return target
 
 
 def schema() -> dict:
