@@ -20,6 +20,20 @@ fixture built from a person tests what you did not.
 | `rachel` | 39, BMI 45, five months on a GLP-1, knee osteoarthritis | medication effects, capacity limits, involuntary intake | 2 |
 | `stefan` | 44, harbour dispatcher, one month of degraded data with no stated cause | confabulation refusal, knowledge cutoffs, silence handling | 4 |
 
+## What they deliberately do not carry
+
+Every quantity in these corpora is OBSERVED. None of the nine records a
+derived value, so `derived_from` and `derived_op` are null throughout, and
+that is the honest answer rather than a gap: none of these athletes computes a
+number from other numbers and writes the result down as a value. Declaring a
+lineage they never had would be inventing exactly the evidence the field
+exists to make checkable, and a fixture that asserts a habit its person does
+not have stops being a person.
+
+The derived case is demonstrated in `examples/demo` instead, where the
+fictional athlete does keep a paper average, and exercised directly in
+`tests/test_lineage.py`.
+
 ## Why the profiles matter more than the numbers
 
 Sweep 3 asked each of them a question the earlier sweeps did not: **what do YOU

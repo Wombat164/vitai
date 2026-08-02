@@ -700,6 +700,28 @@ for _ds in ("weight", "measurements"):
     KEYS[_ds].append("protocol")
 
 
+# --- derivation lineage (#170) ----------------------------------------------
+#
+# A value computed from other rows must be able to NAME them. Without that, a
+# correction to an input leaves every value derived from it standing, and
+# nothing can say which numbers are now resting on a claim the record has
+# retracted.
+#
+# DECLARED lineage only. The semiring-provenance result is that declared
+# lineage is sufficient to DETECT staleness; re-execution is needed only to
+# correct drift, and this engine does not re-execute.
+#
+# The ids are `identity.row_ref` grammar rather than `claim_id`, which is what
+# the proposal named: #181 shipped in between, and `claim_id` cannot name a
+# set or a meal item uniquely - it collided on 8 of 11 `sets` rows in the demo
+# corpus. A lineage pointing at three rows is not lineage.
+for _ds in ("weight", "daily", "sessions", "measurements", "sets", "meals"):
+    CURRENT_GENERATION[_ds] += 1
+    for _k in ("derived_from", "derived_op"):
+        KEY_GENERATION.setdefault(_ds, {})[_k] = CURRENT_GENERATION[_ds]
+        KEYS[_ds].append(_k)
+
+
 def key_generation(dataset: str, key: str) -> int:
     """Generation a key was introduced in (1 = founding)."""
     return KEY_GENERATION.get(dataset, {}).get(key, 1)
@@ -802,6 +824,52 @@ SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
+# A row that names its lineage has been COMPUTED, and must say so. Without
+# this a derived value is indistinguishable from an observation, which is the
+# laundering the whole provenance layer exists to prevent.
+DERIVED_CAPTURES = {"derived", "derived_external"}
+
+
+def _lineage_problems(dataset: str, rec: dict) -> list[str]:
+    """Checks on `derived_from` and `derived_op` (#170)."""
+    # Through the alias layer, not against the raw string. `derived` and
+    # `derived_external` each carry aliases the registry resolves, and a row
+    # written `capture: "athlete-derived"` is a correctly-captured derived row
+    # that a raw comparison would reject.
+    from .provenance import capture_of
+
+    out = []
+    lineage, op = rec.get("derived_from"), rec.get("derived_op")
+    if lineage is None:
+        if op is not None:
+            out.append("'derived_op' says HOW a value was computed and means "
+                       "nothing without 'derived_from' saying from what")
+        return out
+    if not isinstance(lineage, (list, tuple)) or not lineage:
+        out.append("'derived_from' is a non-empty list of row references; a "
+                   "row that names no input has not declared a lineage")
+        return out
+    for ref in lineage:
+        if not isinstance(ref, str) or ref.count(":") < 1:
+            out.append(f"'derived_from' takes row references, got {ref!r}")
+    # NO SELF-REFERENCE CHECK HERE, and the reason is worth stating because
+    # the check looks obviously correct. `row_ref` numbers a row by its
+    # position among the rows sharing its date and source, and this function
+    # sees ONE record with no set around it, so it computes ordinal 0 for
+    # every row. A second same-day same-source reading deriving from the first
+    # therefore names a reference identical to the one computed for itself -
+    # a true lineage, rejected. The set-aware check lives in
+    # `resolution.derivation_cycles`, which has the real ordinals.
+    if capture_of(rec) not in DERIVED_CAPTURES:
+        out.append(
+            f"a row with 'derived_from' was COMPUTED, so its capture is one "
+            f"of {', '.join(sorted(DERIVED_CAPTURES))}, got "
+            f"{rec.get('capture')!r}. A derived value that renders as an "
+            "observation is the laundering the provenance layer exists to "
+            "prevent")
+    return out
+
+
 def _protocol_problems(rec: dict) -> list[str]:
     out = []
     if not SLUG_RE.match(str(rec.get("slug") or "")):
@@ -892,6 +960,8 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
                    for v in (p, a, b)) and not a <= p <= b:
                 problems.append(f"band out of order: {lo}<={point}<={hi} "
                                 f"violated ({a} <= {p} <= {b})")
+    if "derived_from" in keys:
+        problems += _lineage_problems(dataset, rec)
     if dataset == "protocols":
         problems += _protocol_problems(rec)
     if dataset == "regimes":

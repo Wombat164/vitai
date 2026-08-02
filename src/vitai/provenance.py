@@ -138,10 +138,53 @@ def independent_witnesses(recs: list[dict]) -> int:
     observation per row as far as anyone can tell, and pretending otherwise
     would silently merge a legitimately un-annotated history.
     """
-    known = distinct_origins(recs)
+    # A DERIVED VALUE NEVER CORROBORATES ITS OWN INPUTS (#170), and the count
+    # below is what enforces it. Derived rows contribute NOTHING OF THEIR OWN.
+    # What they contribute is the observations their lineage names, counted
+    # once across all of them together: a value computed from a reading is
+    # that reading wearing arithmetic, so however many rows are wrapped around
+    # one observation, the observation is still one witness.
+    #
+    # Counted ACROSS clusters rather than per cluster, because per-cluster
+    # counting let arithmetic manufacture witnesses: two readings from one
+    # scale are one witness, and two values each computed from one of them
+    # would have been two.
+    #
+    # A row reference names `dataset:date:source`, and `source` is the same
+    # field the rows themselves carry, so this compares like with like. By
+    # SOURCE and not by date, matching how `distinct_origins` treats the rows
+    # here: two readings from one scale on two mornings are one witness, so
+    # two values computed from them must be one witness too, or the same
+    # observation counts differently depending on whether arithmetic was
+    # applied to it. A reference this cannot parse falls back to one witness
+    # for its cluster, which is the answer that assumes least.
+    clusters = derivation_groups(recs)
+    derived_ids = {id(r) for group in clusters for r in group}
+    plain = [r for r in recs if id(r) not in derived_ids]
+
+    named, unparsed = set(), 0
+    for group in clusters:
+        refs = {str(x) for row in group for x in (row.get("derived_from") or [])}
+        sources = {p[2] for p in (r.split(":") for r in refs) if len(p) >= 3}
+        if sources:
+            named |= sources
+        else:
+            unparsed += 1
+
+    # An input that is ALSO one of the rows here is already counted below, by
+    # its own origin. Counting it again as something the derivation names
+    # would corroborate an observation with a restatement of itself.
+    here = {str(r.get("source")) for r in plain if r.get("source")}
+    from_lineage = len(named - here) + unparsed
+
+    known = distinct_origins(plain)
     if known:
-        return len(known) + sum(1 for r in recs if not is_independent(r))
-    return len(recs)
+        base = len(known) + sum(1 for r in plain if not is_independent(r))
+    elif plain or not from_lineage:
+        base = len(plain)
+    else:
+        base = 0
+    return base + from_lineage
 
 
 def shares_origin(a: dict, b: dict) -> bool:
@@ -153,6 +196,29 @@ def shares_origin(a: dict, b: dict) -> bool:
     """
     return (is_independent(a) and is_independent(b)
             and origin_of(a) == origin_of(b))
+
+
+def derivation_groups(recs: list[dict]) -> list[list[dict]]:
+    """Derived rows clustered by the inputs they stand on.
+
+    Transitive: a row from x and y, a row from y and z, and a row from z and w
+    are ONE cluster, because each link is the same observation reappearing
+    with arithmetic on top. Chaining is the point - a two-hop derivation is
+    still not a second look at the athlete.
+    """
+    groups: list[tuple[set, list[dict]]] = []
+    for rec in recs:
+        lineage = {str(x) for x in (rec.get("derived_from") or [])}
+        if not lineage:
+            continue
+        hit = [g for g in groups if g[0] & lineage]
+        merged_refs, merged_rows = set(lineage), [rec]
+        for g in hit:
+            merged_refs |= g[0]
+            merged_rows += g[1]
+            groups.remove(g)
+        groups.append((merged_refs, merged_rows))
+    return [rows for _refs, rows in groups]
 
 
 # --- how a value was acquired (#77/#78) ---------------------------------------

@@ -143,3 +143,17 @@ may_transcribe = true
 has_artifact = false
 note = "assumes the costly side of both, as provenance.toml does for an unrecognised hop"
 restatements = 2
+
+[capture.derived_external]
+# Computed OUTSIDE the engine from named rows in this record (#170). The
+# actor split matters: `derived` is this engine's own arithmetic, which is
+# reproducible from its inputs, and this is somebody else's, which is not.
+label = "Computed outside the engine from named rows in this record"
+aliases = ["athlete-derived", "reconstructed"]
+may_transcribe = false
+has_artifact = true
+note = "the inputs ARE the artifact: the row names what it was computed from, and that naming is the evidence"
+# THE COSTLY SIDE, for the same reason `derived` takes it: the count is the
+# count of its inputs, which this file cannot see, and those inputs may
+# include testimony.
+restatements = 2
