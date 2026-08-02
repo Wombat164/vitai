@@ -18,6 +18,8 @@ mid-week does not re-score the days already lived under the old number.
 from __future__ import annotations
 
 from collections import defaultdict
+from math import sqrt
+from statistics import stdev
 from datetime import date, datetime, timedelta
 from statistics import mean
 
@@ -56,6 +58,102 @@ def _goal_for(goals_in_force: tuple[dict, ...], metric: str) -> str | None:
         if g.get("metric") == metric and g.get("metric") != EXTERNAL_METRIC:
             return g.get("slug")
     return None
+
+
+# --- PHASE 0 EXPERIMENT ONLY (docs/proposals/uncertainty/00-phase0-experiment.md)
+#
+# Not shipped. This branch exists to COUNT refusals on a real record and settle
+# whether interval verdicts are viable at weekly cadence. If the answer is no,
+# none of this survives; that is the point of running it before building.
+#
+# The engine already contains the precedent this copies: the weight_rate block
+# below refuses (emits NODATA with the value) when weigh-in timing drift alone
+# could account for the rate. This extends the identical shape to measurement
+# dispersion.
+
+RECT = sqrt(3.0)      # GUM 4.3.7: symmetric limits +/-a, no stated distribution
+K95 = 1.960           # coverage factor for a 95 percent interval
+
+
+def _band_u(rec: dict) -> float | None:
+    """Type B standard uncertainty from the row's own G37 band.
+
+    `kg_lo`/`kg_hi` are validated limits (lo <= point <= hi) rather than a
+    stated distribution, so the half-width is treated as rectangular.
+    """
+    lo, hi = rec.get("kg_lo"), rec.get("kg_hi")
+    if lo is None or hi is None:
+        return None
+    return (float(hi) - float(lo)) / 2.0 / RECT
+
+
+def _week_mean_u_typeB(rows: list[dict]) -> float | None:
+    """u of the weekly mean from per-row instrument bands.
+
+    None if ANY row lacks a band: a partial budget understates the
+    uncertainty, which is the wrong side to be wrong on.
+    """
+    us = [_band_u(r) for r in rows]
+    if not us or any(u is None for u in us):
+        return None
+    return sqrt(sum(u * u for u in us)) / len(us)
+
+
+def _week_mean_u_typeA(rows: list[dict],
+                       pooled_sd: float | None) -> float | None:
+    """u of the weekly mean from the athlete's own replicates (GUM 4.2).
+
+    This is TOTAL observed dispersion: instrument noise and day-to-day
+    biological variation together, which is why Type A and Type B must never
+    be added for the same week (GUM 4.3.10, the double-counting ban).
+    """
+    vals = [r["kg"] for r in rows if r.get("kg") is not None]
+    n = len(vals)
+    if n >= 3:
+        return stdev(vals) / sqrt(n)
+    if pooled_sd is not None and n >= 1:
+        return pooled_sd / sqrt(n)
+    return None
+
+
+def pooled_within_week_sd(by_week_rows: dict) -> tuple[float | None, int]:
+    """RMS of within-week SDs over every week with at least three readings.
+
+    Returns (pooled_sd, weeks_used). The experiment's own failure mode is too
+    few such weeks: below eight, the record cannot answer F1 from its own data
+    and the literature prior governs provisionally.
+    """
+    sds = []
+    for rows in by_week_rows.values():
+        vals = [r["kg"] for r in rows if r.get("kg") is not None]
+        if len(vals) >= 3:
+            sds.append(stdev(vals))
+    if not sds:
+        return None, 0
+    return sqrt(sum(s * s for s in sds) / len(sds)), len(sds)
+
+
+def rate_interval(u_prev: float | None, u_cur: float | None, rate: float,
+                  target: float, half_band: float = 0.25) -> dict | None:
+    """Does the rate's 95 percent interval cross a verdict boundary?
+
+    Two severities on purpose. `refusal`: the interval crosses ONE boundary,
+    so the specific verdict word is not supported. `straddle`: it covers the
+    whole band, so no verdict word is supported at all.
+    """
+    if u_prev is None or u_cur is None:
+        return None
+    u_rate = sqrt(u_prev ** 2 + u_cur ** 2)
+    half = K95 * u_rate
+    lo_edge, hi_edge = target - half_band, target + half_band
+    lo, hi = rate - half, rate + half
+    spans_low = lo < lo_edge < hi
+    spans_high = lo < hi_edge < hi
+    return {
+        "u_rate": u_rate, "half": half, "lo": lo, "hi": hi,
+        "refusal": spans_low or spans_high,
+        "straddle": hi > hi_edge and lo < lo_edge,
+    }
 
 
 def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
