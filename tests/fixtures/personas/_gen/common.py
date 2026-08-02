@@ -74,6 +74,17 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # derived, and declaring a lineage none of them has would be inventing exactly
 # the evidence the field exists to make checkable. The corpora DO change: six
 # datasets gain two null columns and a bumped `_gen`.
+# Re-pinned for phase 3, which added the `emissions` dataset. REVIEWED rather
+# than bumped, and this one is a NEW DATASET rather than a widened line, so it
+# is worth being explicit: no builder here writes an emission, and none should.
+# An emission records that the ENGINE told this athlete something, which is an
+# event produced by a consumer at delivery time, not a fact about the person.
+# Inventing one would assert that a judgement was surfaced to someone it was
+# never surfaced to. No persona ships an emissions file at all - these
+# builders only write datasets they have content for, and an absent file is an
+# empty dataset - and their existing lines are untouched, because a new
+# dataset appends nothing to the datasets already in the wild.
+AUTHORED_AGAINST_CONTRACT = "21"  # vitai.db.CONTRACT_VERSION is a string
 # Re-pinned for #188 and #190, which added five macro totals plus two sleep
 # instants to daily (two generations - unrelated facts) and three per-100 g
 # figures to meals. REVIEWED rather than bumped, and the reading differs
@@ -98,13 +109,13 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 #
 # The corpora DO change: daily gains seven null columns, meals three, and
 # `_gen` moves on both.
-AUTHORED_AGAINST_CONTRACT = "20"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,
     "checks": 3,
     "context": 3,
     "daily": 11,
+    "emissions": 1,
     "events": 3,
     "goals": 4,
     "inferences": 4,

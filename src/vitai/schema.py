@@ -672,7 +672,40 @@ KEYS["regimes"] = [
     "date", "from_date", "to_date", "dataset", "field", "kind", "source",
     "text", "anchored_by", "note", "recorded_at", "device", "supersedes",
 ]
-for _ds in ("protocols", "regimes"):
+KEYS["emissions"] = [
+    # WHAT THE ENGINE TOLD THE ATHLETE, and when. Phase 3 of the uncertainty
+    # proposal, 01-schema 8b.
+    #
+    # The asymmetry this closes: retracting an input empties the interval, but
+    # the interval was CONSUMED - verdicts and warnings were computed from it
+    # and acted on. Retraction propagated to the input and stopped, because
+    # verdicts are rebuilt into the database and overwritten, so nothing could
+    # answer "what did it tell me last week, and does that still hold".
+    #
+    # SURFACED ASSERTIONS ONLY, and the distinction is the whole design. A
+    # computed verdict is rebuildable, and logging every one of them would
+    # duplicate the derived tier into the ground-truth tier, make rebuild
+    # non-idempotent, and grow without bound on every rebuild. "The engine
+    # asserted X to the athlete on day T" is an EVENT IN THE WORLD: not
+    # rebuildable, bounded by actual use, and the only kind that had a
+    # consequence worth retracting. An unseen verdict was never acted on.
+    #
+    # Written at DELIVERY time by `api.assert_delivery`, never at build. Build
+    # stays a pure function of the record.
+    #
+    # TWO DEVIATIONS FROM 01-schema 8b, recorded rather than silently taken.
+    # The spec types `contract` as an integer; it is stored as the STRING the
+    # rest of the engine uses, because `CONTRACT_VERSION` and `meta.contract`
+    # are strings and a third spelling of one number is a conversion waiting
+    # to be got wrong. And the spec's read-side derivations, `basis_retracted`
+    # and `still_holds`, are NOT here: they are the next rung, and
+    # `still_holds` is additionally blocked on #148 (replaying an assertion
+    # needs the policy in force at its date, not today's). This dataset
+    # records; checking what it recorded comes after.
+    "date", "kind", "metric", "week", "statement", "basis_claims",
+    "policy_asof", "contract", "surface", "recorded_at", "device",
+]
+for _ds in ("protocols", "regimes", "emissions"):
     CURRENT_GENERATION[_ds] = 1
 
 IDENTITY_KEY["protocols"] = "slug"
@@ -877,6 +910,64 @@ DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DERIVED_CAPTURES = {"derived", "derived_external"}
 
 
+EMISSION_KINDS = ("verdict", "warning", "plan", "requirement")
+
+
+def _emission_problems(rec: dict) -> list[str]:
+    """Checks on a surfaced assertion (01-schema 8b).
+
+    STRICTER THAN MOST DATASETS HERE, and deliberately. Elsewhere a missing
+    field is an athlete who did not write something down, and refusing it
+    would make recording cost more than not bothering. This dataset is written
+    by a PROGRAM at delivery time, so a missing field is a consumer bug, and
+    the row's whole purpose is to be quotable later without recompute. An
+    assertion that cannot say what it asserted is worse than no row: it
+    records that something was said and loses what.
+    """
+    out = []
+    kind = rec.get("kind")
+    if kind not in EMISSION_KINDS:
+        out.append(f"'kind' is one of {', '.join(EMISSION_KINDS)}, got "
+                   f"{kind!r}")
+    for field in ("statement", "surface", "policy_asof"):
+        if not str(rec.get(field) or "").strip():
+            out.append(f"'{field}' is required on an emission: a row that "
+                       f"cannot say what was asserted, who delivered it, or "
+                       f"under which policy cannot be checked against later "
+                       f"knowledge, which is the only reason the row exists")
+    # SHAPES, not just presence. A `policy_asof` of "banana" satisfies "is not
+    # blank" and satisfies nothing else: the replay that reads it has to
+    # resolve it to a date, and discovering that at replay time is discovering
+    # it after the assertion has already been acted on.
+    if (asof := rec.get("policy_asof")) and _bad_date(str(asof)):
+        out.append(f"'policy_asof' is an ISO date naming the policy in force "
+                   f"when this was computed, got {asof!r}")
+    if (wk := rec.get("week")) is not None:
+        if _bad_date(str(wk)):
+            out.append(f"'week' is an ISO date, got {wk!r}")
+        elif date.fromisoformat(str(wk)).weekday() != 0:
+            out.append(f"'week' is the MONDAY of the week the assertion was "
+                       f"about, and {wk!r} is not a Monday. The engine buckets "
+                       "on Monday, so any other day names a week that does "
+                       "not line up with the one that was judged")
+    if (surf := rec.get("surface")) and not SLUG_RE.match(str(surf)):
+        out.append(f"'surface' is a lowercase-kebab slug naming the consumer "
+                   f"that delivered this, got {surf!r}")
+    if (c := rec.get("contract")) is None or isinstance(c, bool) or not (
+            isinstance(c, int) or str(c).isdigit()):
+        out.append(f"'contract' is the contract version at emission, got "
+                   f"{c!r}. Without it a replay cannot know whether the "
+                   "statement still means what it meant")
+    basis = rec.get("basis_claims")
+    if basis is not None:
+        if not isinstance(basis, (list, tuple)):
+            out.append(f"'basis_claims' is a list of claim ids, got {basis!r}")
+        elif any(not isinstance(b, str) or ":" not in b for b in basis):
+            out.append("'basis_claims' takes claim ids, and one of these is "
+                       "not one")
+    return out
+
+
 def _lineage_problems(dataset: str, rec: dict) -> list[str]:
     """Checks on `derived_from` and `derived_op` (#170)."""
     # Through the alias layer, not against the raw string. `derived` and
@@ -1013,6 +1104,8 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
         problems += _protocol_problems(rec)
     if dataset == "regimes":
         problems += _regime_problems(rec)
+    if dataset == "emissions":
+        problems += _emission_problems(rec)
     if dataset in ("weight", "measurements") and rec.get("protocol") is not None:
         if not SLUG_RE.match(str(rec["protocol"])):
             problems.append(
