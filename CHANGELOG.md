@@ -6,6 +6,27 @@ versioning follows [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **A public accessor for the shape this engine emits** (#147). `vitai schema`
+  and `api.schema()` return the contract version and the per-dataset
+  generations.
+
+  Anything that PINS against this engine needs those two numbers: a fixture
+  corpus that must refuse to regenerate when the shape has moved past what it
+  was authored against, a content repo recording which engine wrote it, a
+  client checking an artifact is still readable. Every one of them had to reach
+  into `db.CONTRACT_VERSION` and `schema.CURRENT_GENERATION`, which are private
+  and will move. **A pin that reads private surface breaks silently on an
+  upgrade**, which is the failure the pin exists to prevent: the guard and the
+  thing it guards against sharing a failure mode.
+
+  `contract` versions the READ MODEL, the built SQLite shape a consumer gates
+  on. `generations` versions the LINE SHAPE per dataset. They answer different
+  questions and a consumer usually needs both. **`engine` is provenance and
+  deliberately not a gate**: it moves for a docs fix and stands still while the
+  schema moves, and both directions have happened here.
+
+  Takes no `--root`, because the answer is a property of the installed engine
+  rather than of anyone's record.
 - **A policy digest on the read model, contract 17** (#148). `as_of`
   reconstructs the record by filtering `recorded_at`. That is right for
   everything the record holds and wrong for everything it does not, and

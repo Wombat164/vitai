@@ -17,7 +17,7 @@ from importlib import resources
 from pathlib import Path
 
 from . import __version__
-from .api import Vitai
+from .api import Vitai, schema
 from .jsonl import DataError
 from .schema import (KEYS)
 
@@ -1007,6 +1007,25 @@ def cmd_status(args: argparse.Namespace) -> None:
     print(st["disclaimer"])
 
 
+def cmd_schema(args: argparse.Namespace) -> None:
+    """A harness over `api.schema()`.
+
+    Takes no `--root`, deliberately: the contract and the generations are
+    properties of the installed ENGINE and not of anyone's record, and giving
+    this a root would invite a reader to think a different repo could answer
+    differently.
+    """
+    shape = schema()
+    if args.json:
+        print(json.dumps(shape, indent=2, sort_keys=True))
+        return
+    print(f"engine   {shape['engine']}  (provenance only, never a gate)")
+    print(f"contract {shape['contract']}  (the read model a consumer gates on)")
+    print("generations:")
+    for name in sorted(shape["generations"]):
+        print(f"  {name:<14} {shape['generations'][name]}")
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="vitai", description=__doc__)
     ap.add_argument("--version", action="version", version=f"vitai {__version__}")
@@ -1171,6 +1190,14 @@ def main(argv: list[str] | None = None) -> None:
                            help="every escalation in the record, not just "
                                 "the ones needing attention now")
         p.set_defaults(fn=fn)
+
+    # Registered OUTSIDE the loop above, which gives every command a `--root`.
+    # This one has none, deliberately: see `cmd_schema`.
+    p = sub.add_parser(
+        "schema",
+        help="the contract version and dataset generations this engine emits")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(fn=cmd_schema)
 
     args = ap.parse_args(argv)
     args.fn(args)
