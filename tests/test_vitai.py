@@ -1190,3 +1190,225 @@ def test_the_viewpoint_reaches_the_whole_brief(tmp_path):
     late = Vitai(root, on=date(2026, 6, 2)).situation()
     assert early["on"] == "2026-05-02" and late["on"] == "2026-06-02"
     assert early["rollup"] != late["rollup"]
+# ---- #158 rung 4: write parity --------------------------------------------
+#
+# The vocabulary already existed and was in live use. What was missing is that
+# a consumer could reach it without hand-writing JSONL, which meant every
+# agent re-implemented the provenance stamping and each one got a slightly
+# different answer about what a spoken number IS.
+
+def _repo(tmp_path):
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    return root
+
+
+def test_a_stated_value_carries_provenance_the_engine_set(tmp_path):
+    from vitai.api import Vitai
+    row = Vitai(_repo(tmp_path)).claim(
+        "weight", {"kg": 80.4}, said="about eighty and a half this morning")
+    assert row["capture"] == "narrative"
+    assert row["source"] == "stated-in-chat"
+    assert row["read_by"] == "athlete"
+    assert row["note"] == "about eighty and a half this morning"
+    assert row["recorded_at"], "the engine stamps transaction time"
+
+
+def test_a_caller_cannot_stamp_its_own_provenance(tmp_path):
+    """The acceptance criterion of #158, and the reason behind it: a caller
+    that could set these could file a recollection as a device reading, and
+    the ladder ranks `stated-in-chat` ABOVE a connector export."""
+    import pytest
+
+    from vitai.api import Vitai
+    engine = Vitai(_repo(tmp_path))
+    for field, value in (("recorded_at", "2026-01-01T00:00:00+00:00"),
+                         ("device", "someone-elses-phone"),
+                         ("capture", "ble"),
+                         ("source", "scale")):
+        with pytest.raises(ValueError, match="not a quantity"):
+            engine.claim("weight", {"kg": 80.0, field: value})
+
+
+def test_read_by_is_refused_in_values_rather_than_overridden(tmp_path):
+    """It was silently overwritten by the default, so a caller naming the
+    wrong reader got no error and no effect. Refusing with a pointer to the
+    parameter is the honest version."""
+    import pytest
+
+    from vitai.api import Vitai
+    engine = Vitai(_repo(tmp_path))
+    with pytest.raises(ValueError, match="read_by. parameter"):
+        engine.claim("weight", {"kg": 80.0, "read_by": "model"})
+    assert engine.claim("weight", {"kg": 80.0}, read_by="model")["read_by"] \
+        == "model"
+
+
+def test_an_agent_transcribing_can_say_so(tmp_path):
+    """Recording WHO read is not ranking who read. #140 declined to rank
+    people and deliberately kept the field."""
+    import pytest
+
+    from vitai.api import Vitai
+    engine = Vitai(_repo(tmp_path))
+    assert engine.claim("weight", {"kg": 79.9},
+                        read_by="model")["read_by"] == "model"
+    with pytest.raises(ValueError, match="athlete, model, human-other"):
+        engine.claim("weight", {"kg": 79.9}, read_by="nobody")
+
+
+def test_the_engine_refuses_the_ambiguity_rather_than_each_agent(tmp_path):
+    """"Some push-ups" is not a rep count, and the place to decide that once
+    is the engine: an agent that validates for itself is an agent that will
+    eventually decide "some" means three."""
+    import pytest
+
+    from vitai.api import Vitai
+    from vitai.jsonl import DataError
+    engine = Vitai(_repo(tmp_path))
+    with pytest.raises(DataError) as caught:
+        engine.claim("sets", {"exercise": "pushup", "set_index": 1,
+                              "reps_completed": "some"})
+    # The WHOLE-NUMBER rule specifically. Asserting only "reps" passed
+    # against a different refusal in the same message ("a set needs reps or a
+    # duration"), so deleting the whole-number check left this green while
+    # `{"reps_completed": "some", "duration_s": 60}` would have appended.
+    assert "whole number" in str(caught.value)
+    with pytest.raises(DataError):
+        engine.claim("sets", {"exercise": "pushup", "set_index": 1,
+                              "reps_completed": "some", "duration_s": 60})
+
+
+def test_an_utterance_with_no_number_still_appends_exactly_one_line(tmp_path):
+    """Zero guessed numbers, but always exactly one appended claim. A rule
+    that answers "I did some push-ups" by writing nothing hands the record to
+    whichever tool is willing to write the sentence down."""
+    from vitai.api import Vitai
+    engine = Vitai(_repo(tmp_path))
+    row = engine.said("did some push-ups after work")
+    assert row["text"] == "did some push-ups after work"
+    assert row["source"] == "stated-in-chat"
+    assert row["recorded_at"]
+    assert len(engine.dataset("journal")) == 1
+
+
+def test_saying_nothing_appends_nothing(tmp_path):
+    import pytest
+
+    from vitai.api import Vitai
+    engine = Vitai(_repo(tmp_path))
+    for empty in ("", "   ", None):
+        with pytest.raises(ValueError, match="nothing was said"):
+            engine.said(empty)
+    assert engine.dataset("journal") == []
+
+
+def test_the_destructive_field_needs_a_deliberate_parameter(tmp_path):
+    """`supersedes` retires the line it names on every future load. It rode
+    through the first cut inside `values`, so a narrative claim could
+    permanently retire a device reading with provenance saying the athlete
+    stated it - and a caller that reached it by putting a key in a dict would
+    not have decided to."""
+    import pytest
+
+    from vitai.api import Vitai
+    engine = Vitai(_repo(tmp_path))
+    with pytest.raises(ValueError, match="corrects"):
+        engine.claim("weight", {"kg": 75.0,
+                                "supersedes": "2026-07-01/scale"})
+    row = engine.claim("weight", {"kg": 75.0}, corrects="2026-07-01/scale")
+    assert row["supersedes"] == "2026-07-01/scale"
+
+
+def test_a_chat_claim_cannot_manufacture_a_witness(tmp_path):
+    """Setting `origin` made a narrative claim count as an INDEPENDENT
+    witness, which is corroboration built out of nothing - exactly what
+    `provenance.py` exists to prevent."""
+    import pytest
+
+    from vitai.api import Vitai
+    engine = Vitai(_repo(tmp_path))
+    for field in ("origin", "path", "origin_evidence", "artifact",
+                  "modelled", "_gen", "type_source"):
+        with pytest.raises(ValueError, match="not a quantity"):
+            engine.claim("weight", {"kg": 70.0, field: "anything"})
+
+
+def test_a_claim_with_no_quantity_is_refused(tmp_path):
+    """An all-null observation row is permanent junk in an append-only
+    record, and it is the likeliest agent slip: the number went into `said`
+    instead of into a field."""
+    import pytest
+
+    from vitai.api import Vitai
+    engine = Vitai(_repo(tmp_path))
+    for empty in ({}, {"kg": None}, {"date": "2026-05-01"}):
+        with pytest.raises(ValueError, match="no quantity was stated"):
+            engine.claim("weight", empty)
+
+
+def test_the_allowlist_covers_a_field_nobody_has_added_yet(tmp_path):
+    """The point of inverting it. A denylist fails silently every time the
+    schema grows; this refuses anything that is not a field of the dataset."""
+    import pytest
+
+    from vitai.api import Vitai
+    engine = Vitai(_repo(tmp_path))
+    with pytest.raises(ValueError, match="no field"):
+        engine.claim("weight", {"kg": 80.0, "trustworthiness": 11})
+
+
+def test_forgetting_the_dataset_does_not_silently_drop_the_number(tmp_path):
+    """It discarded the quantities and exited 0: the number the athlete
+    stated vanished while the tool reported success, which for an agent is
+    the worst available shape of failure."""
+    import pytest
+
+    from vitai.cli import main
+    root = _repo(tmp_path)
+    with pytest.raises(SystemExit) as caught:
+        main(["claim", "--root", str(root), "--said", "80.4 today", "kg=80.4"])
+    assert "no --dataset" in str(caught.value)
+
+
+def test_the_utterance_surface_is_reachable_from_the_cli(tmp_path, capsys):
+    """P9 inside the P9 change: `kind` and `about` were API-only, so an agent
+    on the CLI tier could not file a worry."""
+    import json
+
+    from vitai.cli import main
+    root = _repo(tmp_path)
+    capsys.readouterr()
+    main(["claim", "--root", str(root), "--said", "knee feels off",
+          "--kind", "worry"])
+    assert json.loads(capsys.readouterr().out)["kind"] == "worry"
+
+
+def test_a_claim_is_reachable_through_both_doors(tmp_path, capsys):
+    """P9."""
+    import json
+
+    from vitai.api import Vitai
+    from vitai.cli import main
+    root = _repo(tmp_path)
+    capsys.readouterr()
+    main(["claim", "--root", str(root), "--dataset", "weight",
+          "--said", "about eighty", "kg=80.4"])
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["kg"] == 80.4 and printed["capture"] == "narrative"
+    main(["claim", "--root", str(root), "--said", "some push-ups"])
+    assert len(Vitai(root).dataset("journal")) == 1
+
+
+def test_the_cli_relays_the_engines_refusal_verbatim(tmp_path, capsys):
+    """An agent driving the CLI needs the reason, not an exit code. A code
+    would have to be interpreted, and every interpreter would differ."""
+    import pytest
+
+    from vitai.cli import main
+    root = _repo(tmp_path)
+    with pytest.raises(SystemExit) as caught:
+        main(["claim", "--root", str(root), "--dataset", "weight",
+              "kg=80", "source=scale"])
+    assert "not a quantity" in str(caught.value)

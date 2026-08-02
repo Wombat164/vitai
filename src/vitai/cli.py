@@ -994,6 +994,50 @@ def cmd_situation(args: argparse.Namespace) -> None:
     on = date.fromisoformat(args.on) if args.on else None
     print(json.dumps(Vitai(_root(args), on=on).situation(recent=args.recent),
                      indent=2, sort_keys=True, default=str))
+def cmd_claim(args: argparse.Namespace) -> None:
+    """A harness over `Vitai.claim()` and `Vitai.said()`.
+
+    Two shapes because there are two acts (#158): a stated quantity, and an
+    utterance no quantity can honestly be taken from. Writing nothing for the
+    second is what hands the record to whichever tool is willing to write the
+    sentence down.
+    """
+    on = date.fromisoformat(args.on) if args.on else None
+    engine = Vitai(_root(args), on=on)
+    # Forgetting --dataset used to DISCARD the stated quantities and exit 0:
+    # the number the athlete said vanished while the tool reported success,
+    # which for an agent driving this is the worst possible shape of failure.
+    if args.value and not args.dataset:
+        sys.exit(f"{len(args.value)} quantity/quantities given with no "
+                 "--dataset to put them in. Add --dataset, or move the "
+                 "number into --said if it was only spoken")
+    try:
+        if args.dataset:
+            values = {}
+            for pair in args.value:
+                if "=" not in pair:
+                    sys.exit(f"{pair!r} is not field=value")
+                field, _, raw = pair.partition("=")
+                try:
+                    values[field] = json.loads(raw)
+                except json.JSONDecodeError:
+                    values[field] = raw
+            row = engine.claim(args.dataset, values, said=args.said,
+                               read_by=args.read_by, corrects=args.corrects)
+        else:
+            if not args.said:
+                sys.exit("give --said (what was stated), and --dataset with "
+                         "field=value pairs if a quantity was stated too")
+            row = engine.said(args.said, kind=args.kind, about=args.about)
+    except (ValueError, DataError) as e:
+        # The engine's own sentence. An agent can relay it; a code would have
+        # to be interpreted, and every interpreter would differ.
+        sys.exit(str(e))
+    except KeyError as e:
+        # `KeyError` stringifies with its own quotes, so relaying it verbatim
+        # delivered the engine's sentence wearing quotation marks.
+        sys.exit(e.args[0] if e.args else str(e))
+    print(json.dumps(row, sort_keys=True))
 
 
 def cmd_status(args: argparse.Namespace) -> None:
@@ -1058,6 +1102,8 @@ def main(argv: list[str] | None = None) -> None:
         ("situation", cmd_situation,
          "the whole brief as JSON: refusals first, then state, then what is "
          "unresolved (#158)"),
+        ("claim", cmd_claim,
+         "append what the athlete stated, with provenance the engine stamps"),
         ("verdicts", cmd_verdicts, "weekly goal-attainment rows as JSONL (the platform contract)"),
         ("goals", cmd_goals, "active goals: progress, dates, contributions, flagged edits"),
         ("append", cmd_append,
@@ -1094,6 +1140,22 @@ def main(argv: list[str] | None = None) -> None:
                            help="the valid-time viewpoint (default: today)")
             p.add_argument("--recent", type=int, default=14,
                            help="how many recent sessions to carry (default: 14)")
+        if name == "claim":
+            p.add_argument("--dataset", help="dataset for a stated QUANTITY; "
+                                             "omit for an utterance only")
+            p.add_argument("--said", help="the athlete's own words, verbatim")
+            p.add_argument("--read-by", dest="read_by", default="athlete",
+                           help="who read it: athlete, model, human-other")
+            p.add_argument("--corrects", metavar="DATE/SOURCE",
+                           help="retire the line this names (destructive)")
+            p.add_argument("--on", metavar="YYYY-MM-DD",
+                           help="the date the claim is ABOUT (default: today)")
+            p.add_argument("--kind", default="claim",
+                           help="utterance kind: claim, worry, idea, "
+                                "preference, question, note")
+            p.add_argument("--about", help="what the utterance refers to")
+            p.add_argument("value", nargs="*", metavar="field=value",
+                           help="the quantities stated")
         if name == "infer":
             p.add_argument("--dry-run", action="store_true",
                            help="print validated inferences without appending")
