@@ -346,6 +346,19 @@ def load_report(data_dir: Path, name: str,
     return retire(name, [r for _, r in rows]), errors
 
 
+# Datasets where a correction is meaningless because a row is an EVENT rather
+# than a claim about a value. `emissions` records that the engine told the
+# athlete something on a day: two on one day are two things that were said, and
+# a later row cannot make an earlier one not have been said.
+#
+# This needs its own list because `line_key` falls back to `date/source` and
+# `emissions` has no `source`, so every emission on one day shares the key
+# `"<date>/"`. One `supersedes` line naming that key would have retired the
+# whole day's assertions - the record forgetting what it told someone, which is
+# the exact failure this dataset exists to prevent.
+EVENT_DATASETS = frozenset({"emissions"})
+
+
 def retire(dataset: str, rows: list[dict]) -> list[dict]:
     """`rows` with every superseded line dropped, in order.
 
@@ -359,6 +372,8 @@ def retire(dataset: str, rows: list[dict]) -> list[dict]:
     corrections ACTUALLY APPLIED. Deriving that from the ordering rules a
     second time got three cases wrong; asking the same function is exact.
     """
+    if dataset in EVENT_DATASETS:
+        return list(rows)
     records: list[dict] = []
     refs: set[str] = set()
     for r in reversed(rows):

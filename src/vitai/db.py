@@ -197,7 +197,22 @@ from .schema import KEYS
 #     stale number stays, visibly flagged, because an engine that cannot
 #     re-run the derivation cannot produce a right answer and a confident
 #     wrong one is worse than a flagged old one.
-# 21: a `pending` refusal reason, and `due` on a refusal row. `no_input` said
+# 21: `emissions`, the engine's memory of what it TOLD the athlete. Phase 3
+#     of the uncertainty proposal. Pass-through and append-only, never
+#     resolved: two assertions made on one day are two events, not a
+#     contested value.
+#
+#     SURFACED assertions only, written at delivery time by
+#     `api.assert_delivery` and never at build. A consumer must not read this
+#     as the set of verdicts the engine computed - it is the set it DELIVERED,
+#     and a judgement nobody was shown had no consequence to retract. A
+#     consumer that renders judgements and does not call `assert_delivery`
+#     produces assertions the record cannot later retract; that is the
+#     accepted residual risk, because logging computation instead of delivery
+#     records the wrong event.
+#
+#     `basis_claims` is a JSON array in a TEXT column, like `derived_from`.
+# 22: a `pending` refusal reason, and `due` on a refusal row. `no_input` said
 #     the record holds nothing, which is true and cannot tell an athlete that
 #     nothing will ever come apart from a source that delivers in four hours.
 #     `pending` says the question is answerable and not yet, and carries WHEN.
@@ -211,13 +226,18 @@ from .schema import KEYS
 #     `due` is derived from the source's OWN arrivals, never declared: a
 #     source with no established cadence produces `no_input`, exactly as
 #     today.
-CONTRACT_VERSION = "21"
+CONTRACT_VERSION = "22"
 
 _TEXT_COLS = {"derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
               # under REAL affinity silently becomes 7.0, which is the defect
               # the `activity_id` note below already warns about
-              # `due` is an ISO date; REAL affinity would turn it into a
-              # float and lose the day.
+              #
+              # `contract` is a version STRING and `policy_asof` an ISO date;
+              # both are digits and hyphens, so REAL affinity would turn "21"
+              # into 21.0 and lose the distinction. `statement`, `week` and
+              # `metric` are already below, on other datasets.
+              "basis_claims", "surface", "policy_asof", "contract",
+              # `due` is an ISO date too (#202).
               "due",
               "date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",
