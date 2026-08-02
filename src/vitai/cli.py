@@ -994,6 +994,16 @@ def cmd_situation(args: argparse.Namespace) -> None:
     on = date.fromisoformat(args.on) if args.on else None
     print(json.dumps(Vitai(_root(args), on=on).situation(recent=args.recent),
                      indent=2, sort_keys=True, default=str))
+def cmd_mcp(args: argparse.Namespace) -> None:
+    """A harness over `vitai.mcp.serve`. Speaks MCP on stdio.
+
+    Nothing is printed here: the protocol owns stdout, and a stray line
+    corrupts the stream.
+    """
+    from .mcp import serve
+    sys.exit(serve(_root(args)))
+
+
 def cmd_claim(args: argparse.Namespace) -> None:
     """A harness over `Vitai.claim()` and `Vitai.said()`.
 
@@ -1102,6 +1112,8 @@ def main(argv: list[str] | None = None) -> None:
         ("situation", cmd_situation,
          "the whole brief as JSON: refusals first, then state, then what is "
          "unresolved (#158)"),
+        ("mcp", cmd_mcp,
+         "speak MCP on stdio, so an off-the-shelf agent can attach (#158)"),
         ("claim", cmd_claim,
          "append what the athlete stated, with provenance the engine stamps"),
         ("verdicts", cmd_verdicts, "weekly goal-attainment rows as JSONL (the platform contract)"),

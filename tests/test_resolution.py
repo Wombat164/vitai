@@ -364,8 +364,16 @@ def test_a_suppressed_metric_is_recorded_but_not_scored():
             for d in range(1, 8)]
     cfg = Config(steps_floor=9000, suppressed_metrics=("steps",))
     rows = compute_verdicts(cfg, [], days, [])
-    assert not any(r["metric"] == "steps" for r in rows)
-    # ...but the observation itself is untouched.
+    # LABELLED, not deleted (#177). Deleting the row made a suppressed metric
+    # indistinguishable from one nobody computed, and the doctrine everywhere
+    # else in this engine is that suppression is a label and never a deletion.
+    # The judging still does not happen; the change is that the record says
+    # so. Updated deliberately: this asserted the old behaviour.
+    steps = [r for r in rows if r["metric"] == "steps"]
+    assert steps, "a suppressed metric must not vanish"
+    assert all(r["verdict"] == "no_data" for r in steps)
+    assert all(r["reason"] == "suppressed" for r in steps)
+    # ...and the observation itself is untouched.
     assert _resolve(daily=days)["canonical"]["daily"][0]["steps"] == 1000
 
 
@@ -462,7 +470,7 @@ def test_build_projects_the_adjudication_trail(tmp_path):
         assert con.execute(
             "SELECT kcal_out FROM daily").fetchone()[0] == 2443
         assert con.execute(
-            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "17"
+            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "18"
     finally:
         con.close()
 

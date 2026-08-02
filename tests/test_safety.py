@@ -465,7 +465,7 @@ def test_build_projects_the_safety_tables(tmp_path):
             "SELECT trigger FROM escalations WHERE level='emergency'"
         ).fetchone()[0] == "cardiac"
         assert con.execute(
-            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "17"
+            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "18"
     finally:
         con.close()
 
@@ -706,9 +706,17 @@ def test_expected_rapid_loss_suppresses_the_rate_verdict_only():
                                    weight, days, [], medical=[])
     medicated = compute_verdicts(Config(phases=((130.0, 100.0, 0.7),)),
                                  weight, days, [], medical=med)
-    assert any(r["metric"] == "weight_rate" for r in unmedicated)
-    assert not any(r["metric"] == "weight_rate" for r in medicated), (
+    assert any(r["metric"] == "weight_rate" and r["verdict"] != "no_data"
+               for r in unmedicated)
+    # LABELLED, not deleted (#177), and the reason matters most here: a
+    # contraindicated verdict that simply vanished was indistinguishable from
+    # one never computed, so nothing could say WHY this athlete is not being
+    # scored on a rate. Judged is still what it must not be.
+    medicated_rate = [r for r in medicated if r["metric"] == "weight_rate"]
+    assert medicated_rate, "the row must say it was withheld, not disappear"
+    assert all(r["verdict"] == "no_data" for r in medicated_rate), (
         "expected medicated loss was judged against a lifestyle target")
+    assert all(r["reason"] == "contraindicated" for r in medicated_rate)
     assert any(r["metric"] == "intake_floor" and r["verdict"] == "behind"
                for r in medicated), "a modifier must never silence a floor"
 

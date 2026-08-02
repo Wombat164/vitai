@@ -403,7 +403,7 @@ def test_api_build_projects_verdicts_and_contract(tmp_path):
             "justifications", "conservation", "retractions",
             "medical", "gates", "escalations", "checks"} <= tables
     assert con.execute("SELECT COUNT(*) FROM inferences").fetchone()[0] == 1
-    assert con.execute("SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "17"
+    assert con.execute("SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "18"
     con.close()
     assert v.status_line().startswith("77.3 kg")
     assert isinstance(v.verdicts(), list)
@@ -761,6 +761,13 @@ CLI_MAY_IMPORT = {
     # parked in api.py to get past this test, which is the failure one layer
     # along.
     "api": {"Vitai", "schema"},
+    # `mcp` is a second HARNESS, not engine logic, which is the distinction
+    # this table exists to police. It is allowed for the same reason `api` is
+    # and `jsonl` is not: it structurally cannot exceed the API, because its
+    # tool table names methods on `Vitai` and raises at import if one is
+    # missing. A capability the MCP server can reach, an agent can reach by
+    # definition, since the MCP server is what the agent is talking to.
+    "mcp": {"serve"},
     "jsonl": {"DataError"},
     "schema": {"KEYS"},
     "": {"__version__"},          # `from . import __version__`
@@ -1412,3 +1419,205 @@ def test_the_cli_relays_the_engines_refusal_verbatim(tmp_path, capsys):
         main(["claim", "--root", str(root), "--dataset", "weight",
               "kg=80", "source=scale"])
     assert "not a quantity" in str(caught.value)
+
+
+# ---- #158 rung 5: the MCP adapter is a harness, not a second surface -------
+
+def test_every_mcp_tool_resolves_to_the_api():
+    """The acceptance criterion of #158, and it is enforced at IMPORT rather
+    than asserted here: an adapter that could name a missing capability is one
+    that will, silently, the first time a method is renamed."""
+    from vitai.api import Vitai
+    from vitai.mcp import TOOLS
+    for name, spec in TOOLS.items():
+        method = spec["method"]
+        if method is None:
+            continue          # a module-level function of the same name
+        assert hasattr(Vitai, method), f"{name} names Vitai.{method}"
+
+
+def test_a_tool_naming_a_missing_method_fails_at_import():
+    """The premise. If this could be added quietly, the check above is
+    decoration."""
+    import pytest
+
+    from vitai.api import Vitai
+    from vitai.mcp import TOOLS
+    assert not hasattr(Vitai, "definitely_not_a_method")
+    with pytest.raises(AttributeError):
+        # the same guard the module runs over its own table
+        for spec in list(TOOLS.values()) + [{"method": "definitely_not_a_method"}]:
+            m = spec["method"]
+            if m is not None and not hasattr(Vitai, m):
+                raise AttributeError(m)
+
+
+def test_tool_descriptions_come_from_the_methods_own_docstring():
+    """So the adapter cannot document a capability differently from the API.
+    Two descriptions of one method is two chances to be wrong."""
+    from vitai.api import Vitai
+    from vitai.mcp import tool_list
+    for tool in tool_list():
+        assert tool["description"], tool["name"]
+        method = getattr(Vitai, tool["name"], None)
+        if method is not None and method.__doc__:
+            assert tool["description"] == \
+                method.__doc__.strip().splitlines()[0]
+
+
+def test_it_speaks_the_protocol(tmp_path):
+    """Newline-delimited JSON-RPC 2.0 on stdio, initialize through a call."""
+    import io
+    import json
+
+    from vitai.cli import main
+    from vitai.mcp import serve
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    stdin = io.StringIO("\n".join([
+        json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize"}),
+        json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
+        json.dumps({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+                    "params": {"name": "schema", "arguments": {}}}),
+    ]) + "\n")
+    import contextlib
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        serve(root, stdin=stdin)
+    replies = [json.loads(ln) for ln in out.getvalue().splitlines() if ln]
+    assert replies[0]["result"]["protocolVersion"]
+    assert {t["name"] for t in replies[1]["result"]["tools"]} == \
+        {"situation", "schema", "validate", "status", "day", "window",
+         "goals", "safety", "claim", "said"}
+    payload = json.loads(replies[2]["result"]["content"][0]["text"])
+    assert payload["contract"]
+
+
+def test_a_refusal_is_relayed_as_the_engines_sentence(tmp_path):
+    """An agent can act on a sentence. A code has to be interpreted, and
+    every interpreter differs."""
+    import contextlib
+    import io
+    import json
+
+    from vitai.cli import main
+    from vitai.mcp import serve
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    stdin = io.StringIO(json.dumps({
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "claim",
+                   "arguments": {"dataset": "weight",
+                                 "values": {"kg": 80.0, "source": "scale"}}},
+    }) + "\n")
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        serve(root, stdin=stdin)
+    reply = json.loads(out.getvalue().strip())
+    assert "not a quantity" in reply["error"]["message"]
+
+
+def test_an_unknown_tool_is_refused_by_name(tmp_path):
+    import contextlib
+    import io
+    import json
+
+    from vitai.cli import main
+    from vitai.mcp import serve
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    stdin = io.StringIO(json.dumps({
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "drop_everything", "arguments": {}},
+    }) + "\n")
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        serve(root, stdin=stdin)
+    assert "no such tool" in json.loads(out.getvalue())["error"]["message"]
+
+
+# ---- #177: no_data was one word for four states ---------------------------
+#
+# The distinction already existed in the data and was recoverable only by
+# inspecting which fields were null. Every consumer would have
+# reverse-engineered it from row shape, each slightly differently, and none of
+# them is the engine.
+
+def _verdict_rows(**kw):
+    from vitai.config import Config
+    from vitai.verdicts import compute_verdicts
+    return compute_verdicts(kw.pop("cfg", Config()), kw.pop("weight", []),
+                            kw.pop("daily", []), kw.pop("sessions", []), **kw)
+
+
+def test_a_refusal_cannot_ship_without_a_reason():
+    """The totality the issue asks for, held where every row is BUILT rather
+    than at each caller, so a new refusal site cannot ship unlabelled."""
+    import pytest
+
+    from vitai.verdicts import NODATA, _row
+    with pytest.raises(ValueError, match="needs a reason"):
+        _row("2030-04-01", "weight_rate", None, None, NODATA)
+    with pytest.raises(ValueError, match="needs a reason"):
+        _row("2030-04-01", "weight_rate", None, None, NODATA, reason="made up")
+
+
+def test_a_judgement_carries_no_reason():
+    """The other half. A reason on a judged row would mean the field answers
+    two different questions depending on the verdict beside it."""
+    import pytest
+
+    from vitai.verdicts import ON, _row
+    with pytest.raises(ValueError, match="not a refusal"):
+        _row("2030-04-01", "steps", 9000, 8000, ON, reason="no_input")
+
+
+def test_the_reason_is_readable_without_inspecting_null_fields():
+    """The complaint in one sentence: a consumer had to reverse-engineer why
+    from the shape of the row."""
+    from vitai.config import Config
+    weight = [{"date": "2030-04-01", "kg": 80.0, "source": "scale",
+               "note": None, "body_fat_pct": None, "kg_lo": None,
+               "kg_hi": None, "body_fat_lo": None, "body_fat_hi": None}]
+    # A rate with no phase configured: the rate is real, the policy is not.
+    rows = _verdict_rows(cfg=Config(), weight=weight * 2)
+    refusals = [r for r in rows if r["verdict"] == "no_data"]
+    for row in refusals:
+        assert row["reason"], row
+        assert row["reason"] in {"no_input", "no_policy", "not_supported",
+                                 "contraindicated", "suppressed"}
+
+
+def test_a_consumer_ignoring_the_reason_sees_the_previous_behaviour():
+    """Additive and appended, so a reader by name is unaffected and one
+    reading positionally sees the new column last."""
+    from vitai.db import VERDICT_KEYS
+    assert VERDICT_KEYS[-1] == "reason"
+    assert VERDICT_KEYS[:-1] == ["week", "metric", "value", "target",
+                                 "verdict", "goal"]
+
+
+def test_the_reason_reaches_the_read_model(tmp_path):
+    import json
+    import sqlite3
+
+    from vitai.api import Vitai
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    (root / "data" / "weight.jsonl").write_text("\n".join(json.dumps(
+        {"date": f"2026-04-{d:02d}", "kg": 80.0, "source": "scale",
+         "note": None, "body_fat_pct": None, "kg_lo": None, "kg_hi": None,
+         "body_fat_lo": None, "body_fat_hi": None, "measured_at": None})
+        for d in range(1, 15)) + "\n", encoding="utf-8")
+    con = sqlite3.connect(Vitai(root).build())
+    try:
+        cols = [c[1] for c in con.execute("PRAGMA table_info(verdicts)")]
+        assert cols[-1] == "reason"
+        rows = con.execute(
+            "SELECT verdict, reason FROM verdicts WHERE verdict='no_data'"
+        ).fetchall()
+    finally:
+        con.close()
+    assert rows, "premise: this record produces refusals"
+    assert all(reason for _, reason in rows), "a refusal reached the read model bare"

@@ -28,6 +28,31 @@ from .schema import EXTERNAL_METRIC
 
 ON, AHEAD, BEHIND, NODATA = "on_target", "ahead", "behind", "no_data"
 
+# WHY there is no verdict (#177). `no_data` answers "can a judgement be
+# rendered"; this answers "why not", and they are different questions that
+# should not share a token.
+#
+# The distinction already existed in the data and was recoverable ONLY by
+# inspecting which fields were null: value and target both absent meant the
+# input was missing, target absent meant no policy, both present meant the
+# measurement could not support the judgement. Every consumer would have
+# reverse-engineered that from row shape, each slightly differently, and none
+# of them is the engine.
+#
+# A SECOND FIELD rather than more verdict words, deliberately. The verdict
+# answers one question with one answer, and a consumer that ignores the reason
+# degrades to exactly today's behaviour rather than breaking on a widened
+# vocabulary it switches on. It also leaves room for the cases that do not
+# exist yet, and the uncertainty work already has two.
+NO_INPUT = "no_input"                # the record holds nothing to judge
+NO_POLICY = "no_policy"              # nothing to judge it against
+NOT_SUPPORTED = "not_supported"      # the measurement cannot support a verdict
+CONTRAINDICATED = "contraindicated"  # judging it would be actively harmful
+SUPPRESSED = "suppressed"            # the athlete asked not to be scored
+
+REFUSAL_REASONS = {NO_INPUT, NO_POLICY, NOT_SUPPORTED, CONTRAINDICATED,
+                   SUPPRESSED}
+
 
 def _week_key(d: str) -> str:
     dt = datetime.fromisoformat(d).date()
@@ -40,10 +65,25 @@ def _weeks_covered(*datasets: list[dict]) -> list[str]:
 
 
 def _row(week: str, metric: str, value: float | None, target: float | None,
-         verdict: str, goal: str | None = None) -> dict:
+         verdict: str, goal: str | None = None,
+         reason: str | None = None) -> dict:
+    # A reason is REQUIRED with a refusal and forbidden without one, so a new
+    # refusal site cannot ship unlabelled and a judged row cannot carry a
+    # reason nobody asked for. This is the totality the issue asks for, held
+    # at the one place every row is built rather than at each caller.
+    if verdict == NODATA and reason not in REFUSAL_REASONS:
+        raise ValueError(
+            f"a {NODATA} verdict needs a reason, one of "
+            f"{', '.join(sorted(REFUSAL_REASONS))}, got {reason!r}. Once a "
+            "refusal ships under a bare token the reason is gone and cannot "
+            "be recovered from the row")
+    if verdict != NODATA and reason is not None:
+        raise ValueError(f"{verdict} is a judgement, not a refusal; it has no "
+                         f"reason to carry (got {reason!r})")
     return {"week": week, "metric": metric,
             "value": round(value, 3) if value is not None else None,
-            "target": target, "verdict": verdict, "goal": goal}
+            "target": target, "verdict": verdict, "goal": goal,
+            "reason": reason}
 
 
 def _goal_for(goals_in_force: tuple[dict, ...], metric: str) -> str | None:
@@ -88,13 +128,15 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
         prev = by_week_kg.get(prev_wk)
         if not vals or not prev:
             if vals or prev:
-                rows.append(_row(wk, "weight_rate", None, None, NODATA))
+                rows.append(_row(wk, "weight_rate", None, None, NODATA,
+                                 reason=NO_INPUT))
             continue
         rate = mean(prev) - mean(vals)  # positive = losing
         target = phase_rate_for(cfg_for[wk], mean(vals))
         goal = _goal_for(goals_for[wk], "weight_rate")
         if target is None:
-            rows.append(_row(wk, "weight_rate", rate, None, NODATA, goal))
+            rows.append(_row(wk, "weight_rate", rate, None, NODATA, goal,
+                             reason=NO_POLICY))
             continue
         # #37: a rate whose weigh-in times are spread widely enough to
         # account for it is not a rate, and this is the machine-readable
@@ -107,7 +149,8 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
                                  + by_week_rows.get(prev_wk, []))
         if timing["known"] and not timing["unknown"] and (
                 timing["drift_kg"] >= abs(rate)):
-            rows.append(_row(wk, "weight_rate", rate, target, NODATA, goal))
+            rows.append(_row(wk, "weight_rate", rate, target, NODATA, goal,
+                             reason=NOT_SUPPORTED))
             continue
         if abs(rate - target) <= 0.25:
             verdict = ON
@@ -196,14 +239,24 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
     # for whom the treatment is working that she is failing a target nobody
     # set for her. Drop the row rather than dress it up; the nutrition floors
     # and the lean-mass composite carry the real risk on this pathway.
+    # LABELLED, not deleted (#177). Dropping the row made a contraindicated
+    # metric indistinguishable from one that was never computed, and the
+    # doctrine everywhere else in this engine is that suppression is a label
+    # and never a deletion. The judgement still does not happen; what changes
+    # is that the record says so.
     if _drops_rate_verdict(medical or [], weeks):
-        rows = [r for r in rows if r["metric"] != "weight_rate"]
+        rows = [_row(r["week"], r["metric"], r["value"], r["target"], NODATA,
+                     r["goal"], reason=CONTRAINDICATED)
+                if r["metric"] == "weight_rate" else r for r in rows]
 
     # G33, last: a suppressed metric is still RECORDED, just not scored. The
     # data keeps accumulating for the day the athlete wants it back; what
     # stops is the judging.
     if cfg.suppressed_metrics:
-        rows = [r for r in rows if r["metric"] not in cfg.suppressed_metrics]
+        rows = [_row(r["week"], r["metric"], r["value"], r["target"], NODATA,
+                     r["goal"], reason=SUPPRESSED)
+                if r["metric"] in cfg.suppressed_metrics else r
+                for r in rows]
     rows.sort(key=lambda r: (r["week"], r["metric"]))
     return rows
 
