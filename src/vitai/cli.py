@@ -10,18 +10,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import sys
 from datetime import date
-from importlib import resources
 from pathlib import Path
 
 from . import __version__
-from .api import Vitai, schema
+from .api import Vitai, init, schema
 from .jsonl import DataError
-from .schema import (KEYS)
-
-DATASETS = list(KEYS)
 
 
 def _root(args: argparse.Namespace) -> Path:
@@ -33,47 +28,18 @@ def _root(args: argparse.Namespace) -> Path:
 
 
 def cmd_init(args: argparse.Namespace) -> None:
-    target = Path(args.path).resolve()
-    if target.exists() and any(p.name != ".git" for p in target.iterdir()):
-        sys.exit(f"{target} exists and is not empty - refusing to overwrite.")
-    target.mkdir(parents=True, exist_ok=True)
-    tpl = resources.files("vitai") / "templates"
-    for entry in tpl.iterdir():
-        with resources.as_file(entry) as src:
-            shutil.copy(src, target / entry.name)
-    # G26: pin LF on the append-only JSONL so a Windows<->Linux repo does not
-    # bury the supersedes audit trail under CRLF phantom diffs. Written here
-    # rather than shipped as a template dotfile (packaging globs skip dotfiles).
-    (target / ".gitattributes").write_text(
-        "* text=auto\n*.jsonl text eol=lf\n*.md text eol=lf\n",
-        encoding="utf-8", newline="\n")
-    # `derived/` is REBUILDABLE and must never be synced or committed (#105).
-    # The database rebuilds from `data/*.jsonl` in seconds, so syncing it
-    # would make a disposable file load-bearing - and SQLite's main file and
-    # its WAL are separate files that must stay consistent, so a client that
-    # uploads them independently produces a database that is corrupt rather
-    # than merely stale. Written here rather than shipped as a template
-    # dotfile, for the same reason `.gitattributes` is: packaging globs skip
-    # dotfiles.
-    (target / ".gitignore").write_text(
-        "# Rebuilt by `vitai build` from data/*.jsonl. Never sync or commit\n"
-        "# this: it is derived, and a synced SQLite file is corrupt rather\n"
-        "# than merely stale.\n"
-        "derived/\n"
-        "\n"
-        "# Artifacts are personal data (#80). Keep them, but decide\n"
-        "# deliberately how - git-lfs, a sibling directory, an object store -\n"
-        "# rather than by a default nobody chose.\n"
-        "artifacts/\n",
-        encoding="utf-8", newline="\n")
-    (target / "data").mkdir(exist_ok=True)
-    for name in DATASETS:
-        (target / "data" / f"{name}.jsonl").touch()
-    (target / "derived").mkdir(exist_ok=True)
+    """Harness over `api.init`: arguments in, refusal translated, two lines out.
+
+    The translation is the only thing here that is not plumbing. `init` raises
+    so a library caller can catch; a CLI has to become an exit status.
+    """
+    try:
+        target = init(args.path)
+    except FileExistsError as e:
+        sys.exit(str(e))
     print(f"Initialised vitai content repo at {target}")
     print("Next: fill profile.md, tune vitai.toml, keep this repo PRIVATE, "
           "then append data lines and run `vitai build`.")
-
 
 def cmd_build(args: argparse.Namespace) -> None:
     """A harness over `Vitai.load_report()` and `Vitai.build()`."""
