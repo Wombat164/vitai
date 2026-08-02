@@ -134,3 +134,60 @@ def test_the_real_repository_passes():
     This is also the regression that would catch a future commit adding a real
     track or a hard-coded home path."""
     assert gate.main() == 0
+
+
+# ---- the coordinate rule had two false-positive classes --------------------
+
+def test_a_doi_is_not_a_place():
+    """`10.1007/s10472-011-9241-8` matches the coordinate pattern exactly, and
+    a repo that argues from papers produces one every time it cites. Excluded
+    structurally rather than by exempting every citation forever."""
+    assert not gate._coordinate_shaped(
+        "docs/x.md", "Staworko, Chomicki 2012, DOI 10.1007/s10472-011-9241-8")
+    assert not gate._coordinate_shaped(
+        "docs/x.md", "see 10.14778/1920841.1921008 for the divergence rule")
+
+
+def test_a_doi_does_not_shelter_a_coordinate_beside_it():
+    """The premise. Blanking the DOI must not blank the line."""
+    assert gate._coordinate_shaped(
+        "docs/x.md", "DOI 10.1145/1265530.1265535 and the start was 51.5074")
+
+
+def test_the_rule_still_catches_a_place():
+    for line in ("home is at 51.5074, -0.1278",
+                 "lat 51.15831 lon 4.42631",
+                 "the run started at -33.86880"):
+        assert gate._coordinate_shaped("docs/x.md", line), line
+
+
+def test_an_exempt_string_is_scoped_and_re_triggers():
+    """Hashed rather than listed by file, for the same reason
+    `boundary_gate.py` hashes its own: sparing a FILE silently spares whatever
+    is written into it next."""
+    import hashlib
+    from pathlib import Path
+    where, digest = next(iter(gate.EXEMPT_COORD_SHAPED))
+    line = next(l for l in (Path(where).read_text(encoding="utf-8")
+                            .splitlines())
+                if hashlib.sha256(" ".join(l.split()).encode()).hexdigest()
+                == digest)
+    assert not gate._coordinate_shaped(where, line)
+    # the same words in another file inherit nothing
+    assert gate._coordinate_shaped("docs/elsewhere.md", line)
+    # and an edit puts it back in front of a reviewer
+    assert gate._coordinate_shaped(where, line + " 51.5074")
+
+
+def test_every_coordinate_exemption_records_why_and_still_matches():
+    """An exemption whose justification is not written down is
+    indistinguishable from an oversight, and one whose line no longer exists
+    is an exemption nobody can review."""
+    import hashlib
+    from pathlib import Path
+    assert gate.EXEMPT_COORD_SHAPED
+    for (where, digest), reason in gate.EXEMPT_COORD_SHAPED.items():
+        assert len(reason) > 20, (where, reason)
+        live = {hashlib.sha256(" ".join(l.split()).encode()).hexdigest()
+                for l in Path(where).read_text(encoding="utf-8").splitlines()}
+        assert digest in live, f"{where}: no live line hashes to {digest}"
