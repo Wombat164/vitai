@@ -140,13 +140,13 @@ the observation resolver):
 | `date` | ISO date | no | | effective-from (P2: no current-state values; a new line with the same identity key supersedes from its date forward) |
 | `system` | string | no | source/origin slug | `sosa:madeBySensor` framing: names the instrument, matching `origin`, falling back to `source` |
 | `field` | string | no | a dataset column | which measurand this row describes |
-| `condition` | string | yes | open vocab, lowercase-kebab (`open-sky`, `indoor`, `treadmill`) | ssn `Condition`; null = unconditional |
+| `condition` | string | yes | CLOSED vocab: a registered member of `conditions.jsonl`, never free text | ssn `Condition`; null = unconditional, and **null is the expected value**. See the legality gate below. |
 | `u` | number | yes | | STANDARD uncertainty, converted by the engine from `u_given`; never written by hand |
 | `u_given` | number | yes | | the figure as stated by its basis document |
 | `u_given_as` | string | yes (required with u_given) | `standard \| expanded_k2 \| ci95 \| ci99 \| limits \| triangular \| display_step` | ONE canonicaliser converts (GUM Type B table: /2, /1.960, /2.576, /sqrt(3), /sqrt(6), *0.29) |
 | `u_relative` | bool | no (default false) | | proportional (GPS distance) vs absolute (a scale) |
 | `u_eval` | string | yes (required with u_given) | `type_a \| type_b` | GUM 4.2/4.3 evaluation route |
-| `u_condition` | string | yes | `repeatability \| intermediate \| reproducibility` | VIM 2.15 note 2: precision is meaningless without its specified condition |
+| `u_condition` | string | yes | `repeatability \| intermediate \| reproducibility` | VIM 2.15 defines precision as agreement "under specified conditions", so the condition is constitutive of the figure: an unconditioned precision does not satisfy the definition. (VIM does not use the word "meaningless"; do not attribute it.) These are REPLICATION conditions (VIM 2.20/2.22/2.24), a different axis from environmental `condition` above, and the two columns must never be merged. NOTE: ISO 5725-1 calls repeatability and reproducibility "the two extremes", with intermediate cases between them, and ISO 5725-3 requires naming WHICH factors varied. A bare `intermediate` is therefore **not comparable across rows** unless a factor list accompanies it. |
 | `bias` | number | yes | | known systematic offset (VIM 2.18). The engine NEVER auto-corrects (P4: no silent adjustment); a declared bias powers seam detection (#33) and renders as a labelled offset. GUM 6.3.1 noted in the field doc: a known bias belongs here, not widened into `u`. |
 | `resolution_step` | number | yes | | display step dx (ssn `Resolution`); u contribution 0.29*dx, folded in by the canonicaliser only when `u` is otherwise absent (GUM 4.3.10 double-counting ban: never added to an observed-scatter u) |
 | `definitional_u` | number | yes | | VIM 2.27 floor from measurand looseness (fasted? clothed? time of day?). Weight already has a code-level cousin: `clocks.DIURNAL_KG_PER_DAY` is the diurnal component of definitional uncertainty under another name; the capability row makes it declarable per measurand. |
@@ -202,6 +202,70 @@ render layer must not present a `judgement`-based u as a datasheet one
 its condition, which sessions mostly do not record: an observation matching no
 condition row falls back to the unconditional row or to null, never to the
 nearest condition.
+
+### 4b. The condition legality gate (settled by research, 2026-08-02)
+
+The scope question (per field, or per field AND condition) was researched and
+answered: **ship per field. Keep `condition` as a nullable, gated slot and
+populate it with nothing.**
+
+The argument is not cost. It is that **for the conditions this record can
+legally know, condition-scoping and instrument identity are the same
+distinction, and instrument identity is already an axis.** Treadmill distance
+is not GPS distance measured badly; it is a different sensor measuring a
+different construct, so it belongs in a row with a different `system` and
+`competence: proxy`, not as a condition on the GPS row. Once those are removed,
+the conditions that remain (canopy, urban canyon, sky view) are exactly the
+ones that must be INFERRED, and P4 bars inferred data from the deterministic
+path. **The legal cells and the useful cells are disjoint.**
+
+Checked against this record rather than assumed: the watch's route files carry
+latitude, longitude, elevation and time and nothing else, across every
+trackpoint, although the file format's base schema has carried optional fix
+type, satellite count and DOP for two decades. The activity records declare
+only sport, detailed sport and whether a route exists. So the only
+legally-declared condition axis available today is indoor versus route-bearing,
+which the `system` axis already expresses better.
+
+**The gate.** A `condition` value is legal only when it is a total function of
+literal values already present in the source record, resolved by a versioned
+lookup, with an explicit `unknown` output. Concretely, each member registered in
+`conditions.jsonl` must name `derived_from` (the exact source field) and
+enumerate the literal `values` that map to it. **A predicate over a number is
+inference wearing a lookup's clothes** and must be rejected by the validator:
+`elevation_gain > 400 -> mountain` is exactly the smuggling route this gate
+exists to close.
+
+Corroboration from outside the project: the sensor-web standards that define a
+condition-scoped capability slot largely do not populate it, and the two
+neighbouring ecosystems dropped the construct entirely in favour of quality
+attached to the OBSERVATION. Where condition-dependent quality genuinely reaches
+a user at scale (aviation integrity monitoring), it is delivered as a computed
+per-observation bound, never as a published condition matrix.
+
+### 4c. Per-observation uncertainty (`u_obs`), reserved now
+
+Add to the observation row, nullable, with no consumer required in v1:
+
+| field | type | null? | vocabulary | meaning |
+|---|---|---|---|---|
+| `u_obs` | number | yes | | uncertainty stated by the source FOR THIS OBSERVATION |
+| `u_obs_source` | string | yes (required with u_obs) | | which vendor field it came from |
+
+Populated **only** from a vendor-supplied per-observation figure, never computed
+and never derived from a geometry factor: a dilution-of-precision number is
+dimensionless and converting it to metres requires assuming an error budget,
+which is the borrowed figure the numeric-u rule already forbids.
+
+Always null in this record today, because neither the watch nor the platform
+emits one. It is reserved because it is the slot the entire surrounding
+ecosystem converged on (activity-file formats and both mobile platforms all
+ship a per-observation accuracy figure), so a future device turns tier 1 on with
+no schema change.
+
+**Resolution order, strictly top-down:** `u_obs` > declared-condition row >
+unconditional row > null. The display rule reads the same chain, so engine and
+client answer the question once.
 
 ## 5. Qualifications dataset (#168)
 
