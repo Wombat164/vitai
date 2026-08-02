@@ -55,7 +55,17 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # every generation below is unchanged. Confirmed by regenerating: the
 # committed corpora came back byte-identical, which is the evidence that the
 # contract move did not reach them.
-AUTHORED_AGAINST_CONTRACT = "18"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #171 track 2, which added `protocol` to weight and
+# measurements and the `protocols` and `regimes` datasets. REVIEWED rather
+# than bumped: no builder here writes either new dataset or the new field, and
+# the builders None-fill from `KEYS[dataset]`, so `protocol` lands absent on
+# every persona row, and `_gen` moves with it. That is the correct reading:
+# none of these athletes declared a procedure, and asserting one they never
+# followed would be inventing evidence. The corpora DID change - nine weight
+# and measurement files gained `"protocol": null` and a bumped `_gen` - which
+# is the ordinary consequence of regenerating a corpus against a wider schema,
+# and is reviewed here rather than waved through.
+AUTHORED_AGAINST_CONTRACT = "19"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,
@@ -67,12 +77,14 @@ AUTHORED_AGAINST_GENERATIONS = {
     "inferences": 4,
     "journal": 3,
     "meals": 3,
-    "measurements": 7,
+    "measurements": 8,
     "medical": 5,
     "sessions": 9,
     "sets": 4,
+    "protocols": 1,
+    "regimes": 1,
     "thresholds": 3,
-    "weight": 8,
+    "weight": 9,
 }
 
 

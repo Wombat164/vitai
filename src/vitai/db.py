@@ -170,7 +170,21 @@ from .schema import KEYS
 #     suppressed metric now appears as a labelled row rather than as an
 #     absence, which is the doctrine everywhere else in this engine and was
 #     not honoured at the verdict layer.
-CONTRACT_VERSION = "18"
+# 19: protocol and regimes (#171 track 2) - `protocol` on weight and
+#     measurements names the CONDITIONS a measurement was taken under, and a
+#     row without one is a different epistemic class rather than a row with a
+#     missing optional field: it carries the measurand's full definitional
+#     uncertainty, which for body mass dominates instrument error. Plus two
+#     policy datasets: `protocols` defines the slugs in the athlete's own
+#     words, and `regimes` declares a bounded interval whose claims were
+#     UNANCHORED. A consumer must not read an emptied interval as missing
+#     data: the claims are still in `claims`, what ended is their standing as
+#     values, and nothing is filled in behind them because the measurement
+#     that ended a regime is evidence the earlier claims were unanchored
+#     rather than evidence of what the true values were.
+#     RENUMBERED from 18: #177 merged first, and the contract follows
+#     MERGE order rather than issue order.
+CONTRACT_VERSION = "19"
 
 _TEXT_COLS = {"date", "type", "source", "location", "note",
               "kind", "statement", "model", "evidence",

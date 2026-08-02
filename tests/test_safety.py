@@ -465,7 +465,7 @@ def test_build_projects_the_safety_tables(tmp_path):
             "SELECT trigger FROM escalations WHERE level='emergency'"
         ).fetchone()[0] == "cardiac"
         assert con.execute(
-            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "18"
+            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "19"
     finally:
         con.close()
 

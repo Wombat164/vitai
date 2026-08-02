@@ -54,6 +54,7 @@ which is what a UI needs to answer "why did this run not move my bar".
 | 16 | unreleased | `device` on EVERY dataset, naming the machine that wrote the line down - distinct from `source`, which names the instrument that observed the value. Readers take `<dataset>.<device>.jsonl` alongside `<dataset>.jsonl` and union them |
 | 17 | unreleased | `meta` gains a `policy` row: a content hash of the config the record does not hold |
 | 18 | unreleased | `verdicts` gains `reason`: `no_data` was one word for four states, distinguishable only by which fields were null |
+| 19 | unreleased | `protocol` on weight and measurements (the CONDITIONS a measurement was taken under); the `protocols` and `regimes` datasets |
 
 `db.py` carries the same history beside `CONTRACT_VERSION`, at more length
 and with the reasoning. This table is the summary; that comment is the
