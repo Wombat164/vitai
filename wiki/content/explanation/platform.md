@@ -56,6 +56,7 @@ which is what a UI needs to answer "why did this run not move my bar".
 | 18 | unreleased | `verdicts` gains `reason`: `no_data` was one word for four states, distinguishable only by which fields were null |
 | 19 | unreleased | `protocol` on weight and measurements (the CONDITIONS a measurement was taken under); the `protocols` and `regimes` datasets |
 | 20 | unreleased | `derived_from` and `derived_op`: which rows a computed value stands on, and how. Both DECLARED rather than executable - do not re-run `derived_op`, and do not assume the engine did. Rows standing on a shared input count as ONE witness in `independent_sources`, so that number may fall. A value whose input was later restated raises `stale_derivation` and is left in place, flagged rather than corrected |
+| 21 | unreleased | `emissions`: what the engine TOLD the athlete, and when. Pass-through, append-only, never resolved - two assertions on one day are two events, and no correction retires either. Read it as DELIVERED rather than computed: it holds what a consumer surfaced, not what the engine calculated, because a judgement nobody was shown had no consequence to retract. Written at delivery time via `api.assert_delivery`, never at build |
 
 `db.py` carries the same history beside `CONTRACT_VERSION`, at more length
 and with the reasoning. This table is the summary; that comment is the

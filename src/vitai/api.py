@@ -29,7 +29,7 @@ from .config import Config, load_config, policy_digest
 from .contributions import compute_contributions, goal_progress
 from .db import CONTRACT_VERSION, build_db
 from .clocks import is_aware
-from .jsonl import append, append_many, load
+from .jsonl import EVENT_DATASETS, append, append_many, load
 from . import query
 from .policy import (State, context_on, days_between, events_on, plan_churn,
                      state)
@@ -141,6 +141,17 @@ class Vitai:
         keys with null, stamps `_gen`, and validates before writing - an
         append-only file cannot be un-appended.
         """
+        # `emissions` has ONE door, and it is not this one. `assert_delivery`
+        # stamps the contract in force and the delivering surface, and a row
+        # arriving through the generic append could name its own: an assertion
+        # filed as having been made under a shape that was never current, which
+        # the replay that checks whether it still holds would then compare
+        # against the wrong meaning.
+        if name in EVENT_DATASETS:
+            raise ValueError(
+                f"{name} is written by `assert_delivery`, which stamps the "
+                f"contract and the surface. Appending directly would let a "
+                f"caller name either")
         self._forget()
         return append(self.root / "data", name, record,
                       device=self.config.device)
@@ -152,6 +163,17 @@ class Vitai:
         validates every row before writing any, and writes in a single open.
         Looping over `append` re-parses a growing file per row.
         """
+        # `emissions` has ONE door, and it is not this one. `assert_delivery`
+        # stamps the contract in force and the delivering surface, and a row
+        # arriving through the generic append could name its own: an assertion
+        # filed as having been made under a shape that was never current, which
+        # the replay that checks whether it still holds would then compare
+        # against the wrong meaning.
+        if name in EVENT_DATASETS:
+            raise ValueError(
+                f"{name} is written by `assert_delivery`, which stamps the "
+                f"contract and the surface. Appending directly would let a "
+                f"caller name either")
         self._forget()
         return append_many(self.root / "data", name, records,
                            device=self.config.device)
@@ -1018,6 +1040,67 @@ class Vitai:
         "supersedes",
         "note",
     })
+
+    # What a caller may state about an assertion. Everything else on the row
+    # is the ENGINE's to stamp, and an allowlist rather than a denylist because
+    # the denylist version of this on `claim` let `supersedes` through: a
+    # forgotten key on a write path is a capability nobody decided to grant.
+    EMISSION_FIELDS = frozenset({
+        "date", "kind", "metric", "week", "statement", "basis_claims",
+        "policy_asof"})
+
+    def assert_delivery(self, rows: list[dict], surface: str) -> int:
+        """Record that these assertions were SURFACED to the athlete.
+
+        Phase 3 of the uncertainty proposal, 01-schema 8b. Called at DELIVERY
+        time by whatever showed the athlete a judgement, and never at build:
+        build is a pure function of the record, and a build that appended to
+        the record would make a rebuild non-idempotent, which is the
+        record-is-input / database-is-disposable split this engine rests on.
+
+        WHY DELIVERY RATHER THAN COMPUTATION. A computed verdict is
+        rebuildable, so logging every one would duplicate the derived tier
+        into the ground-truth tier and grow without bound on every rebuild.
+        "The engine asserted X to the athlete on day T" is an event in the
+        world: not rebuildable, bounded by actual use, and the only kind of
+        assertion that had a consequence worth retracting later. An unseen
+        verdict was never acted on.
+
+        `contract`, `recorded_at` and `device` are STAMPED HERE and cannot be
+        supplied. A caller that could name its own contract version could file
+        an assertion as having been made under a shape that was not in force,
+        and the replay that checks whether it still holds would compare
+        against the wrong meaning.
+
+        The residual risk, recorded rather than papered over: a consumer that
+        renders a judgement and does not call this produces an assertion the
+        record cannot later retract. That is accepted, because the alternative
+        - logging computation instead of delivery - records the wrong event.
+
+        Returns how many rows were appended.
+        """
+        if not str(surface or "").strip():
+            raise ValueError(
+                "surface names WHICH consumer delivered these, and an "
+                "assertion whose deliverer is unknown cannot be attributed "
+                "when it turns out to have been wrong")
+        out = []
+        for row in rows or []:
+            unknown = sorted(set(row) - self.EMISSION_FIELDS)
+            if unknown:
+                raise ValueError(
+                    f"assert_delivery does not take {', '.join(unknown)}. "
+                    f"`contract`, `recorded_at` and `device` are stamped by "
+                    f"the engine at emission, and the rest is not an "
+                    f"emission field")
+            out.append({**row, "surface": str(surface).strip(),
+                        "contract": CONTRACT_VERSION})
+        if not out:
+            return 0
+        self._forget()
+        append_many(self.root / "data", "emissions", out,
+                    device=self.config.device)
+        return len(out)
 
     def claim(self, dataset: str, values: dict, said: str | None = None,
               read_by: str = "athlete", corrects: str | None = None,
