@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from pathlib import Path
+from statistics import mean
 
 from .config import Config, load_config, policy_digest
 from .contributions import compute_contributions, goal_progress
@@ -32,8 +33,8 @@ from .policy import (State, context_on, days_between, events_on, plan_churn,
 from .report import build_report
 from .resolution import live_inferences, resolve, retractions
 from .safety import (
-    active_episodes, banner, escalations, gates_on, hold_gates, is_gated,
-    urgent_now,
+    DISCLAIMER, active_episodes, banner, escalations, gates_on, hold_gates,
+    is_gated, urgent_now,
 )
 from .schema import KEYS
 from .verdicts import compute_verdicts
@@ -172,6 +173,130 @@ class Vitai:
         """
         from .artifacts import DirectoryStore
         return DirectoryStore(self.root / "artifacts")
+
+    # --- pure functions the CLI used to reach for directly (#158) ----------
+    #
+    # Each of these is a formatting or interpretation rule that belongs to the
+    # engine: what a failed attempt IS, what a meal item's energy IS, which
+    # way a route ran, what a recovery phrase decodes to. The CLI imported
+    # them from their modules, which meant an agent rendering the same things
+    # had to know which module answers which question, and every one of those
+    # is a private detail that will move.
+    #
+    # STATIC where they take no record, because requiring a content repo to
+    # decode a phrase would be a privilege the interface should not have.
+
+    @staticmethod
+    def is_failed_attempt(row: dict) -> bool:
+        """A set that was attempted and not completed (contract 14).
+
+        THE case that dataset exists for: "0 reps" reads as nothing happened,
+        and a failed attempt is the most informative set in a progression.
+        """
+        from .sets import is_failed_attempt
+        return is_failed_attempt(row)
+
+    @staticmethod
+    def item_energy(row: dict):
+        """kcal for one meal item, DERIVED from its quantity (contract 15)."""
+        from .meals import item_energy
+        return item_energy(row)
+
+    @staticmethod
+    def quantity_range(row: dict):
+        """(lo, point, hi) grams for a meal item, or None.
+
+        The range IS the confidence statement, so a consumer that collapses
+        it to the point has thrown away the only thing that said how sure the
+        estimate was.
+        """
+        from .meals import quantity_range
+        return quantity_range(row)
+
+    @staticmethod
+    def modifier_axes() -> dict:
+        """The axes a set's configuration is described on (#99).
+
+        `categorical` are free labels; `machine_scoped` are numbers that mean
+        NOTHING without the machine that scoped them - `level 15` on its own
+        is the confident wrong answer #60 was filed about. A consumer
+        rendering a set needs to know which is which, and had to import a
+        private module to find out.
+        """
+        from .modifiers import CATEGORICAL, MACHINE_SCOPED
+        return {"categorical": tuple(CATEGORICAL),
+                "machine_scoped": tuple(MACHINE_SCOPED)}
+
+    @staticmethod
+    def compass(bearing: float) -> str:
+        """A bearing as a compass point."""
+        from .route import compass
+        return compass(bearing)
+
+    @staticmethod
+    def new_recovery_key() -> tuple[bytes, str]:
+        """A fresh key and its checksummed paper phrase (#107)."""
+        from .recovery import generate, to_phrase
+        key = generate()
+        return key, to_phrase(key)
+
+    @staticmethod
+    def key_from_phrase(typed: str) -> tuple[bytes | None, str | None]:
+        """Decode a recovery phrase. Returns (key, problem); one is None.
+
+        The half that matters is the refusal: the failure mode is not "never
+        wrote it down", it is "believed they wrote it down correctly".
+        """
+        from .recovery import from_phrase
+        return from_phrase(typed)
+
+    def manifest(self) -> dict:
+        """The artifacts this record still holds, by content address.
+
+        Live rows only: a removal is a tombstone, and REMOVED IS NOT MISSING
+        (contract 13). Exposed because `vitai artifact ls` derived it from
+        `artifacts.live_manifest` directly (#158), so an agent listing the
+        evidence had to know which module answers that and which rows to drop.
+        """
+        from .artifacts import live_manifest
+        return live_manifest(self.dataset("artifacts"))
+
+    def why_absent(self, ref: str) -> str:
+        """Deleted, lost, or never here. Three different facts, said plainly.
+
+        A consumer that renders all three as "missing" turns a retention
+        decision into a data-loss alarm, which contract 13 names as the thing
+        not to get wrong - so the engine answers it rather than each client.
+        """
+        from .artifacts import live_manifest, removed_refs
+        rows = self.dataset("artifacts")
+        if ref in removed_refs(rows):
+            removals = [r for r in rows
+                        if r.get("sha256") == ref and r.get("removed")]
+            why = ((removals[-1].get("reason") or "no reason recorded")
+                   if removals else "")
+            return (f"the athlete deleted it ({why}). The value it backed "
+                    "stands")
+        if ref in live_manifest(rows):
+            return ("the manifest holds it and the store does not, so the "
+                    "bytes were lost rather than deleted. Adding the same "
+                    "artifact again repairs it")
+        return "no manifest row has ever mentioned this hash"
+
+    @staticmethod
+    def is_reference(ref: str) -> bool:
+        """Is this a content address rather than a path? (contract 13)"""
+        from .artifacts import is_reference
+        return is_reference(ref)
+
+    @staticmethod
+    def artifact_faults(findings: list[dict]) -> list[dict]:
+        """The findings that are FAILURES, of the ones `verify_artifacts`
+        returns. Only a claim the evidence can no longer back is a fault: a
+        deliberate removal, an orphan and a not-yet-cited artifact are all
+        reported and none of them is broken."""
+        from .artifacts import faults
+        return faults(findings)
 
     def add_artifact(self, payload: bytes, media_type: str,
                      **fields) -> dict:
@@ -622,9 +747,18 @@ class Vitai:
         """The fast path: escalations that must not wait for the weekly rollup."""
         return urgent_now(self.safety(on), on=on or self.on)
 
-    def safety_banner(self, on: date | str | None = None) -> str:
-        """The fixed escalation text for the fast path; empty when clear."""
-        return banner(self.urgent(on))
+    def safety_banner(self, on: date | str | None = None,
+                      every: bool = False) -> str:
+        """The fixed escalation text; empty when clear.
+
+        `every` renders EVERY escalation the record justifies rather than only
+        the fast-path ones. The CLI's `safety --all` had this and the API did
+        not, so it reached for `safety.banner` directly (#158) - and this text
+        is reviewed, fixed and never model-authored, which makes "who may
+        render it" a question the engine should answer rather than each
+        consumer.
+        """
+        return banner(self.safety(on) if every else self.urgent(on))
 
     def verdicts(self, today: date | None = None) -> list[dict]:
         d = self.canonical()
@@ -765,6 +899,274 @@ class Vitai:
                          events=self.events(on)),
             encoding="utf-8", newline="\n")
         return db
+
+    @staticmethod
+    def conform(kind: str, impl) -> dict:
+        """Run a contract suite against an implementation, bundled or not.
+
+        Exposed here because #158's acceptance says no CLI command may contain
+        logic absent from the API, and this one did: running the suite existed
+        only in `cmd_conform`. That is the wrong capability to leave CLI-only,
+        because `conform.py`'s whole argument is that a third party can check
+        their own implementation on the same terms the bundled ones are
+        checked, and "shell out and parse the printed lines" is not the same
+        terms.
+
+        Takes an IMPLEMENTATION rather than a name, and `implementation()`
+        resolves names, because they fail differently: a name that is neither
+        bundled nor a dotted path is a typo, and an import that blows up is a
+        broken implementation. Folding both into one call meant one except
+        clause covered the suite run too, so a TypeError from deep inside a
+        third party's transport was reported as "could not construct" - which
+        names the wrong thing and hides a traceback worth seeing.
+
+        STATIC on purpose: conformance is about an implementation, not about a
+        record, and requiring a content repo to check a transport would be a
+        privilege the interface should not have.
+
+        Returns `{"findings": [...], "failures": [...], "ok": bool}`.
+        """
+        from . import conform as suites
+        suite = {"transport": suites.transport, "custody": suites.custody}
+        if kind not in suite:
+            raise ValueError(f"kind must be transport or custody, not {kind!r}")
+        findings = suite[kind](impl)
+        failures = suites.failures(findings)
+        return {"findings": findings, "failures": failures,
+                "ok": not failures}
+
+    @staticmethod
+    def implementation(kind: str, spec: str, at: Path | str):
+        """A bundled name or a dotted path, with no difference in privilege.
+
+        The bundled implementations are reached the same way anyone else's
+        are: resolved by name, constructed, handed to the same suite. If the
+        golden path had a shortcut here, the interface would be decoration.
+        """
+        from . import sync
+        where = Path(at)
+        bundled = {
+            "transport": {
+                "directory": lambda: sync.DirectoryTransport(where),
+                "memory": sync.MemoryTransport,
+                "mirror": lambda: sync.MirrorTransport(
+                    sync.DirectoryTransport(where), sync.MemoryTransport()),
+            },
+            "custody": {
+                "file": lambda: sync.FileCustody(where / "key"),
+                "env": lambda: sync.EnvCustody("VITAI_KEY"),
+            },
+        }[kind]
+        if spec in bundled:
+            return bundled[spec]()
+        module, _, attr = spec.rpartition(".")
+        if not module:
+            raise ValueError(
+                f"{spec!r} is neither a bundled {kind} "
+                f"({', '.join(sorted(bundled))}) nor a dotted path to one")
+        import importlib
+        return getattr(importlib.import_module(module), attr)()
+
+    def load_report(self) -> dict:
+        """What a load of this record SAW: counts, quarantined lines, warnings.
+
+        `cmd_build` derived all three itself (#158), which meant an agent
+        could rebuild a record and had no way to learn that eleven lines had
+        been quarantined on the way. G26 is that a malformed line never aborts
+        a read - it is skipped and REPORTED - and a report only one consumer
+        can reach is half of that rule.
+
+        Warnings are schema complaints about lines that loaded: they do not
+        stop a build, and `validate()` is where they are problems.
+        """
+        from .jsonl import load_report as _load
+        from .schema import validate_record
+
+        counts: dict[str, int] = {}
+        quarantined: list[str] = []
+        warnings: list[str] = []
+        for name in KEYS:
+            records, errors = _load(self.root / "data", name)
+            counts[name] = len(records)
+            quarantined += errors
+            for rec in records:
+                warnings += [f"{name}.jsonl {rec.get('date')}: {p}"
+                             for p in validate_record(name, rec)]
+        return {"counts": counts, "quarantined": quarantined,
+                "warnings": warnings}
+
+    def validate(self) -> dict:
+        """Every problem and every advisory in this record.
+
+        Moved here from `cmd_validate` (#158): it existed only in the CLI, so
+        an agent could not ask whether a record was sound without shelling out
+        and parsing prose. P9 says the CLI is a harness over this, and for
+        this capability there was nothing to harness.
+
+        Returns `{"problems": [...], "advisories": [...], "ok": bool}`. It
+        RAISES NOTHING and exits nothing: deciding what a problem means is the
+        caller's, and a library that calls `sys.exit` cannot be used by one.
+
+        Problems fail a build; advisories never do. The distinction is
+        load-bearing and is the engine's, not the caller's: an advisory
+        describes a row that is legal and already on disk, and making those
+        errors would demand a migration before the record could be built at
+        all (#38).
+        """
+        from .devices import stream_paths
+        from .jsonl import read_lines
+        from .schema import (corrections_that_did_not_apply,
+                             impossible_claim_problems, recorded_at_problems,
+                             supersedes_problems, timestamp_advisories,
+                             unranked_source_problems,
+                             unstamped_after_the_clock_started,
+                             validate_record)
+
+        cfg = self.config
+        ranked = set(cfg.source_order) | {
+            s for ladder in cfg.precedence.values() for s in ladder}
+        problems: list[str] = []
+        advisories: list[str] = []
+
+        for name in KEYS:
+            # EVERY device file, not just the plain one (#105). Reading only
+            # `<name>.jsonl` meant a malformed or invalid line in
+            # `<name>.laptop.jsonl` passed clean and was then quarantined by
+            # the build, and monotonicity, unranked sources and supersedes
+            # ambiguity were all skipped for every device stream - precisely
+            # when the union makes cross-file collisions likelier.
+            #
+            # Per FILE for the per-line checks, so a message names the file
+            # the reader has to open. The file-level checks below run over the
+            # merged stream, because monotonicity across a union is the
+            # question that actually matters once a second device exists.
+            rows: list[tuple[int, dict]] = []
+            for path in stream_paths(self.root / "data", name):
+                found, parse_errors = read_lines(path)
+                # G26: report EVERY malformed line.
+                problems += [f"MALFORMED: {e}" for e in parse_errors]
+                for n, rec in found:
+                    problems += [f"{path.name} line {n}: {p}"
+                                 for p in validate_record(name, rec)]
+                # PER FILE, unlike the checks below: the rule is "this file's
+                # clock started", and a file is what has a clock.
+                advisories += unstamped_after_the_clock_started(path.name,
+                                                                found)
+                rows += found
+            # File-level: transaction time must be monotonic and tie-free
+            # (#37). Neither is a property of any single line.
+            problems += recorded_at_problems(name, rows)
+            problems += unranked_source_problems(name, rows, ranked)
+            problems += impossible_claim_problems(name, rows)
+            problems += supersedes_problems(name, rows)
+            advisories += corrections_that_did_not_apply(name, rows)
+            advisories += timestamp_advisories(name, rows)
+            # A missing track file is NOT a missing session: the session is
+            # the fact and the track is an attachment, so a broken pointer is
+            # reported and never fails the build (#43).
+            for n, rec in rows:
+                if (t := rec.get("track")) and not (self.root / str(t)).exists():
+                    advisories.append(
+                        f"{name}.jsonl line {n}: track {t!r} is not in this "
+                        "repo - the session stands, but its geometry cannot "
+                        "be rebuilt")
+
+        return {"problems": problems, "advisories": advisories,
+                "ok": not problems}
+
+    def accept_inferences(self, rows: list[dict]) -> int:
+        """Append validated inference rows and rebuild. Returns the count.
+
+        Separate from `infer()` because running a model and COMMITTING what it
+        said are two different acts, and folding them together meant the rows
+        were on disk before any caller had seen them: if the rebuild raised,
+        the CLI had appended lines it never echoed, and the echo exists so a
+        script can log exactly what it committed.
+        """
+        from .inference import append_inferences
+        appended = append_inferences(self.root, rows)
+        self.build()
+        return appended
+
+    def infer(self, today: date | None = None) -> dict:
+        """Run the opt-in inference layer. A model reads; the engine decides.
+
+        Moved here from `cmd_infer` (#158), same reason as `validate`. P4 is
+        unchanged and unchangeable: nothing a model produces becomes a number,
+        a severity or a verdict, and every candidate is validated before it
+        can be appended.
+
+        Returns `{"accepted": [...], "rejected": [...]}` and APPENDS NOTHING.
+        `rejected` carries the reasons rather than a count, because an agent
+        that cannot see WHY a candidate was refused will simply send it again.
+        Commit the accepted rows with `accept_inferences()`.
+        """
+        from .config import load_inference_config
+        from .inference import backend_from_config, run_inference
+
+        cfg = load_inference_config(self.root)
+        if not cfg:
+            raise ValueError(
+                "no [inference] section in vitai.toml - inference is opt-in; "
+                "see the template for claude-cli / openai-compatible examples")
+        data = self.datasets()
+        valid, errors = run_inference(
+            self.root, backend_from_config(cfg), self.rollup(),
+            data["daily"], data["sessions"], data["inferences"],
+            today or self.on,
+            max_items=int(cfg.get("max_items", 5)))
+        return {"accepted": valid, "rejected": errors}
+
+    def status(self) -> dict:
+        """The one-line state, with everything the line used to compute itself.
+
+        P9 says the CLI is a thin harness over this API and never a separate
+        code path (#158). `cmd_status` was the standing counter-example: it
+        loaded the datasets itself, derived a seven-day rate and a direction
+        word, and read tripwire count out of `derived/weekly.md` by string
+        prefix - none of which existed here, so no agent could obtain what
+        the CLI printed without reimplementing it.
+
+        Worse than duplicated: DIVERGED. The CLI's version still opened with
+        "no weight data yet" on an empty record, which is exactly the
+        weight-first behaviour `status_line` was rewritten to remove (G62/G64)
+        - an athlete who had refused a weight goal was told at every session
+        that she had failed to weigh herself.
+
+        Returns the parts, not a sentence, because a consumer that has to
+        decide something needs the rate rather than the phrase containing it.
+        """
+        pts = sorted((w["date"], w["kg"]) for w in self.dataset("weight")
+                     if w.get("kg") is not None)
+        out = {
+            "line": self.status_line(),
+            "on": self.on.isoformat(),
+            "rate_kg_per_week": None,
+            "direction": None,
+            "mean_kg_7d": None,
+            "tripwires": None,
+            "disclaimer": DISCLAIMER,
+        }
+        if len(pts) >= 8:
+            vals = [v for _, v in pts[-7:]]
+            prev = [v for _, v in pts[-14:-7]] or vals
+            days = (datetime.fromisoformat(pts[-1][0])
+                    - datetime.fromisoformat(pts[-8][0])).days
+            if days:
+                rate = (mean(prev) - mean(vals)) / days * 7
+                out["rate_kg_per_week"] = rate
+                out["mean_kg_7d"] = mean(vals)
+                # G69, the same rule the rollup uses: a bare signed rate reads
+                # backwards to anyone who has not memorised that positive
+                # means losing. The WORD is the engine's, not the caller's.
+                out["direction"] = ("losing" if rate > 0 else
+                                    "gaining" if rate < 0 else "holding")
+        weekly = self.root / "derived" / "weekly.md"
+        if weekly.exists():
+            out["tripwires"] = sum(
+                1 for ln in weekly.read_text(encoding="utf-8").splitlines()
+                if ln.startswith("- **"))
+        return out
 
     def status_line(self) -> str:
         """One line of state, led by what the athlete actually tracks.

@@ -718,3 +718,189 @@ def test_neither_table_invents_a_contract():
     for path in ("README.md", "wiki/content/explanation/platform.md"):
         extra = _table_contracts(path) - documented
         assert not extra, f"{path} documents contracts that do not exist: {sorted(extra)}"
+
+
+# ---- #158: the CLI is a harness over the API, and stays one ----------------
+#
+# P9 is doctrine: "the CLI is a thin harness over the same `vitai.api` the
+# platform consumes, never a separate code path". It was not true. `cmd_status`
+# loaded the datasets itself and derived a rate and a trend word the API had no
+# way to produce; `validate` and `infer` existed only in the CLI; `cmd_build`
+# reimplemented the load-and-validate loop.
+#
+# That mattered beyond tidiness. An agent had exactly two options - shell out
+# and parse prose, or read the JSONL and reimplement the engine's own reading
+# rules - and the CLI's copy of `status` had DIVERGED, still opening with "no
+# weight data yet" on an empty record, which is the weight-first behaviour the
+# API was rewritten to remove (G62/G64).
+#
+# Mechanical, because prose did not hold it: this regressed silently for
+# months while the principle sat in `docs/model.md` being agreed with.
+
+# What the CLI may import from the engine, and why each one is not logic.
+#
+# `Vitai` is the surface. `KEYS` is the list of dataset NAMES, which argparse
+# needs to build its choices before any engine call happens. `DataError` is an
+# exception type to catch. Anything else is a capability, and a capability the
+# CLI can reach directly is one an agent cannot.
+CLI_MAY_IMPORT = {
+    "api": {"Vitai"},
+    "jsonl": {"DataError"},
+    "schema": {"KEYS"},
+    "": {"__version__"},          # `from . import __version__`
+}
+
+
+def _cli_engine_imports():
+    """Every way cli.py can name an engine module.
+
+    RELATIVE AND ABSOLUTE, and plain `import` as well as `from`. The first cut
+    inspected only relative `ImportFrom`, which is the house style here and so
+    catches a copy-paste regression - but `from vitai.resolution import
+    resolve` and `import vitai.safety` both sailed through, and the absolute
+    form is exactly what an IDE auto-import emits. A guard that misses the
+    likeliest accidental regression is worth very little.
+    """
+    import ast
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1]
+           / "src" / "vitai" / "cli.py").read_text(encoding="utf-8")
+    out = {}
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.ImportFrom):
+            mod = node.module or ""
+            if node.level:
+                key = mod
+            elif mod == "vitai" or mod.startswith("vitai."):
+                key = mod[len("vitai."):] if mod != "vitai" else ""
+            else:
+                continue  # a third-party or stdlib import is not our business
+            out.setdefault(key, set()).update(a.name for a in node.names)
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "vitai" or alias.name.startswith("vitai."):
+                    # `import vitai.safety` binds the whole package, so every
+                    # module under it is reachable. Reported under its own
+                    # name so the message says which one.
+                    key = alias.name[len("vitai."):]
+                    out.setdefault(key, set()).add("<module>")
+    return out
+
+
+def test_the_cli_reaches_the_engine_only_through_the_api():
+    """A capability the CLI can reach directly is one an agent cannot.
+
+    This is the acceptance criterion of #158 stated as a test: "No CLI command
+    contains logic absent from `vitai.api`." Import surface is the mechanical
+    proxy - a command cannot reimplement `resolution` or `safety` without
+    importing them.
+    """
+    got = _cli_engine_imports()
+    for module, names in sorted(got.items()):
+        allowed = CLI_MAY_IMPORT.get(module)
+        assert allowed is not None, (
+            f"cli.py imports from `{module}`, which is engine logic. Add the "
+            f"capability to vitai.api and harness it, or justify it in "
+            f"CLI_MAY_IMPORT with the reason it is not logic.")
+        extra = names - allowed
+        assert not extra, (
+            f"cli.py imports {sorted(extra)} from `{module}`. Those are "
+            f"capabilities an agent cannot reach; move them to vitai.api.")
+
+
+def test_the_guard_sees_every_way_of_naming_an_engine_module():
+    """The holes the first cut had, each demonstrated against the detector
+    rather than argued about."""
+    import ast
+    import textwrap
+
+    def detect(src):
+        out = {}
+        for node in ast.walk(ast.parse(textwrap.dedent(src))):
+            if isinstance(node, ast.ImportFrom):
+                mod = node.module or ""
+                if node.level:
+                    key = mod
+                elif mod == "vitai" or mod.startswith("vitai."):
+                    key = mod[len("vitai."):] if mod != "vitai" else ""
+                else:
+                    continue
+                out.setdefault(key, set()).update(a.name for a in node.names)
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.startswith("vitai."):
+                        out.setdefault(alias.name[len("vitai."):],
+                                       set()).add("<module>")
+        return out
+
+    assert "resolution" in detect("from .resolution import resolve")
+    assert "resolution" in detect("from vitai.resolution import resolve")
+    assert "safety" in detect("import vitai.safety")
+    assert "policy" in detect("""
+        def f():
+            from vitai.policy import state
+    """)
+    # A genuinely unrelated import must not be reported, or the guard cries
+    # wolf and gets an allowlist entry per stdlib module.
+    assert detect("import json\nfrom pathlib import Path") == {}
+
+
+def test_every_capability_the_cli_prints_exists_on_the_api():
+    """The four that were missing, asserted by name so a deletion is loud."""
+    from vitai.api import Vitai
+    for capability in ("status", "validate", "infer", "accept_inferences",
+                       "load_report", "conform", "implementation", "manifest",
+                       "why_absent", "safety_banner", "status_line", "build"):
+        assert callable(getattr(Vitai, capability, None)), capability
+
+
+def test_status_is_the_same_answer_through_both_doors(tmp_path, capsys):
+    """The CLI's copy had diverged from the API's, which is the failure P9
+    exists to prevent, and it stayed invisible because nothing compared them.
+    """
+    import json
+
+    from vitai.api import Vitai
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    (root / "data" / "weight.jsonl").write_text("\n".join(json.dumps(
+        {"date": f"2026-05-{n:02d}", "kg": 80.0 - n * 0.1, "source": "scale",
+         "note": None}) for n in range(1, 20)) + "\n", encoding="utf-8")
+
+    capsys.readouterr()
+    main(["status", "--root", str(root)])
+    printed = capsys.readouterr().out
+    assert Vitai(root).status()["line"] in printed
+
+
+def test_an_empty_record_is_not_told_it_failed_to_weigh_itself(tmp_path,
+                                                               capsys):
+    """The concrete divergence. An athlete who had refused a weight goal was
+    told at every session that she had failed to weigh herself (G62/G64); the
+    API was rewritten and the CLI's copy was not."""
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    capsys.readouterr()
+    main(["status", "--root", str(root)])
+    out = capsys.readouterr().out
+    assert "no weight data yet" not in out
+    assert "nothing logged yet" in out
+
+
+def test_validate_returns_a_report_rather_than_exiting(tmp_path):
+    """A library that calls `sys.exit` cannot be used by one. Deciding what a
+    problem MEANS is the caller's."""
+    import json
+
+    from vitai.api import Vitai
+    from vitai.cli import main
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    (root / "data" / "weight.jsonl").write_text(
+        json.dumps({"date": "2026-05-01", "kg": 80.0}) + "\n", encoding="utf-8")
+    report = Vitai(root).validate()
+    assert report["ok"] is False
+    assert report["problems"]
+    assert isinstance(report["advisories"], list)
