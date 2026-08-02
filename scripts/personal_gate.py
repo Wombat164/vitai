@@ -95,6 +95,39 @@ SELF = "scripts/personal_gate.py"
 # which a number stops being a rounded landmark and starts being a place.
 COORD_RE = re.compile(r"(?<![\w.])[-+]?\d{1,3}\.\d{4,}(?![\w.])")
 
+# A DOI IS NOT A PLACE. `10.1007/s10472-011-9241-8` matches the pattern above
+# exactly, and a repo that cites literature will produce one every time it
+# argues from a paper - which made this a recurring false positive rather than
+# a one-off. Excluded STRUCTURALLY, by the shape only a DOI has: the registrant
+# prefix is always `10.` followed by four or more digits and then a slash.
+#
+# The trade is stated rather than hidden: a real latitude between 10.0 and
+# 10.9999 written immediately before a slash would now pass. That is a shape
+# no coordinate format in this repo produces, and the alternative was
+# exempting every citation by hand forever.
+DOI_RE = re.compile(r"(?<![\w.])10\.\d{4,}/")
+
+# Coordinate-shaped strings that are NOT coordinates, keyed by (file, hash of
+# the normalised line) and each carrying its reason.
+#
+# Hashed rather than listed by file, for the same reason `boundary_gate.py`
+# hashes its own: sparing a FILE silently spares whatever is written into it
+# next, while sparing a STRING means an edit re-triggers review. This gate had
+# no exemption facility at all, so its only two answers were "pass" and
+# "rewrite the sentence" - and a mathematical constant is not a sentence
+# anybody should have to rewrite.
+EXEMPT_COORD_SHAPED: dict[tuple[str, str], str] = {
+    ("docs/proposals/uncertainty/03-tests.md",
+     "05b8781bc3793c94203d54bc72620b6f1a40173f7ca7730190039a95ee7a57d5"):
+        "1.1547 is 2/sqrt(3), the rectangular-to-standard conversion factor",
+    ("docs/proposals/uncertainty/03-tests.md",
+     "2c91992bbf6d3503a28805b68b9f0ce64cca987d2ef7109c566df2ba6a184320"):
+        "1.732050 and 2.449489 are sqrt(3) and sqrt(6), a conversion table",
+    ("docs/proposals/uncertainty/03-tests.md",
+     "e1ed4ee8abf9a30540958c4f6ffa470a0824830ebc36f27e9016162773bbff67"):
+        "0.7071 is 1/sqrt(2), the fused uncertainty of two equal inputs",
+}
+
 # A geo field name followed by a NUMBER, for data that names coordinates
 # without enough decimals to trip the pattern above. The number is the point:
 # `lat: float` is code that handles geodata, `lat="51.21"` is geodata, and a
@@ -130,6 +163,25 @@ def synthetic(path: Path) -> bool:
     return posix == SELF or posix.startswith(SYNTHETIC_PREFIXES)
 
 
+def _coordinate_shaped(posix: str, text: str) -> bool:
+    """Does this file carry a decimal precise enough to be a place?
+
+    PER LINE, and with two escapes, because the pattern alone had two
+    recurring false positives that were not places at all: a DOI, which is a
+    whole CLASS and is excluded structurally, and a mathematical constant,
+    which is an individual decision and is recorded as one.
+    """
+    for line in text.splitlines():
+        if not COORD_RE.search(DOI_RE.sub(" ", line)):
+            continue
+        key = (posix, hashlib.sha256(
+            " ".join(line.split()).encode()).hexdigest())
+        if key in EXEMPT_COORD_SHAPED:
+            continue
+        return True
+    return False
+
+
 def numeric_findings(path: Path, text: str) -> list[str]:
     """What a word matcher cannot see: coordinates and home paths (#64)."""
     found: list[str] = []
@@ -144,7 +196,8 @@ def numeric_findings(path: Path, text: str) -> list[str]:
                      "door, so it is allowed only where it is provably synthetic")
     if not synthetic(path):
         if path.suffix.lower() not in NOT_GEODATA:
-            if COORD_RE.search(text) or GEO_NAME_RE.search(text):
+            if (_coordinate_shaped(posix, text)
+                    or GEO_NAME_RE.search(text)):
                 found.append("coordinate-shaped data outside a synthetic path")
         if HOME_PATH_RE.search(text):
             found.append("an absolute home-directory path (leaks a username "

@@ -980,6 +980,160 @@ class Vitai:
         import importlib
         return getattr(importlib.import_module(module), attr)()
 
+    # --- write parity (#158 rung 4) -------------------------------------
+    #
+    # The vocabulary already exists and is in live use. What was missing is
+    # that a consumer could reach it without hand-writing JSONL, which meant
+    # every agent re-implemented the provenance stamping and each one got a
+    # slightly different answer about what a spoken number IS.
+
+    # What the ENGINE stamps and a caller may never assert. `recorded_at` and
+    # `device` are already refused by `append_many` for the same reason; the
+    # other two are refused because a caller that could set them could file a
+    # recollection as a device reading, and the ladder ranks `stated-in-chat`
+    # ABOVE a connector export (#140, #167).
+    NARRATIVE = {"capture": "narrative", "source": "stated-in-chat"}
+    # AN ALLOWLIST, because a denylist on a write path is wrong by
+    # construction. The first cut enumerated what a caller may NOT set and
+    # left everything unlisted open, which fails silently every time the
+    # schema grows. What rode through it:
+    #
+    #   `supersedes`  the record's only DESTRUCTIVE primitive. A narrative
+    #                 claim could permanently retire a device reading, with
+    #                 provenance saying the athlete stated it.
+    #   `origin`      corroboration built out of nothing: setting it made a
+    #                 chat claim count as an INDEPENDENT witness, which is
+    #                 exactly what `provenance.py` exists to prevent.
+    #   `path`, `origin_evidence`, `artifact`, `type_source`, `_gen`
+    #
+    # So everything a caller may NOT set is named, and the quantities are
+    # checked against the dataset's own keys. A provenance field added
+    # tomorrow lands here rather than silently becoming settable.
+    NOT_A_QUANTITY = frozenset({
+        "recorded_at", "device", "capture", "source", "read_by", "_gen",
+        "origin", "path", "origin_evidence", "artifact", "modelled",
+        "type_source", "activity_source",
+        "supersedes",
+        "note",
+    })
+
+    def claim(self, dataset: str, values: dict, said: str | None = None,
+              read_by: str = "athlete", corrects: str | None = None,
+              on: date | str | None = None) -> dict:
+        """Append ONE claim the athlete stated, with provenance the engine sets.
+
+        A spoken rep count becomes a line carrying `capture: narrative`,
+        `source: stated-in-chat` and a `recorded_at` the engine sets. The
+        caller supplies the quantities and nothing else.
+
+        REFUSAL IS THE POINT, and it belongs here rather than in each agent.
+        "Some push-ups" is not a rep count, and the place to decide that once
+        is the engine: an agent that validates for itself is an agent that
+        will eventually decide "some" means three. A value this cannot accept
+        raises with the engine's own reason, which is a sentence an agent can
+        relay rather than a code it has to interpret.
+
+        `said` is the athlete's own words, kept verbatim in `note`. Not
+        decoration: it is the only record of what the number was derived
+        FROM, and #168 exists because a qualification has nowhere else to sit.
+
+        `read_by` is required by the engine whenever the capture involved
+        somebody reading, and narrative does - the engine refused the first
+        version of this method for exactly that reason. It defaults to
+        `athlete` because the commonest case is the athlete saying a number
+        they know. An agent transcribing what it heard should pass `model`,
+        and the difference is worth carrying: RECORDING who read is not
+        ranking who read, and #140 deliberately declined to rank people while
+        keeping the field.
+        """
+        if dataset not in KEYS:
+            raise KeyError(f"unknown dataset {dataset!r}; "
+                           f"one of {sorted(KEYS)}")
+        refused = sorted(k for k in values if k in self.NOT_A_QUANTITY)
+        if refused:
+            hints = {"read_by": "the `read_by` parameter",
+                     "supersedes": "the `corrects` parameter",
+                     "note": "the `said` parameter"}
+            named = [f"{k} (use {hints[k]})" if k in hints else k
+                     for k in refused]
+            raise ValueError(
+                f"not a quantity: {', '.join(named)}. A caller supplies what "
+                "was stated and nothing else - one that could set these could "
+                "file a recollection as a device reading, manufacture an "
+                "independent witness out of nothing, or retire a measurement")
+        unknown = sorted(set(values) - set(KEYS[dataset]))
+        if unknown:
+            raise ValueError(f"{dataset} has no field(s) "
+                             f"{', '.join(unknown)}")
+        if not {k: v for k, v in values.items()
+                if k != "date" and v is not None}:
+            # An all-null row is permanent junk in an append-only record, and
+            # it is the likeliest agent slip: the quantity went into `said`
+            # instead of into a field.
+            raise ValueError(
+                f"no quantity was stated for {dataset}. If the athlete said "
+                "something no number can honestly be taken from, append it "
+                "with `said()` rather than an empty row")
+        from .provenance import READERS
+        if read_by not in READERS:
+            raise ValueError(f"read_by is one of {', '.join(READERS)}, "
+                             f"got {read_by!r}")
+        row = dict(values)
+        row.update(self.NARRATIVE)
+        row["read_by"] = read_by
+        if said is not None:
+            said = str(said).strip()
+            if not said:
+                raise ValueError("said was given and is empty; omit it rather "
+                                 "than recording that nothing was said")
+            row["note"] = said
+        if corrects is not None:
+            # EXPLICIT, because it is destructive: a supersede retires the
+            # line it names on every future load, and a caller that reached
+            # it by putting a key in a dict would not have decided to.
+            row["supersedes"] = corrects
+        # The VIEWPOINT is the write date. Worth knowing rather than
+        # discovering: an engine pinned to a past date for a historical
+        # question stamps a claim with that date. Pass `on` to say otherwise.
+        when = on if on is not None else self.on
+        if isinstance(when, str):
+            when = date.fromisoformat(when)
+        row.setdefault("date", when.isoformat())
+        return self.append(dataset, row)
+
+    def said(self, text: str, kind: str = "claim",
+             about: str | None = None, on: date | str | None = None) -> dict:
+        """Append what the athlete SAID, when no number can be taken from it.
+
+        The other half of the refusal, and the half that makes refusing safe.
+        Zero guessed numbers, but always exactly one appended line: a rule
+        that answers "I did some push-ups" by writing nothing hands the record
+        to whichever tool is willing to write the sentence down, and an
+        account of a session nobody measured is the capture this product
+        exists for.
+
+        Lands in `journal`, where the athlete's own words live: their
+        statements are observations of a STATEMENT rather than engine
+        inferences, which is why they have their own dataset instead of
+        sitting in `inferences` (P3, no laundering in either direction).
+        """
+        text = str(text or "").strip()
+        if not text:
+            raise ValueError("nothing was said; there is no claim to append")
+        when = on if on is not None else self.on
+        if isinstance(when, str):
+            when = date.fromisoformat(when)
+        return self.append("journal", {
+            "date": when.isoformat(),
+            "kind": kind,
+            "text": text,
+            "about": about,
+            "source": "stated-in-chat",
+            "confidence": None,
+            "status": None,
+            "note": None,
+        })
+
     def load_report(self) -> dict:
         """What a load of this record SAW: counts, quarantined lines, warnings.
 
