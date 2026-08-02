@@ -761,6 +761,13 @@ CLI_MAY_IMPORT = {
     # parked in api.py to get past this test, which is the failure one layer
     # along.
     "api": {"Vitai", "schema"},
+    # `mcp` is a second HARNESS, not engine logic, which is the distinction
+    # this table exists to police. It is allowed for the same reason `api` is
+    # and `jsonl` is not: it structurally cannot exceed the API, because its
+    # tool table names methods on `Vitai` and raises at import if one is
+    # missing. A capability the MCP server can reach, an agent can reach by
+    # definition, since the MCP server is what the agent is talking to.
+    "mcp": {"serve"},
     "jsonl": {"DataError"},
     "schema": {"KEYS"},
     "": {"__version__"},          # `from . import __version__`
@@ -1412,3 +1419,118 @@ def test_the_cli_relays_the_engines_refusal_verbatim(tmp_path, capsys):
         main(["claim", "--root", str(root), "--dataset", "weight",
               "kg=80", "source=scale"])
     assert "not a quantity" in str(caught.value)
+
+
+# ---- #158 rung 5: the MCP adapter is a harness, not a second surface -------
+
+def test_every_mcp_tool_resolves_to_the_api():
+    """The acceptance criterion of #158, and it is enforced at IMPORT rather
+    than asserted here: an adapter that could name a missing capability is one
+    that will, silently, the first time a method is renamed."""
+    from vitai.api import Vitai
+    from vitai.mcp import TOOLS
+    for name, spec in TOOLS.items():
+        method = spec["method"]
+        if method is None:
+            continue          # a module-level function of the same name
+        assert hasattr(Vitai, method), f"{name} names Vitai.{method}"
+
+
+def test_a_tool_naming_a_missing_method_fails_at_import():
+    """The premise. If this could be added quietly, the check above is
+    decoration."""
+    import pytest
+
+    from vitai.api import Vitai
+    from vitai.mcp import TOOLS
+    assert not hasattr(Vitai, "definitely_not_a_method")
+    with pytest.raises(AttributeError):
+        # the same guard the module runs over its own table
+        for spec in list(TOOLS.values()) + [{"method": "definitely_not_a_method"}]:
+            m = spec["method"]
+            if m is not None and not hasattr(Vitai, m):
+                raise AttributeError(m)
+
+
+def test_tool_descriptions_come_from_the_methods_own_docstring():
+    """So the adapter cannot document a capability differently from the API.
+    Two descriptions of one method is two chances to be wrong."""
+    from vitai.api import Vitai
+    from vitai.mcp import tool_list
+    for tool in tool_list():
+        assert tool["description"], tool["name"]
+        method = getattr(Vitai, tool["name"], None)
+        if method is not None and method.__doc__:
+            assert tool["description"] == \
+                method.__doc__.strip().splitlines()[0]
+
+
+def test_it_speaks_the_protocol(tmp_path):
+    """Newline-delimited JSON-RPC 2.0 on stdio, initialize through a call."""
+    import io
+    import json
+
+    from vitai.cli import main
+    from vitai.mcp import serve
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    stdin = io.StringIO("\n".join([
+        json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize"}),
+        json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
+        json.dumps({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+                    "params": {"name": "schema", "arguments": {}}}),
+    ]) + "\n")
+    import contextlib
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        serve(root, stdin=stdin)
+    replies = [json.loads(ln) for ln in out.getvalue().splitlines() if ln]
+    assert replies[0]["result"]["protocolVersion"]
+    assert {t["name"] for t in replies[1]["result"]["tools"]} == \
+        {"situation", "schema", "validate", "status", "day", "window",
+         "goals", "safety", "claim", "said"}
+    payload = json.loads(replies[2]["result"]["content"][0]["text"])
+    assert payload["contract"]
+
+
+def test_a_refusal_is_relayed_as_the_engines_sentence(tmp_path):
+    """An agent can act on a sentence. A code has to be interpreted, and
+    every interpreter differs."""
+    import contextlib
+    import io
+    import json
+
+    from vitai.cli import main
+    from vitai.mcp import serve
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    stdin = io.StringIO(json.dumps({
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "claim",
+                   "arguments": {"dataset": "weight",
+                                 "values": {"kg": 80.0, "source": "scale"}}},
+    }) + "\n")
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        serve(root, stdin=stdin)
+    reply = json.loads(out.getvalue().strip())
+    assert "not a quantity" in reply["error"]["message"]
+
+
+def test_an_unknown_tool_is_refused_by_name(tmp_path):
+    import contextlib
+    import io
+    import json
+
+    from vitai.cli import main
+    from vitai.mcp import serve
+    root = tmp_path / "content"
+    main(["init", str(root)])
+    stdin = io.StringIO(json.dumps({
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "drop_everything", "arguments": {}},
+    }) + "\n")
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        serve(root, stdin=stdin)
+    assert "no such tool" in json.loads(out.getvalue())["error"]["message"]
