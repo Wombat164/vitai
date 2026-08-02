@@ -1,0 +1,47 @@
+# Expected variation: which quantities are suspicious when they DO NOT move.
+#
+# The restatement detector reads this. A run of identical values across a
+# window, in a quantity the body or the world makes vary, is evidence that a
+# number was restated rather than observed: somebody wrote down what they
+# remembered, or a device repeated its last reading, or an import carried one
+# value forward across days it never covered.
+#
+# This is the same concept `capture.toml` ranks with `restatements`, reached by
+# a different route. There, the record SAYS how a value was acquired and the
+# rank follows. Here the record says nothing and the SHAPE of the series is the
+# only evidence available. One phenomenon, two evidence routes.
+#
+# AN OPEN REGISTRY, in the deny-list direction `cannot_observe` already uses: a
+# field absent here is never checked, and an omission accuses nobody. Adding a
+# field is a decision that this quantity genuinely varies, which is a claim
+# about the world and should be made deliberately.
+#
+# ADVISORY ONLY, always. Some true series really are flat: a maintenance phase
+# on a coarse scale, a week of identical steps targets met exactly, an injury
+# layoff. A detector that failed a build on a flat series would be asserting
+# that the athlete's record is wrong because it is boring.
+
+version = 1
+
+[variation.weight.kg]
+# 0.2 kg is the width the engine already treats as real movement, and it sits
+# an order of magnitude below the day-to-day swing `clocks.DIURNAL_KG_PER_DAY`
+# records (1.0 kg across waking hours). A series that does not move by even
+# this much across five days is flatter than hydration alone allows.
+min_spread_abs = 0.2
+window_days = 5
+note = "day-to-day body mass moves with hydration, glycogen and food transit, so an exactly constant series is evidence of restatement rather than observation"
+
+[variation.daily.rhr]
+# Resting heart rate moves with sleep, load and illness. An identical integer
+# for a week is a device repeating a cached reading or a person recalling one.
+min_spread_abs = 1.0
+window_days = 7
+note = "resting heart rate responds to sleep, training load and illness; a constant integer across a week is a repeated reading rather than a stable one"
+
+[variation.daily.steps]
+# Steps vary enormously by day. Identical counts are a synced placeholder or a
+# manual estimate repeated, not a person walking exactly the same distance.
+min_spread_abs = 100.0
+window_days = 3
+note = "step counts vary by thousands between ordinary days; an identical count on consecutive days is a placeholder or a repeated estimate"

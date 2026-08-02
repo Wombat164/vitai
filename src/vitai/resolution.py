@@ -723,6 +723,11 @@ def resolve(datasets: dict[str, list[dict]],
     # claims still resolve, and then the days a declared regime covers stop
     # standing as values.
     tripwires += apply_regimes(canonical, datasets.get("regimes") or [])
+    # ADVISORY, and last: a constant run is a question about how a number was
+    # acquired, never a fault in the arithmetic above it. AFTER apply_regimes
+    # deliberately: a declared regime has already emptied its interval, so the
+    # detector cannot re-flag a restatement the athlete has already named.
+    tripwires += restatement_runs(canonical)
     tripwires.sort(key=lambda t: (t["date"] or "", t["kind"], t["detail"]))
     explanations.sort(key=lambda e: (e["date"] or "", e["dataset"], e["field"]))
     justifications.sort(key=lambda j: (j["date"] or "", j["dataset"], j["field"]))
@@ -956,6 +961,79 @@ def apply_regimes(canonical: dict, regimes: list[dict]) -> list[dict]:
                     f"what the true values were"),
             })
     return out
+
+
+def restatement_runs(canonical: dict) -> list[dict]:
+    """Runs of identical values in quantities the world makes vary.
+
+    A number repeated unchanged across days, in a quantity that moves, is
+    evidence that it was RESTATED rather than observed: somebody wrote down
+    what they remembered, a device repeated a cached reading, or an import
+    carried one value across days it never covered.
+
+    THE SAME CONCEPT `provenance.restatements` RANKS, reached from the other
+    side. There, the record SAYS how a value was acquired (`capture:
+    narrative`) and the rank follows from the statement. Here the record says
+    nothing, and the shape of the series is the only evidence there is. One
+    phenomenon, two evidence routes; neither replaces the other, because a
+    record can lie about capture and a restated series can be honestly
+    labelled.
+
+    ADVISORY, always, and the registry is open: a field absent from
+    `semantics/variation.toml` is never checked, and an omission accuses
+    nobody. Some true series are genuinely flat - a maintenance phase on a
+    coarse scale, a layoff - and a detector that failed a build on one would
+    be asserting that a record is wrong for being boring.
+    """
+    from .vocab import registry
+    spec = registry("variation")["variation"]
+    out = []
+    for dataset, fields in sorted(spec.items()):
+        rows = canonical.get(dataset) or []
+        for field, rule in sorted(fields.items()):
+            out += _runs_in(dataset, field, rows, rule)
+    return out
+
+
+def _runs_in(dataset: str, field: str, rows: list[dict],
+             rule: dict) -> list[dict]:
+    """Every constant run of this field long enough to be worth saying."""
+    dated = sorted(
+        ((str(r.get("date")), r.get(field)) for r in rows
+         if r.get("date") and r.get(field) is not None),
+        key=lambda pair: pair[0])
+    if not dated:
+        return []
+    window = int(rule.get("window_days", 5))
+    out, start = [], 0
+    for i in range(1, len(dated) + 1):
+        same = i < len(dated) and dated[i][1] == dated[start][1]
+        if same:
+            continue
+        first, last = dated[start][0], dated[i - 1][0]
+        # SPAN IN DAYS, not row count. Three readings on one morning are one
+        # observation restated twice, not three days of agreement, and a
+        # row-count rule would have called that a flat week.
+        if i - start >= 2 and _days_between(first, last) + 1 >= window:
+            out.append({
+                "date": first,
+                "kind": "constant_value_run",
+                "severity": "review",
+                "detail": (
+                    f"{dataset}.{field} held exactly {dated[start][1]} from "
+                    f"{first} to {last}, which is {_days_between(first, last) + 1} "
+                    f"days. {rule.get('note', '')} If this is real, a regime "
+                    f"declaration says so; if it is a value carried forward, "
+                    f"the reading it was carried from is the one observation "
+                    f"here"),
+            })
+        start = i
+    return out
+
+
+def _days_between(first: str, last: str) -> int:
+    from datetime import date as _date
+    return (_date.fromisoformat(last) - _date.fromisoformat(first)).days
 
 
 def _contradictions(explanations: list[dict]) -> list[dict]:
