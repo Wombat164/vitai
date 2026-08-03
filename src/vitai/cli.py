@@ -134,7 +134,26 @@ def _fmt_goal(row: dict) -> str:
     elif target is None:
         head = f"{counted:g} logged (no target)"
     else:
-        head = f"{counted:g}/{target:g}" + (f" ({pct:.0f}%)" if pct is not None else "")
+        # PER POLARITY (#200). A percentage is the floor's measure; sending a
+        # ceiling down the same branch printed "7700/1200" for a breached cap
+        # and dropped every field that says so, which reads indistinguishably
+        # from a floor doing well.
+        polarity = row.get("polarity") or "floor"
+        room, breach = row.get("room_left"), row.get("breach")
+        if polarity == "ceiling" and room is not None:
+            head = (f"{counted:g} against a cap of {target:g}"
+                    + (f" - OVER by {abs(room):g}" if breach
+                       else f" - {room:g} to spare"))
+        elif polarity == "band" and row.get("target_hi") is not None:
+            head = (f"{counted:g}, aiming for {target:g} to "
+                    f"{row['target_hi']:g}"
+                    + (f" - {breach.upper()}" if breach else " - inside"))
+        elif polarity == "approach" and row.get("distance") is not None:
+            head = (f"{counted:g}, aiming for {target:g} - "
+                    f"{row['distance']:g} away")
+        else:
+            head = f"{counted:g}/{target:g}" + (
+                f" ({pct:.0f}%)" if pct is not None else "")
     bits = [f"{row['slug']}: {head}"]
     if row.get("policy") == "guarded" and row.get("unbudgeted"):
         bits.append(f"{row['unbudgeted']:g} unbudgeted")

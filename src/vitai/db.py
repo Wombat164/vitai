@@ -226,7 +226,24 @@ from .schema import KEYS
 #     `due` is derived from the source's OWN arrivals, never declared: a
 #     source with no established cadence produces `no_input`, exactly as
 #     today.
-CONTRACT_VERSION = "22"
+# 23: goal POLARITY. `monotonic` and `guarded` both meant "more counts", so a
+#     cap was scored as an accumulation: 1100 kcal a day against a 1200 limit
+#     reported 641.7% for the week and minted four milestones for breaching
+#     it. `polarity` says which direction is progress - floor, ceiling, band
+#     or approach - and `target_hi` carries a band's upper bound.
+#
+#     WHAT A CONSUMER MUST NOT ASSUME: that `progress_pct` is always there. It
+#     is the FLOOR's measure and is null for every other polarity, because a
+#     percentage of a limit consumed is the figure that read as success.
+#     A ceiling reports `headroom`, a band reports `headroom` and which side
+#     it fell off, an approach reports `distance`, and `breach` says under or
+#     over wherever the question has an answer.
+#
+#     Absent polarity reads as `floor`, so no existing row re-scores and no
+#     row has to be edited to keep the answer it had. Rows whose title says
+#     cap or limit while scoring as a floor now raise a validate ADVISORY
+#     rather than having to be found by hand.
+CONTRACT_VERSION = "23"
 
 _TEXT_COLS = {"derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
               # under REAL affinity silently becomes 7.0, which is the defect
@@ -237,6 +254,9 @@ _TEXT_COLS = {"derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
               # into 21.0 and lose the distinction. `statement`, `week` and
               # `metric` are already below, on other datasets.
               "basis_claims", "surface", "policy_asof", "contract",
+              # `polarity` and `breach` are words; a band's bounds are numbers
+              # and stay numeric.
+              "polarity", "breach",
               # `due` is an ISO date too (#202).
               "due",
               "date", "type", "source", "location", "note",
@@ -318,7 +338,11 @@ PROGRESS_KEYS = ["slug", "title", "metric", "policy", "status", "period",
                  "dataset", "scope", "declared", "last_edited", "deadline",
                  "deadline_kind",
                  "days_to_deadline", "event", "verification", "motivator",
-                 "tracker", "milestones"]
+                 "tracker", "milestones",
+                 # Appended (#200), so a positional reader keeps every column
+                 # it knew. `progress_pct` above is now the FLOOR's measure
+                 # and is null for the other three polarities.
+                 "polarity", "target_hi", "room_left", "distance", "breach"]
 
 # Increment 2: the adjudication trail. Primary dataset tables hold CANONICAL
 # rows; these say where those rows came from and what was overruled.

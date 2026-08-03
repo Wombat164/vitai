@@ -40,9 +40,19 @@ plan they will follow, not the best plan.
    make it data. For each one capture:
    - `metric` + `target`, and `dataset`/`session_type` to scope which events
      count (`distance_km` is walking on a daily line, running on a session);
+   - `polarity`: which direction is progress. `floor` (at or above: steps,
+     protein), `ceiling` (at or below: a calorie cap, sodium), `band` with a
+     `target_hi` (between two values), or `approach` (converge on a value from
+     either side: a target weight). ASK, do not infer from the wording - a cap
+     left undeclared is scored as a floor, so holding under it reads as
+     exceeding it;
+   - `period`: `daily` for a per-day target, or the longer buckets. A cap with
+     no period caps a running total that never resets;
    - `policy`: `monotonic` where more always counts (steps, protein), or
      `guarded` with a `guard_pct` where volume beyond a ramp does not
-     (running, and anything with an injury history behind it);
+     (running, and anything with an injury history behind it). Orthogonal to
+     `polarity`: this says whether progress may run backwards, that says which
+     way it runs;
    - `motivator` - the intrinsic why, in the athlete's own words. This is
      what the coach anchors on later, so a flat restatement of the metric
      ("walk more") is a wasted field; "keep the desk job from winning" is not;

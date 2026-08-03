@@ -1276,7 +1276,9 @@ class Vitai:
         from .jsonl import read_lines
         from .schema import (corrections_that_did_not_apply,
                              impossible_claim_problems, recorded_at_problems,
-                             supersedes_problems, timestamp_advisories,
+                             period_advisories, polarity_advisories,
+                             supersedes_problems,
+                             timestamp_advisories,
                              unranked_source_problems,
                              unstamped_after_the_clock_started,
                              validate_record)
@@ -1320,6 +1322,9 @@ class Vitai:
             problems += supersedes_problems(name, rows)
             advisories += corrections_that_did_not_apply(name, rows)
             advisories += timestamp_advisories(name, rows)
+            if name == "goals":
+                advisories += polarity_advisories(rows)
+                advisories += period_advisories(rows)
             # A missing track file is NOT a missing session: the session is
             # the fact and the track is an attachment, so a broken pointer is
             # reported and never fails the build (#43).
