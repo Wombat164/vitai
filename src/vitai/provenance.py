@@ -121,6 +121,20 @@ def is_independent(rec: dict) -> bool:
     return origin is not None and origin != UNKNOWN
 
 
+def _channel(rec: dict) -> str | None:
+    """The route a row arrived by, or None when it does not name one.
+
+    NONE RATHER THAN `unknown`, and the distinction is the same one this
+    module makes everywhere else: an unstated channel is nobody saying, not a
+    channel called "unknown". Folding them together let two rows merge on the
+    strength of what they BOTH failed to say, which is the collapse
+    `shares_origin` refuses one function below - the engine does not get to
+    assume two anonymous rows are the same reading.
+    """
+    source = rec.get("source")
+    return str(source) if source not in (None, "") else None
+
+
 def distinct_origins(recs: list[dict]) -> set[str]:
     """The genuinely independent origins among these claims."""
     return {str(origin_of(r)) for r in recs if is_independent(r)}
@@ -133,10 +147,17 @@ def independent_witnesses(recs: list[dict]) -> int:
     platforms are one witness, and reporting five is the false confidence
     this whole module exists to prevent.
 
-    Rows with no usable origin each count as their own witness only when
-    nothing else does: a record with no provenance at all still had one
-    observation per row as far as anyone can tell, and pretending otherwise
-    would silently merge a legitimately un-annotated history.
+    Rows with no usable origin are counted by the CHANNEL they arrived by, so
+    a record with no provenance at all still reports one witness per distinct
+    source rather than collapsing to nothing - a legitimately un-annotated
+    history keeps whatever independence it can demonstrate - while two rows
+    down one channel stay one witness however many times they are restated.
+
+    A SUPERSEDED ROW IS NOT HERE TO BE COUNTED. `retire` drops it at load, so
+    a correction that applied never reaches this function. A correction that
+    did NOT apply, because its reference matched no line, is a different
+    defect and is filed as one: the row is still live, and counting it is
+    correct behaviour on incorrect data.
     """
     # A DERIVED VALUE NEVER CORROBORATES ITS OWN INPUTS (#170), and the count
     # below is what enforces it. Derived rows contribute NOTHING OF THEIR OWN.
@@ -177,13 +198,33 @@ def independent_witnesses(recs: list[dict]) -> int:
     here = {str(r.get("source")) for r in plain if r.get("source")}
     from_lineage = len(named - here) + unparsed
 
+    # SOURCES, NOT ROWS (#211). A row whose origin is unstated used to count as
+    # its own witness on top of every named origin, so two rows from ONE source
+    # reported two independent sources - and correcting a row, which appends a
+    # second one, INFLATED the evidence for the value being corrected. The more
+    # carefully someone kept their record, the better witnessed it looked.
+    #
+    # An unstated origin cannot be told from another unstated origin by
+    # instrument, so the only thing distinguishing those rows is the channel
+    # they arrived by. Two deliveries down one channel are one witness. And a
+    # channel already represented by a row whose instrument IS named adds
+    # nothing: the same source, once with an origin and once without, is one
+    # source either way.
+    #
+    # This is the shared-influence rule the metrology literature states for
+    # quantities entering a result by two routes: enter it once, and make the
+    # shared node explicit rather than fudging the combination afterwards.
     known = distinct_origins(plain)
-    if known:
-        base = len(known) + sum(1 for r in plain if not is_independent(r))
-    elif plain or not from_lineage:
-        base = len(plain)
-    else:
-        base = 0
+    named_channels = {c for r in plain if is_independent(r)
+                      and (c := _channel(r)) is not None}
+    anon = [r for r in plain if not is_independent(r)]
+    anon_channels = {c for r in anon if (c := _channel(r)) is not None}
+    # A row that names NEITHER an instrument nor a channel stands alone: there
+    # is nothing to dedupe it against, and merging two of them would assert a
+    # shared origin nobody stated. Counted individually, which is what the
+    # un-annotated history this rule protects actually needs.
+    unattributed = sum(1 for r in anon if _channel(r) is None)
+    base = len(known) + len(anon_channels - named_channels) + unattributed
     return base + from_lineage
 
 
@@ -196,6 +237,26 @@ def shares_origin(a: dict, b: dict) -> bool:
     """
     return (is_independent(a) and is_independent(b)
             and origin_of(a) == origin_of(b))
+
+
+def same_witness(a: dict, b: dict) -> bool:
+    """Would counting these two separately count one observation twice?
+
+    THE PAIRWISE FORM OF THE COUNTING RULE (#211), and it exists so the two
+    cannot drift. `independent_sources` said one witness while the resolution
+    row beside it called the same pair "independent observations", because the
+    count deduped by channel and the label still keyed on instrument alone.
+    Two fields, one question, two answers.
+
+    Instruments decide it when both are named. Where either is unstated the
+    instrument cannot be compared, so the channel is the only independence
+    either row can demonstrate - and a row naming no channel demonstrates
+    none, so it stands alone rather than merging with another silence.
+    """
+    if is_independent(a) and is_independent(b):
+        return origin_of(a) == origin_of(b)
+    channel = _channel(a)
+    return channel is not None and channel == _channel(b)
 
 
 def derivation_groups(recs: list[dict]) -> list[list[dict]]:

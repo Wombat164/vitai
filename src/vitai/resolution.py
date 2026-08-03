@@ -41,7 +41,8 @@ from datetime import datetime, timedelta
 
 from .clocks import comparable, is_aware, parse_time, stamp_instant
 from .provenance import (TRUST_ORDER, capture_of, describe, distinct_origins,
-                         independent_witnesses, restatements, shares_origin,
+                         independent_witnesses, restatements, same_witness,
+                         shares_origin,
                          states_capture, trust_ceiling)
 
 from .schema import KEYS
@@ -303,8 +304,16 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
                 # points on one pipe. The spread then measures PIPELINE
                 # FIDELITY, not truth - worth reporting, never worth counting
                 # as validation (#51).
-                "independent": not shares_origin(winner, loser),
-                "compares": ("pipeline fidelity" if shares_origin(winner, loser)
+                #
+                # `same_witness` rather than `shares_origin` (#211), because
+                # `witnesses` above already counts by channel where no
+                # instrument is named. Keying the label on instrument alone
+                # emitted one witness beside the words "independent
+                # observations" for the same pair: two fields, one question,
+                # two answers, on a row whose whole job is to say how well
+                # evidenced a value is.
+                "independent": not same_witness(winner, loser),
+                "compares": ("pipeline fidelity" if same_witness(winner, loser)
                              else "independent observations"),
                 "discarded": discarded,
                 # The signature of #73: a row with no source lost to a ranked
