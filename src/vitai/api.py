@@ -102,6 +102,12 @@ class Vitai:
         # which accepted a `datetime` the constructor rejects for a stated
         # reason - the same value refused at one door and taken at the next.
         self.on = _viewpoint(on) or date.today()
+        # WHETHER ANYONE ASKED (#207). `self.on` cannot answer it: a caller
+        # who passes today's date and a caller who passes nothing end up
+        # holding the same value, and only one of them made a choice. `build`
+        # needs the difference, because an unqualified build must be a
+        # function of the record and a requested one must be honoured exactly.
+        self._on_requested = on is not None
         # Per-instance read cache. See `_forget`.
         self._loaded: dict[str, list[dict]] = {}
         self._resolved: dict | None = None
@@ -813,7 +819,13 @@ class Vitai:
 
     def rollup(self, today: date | None = None) -> str:
         d = self.canonical()
-        on = today or self.on
+        # THE SAME DEFAULT `build` USES (#207), because this renders the same
+        # artifact. Left on the wall clock, `rollup()` stamped "Generated
+        # <today>" while the `weekly.md` written by `build()` beside it said
+        # the record's own date - two renderings of one report disagreeing
+        # about when they were made.
+        on = today or (self.on if self._on_requested
+                       else self.last_recorded() or self.on)
         # `today=on`, not `today=today`. Passing the un-defaulted parameter
         # left `build_report` to fall back to its own `date.today()`, so the
         # report itself was still dated by the wall clock while every table
@@ -912,6 +924,49 @@ class Vitai:
             "escalations": self.safety(),
         }
 
+    def last_recorded(self) -> date | None:
+        """The latest `date` any row in this record carries (#207).
+
+        The record's own horizon, used as the build's viewpoint when nobody
+        named one. A record is a closed thing: what it contains does not
+        change because a build ran on a Tuesday, and every other derivation
+        here is a pure function of appended facts.
+
+        NARROWER THAN "the last day this record speaks about", deliberately.
+        `events.event_date` and `regimes.to_date` legitimately run ahead of
+        the last row - a race declared in June for September - so the record
+        does say things about later days. This is the last day it has a ROW
+        for, which is the horizon a build's visibility questions turn on.
+
+        PARSED, NOT COMPARED AS TEXT. `date.fromisoformat` accepts ISO week
+        dates and the basic format as well as the extended one, and neither
+        sorts chronologically against the others: `2030-W01-1` outranks every
+        extended date in its year on the letter W alone, and `20300101` beats
+        `2030-12-31` on the fifth character. A string maximum over a record
+        holding one such row picked a date months early, which put the build
+        back on a viewpoint where nothing was in force - the exact symptom
+        this function exists to remove.
+
+        A date this cannot parse is SKIPPED rather than raised on. The loader
+        promises a build proceeds from the good rows, and taking a record that
+        built yesterday and refusing it today would break that for the sake of
+        a horizon one row could not contribute to anyway.
+
+        Returns None for a record with no usable dates, which has no horizon
+        and nothing whose visibility a viewpoint could decide.
+        """
+        seen = []
+        for rows in self.datasets().values():
+            for r in rows:
+                raw = r.get("date")
+                if not isinstance(raw, str):
+                    continue
+                try:
+                    seen.append(date.fromisoformat(raw[:10]))
+                except ValueError:
+                    continue
+        return max(seen) if seen else None
+
     def build(self, today: date | None = None) -> Path:
         """Rebuild derived/: SQLite read model (incl. verdicts) + weekly.md.
 
@@ -919,7 +974,18 @@ class Vitai:
         rows, so a consumer reading `daily` gets adjudicated truth without
         having to know the resolution rules.
         """
-        on = today or self.on
+        # THE BUILD'S VIEWPOINT IS THE RECORD'S, unless somebody named one
+        # (#207). `goal_progress` is materialised against it, so defaulting to
+        # the wall clock meant two people building the same record on
+        # different days got different databases, with nothing in either one
+        # recording the choice - the example corpus shipped an empty
+        # `goal_progress` beside 109 contribution rows.
+        #
+        # An explicit `today=` or `on=` still wins, because "what does this
+        # look like now" is a real question. What changes is the answer when
+        # nobody asked it.
+        on = today or (self.on if self._on_requested
+                       else self.last_recorded() or self.on)
         resolved = self.resolution()
         d = dict(resolved["canonical"])
         # An inference whose justification was retracted stops being presented
@@ -934,7 +1000,8 @@ class Vitai:
         derivations = self._derivations(resolved, today=on, cfg=cfg)
         derived = self.root / "derived"
         db = build_db(derived, d, verdicts=derivations["verdicts"],
-                      derivations=derivations, policy=policy_digest(cfg))
+                      derivations=derivations, policy=policy_digest(cfg),
+                      built_on=on.isoformat())
         (derived / "weekly.md").write_text(
             build_report(self.config, d["weight"], d["daily"], d["sessions"],
                          today=on, gates=derivations["gates"],
@@ -1344,6 +1411,14 @@ class Vitai:
         """
         from .inference import append_inferences
         appended = append_inferences(self.root, rows)
+        # The rows went in through a MODULE function, which has no instance to
+        # tell, so the read cache still holds the record as it was before the
+        # append. `infer()` warms that cache on the way here, so the rebuild
+        # was running over stale datasets - and now that the build takes its
+        # viewpoint from the record, a stale read would stamp `built_on` with
+        # a horizon the record no longer has, which is worse than a missing
+        # row because it asserts something.
+        self._forget()
         self.build()
         return appended
 

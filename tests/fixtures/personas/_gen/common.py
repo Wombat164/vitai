@@ -113,7 +113,11 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # live on VERDICT rows, which are computed rather than recorded, so no builder
 # here writes either and no persona line changes. The pin moves because the
 # read model did.
-AUTHORED_AGAINST_CONTRACT = "22"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #207: `meta` gains a `built_on` row and an unqualified build
+# takes its viewpoint from the record rather than the clock. Neither touches a
+# data line - both are properties of the BUILD - so no persona line changes and
+# nothing is reviewed here beyond the pin itself.
+AUTHORED_AGAINST_CONTRACT = "23"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,
