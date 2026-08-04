@@ -117,7 +117,18 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # takes its viewpoint from the record rather than the clock. Neither touches a
 # data line - both are properties of the BUILD - so no persona line changes and
 # nothing is reviewed here beyond the pin itself.
-AUTHORED_AGAINST_CONTRACT = "23"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #200, which adds `polarity` and `target_hi` to goals. REVIEWED
+# rather than bumped: no builder declares a polarity, absence reads as `floor`,
+# and a floor is exactly what both existing policies already meant, so every
+# persona goal scores precisely as it did. `_gen` moves on the goals lines and
+# nothing else does.
+#
+# FIVE of their goals now raise the new polarity advisory - sofia's 1200 kcal
+# cap, tom's two weight targets, nora's ramp cap and stefan's race time. That is
+# the advisory doing its job rather than a fixture defect. Declaring a polarity
+# on their behalf would be editing what those people said they wanted, which is
+# an editorial decision about the personas and not a migration.
+AUTHORED_AGAINST_CONTRACT = "24"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,
@@ -126,7 +137,7 @@ AUTHORED_AGAINST_GENERATIONS = {
     "daily": 11,
     "emissions": 1,
     "events": 3,
-    "goals": 4,
+    "goals": 5,
     "inferences": 4,
     "journal": 3,
     "meals": 5,

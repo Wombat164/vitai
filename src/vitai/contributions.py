@@ -31,7 +31,7 @@ from datetime import datetime, timedelta
 
 from .clocks import order_key
 from .policy import _event_index, days_between, deadline_of, state
-from .schema import (ATTESTED, EXTERNAL, GOAL_DATASETS, KEYS, MEASURED,
+from .schema import (ATTESTED, EXTERNAL, GOAL_DATASETS, KEYS, MEASURED, polarity_of,
                      verification_of)
 
 ADVANCES, PARTIAL, UNBUDGETED, NEUTRAL, REGRESSES = (
@@ -99,6 +99,8 @@ def _week_key(d: str) -> str:
 
 def _period_key(period: str | None, d: str) -> str:
     """The bucket a date falls in for a goal's period. 'none' = one bucket."""
+    if period == "daily":
+        return d                       # one bucket per day (#200)
     if period == "weekly":
         return _week_key(d)
     if period == "monthly":
@@ -257,8 +259,23 @@ def _judge(goal: dict, slug: str, when: str, value: float, done: float,
 def _milestones(goal: dict, slug: str, when: str, bucket: str,
                 before: float, after: float,
                 minted: set[tuple[str, str, float]]) -> list[dict]:
-    """Target fractions crossed by COUNTED progress since the last event."""
+    """Target fractions crossed by COUNTED progress since the last event.
+
+    FLOORS ONLY (#200). A quarter of the way to a cap is not an achievement,
+    and minting it was the celebratory half of the polarity defect: holding
+    1100 against a 1200 limit for a week produced four of these.
+
+    Approaches get none either, and that is a narrower statement than "they
+    make no sense". Half way to a target weight is a real milestone, but it
+    needs a BASELINE - where the athlete started - to be half way FROM, and the
+    goal row records no such value. Minting fractions of the target instead
+    would celebrate arriving from below at a goal being approached from above.
+    Left unminted rather than invented; it wants the declaration-time value,
+    which is a design decision rather than an oversight.
+    """
     target = goal.get("target")
+    if polarity_of(goal) != "floor":
+        return []
     if target is None or isinstance(target, bool) or not isinstance(
             target, (int, float)) or target <= 0:
         return []
@@ -272,6 +289,63 @@ def _milestones(goal: dict, slug: str, when: str, bucket: str,
                 "fraction": frac, "value": round(after, 3), "target": target,
                 "label": f"{int(frac * 100)}% of {goal.get('title') or slug}",
             })
+    return out
+
+
+def _standing(goal: dict, counted: float | None,
+              target: object) -> dict:
+    """Where a goal stands, in the arithmetic its POLARITY calls for (#200).
+
+    One number over a target is not a universal measure of progress. Both
+    former policies meant "more counts", so a cap was scored as an
+    accumulation: 1100 kcal a day against a 1200 limit reported 641.7% for the
+    week and read as excelling at the thing it was breaching.
+
+    So `progress_pct` is now the FLOOR's measure and nobody else's. A ceiling
+    reports the room left before it is breached, which is the number a person
+    can act on, and cannot report a percentage of a limit consumed - that is
+    the figure that read as success. 641% is not bounded here, it is
+    unreachable, because nothing divides by a limit any more.
+
+    Every field is null where its polarity does not define it, rather than
+    carrying a number that would have to be ignored.
+
+    `room_left` rather than `headroom`: `headroom` already means the ramp
+    budget a guarded goal has left, on the contributions rows next door. One
+    word for two quantities in adjacent tables is the overloading this engine
+    keeps taking out of other fields.
+    """
+    out = {"progress_pct": None, "room_left": None, "distance": None,
+           "breach": None}
+    usable = (counted is not None and isinstance(target, (int, float))
+              and not isinstance(target, bool))
+    if not usable:
+        return out
+    polarity, value, edge = polarity_of(goal), float(counted), float(target)
+
+    if polarity == "floor":
+        if edge:
+            out["progress_pct"] = round(100.0 * value / edge, 1)
+        out["breach"] = "under" if value < edge else None
+    elif polarity == "ceiling":
+        out["room_left"] = round(edge - value, 3)
+        out["breach"] = "over" if value > edge else None
+    elif polarity == "band":
+        hi = goal.get("target_hi")
+        if not isinstance(hi, (int, float)) or isinstance(hi, bool):
+            return out                  # validation refuses this shape
+        out["breach"] = ("under" if value < edge
+                         else "over" if value > float(hi) else None)
+        # Room to the edge the value is nearest to falling off. Inside the
+        # band both edges matter and the closer one is the one in play;
+        # outside it, the breach itself is the distance.
+        out["room_left"] = round(min(value - edge, float(hi) - value), 3)
+    elif polarity == "approach":
+        # THE SIGN IS NOT THE MEASURE. On a cut less is progress, on a bulk
+        # more is, and at maintenance either direction is the miss - one
+        # metric, three readings, and the only thing common to them is how far
+        # off the value sits.
+        out["distance"] = round(abs(value - edge), 3)
     return out
 
 
@@ -311,10 +385,8 @@ def goal_progress(goals: list[dict], thresholds: list[dict], daily: list[dict],
         unbudgeted = sum(c["value"] - c["counted"] for c in contributions
                          if c["goal"] == slug and c["period"] == bucket)
         target = goal.get("target")
-        pct = None
-        if (countable and isinstance(target, (int, float))
-                and not isinstance(target, bool) and target):
-            pct = round(100.0 * counted / float(target), 1)
+        standing = _standing(goal, counted if countable else None, target)
+        pct = standing["progress_pct"]
         deadline, hardness, anchor = deadline_of(goal, index)
         rows.append({
             "slug": slug,
@@ -325,6 +397,11 @@ def goal_progress(goals: list[dict], thresholds: list[dict], daily: list[dict],
             "period": goal.get("period"),
             "bucket": bucket,
             "target": target,
+            "target_hi": goal.get("target_hi"),
+            "polarity": polarity_of(goal),
+            "room_left": standing["room_left"],
+            "distance": standing["distance"],
+            "breach": standing["breach"],
             "counted": round(counted, 3) if countable else None,
             "unbudgeted": round(unbudgeted, 3) if countable else None,
             "progress_pct": pct,
