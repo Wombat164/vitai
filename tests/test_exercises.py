@@ -425,7 +425,8 @@ def test_requirements_are_derived_from_the_exercise_list():
 def test_a_bodyweight_session_requires_nothing():
     from vitai.exercises import requirements
     got = requirements(["push-up", "plank", "lunge", "burpee"])
-    assert got == {"fixtures": [], "kit": [], "unannotated": []}
+    assert got == {"fixtures": [], "kit": [], "unannotated": [],
+                   "not_exercises": []}
 
 
 def test_an_unannotated_movement_is_reported_rather_than_treated_as_free():
@@ -433,7 +434,12 @@ def test_an_unannotated_movement_is_reported_rather_than_treated_as_free():
     on a requirements list that silently omitted what it did not know."""
     from vitai.exercises import requirements
     got = requirements(["push-up", "no-such-movement"])
-    assert got["unannotated"] == ["unknown"]
+    # NAMED, not collapsed (#227). This asserted `["unknown"]`, which is what
+    # `resolve_exercise` answers for everything it does not recognise - so two
+    # uncatalogued movements reported one entry and a consumer could not say
+    # which, or that there were two.
+    assert got["unannotated"] == ["no-such-movement"]
+    assert got["not_exercises"] == []
 
 
 def test_the_registry_is_fully_annotated():
@@ -446,3 +452,47 @@ def test_the_registry_is_fully_annotated():
     missing = [e for e in exercises()
                if fixtures_of(e) is None and kit_of(e) is None]
     assert missing == []
+
+
+# ---- a session type is not a movement (#227) -------------------------------
+
+def test_a_run_is_not_an_uncatalogued_exercise():
+    """A run, a swim and a ride have no row in this registry and never will,
+    because a run is not an exercise. Reporting them as unannotated said the
+    catalogue had a gap, when what it has is a boundary - and the two want
+    opposite responses. A gap is closed by cataloguing the movement; a
+    boundary is not closed at all, it is asked of something else."""
+    from vitai.exercises import requirements
+    got = requirements(["run", "swim", "cycle"])
+    assert got["not_exercises"] == ["cycle", "run", "swim"]
+    assert got["unannotated"] == []
+
+
+def test_a_mixed_plan_keeps_the_three_apart():
+    """The case that surfaced it: a plan holding a catalogued movement, an
+    uncatalogued one and an activity reported one opaque `unknown`."""
+    from vitai.exercises import requirements
+    got = requirements(["bench-press", "run", "no-such-movement"])
+    assert got["fixtures"] == ["bench"]
+    assert got["not_exercises"] == ["run"]
+    assert got["unannotated"] == ["no-such-movement"]
+
+
+def test_a_consumer_still_has_to_refuse_on_either():
+    """Both lists are reasons to refuse a "you can do this here" answer. They
+    differ in what would fix them, not in whether the engine may guess."""
+    from vitai.exercises import requirements
+    for plan in (["run"], ["no-such-movement"]):
+        got = requirements(plan)
+        assert got["unannotated"] or got["not_exercises"]
+        assert got["fixtures"] == [] and got["kit"] == []
+
+
+def test_what_a_run_requires_is_still_unanswered():
+    """Deliberately. Saying it needs a vocabulary of PLACES - a road, a pool,
+    open water - and `fixtures.toml` is a gym catalogue: bench, rack,
+    cable-stack. Inventing those slugs here is the write-a-vocabulary-from-one
+    -athlete's-examples hazard #236 exists to gate."""
+    from vitai.exercises import fixture_values, requirements
+    assert not {"road", "pool", "open-water", "track"} & set(fixture_values())
+    assert requirements(["run"])["fixtures"] == []
