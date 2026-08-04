@@ -36,7 +36,9 @@ carries that. The commonest way a set ends is that someone judges he cannot
 do another without starting one and finding out, which is `volitional` with
 `rir: 0` - not a contradiction, and not `muscular`, because `muscular`
 asserts a rep was attempted and lost. A `volitional` set must not be read as
-sub-maximal without checking `rir`, which is the mirror of the rule below. `null` means UNSTATED - and a null-failure set must never be
+sub-maximal without checking `rir`, which is the mirror of the rule below.
+
+`null` means UNSTATED - and a null-failure set must never be
 read as maximal by anything downstream. That refusal is #100's to enforce;
 this module's job is that the field exists and is first-class.
 
