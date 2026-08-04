@@ -43,7 +43,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 # --- parameters, each with its source ----------------------------------------
 
@@ -361,6 +361,96 @@ RESAMPLE_SPACING_M = 10.0
 point against point, so unevenly-sampled sequences score near zero even when
 they trace the same ground - and Ramer-Douglas-Peucker output is deliberately
 uneven. Resampling makes the comparison about geometry rather than sampling."""
+
+
+@dataclass(frozen=True)
+class Effort:
+    """The fastest contiguous `distance_m` of a track, and what it rests on.
+
+    `basis` is the load-bearing field. `device` means the window was measured
+    against the watch's own cumulative distance, which is an OBSERVATION;
+    `derived` means it was measured against the haversine sum this module
+    computes from the coordinates, which is not (#48). A best effort over a
+    derived distance inherits every assumption in that derivation, and a
+    consumer that cannot tell the two apart will read both as a time trial.
+
+    `seconds` is ELAPSED, not moving. A stop inside the window is counted,
+    because excluding it would be the engine deciding which pauses were real -
+    `find_stops` reports them separately, and an effort that silently skipped
+    them would flatter the athlete in a way nothing in the record records.
+    """
+    distance_m: float
+    seconds: float
+    start: datetime
+    end: datetime
+    basis: str
+    start_index: int
+    end_index: int
+
+
+def _cumulative(points: list[Fix]) -> tuple[list[float], str]:
+    """Cumulative distance along the track, and which basis it came from.
+
+    The device's own figure where every fix carries one, because that is an
+    observation and the haversine sum is not. Mixed or absent falls back to
+    the derivation rather than interleaving two different quantities.
+    """
+    if all(f.dist is not None for f in points) and len(points) > 1:
+        base = points[0].dist or 0.0
+        cum = [(f.dist or 0.0) - base for f in points]
+        # A device figure that goes backwards is not a device figure worth
+        # trusting; fall through rather than silently sorting it.
+        if all(cum[i] <= cum[i + 1] for i in range(len(cum) - 1)):
+            return cum, "device"
+    cum = [0.0]
+    for i in range(len(points) - 1):
+        cum.append(cum[-1] + haversine_m(points[i], points[i + 1]))
+    return cum, "derived"
+
+
+def best_effort(points: list[Fix], distance_m: float) -> Effort | None:
+    """Fastest elapsed time over any contiguous `distance_m` of the track.
+
+    Returns None when the track is shorter than the window, or carries no
+    times - both of which are "the record cannot answer this", not zero.
+
+    THE WINDOW IS EXACT. A naive implementation takes whole fixes and reports
+    the time for slightly MORE than the asked distance, which flatters nothing
+    but is wrong in a direction that grows with the gap between fixes: at ten
+    second sampling a runner covers ~35 m between points, so an un-interpolated
+    10 km window is really a 10.03 km one. The start edge is interpolated along
+    the segment it falls in, and the time with it.
+    """
+    pts = [f for f in points if f.t is not None]
+    if len(pts) < 2 or distance_m <= 0:
+        return None
+    cum, basis = _cumulative(pts)
+    if cum[-1] < distance_m:
+        return None
+    secs = [(f.t - pts[0].t).total_seconds() for f in pts]
+
+    best: Effort | None = None
+    i = 0
+    for j in range(1, len(pts)):
+        # Advance the trailing edge while the window is still long enough.
+        while i + 1 < j and cum[j] - cum[i + 1] >= distance_m:
+            i += 1
+        if cum[j] - cum[i] < distance_m:
+            continue
+        # Interpolate the start edge so the window is exactly distance_m.
+        seg = cum[i + 1] - cum[i]
+        want = (cum[j] - distance_m) - cum[i]
+        frac = 0.0 if seg <= 0 else max(0.0, min(1.0, want / seg))
+        t_start = secs[i] + frac * (secs[i + 1] - secs[i])
+        elapsed = secs[j] - t_start
+        if elapsed <= 0:
+            continue
+        if best is None or elapsed < best.seconds:
+            best = Effort(
+                distance_m=float(distance_m), seconds=elapsed,
+                start=pts[0].t + timedelta(seconds=t_start), end=pts[j].t,
+                basis=basis, start_index=i, end_index=j)
+    return best
 
 
 def resample(points: list[Fix], spacing_m: float = RESAMPLE_SPACING_M) -> list[Fix]:

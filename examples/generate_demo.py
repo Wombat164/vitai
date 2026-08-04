@@ -270,7 +270,7 @@ def _build(target: Path) -> None:
                 "track": f"tracks/river-ten-{d}.gpx",
             }
             sessions.append(long_run)
-            long_runs.append((d, long_start))
+            long_runs.append((d, long_start, long_km, long_run["duration_s"]))
         if dow in (5, 6) and rng.random() < 0.8:            # weekend gym
             gym = {"date": d, "type": "strength",
                    "distance_km": None,
@@ -342,12 +342,14 @@ def _build(target: Path) -> None:
     # One stored track per long run. Not one per run: a named route with no
     # kept file is the ordinary case, and a demo where everything has a GPX
     # would misrepresent how records actually look.
-    for _d, _start in long_runs:
+    for _d, _start, _km, _dur in long_runs:
         (tracks / f"river-ten-{_d}.gpx").write_text(
-            _route_gpx("river-ten", _d, _start), encoding="utf-8", newline="\n")
+            _route_gpx("river-ten", _d, _start, _km, _dur),
+            encoding="utf-8", newline="\n")
     # The group run's track, filed under its own name because it has no route.
     (tracks / f"group-long-run-{big_run_day.isoformat()}.gpx").write_text(
-        _route_gpx("river-ten", big_run_day.isoformat(), "09:05", n=300),
+        _route_gpx("river-ten", big_run_day.isoformat(), "09:05",
+                   21.1, int(21.1 * 402)),
         encoding="utf-8", newline="\n")
     (tracks / "canal-loop-2030-06-16.gpx").write_text(
         _demo_gpx(context_day), encoding="utf-8", newline="\n")
@@ -625,20 +627,44 @@ ROUTES = {
 }
 
 
-def _route_gpx(route: str, day: str, start_hhmm: str, n: int = 160) -> str:
-    """A synthetic track for a named route. Deterministic - no RNG - so the
-    demo stays byte-reproducible, which is what lets CI prove it."""
+# One degree of latitude is about 111.32 km. These tracks are short and far
+# from the poles, so the flat approximation is fine - and using it is what
+# lets a track be built to a TARGET LENGTH.
+_M_PER_DEG_LAT = 111_320.0
+
+
+def _route_gpx(route: str, day: str, start_hhmm: str, km: float,
+               duration_s: int, fix_every_s: int = 10) -> str:
+    """A synthetic track for a named route, BUILT TO THE SESSION'S OWN FIGURES.
+
+    The geometry used to be fixed, so every track came out about 2 km whatever
+    the row beside it said. A session claiming 10.48 km with a 2 km track is a
+    fivefold contradiction sitting in the demo, and the first consumer to
+    compare the two would have found it - which is the demo's entire job.
+    Distance and elapsed time now come from the session, so the track's implied
+    pace IS the session's pace and the two agree by construction.
+
+    Deterministic - no RNG - so the demo stays byte-reproducible, which is what
+    lets CI prove it.
+    """
     import math
     r = ROUTES[route]
     hh, mm = (int(x) for x in start_hhmm.split(":"))
+    n_out = max(8, int(duration_s / (2 * fix_every_s)))
+    n = n_out * 2
+    # Out and back, so each leg covers half the distance.
+    step_deg = (km * 1000.0 / 2.0) / n_out / _M_PER_DEG_LAT
+    dt = duration_s / n
     pts = []
     for i in range(n):
-        leg = i if i < n // 2 else n - 1 - i          # out, then back
-        secs = i * 10
+        leg = i if i < n_out else n - 1 - i           # out, then back
+        secs = int(round(i * dt))
         pts.append((
-            r["lat"] + leg * 0.00010,
-            r["lon"] + r["bend"] * math.sin(leg * math.pi / (n // 2)),
-            round(4.0 + leg * r["climb"], 1),
+            r["lat"] + leg * step_deg,
+            r["lon"] + r["bend"] * math.sin(leg * math.pi / n_out),
+            # The climb profile is per-100-metres-of-latitude, so it stays the
+            # same gradient whatever the step size works out to be.
+            round(4.0 + leg * r["climb"] * (step_deg / 0.00010), 1),
             f"{day}T{(hh + (mm * 60 + secs) // 3600) % 24:02d}:"
             f"{((mm * 60 + secs) // 60) % 60:02d}:{secs % 60:02d}Z",
         ))

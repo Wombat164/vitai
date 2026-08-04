@@ -55,7 +55,19 @@ TRACK_EXT = {".gpx", ".tcx", ".fit"}
 ALLOWED_TRACKS = {
     "examples/demo/tracks/canal-loop-2030-06-16.gpx",
     "examples/demo/tracks/canal-loop-2030-06-16.tcx",
+    "examples/demo/tracks/group-long-run-2030-06-23.gpx",
+    "examples/demo/tracks/river-ten-2030-06-02.gpx",
+    "examples/demo/tracks/river-ten-2030-06-16.gpx",
+    "examples/demo/tracks/river-ten-2030-06-30.gpx",
 }
+# NAMED, not a directory pattern, and that is deliberate. `--check` does catch
+# an extra file - it unions the committed keys with the regenerated ones, so a
+# real GPX dropped in here drifts and CI fails. But that is a DIFFERENT job,
+# and this gate's value is being independently sufficient: a pattern over the
+# directory makes copying a real track into it pass one of the two guards, and
+# `test_only_the_generators_own_tracks_are_allowed` exists to refuse exactly
+# that trade. Adding four names is the cost of keeping two independent checks,
+# and it is cheap.
 # The persona corpus carries the same proof of syntheticness as the demo's
 # two tracks: every file under a persona's tracks/ directory is emitted by
 # the committed, seeded generator at tests/fixtures/personas/generate.py,
@@ -63,6 +75,12 @@ ALLOWED_TRACKS = {
 # gate as test_committed_data_matches_generator). GPX and TCX only: text
 # formats a reviewer can read in a diff. FIT stays banned everywhere; a
 # binary track cannot be reviewed, so it cannot be proved synthetic here.
+# The persona corpus carries the same proof of syntheticness as the demo's
+# tracks: every file under a persona's tracks/ directory is emitted by the
+# committed, seeded generator at tests/fixtures/personas/generate.py, whose
+# --check mode regenerates and byte-compares it. GPX and TCX only: text
+# formats a reviewer can read in a diff. FIT stays banned everywhere; a binary
+# track cannot be reviewed, so it cannot be proved synthetic here.
 ALLOWED_TRACK_RE = re.compile(
     r"^tests/fixtures/personas/[a-z][a-z0-9-]*/tracks/[^/]+\.(gpx|tcx)$")
 TOKEN_RE = re.compile(r"[a-zA-Z]+")
