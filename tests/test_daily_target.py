@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from pathlib import Path
 
 from vitai.api import Vitai, init
 from vitai.safety import INTAKE_FLOOR_KCAL
