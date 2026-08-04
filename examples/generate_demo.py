@@ -116,6 +116,7 @@ def _build(target: Path) -> None:
 
     start = END - timedelta(days=DAYS - 1)
     weight, daily, sessions = [], [], []
+    long_runs = []
     kg = 80.2
     for i in range(DAYS):
         d = (start + timedelta(days=i)).isoformat()
@@ -233,13 +234,43 @@ def _build(target: Path) -> None:
                 run.update({"_gen": 2, "source": "watch",
                             "start_time": f"{d}T18:10:00+02:00",
                             "elevation_m": round(max(0.0, rng.gauss(35, 15)), 1),
-                            "setting": "outdoor", "route": "canal-loop",
+                            "setting": "outdoor",
+                            # Two routes, alternating by week. One route for
+                            # every run made "which route" a question with one
+                            # possible answer.
+                            "route": ("canal-loop" if (i // 7) % 2 == 0
+                                      else "hill-repeats"),
                             "place": "home", "with": None, "context": "solo",
                             "planned": "running",
                             "weather": rng.choice(["dry", "dry", "rain", "wind"])})
             else:
                 run["location"] = None
             sessions.append(run)
+        # A Sunday long run every other week, on the route the athlete calls
+        # the ten-kilometre one. Its distance varies the way a real one does,
+        # which is the point: asking for "the 10k" has to pick among several
+        # runs that are near ten kilometres and none that is exactly ten.
+        if gen2 and dow == 6 and (i // 7) % 2 == 1:
+            long_km = round(rng.gauss(10.1, 0.45), 2)
+            # NOT `start`: that name holds the block's first date in the
+            # enclosing scope, and rebinding it to a clock time turned every
+            # subsequent `start + timedelta(days=i)` into a TypeError.
+            long_start = "09:20"
+            long_run = {
+                "date": d, "type": "run", "distance_km": long_km,
+                "duration_s": int(long_km * rng.gauss(372, 18)),
+                "avg_hr": int(rng.gauss(152, 4)), "max_hr": None,
+                "cadence": int(rng.gauss(170, 3)), "kcal": int(long_km * 61),
+                "rpe": 6, "note": None, "_gen": 2, "source": "watch",
+                "start_time": f"{d}T{long_start}:00+02:00",
+                "elevation_m": round(max(0.0, rng.gauss(22, 8)), 1),
+                "setting": "outdoor", "route": "river-ten", "place": "home",
+                "with": None, "context": "solo", "planned": "running",
+                "weather": rng.choice(["dry", "dry", "wind", "rain"]),
+                "track": f"tracks/river-ten-{d}.gpx",
+            }
+            sessions.append(long_run)
+            long_runs.append((d, long_start))
         if dow in (5, 6) and rng.random() < 0.8:            # weekend gym
             gym = {"date": d, "type": "strength",
                    "distance_km": None,
@@ -277,7 +308,18 @@ def _build(target: Path) -> None:
                      "duration_s": int(21.1 * 402), "avg_hr": 158,
                      "max_hr": None, "cadence": 166, "kcal": int(21.1 * 61),
                      "location": None, "rpe": 8,
-                     "note": "unplanned - joined a group long run"})
+                     "note": "unplanned - joined a group long run",
+                     "_gen": 2, "source": "watch",
+                     "start_time": f"{big_run_day.isoformat()}T09:05:00+02:00",
+                     "elevation_m": 41.0, "setting": "outdoor",
+                     # NO ROUTE, but a track. The athlete joined a group and
+                     # went somewhere they have no name for; the watch recorded
+                     # it anyway. `route` is a name a PERSON gave a place,
+                     # `track` is the data. A record where every track has a
+                     # route conflates the two, and this row separates them.
+                     "route": None, "place": "home", "with": "a group",
+                     "context": "social", "planned": None, "weather": "dry",
+                     "track": f"tracks/group-long-run-{big_run_day.isoformat()}.gpx"})
     # A richly-contextful day: a rainy Sunday walk with a partner on a route
     # the athlete has a name for. None of it is a number, and all of it is
     # what makes the day legible six months later.
@@ -297,6 +339,16 @@ def _build(target: Path) -> None:
     # identically on any machine.
     tracks = target / "tracks"
     tracks.mkdir(exist_ok=True)
+    # One stored track per long run. Not one per run: a named route with no
+    # kept file is the ordinary case, and a demo where everything has a GPX
+    # would misrepresent how records actually look.
+    for _d, _start in long_runs:
+        (tracks / f"river-ten-{_d}.gpx").write_text(
+            _route_gpx("river-ten", _d, _start), encoding="utf-8", newline="\n")
+    # The group run's track, filed under its own name because it has no route.
+    (tracks / f"group-long-run-{big_run_day.isoformat()}.gpx").write_text(
+        _route_gpx("river-ten", big_run_day.isoformat(), "09:05", n=300),
+        encoding="utf-8", newline="\n")
     (tracks / "canal-loop-2030-06-16.gpx").write_text(
         _demo_gpx(context_day), encoding="utf-8", newline="\n")
     # The same walk as the watch recorded it, in TCX - which carries the
@@ -547,6 +599,58 @@ def _build(target: Path) -> None:
                        ("journal", journal)):
         (target / "data" / f"{name}.jsonl").write_text(
             _jsonl(rows), encoding="utf-8", newline="\n")
+
+
+# The routes the athlete has names for. Real records have a handful, reused
+# constantly, and the name is the thing a person remembers six months later -
+# not the coordinates. Each carries the shape its track should have, so a
+# route-matching consumer has more than one thing to match.
+#
+# Coordinates are fictional and deliberately coarse. A public demo repository
+# is the last place real location data should ever be, and a synthetic athlete
+# with a plausible-looking home is still a pattern worth not modelling.
+ROUTES = {
+    "canal-loop": {
+        "lat": 51.2100, "lon": 3.2200, "climb": 0.55, "bend": 0.0016,
+        "note": "flat towpath, there and back",
+    },
+    "hill-repeats": {
+        "lat": 51.2260, "lon": 3.2410, "climb": 2.10, "bend": 0.0004,
+        "note": "the same short rise, several times",
+    },
+    "river-ten": {
+        "lat": 51.1980, "lon": 3.2050, "climb": 0.20, "bend": 0.0031,
+        "note": "out along the river and back, the ten-kilometre one",
+    },
+}
+
+
+def _route_gpx(route: str, day: str, start_hhmm: str, n: int = 160) -> str:
+    """A synthetic track for a named route. Deterministic - no RNG - so the
+    demo stays byte-reproducible, which is what lets CI prove it."""
+    import math
+    r = ROUTES[route]
+    hh, mm = (int(x) for x in start_hhmm.split(":"))
+    pts = []
+    for i in range(n):
+        leg = i if i < n // 2 else n - 1 - i          # out, then back
+        secs = i * 10
+        pts.append((
+            r["lat"] + leg * 0.00010,
+            r["lon"] + r["bend"] * math.sin(leg * math.pi / (n // 2)),
+            round(4.0 + leg * r["climb"], 1),
+            f"{day}T{(hh + (mm * 60 + secs) // 3600) % 24:02d}:"
+            f"{((mm * 60 + secs) // 60) % 60:02d}:{secs % 60:02d}Z",
+        ))
+    body = "\n".join(
+        f'   <trkpt lat="{lat:.5f}" lon="{lon:.5f}"><ele>{ele}</ele>'
+        f"<time>{t}</time></trkpt>" for lat, lon, ele, t in pts)
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<gpx version="1.1" creator="vitai-demo" '
+            'xmlns="http://www.topografix.com/GPX/1/1">\n'
+            f" <trk><name>{route}</name><trkseg>\n"
+            f"{body}\n"
+            " </trkseg></trk>\n</gpx>\n")
 
 
 def _demo_gpx(day: str) -> str:
