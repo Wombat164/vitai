@@ -1308,6 +1308,42 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
     return problems
 
 
+# The intake floor a declared target may not be set beneath. Imported from
+# `safety` at call time rather than restated here: one number, one owner, and
+# a restated constant is a second definition waiting to drift from the first.
+def _floor_problems(rec: dict) -> list[str]:
+    """A target declared under a safety floor is refused (#191).
+
+    Adding a nutrition target with no declaration gate creates a new way to
+    state an unmeetable number and then be told you are behind it every
+    period, which is the alarm-fatigue failure arriving through the front
+    door. The floor is not suppressible - it fires from defaults whatever the
+    athlete configures - so a target beneath it does not lower the bar, it
+    just guarantees the two disagree forever.
+
+    ONLY WHAT IS CHECKABLE HERE. The energy floor is a constant, so a daily
+    `kcal_in` target below it is refusable at declaration. The PROTEIN floor
+    is per kilogram of bodyweight, and this function sees one record with no
+    record around it, so a grams-per-day target cannot be compared against it
+    without the athlete's weight. That half needs the set-aware gate G58 asks
+    for and is deliberately not guessed at here.
+    """
+    from .safety import INTAKE_FLOOR_KCAL
+
+    if rec.get("metric") != "kcal_in" or rec.get("period") != "daily":
+        return []
+    target = rec.get("target")
+    if not isinstance(target, _NUMERIC) or isinstance(target, bool):
+        return []
+    if target > INTAKE_FLOOR_KCAL:
+        return []
+    return [f"a daily 'kcal_in' target of {target:g} is at or below the "
+            f"{INTAKE_FLOOR_KCAL:g} kcal safety floor, which cannot be "
+            "switched off by declaring one. Scoring against it would report a "
+            "miss every day for hitting the number, while the floor reported "
+            "a miss for the same days at the same time"]
+
+
 def _band_problems(rec: dict) -> list[str]:
     """`target_hi` belongs to a band and to nothing else (#200).
 
@@ -2038,6 +2074,7 @@ def _validate_policy(dataset: str, rec: dict) -> list[str]:
         problems += _enum(rec, "change_kind", CHANGE_KINDS, optional=True)
         problems += _enum(rec, "polarity", GOAL_POLARITIES, optional=True)
         problems += _band_problems(rec)
+        problems += _floor_problems(rec)
         how = verification_of(rec)
         # An ATTESTED goal is the one case where a metric is not merely absent
         # but wrong to have. "I want to enjoy running again" is settled by the

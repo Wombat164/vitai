@@ -281,6 +281,14 @@ def _milestones(goal: dict, slug: str, when: str, bucket: str,
     # is the celebratory defect this engine has taken out once already.
     if lifecycle_of(goal) == "completed":
         return []
+    # A DAILY BUCKET MINTS NOTHING (#191). Milestones key on
+    # (slug, bucket, fraction) with four fractions, so a daily period mints
+    # four a day - 1460 a year for one goal, measured. A quarter of the way
+    # through today is not an achievement, and burying the real ones under
+    # thousands of them is the alarm-fatigue failure this engine keeps taking
+    # out of other surfaces.
+    if goal.get("period") == "daily":
+        return []
     target = goal.get("target")
     if polarity_of(goal) != "floor":
         return []

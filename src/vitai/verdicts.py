@@ -205,6 +205,50 @@ def _awaiting(rows: list[dict], field: str, week: str,
     return {"reason": PENDING, "due": due.isoformat()}
 
 
+def _target_for(goals_in_force: tuple[dict, ...], metric: str,
+                threshold: float) -> tuple[float, str | None]:
+    """The value this metric is judged against, and the goal behind it (#199).
+
+    A DECLARED GOAL TARGET SUPERSEDES THE THRESHOLD while it is in force. The
+    two were separate scoring systems that never met: `goals` held a target
+    the athlete chose and `verdicts` held a floor he did not, they were
+    computed by different code, and the shipped demo had them disagreeing
+    about steps - 99.9% of one number beside `on_target` against another.
+
+    A threshold is a floor nobody chose; a goal target is an aim he did. Where
+    he has said what he is aiming at, that is what he is judged against, and
+    the config value goes back to being what it is - a default for a metric
+    nobody has spoken about.
+
+    THE SAFETY FLOORS ARE NOT REACHED BY THIS. `intake_floor`, `protein_floor`
+    and `energy_availability` are computed on a separate path that never
+    consults goals, which is what makes them non-suppressible: a target
+    declared under a floor changes what he is scored against and cannot switch
+    off the sentence saying the floor was crossed.
+    """
+    for g in goals_in_force:
+        if g.get("metric") != metric or g.get("metric") == EXTERNAL_METRIC:
+            continue
+        target = g.get("target")
+        usable = (isinstance(target, (int, float))
+                  and not isinstance(target, bool))
+        # ONLY WHERE THE UNITS MATCH, which is the part the decision could not
+        # state because it was about precedence rather than arithmetic. These
+        # rows compare a PER-DAY average against a per-day floor. A weekly goal
+        # target is a period TOTAL, and swapping one in compared 9739 steps a
+        # day against 77000 a week and called it behind at 85% of target -
+        # trading a disagreement between two systems for a wrong answer from
+        # one, which is worse.
+        #
+        # A period-total goal is already scored, by `goal_progress` and the
+        # achievement axis that exists for exactly this. What supersedes here
+        # is a target stated in the same unit the row is in: a daily one.
+        if usable and g.get("period") == "daily":
+            return float(target), g.get("slug")
+        return threshold, g.get("slug")
+    return threshold, None
+
+
 def _goal_for(goals_in_force: tuple[dict, ...], metric: str) -> str | None:
     """The active goal this metric serves, if any - the verdict's goal linkage.
 
@@ -294,9 +338,9 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
         if cap is None or not hrs:
             continue
         avg = mean(hrs)
-        rows.append(_row(wk, "easy_hr", avg, float(cap),
-                         ON if avg <= cap else BEHIND,
-                         _goal_for(goals_for[wk], "easy_hr")))
+        aim, goal = _target_for(goals_for[wk], "easy_hr", float(cap))
+        rows.append(_row(wk, "easy_hr", avg, aim,
+                         ON if avg <= aim else BEHIND, goal))
 
     # --- daily floors/gates, weekly aggregated ------------------------------
     daily_by_week: dict[str, list[dict]] = defaultdict(list)
@@ -313,16 +357,18 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
             steps = [d["steps"] for d in days if d.get("steps") is not None]
             if steps:
                 avg = mean(steps)
-                rows.append(_row(wk, "steps", avg, float(eff.steps_floor),
-                                 ON if avg >= eff.steps_floor else BEHIND,
-                                 _goal_for(active, "steps")))
+                aim, goal = _target_for(active, "steps",
+                                        float(eff.steps_floor))
+                rows.append(_row(wk, "steps", avg, aim,
+                                 ON if avg >= aim else BEHIND, goal))
         if eff.sleep_floor_h is not None:
             sleeps = [d["sleep_h"] for d in days if d.get("sleep_h") is not None]
             if sleeps:
                 avg = mean(sleeps)
-                rows.append(_row(wk, "sleep", avg, eff.sleep_floor_h,
-                                 ON if avg >= eff.sleep_floor_h else BEHIND,
-                                 _goal_for(active, "sleep_h")))
+                aim, goal = _target_for(active, "sleep_h",
+                                        float(eff.sleep_floor_h))
+                rows.append(_row(wk, "sleep", avg, aim,
+                                 ON if avg >= aim else BEHIND, goal))
         if eff.pain_gate is not None:
             # `pain` after the gen-2 generalization; old lines arrive here
             # already mapped from `hip_pain` by resolution.canonical_daily.
