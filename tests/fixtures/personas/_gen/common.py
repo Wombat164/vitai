@@ -117,6 +117,17 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # takes its viewpoint from the record rather than the clock. Neither touches a
 # data line - both are properties of the BUILD - so no persona line changes and
 # nothing is reviewed here beyond the pin itself.
+# Re-pinned for #200, which adds `polarity` and `target_hi` to goals. REVIEWED
+# rather than bumped: no builder declares a polarity, absence reads as `floor`,
+# and a floor is exactly what both existing policies already meant, so every
+# persona goal scores precisely as it did. `_gen` moves on the goals lines and
+# nothing else does.
+#
+# FIVE of their goals now raise the new polarity advisory - sofia's 1200 kcal
+# cap, tom's two weight targets, nora's ramp cap and stefan's race time. That is
+# the advisory doing its job rather than a fixture defect. Declaring a polarity
+# on their behalf would be editing what those people said they wanted, which is
+# an editorial decision about the personas and not a migration.
 # Re-pinned for #235, which splits goal status into a declared lifecycle axis
 # and a derived achievement one. REVIEWED rather than bumped: no builder
 # DECLARES a lifecycle, so every persona goal keeps the `status` it was
@@ -124,7 +135,18 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # lines gain a null `lifecycle_status` and a bumped `_gen`, which is the
 # ordinary consequence of regenerating against a wider schema, and every
 # counted value and milestone count across all nine came back identical.
-AUTHORED_AGAINST_CONTRACT = "24"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #235, which splits goal `status` into `lifecycle_status` and a
+# derived `achievement_status`. REVIEWED rather than bumped: no builder writes
+# either new field, the builders None-fill from KEYS, and `status` stays legal
+# forever under G25 - so every persona goal declares exactly what it declared
+# and resolves through the one canonicaliser. The corpora DO change: goals
+# lines gain a null `lifecycle_status` and a bumped `_gen`.
+#
+# Note this lands in the same session as #200's polarity bump, which took the
+# generation from 4 to 5; this takes it to 6. Two independent widenings of one
+# dataset, reviewed separately because they are separate claims about what a
+# goal is.
+AUTHORED_AGAINST_CONTRACT = "25"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,
@@ -133,7 +155,7 @@ AUTHORED_AGAINST_GENERATIONS = {
     "daily": 11,
     "emissions": 1,
     "events": 3,
-    "goals": 5,
+    "goals": 6,
     "inferences": 4,
     "journal": 3,
     "meals": 5,

@@ -30,6 +30,7 @@ from vitai.safety import (
     episodes_on, scan_prose, session_classes, urgent_now,
 )
 from vitai.schema import validate_record
+from vitai.db import CONTRACT_VERSION
 
 
 def write(p: Path, lines):
@@ -465,7 +466,7 @@ def test_build_projects_the_safety_tables(tmp_path):
             "SELECT trigger FROM escalations WHERE level='emergency'"
         ).fetchone()[0] == "cardiac"
         assert con.execute(
-            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "24"
+            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == CONTRACT_VERSION
     finally:
         con.close()
 

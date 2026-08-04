@@ -409,6 +409,32 @@ ACTIVITY_CLASSES = _activity_classes()
 GOAL_DATASETS = {"daily", "sessions", "weight", "measurements"}
 
 GOAL_POLICIES = {"monotonic", "guarded"}
+# WHICH DIRECTION COUNTS AS PROGRESS (#200). Orthogonal to `policy`, which says
+# whether progress may run backwards, and to the teleology axis, which says
+# what KIND of thing a goal is. Three separate questions; they do not share a
+# field.
+#
+# Both policies mean "more counts", so before this a cap was scored as an
+# accumulation and exceeding it read as excelling: a 1200 kcal limit held at
+# 1100 for a week reported 641.7% and minted four celebratory milestones.
+#
+#   floor     at or above the value; below is the miss
+#   ceiling   at or below; above is the miss
+#   band      between two values; either side is a miss, and they differ
+#   approach  converge on a value from wherever you start; the sign is not
+#             the measure, the distance is
+GOAL_POLARITIES = {"floor", "ceiling", "band", "approach"}
+
+# ABSENT IS A FLOOR, and that is a migration statement rather than a taste.
+# Both existing policies already mean "more counts", so reading an unstated
+# polarity as a floor scores every existing row exactly as it scores today.
+# Nothing re-scores, and no row has to be edited to keep the answer it had.
+DEFAULT_POLARITY = "floor"
+
+
+def polarity_of(goal: dict) -> str:
+    """The declared polarity, or the one absence means."""
+    return str(goal.get("polarity") or DEFAULT_POLARITY)
 # `proposed` is a GRAIN of a goal: mentioned, not committed. Without it a
 # half-formed intention has nowhere to live except prose, and the coach
 # cannot tell an aspiration from a decision - which matters, because
@@ -459,7 +485,14 @@ ACHIEVEMENT_STATUSES = {"in_progress", "no_progress", "achieved",
 # answer when the data can give one.
 JOURNAL_KINDS = {"claim", "worry", "idea", "preference", "question", "note"}
 JOURNAL_STATUSES = {"open", "resolved", "superseded", "declined"}
-GOAL_PERIODS = {"none", "weekly", "monthly", "quarterly", "yearly"}
+# `daily` arrives with polarity (#200) rather than after it, because without
+# it polarity gives a WRONG answer on the case that motivated it. A cap is
+# almost always a per-day limit; with no daily bucket the score accumulates
+# over the whole period, so seven compliant days at 1100 against a 1200 cap
+# read as breaching it by 6500. The old defect said a breach was a triumph;
+# scoring it that way would have said a compliant week was a breach, which is
+# not an improvement, it is the same error facing the other way.
+GOAL_PERIODS = {"none", "daily", "weekly", "monthly", "quarterly", "yearly"}
 ON_PERIOD_END = {"reset", "carry", "escalate"}
 CHANGE_KINDS = {"change", "correction"}
 
@@ -834,6 +867,15 @@ for _k in ("sleep_start", "sleep_end"):
     KEYS["daily"].append(_k)
 
 
+# --- goal polarity (#200) ---------------------------------------------------
+#
+# WHICH DIRECTION COUNTS AS PROGRESS. Appended, so a goal line written before
+# this keeps validating and scores exactly as it did: absent reads as `floor`,
+# which is what both existing policies already mean.
+CURRENT_GENERATION["goals"] += 1
+for _k in ("polarity", "target_hi"):
+    KEY_GENERATION.setdefault("goals", {})[_k] = CURRENT_GENERATION["goals"]
+    KEYS["goals"].append(_k)
 # --- goal lifecycle, split from achievement (#235) ---------------------------
 #
 # `status` mixed two axes. `lifecycle_status` takes over the one the athlete
@@ -887,7 +929,8 @@ _TYPES: dict[str, tuple[type, ...]] = {
     "sugar_g": _NUMERIC, "sodium_mg": _NUMERIC,
     "body_fat_pct": _NUMERIC, "kg_lo": _NUMERIC, "kg_hi": _NUMERIC,
     "body_fat_lo": _NUMERIC, "body_fat_hi": _NUMERIC,
-    "target": _NUMERIC, "guard_pct": _NUMERIC, "value": _NUMERIC,
+    "target": _NUMERIC, "target_hi": _NUMERIC, "guard_pct": _NUMERIC,
+    "value": _NUMERIC,
     "mood": (int,), "pain": (int,), "elevation_m": _NUMERIC,
 }
 
@@ -1265,6 +1308,35 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
     return problems
 
 
+def _band_problems(rec: dict) -> list[str]:
+    """`target_hi` belongs to a band and to nothing else (#200).
+
+    A band is the one polarity with two bounds, and both of its misses are
+    real: under and over are different failures with different remedies. On any
+    other polarity a second bound is a value nothing reads, which is the
+    "specified and never written" shape from the other direction - written and
+    never read.
+    """
+    hi, polarity = rec.get("target_hi"), rec.get("polarity")
+    if polarity == "band":
+        if hi is None or rec.get("target") is None:
+            return ["a band needs both bounds: 'target' is the low one and "
+                    "'target_hi' the high one, and a band with one edge is a "
+                    "floor or a ceiling wearing the wrong word"]
+        if not isinstance(hi, _NUMERIC) or isinstance(hi, bool):
+            return [f"'target_hi' is the band's upper bound and must be a "
+                    f"number, got {hi!r}"]
+        lo = rec.get("target")
+        if isinstance(lo, _NUMERIC) and isinstance(hi, _NUMERIC) and (
+                not isinstance(lo, bool) and not isinstance(hi, bool)
+                and hi <= lo):
+            return [f"a band runs from 'target' up to 'target_hi', so "
+                    f"{hi!r} must be above {lo!r}"]
+        return []
+    if hi is not None:
+        return [f"'target_hi' is the upper bound of a BAND, and this goal is "
+                f"{polarity or 'a floor'}. Only a band has two bounds"]
+    return []
 def _lifecycle(rec: dict) -> str | None:
     """The goal's lifecycle, successor first (#235).
 
@@ -1611,6 +1683,76 @@ def unstamped_after_the_clock_started(filename: str,
             "reconstruction of this record changes when it is recomputed"]
 
 
+# Words that mean a goal counts DOWN. Deliberately a short, literal list: the
+# point is to notice the obvious cases, not to parse intent.
+_CAPPISH = ("cap", "limit", "under ", "below", "no more than", "at most",
+            "max ")
+
+
+def polarity_advisories(rows: list[tuple[int, dict]]) -> list[str]:
+    """Goals whose words say cap and whose scoring says floor (#200).
+
+    Polarity defaults to `floor` so that no existing row re-scores, which is
+    the right migration and leaves a real hazard behind: a cap declared before
+    polarity existed still scores as an accumulation, so holding under it
+    reads as exceeding it.
+
+    The issue's own remedy was that such rows are "identifiable by hand".
+    Hunting them by hand is the part that does not survive contact with a
+    growing record, so the engine points at them instead.
+
+    ADVISORY, never a problem. A title is prose and prose is not a
+    declaration: "cap the ramp at 10 percent" may well be a floor on volume
+    with a separate guard, and refusing it would make the engine the author of
+    a goal it only read the label of.
+    """
+    out = []
+    for n, rec in rows:
+        if rec.get("polarity") or rec.get("target") is None:
+            continue
+        # Only rows that can still SCORE. An achieved or abandoned goal is
+        # never counted, so the hazard the advisory describes does not exist
+        # for it, and repeating the warning once per restatement line of the
+        # same slug is noise about a decision already taken.
+        if rec.get("status") not in ("active", "proposed", "paused"):
+            continue
+        title = str(rec.get("title") or "").lower()
+        if any(w in title for w in _CAPPISH):
+            out.append(
+                f"line {n}: goal {rec.get('slug')!r} reads like a cap "
+                f"({rec.get('title')!r}) and has no 'polarity', so it is "
+                "scored as a floor - progress counts UP and holding under the "
+                "value reads as exceeding it. Declare 'ceiling' if that is "
+                "what it is")
+    return out
+
+
+def period_advisories(rows: list[tuple[int, dict]]) -> list[str]:
+    """Ceilings measured against a total nobody meant (#200).
+
+    A cap is nearly always a per-day limit. Scored over a period that
+    accumulates, seven compliant days at 1100 against a 1200 cap read as
+    breaching it by 6500 - the old defect facing the other way, and just as
+    wrong. `daily` exists now, so this points at the rows that want it.
+
+    ADVISORY, because a genuine period total is a legitimate thing to cap: a
+    monthly alcohol budget is a ceiling on a sum and means exactly what it
+    says.
+    """
+    out = []
+    for n, rec in rows:
+        if rec.get("polarity") != "ceiling" or rec.get("target") is None:
+            continue
+        if rec.get("status") not in ("active", "proposed", "paused"):
+            continue
+        if rec.get("tracker") == "sum" and rec.get("period") in (None, "none"):
+            out.append(
+                f"line {n}: goal {rec.get('slug')!r} caps a running total "
+                "that never resets, so every logged day pushes it further "
+                "over. If this is a per-day limit, set period to 'daily'")
+    return out
+
+
 def timestamp_advisories(dataset: str, rows: list[tuple[int, dict]]) -> list[str]:
     """Naive `start_time` values: legal, but not what new writes should carry.
 
@@ -1891,6 +2033,8 @@ def _validate_policy(dataset: str, rec: dict) -> list[str]:
         problems += _enum(rec, "verification", VERIFICATIONS, optional=True)
         problems += _enum(rec, "deadline_kind", DEADLINE_KINDS, optional=True)
         problems += _enum(rec, "change_kind", CHANGE_KINDS, optional=True)
+        problems += _enum(rec, "polarity", GOAL_POLARITIES, optional=True)
+        problems += _band_problems(rec)
         how = verification_of(rec)
         # An ATTESTED goal is the one case where a metric is not merely absent
         # but wrong to have. "I want to enjoy running again" is settled by the
@@ -1898,7 +2042,8 @@ def _validate_policy(dataset: str, rec: dict) -> list[str]:
         # promise the engine cannot keep - it would start issuing verdicts on
         # a proxy nobody agreed was the goal (G86/G83).
         if how == ATTESTED:
-            for k in ("metric", "target", "dataset", "session_type", "period"):
+            for k in ("metric", "target", "target_hi", "dataset", "session_type",
+                      "period"):
                 if rec.get(k) not in (None, "", "none"):
                     problems.append(
                         f"an attested goal is settled by the athlete's word alone, "

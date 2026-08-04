@@ -238,8 +238,27 @@ from .schema import KEYS
 #     thing and building it no longer consults the outside world. An explicit
 #     `--on` still answers "what does this look like now".
 #
+#     #219 also claims 23. The contract follows MERGE order, so whichever
+#     of the two lands second is renumbered rather than assumed.
+# 24: goal POLARITY. `monotonic` and `guarded` both meant "more counts", so a
+#     cap was scored as an accumulation: 1100 kcal a day against a 1200 limit
+#     reported 641.7% for the week and minted four milestones for breaching
+#     it. `polarity` says which direction is progress - floor, ceiling, band
+#     or approach - and `target_hi` carries a band's upper bound.
+#
+#     WHAT A CONSUMER MUST NOT ASSUME: that `progress_pct` is always there. It
+#     is the FLOOR's measure and is null for every other polarity, because a
+#     percentage of a limit consumed is the figure that read as success.
+#     A ceiling reports `headroom`, a band reports `headroom` and which side
+#     it fell off, an approach reports `distance`, and `breach` says under or
+#     over wherever the question has an answer.
+#
+#     Absent polarity reads as `floor`, so no existing row re-scores and no
+#     row has to be edited to keep the answer it had. Rows whose title says
+#     cap or limit while scoring as a floor now raise a validate ADVISORY
+#     rather than having to be found by hand.
 #     #219 also claimed 23 and was renumbered past it; see the note on 24.
-# 24: goal status SPLITS into two axes. `status` mixed where a goal is in its
+# 25: goal status SPLITS into two axes. `status` mixed where a goal is in its
 #     own life with how it is going against its target, which is #199's
 #     two-scoring-systems bug at the vocabulary level: `goals` held the first,
 #     `verdicts` held the second, they were built by different code, and the
@@ -258,7 +277,7 @@ from .schema import KEYS
 #
 #     #219 also claims 24. The contract follows MERGE order, so whichever of
 #     the two lands second is renumbered rather than assumed.
-CONTRACT_VERSION = "24"
+CONTRACT_VERSION = "25"
 
 _TEXT_COLS = {"derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
               # under REAL affinity silently becomes 7.0, which is the defect
@@ -269,6 +288,9 @@ _TEXT_COLS = {"derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
               # into 21.0 and lose the distinction. `statement`, `week` and
               # `metric` are already below, on other datasets.
               "basis_claims", "surface", "policy_asof", "contract",
+              # `polarity` and `breach` are words; a band's bounds are numbers
+              # and stay numeric.
+              "polarity", "breach",
               "lifecycle_status", "achievement_status",
               # `due` is an ISO date too (#202).
               "due",
@@ -352,6 +374,10 @@ PROGRESS_KEYS = ["slug", "title", "metric", "policy", "status", "period",
                  "deadline_kind",
                  "days_to_deadline", "event", "verification", "motivator",
                  "tracker", "milestones",
+                 # Appended (#200), so a positional reader keeps every column
+                 # it knew. `progress_pct` above is now the FLOOR's measure
+                 # and is null for the other three polarities.
+                 "polarity", "target_hi", "room_left", "distance", "breach",
                  # Appended (#235), so a positional reader keeps every column
                  # it knew. `status` above stays, carrying the same value as
                  # `lifecycle_status`, so a consumer reading the old name is

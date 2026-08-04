@@ -22,6 +22,7 @@ from vitai.policy import context_on, has_facility
 from vitai.resolution import canonical_daily, live_inferences, resolve, retractions
 from vitai.schema import validate_record
 from vitai.verdicts import compute_verdicts
+from vitai.db import CONTRACT_VERSION
 
 
 def write(p: Path, lines):
@@ -470,7 +471,7 @@ def test_build_projects_the_adjudication_trail(tmp_path):
         assert con.execute(
             "SELECT kcal_out FROM daily").fetchone()[0] == 2443
         assert con.execute(
-            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "24"
+            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == CONTRACT_VERSION
     finally:
         con.close()
 

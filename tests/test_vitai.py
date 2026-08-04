@@ -8,6 +8,7 @@ import pytest
 
 from vitai.cli import main
 from vitai.config import Config, load_config, phase_rate_for
+from vitai.db import CONTRACT_VERSION
 from vitai.jsonl import load, load_report, read_lines
 from vitai.report import build_report
 from vitai.schema import validate_record
@@ -403,7 +404,8 @@ def test_api_build_projects_verdicts_and_contract(tmp_path):
             "justifications", "conservation", "retractions",
             "medical", "gates", "escalations", "checks"} <= tables
     assert con.execute("SELECT COUNT(*) FROM inferences").fetchone()[0] == 1
-    assert con.execute("SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "24"
+    assert con.execute(
+        "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == CONTRACT_VERSION
     con.close()
     assert v.status_line().startswith("77.3 kg")
     assert isinstance(v.verdicts(), list)
