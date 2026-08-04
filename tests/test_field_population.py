@@ -133,7 +133,6 @@ UNWRITTEN = (
     "sets.read_by",
     "sets.resistance_level",
     "sets.round",
-    "sets.rpe",
     "sets.side",
     "sets.tempo",
     "thresholds.note",
@@ -149,6 +148,14 @@ UNWRITTEN = (
 
 UNREAD = (
     "achievements.occurred_date",
+    # The declared scales from #246. Written by the engine and read by nothing
+    # INSIDE it, which is what an interface field looks like before a consumer
+    # exists: their whole purpose is that a CLIENT stops inventing a
+    # denominator. vitai-lens is the one that will read them first.
+    "daily.mood_scale",
+    "daily.pain_scale",
+    "sessions.rpe_scale",
+    "sets.rpe_scale",
     "daily.alcohol",
     "daily.coverage",
     "daily.feel",

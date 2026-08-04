@@ -151,7 +151,16 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # persona keeps its bare `rpe`, `mood` and `pain` - which is the honest state
 # and the one the fixture set needs, because absent-means-unstated is the case
 # a consumer has to handle and the demo now covers the declared one.
-AUTHORED_AGAINST_CONTRACT = "26"  # vitai.db.CONTRACT_VERSION is a string
+#
+# Re-pinned for #247, which adds the `best_efforts` table. Nothing here
+# changes: it is a DERIVED table computed from stored tracks, and no persona
+# ships one, so every persona yields zero rows and no data line moves.
+# Re-pinned again at MERGE time, to 27. Both #246 and #247 were authored
+# against 26 and each re-pinned to it; #246 merged first and kept it, so the
+# combined tree is 27. Neither change moves a persona data line - one adds
+# scale columns no builder declares, the other a derived table no persona
+# ships - and both re-pin notes above stand as the review that established it.
+AUTHORED_AGAINST_CONTRACT = "27"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,

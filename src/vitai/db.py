@@ -292,7 +292,30 @@ from .schema import KEYS
 #     rendering "4 out of 10" against an undeclared scale asserts a bound the
 #     record never carried. Where a scale IS declared the value is validated
 #     against its range, which is the point of declaring one.
-CONTRACT_VERSION = "26"
+# 27: `best_efforts` - the fastest 1k, 5k, 10k, half and full of every stored
+#     track. The question a runner asks first, and one no field could answer:
+#     `sessions` holds a distance and a duration, so a 10.48 km run and a
+#     9.74 km run are comparable on neither, and a pace computed from both
+#     averages the warm-up in.
+#
+#     ONE ROW PER (track, distance): a track can hold several efforts, and
+#     hanging them off `sessions` would flatten that. A track shorter than a
+#     window simply yields fewer rows - the record cannot answer it, which is
+#     not the same as zero.
+#
+#     `basis` IS LOAD-BEARING. `device` means the window was measured against
+#     the watch's own cumulative distance, an observation; `derived` means
+#     against the haversine sum this engine computes, which is not. A consumer
+#     that cannot tell them apart will read both as a time trial.
+#
+#     `seconds` is ELAPSED: a stop inside the window counts, because excluding
+#     it would be the engine deciding which pauses were real. That is why the
+#     column is not called `moving_time`.
+#
+#     #253 claimed 26 as well and merged first, so this is 27. The
+#     contract follows MERGE order, which is exactly why both sides
+#     said so in their own comment rather than assuming.
+CONTRACT_VERSION = "27"
 
 _TEXT_COLS = {"derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
               # under REAL affinity silently becomes 7.0, which is the defect
@@ -303,6 +326,7 @@ _TEXT_COLS = {"derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
               # into 21.0 and lose the distinction. `statement`, `week` and
               # `metric` are already below, on other datasets.
               "basis_claims", "surface", "policy_asof", "contract",
+              "track", "basis", "start", "end",
               # `polarity` and `breach` are words; a band's bounds are numbers
               # and stay numeric.
               "polarity", "breach",
@@ -422,7 +446,13 @@ ESCALATION_KEYS = ["date", "level", "trigger", "detail", "action"]
 PROVENANCE_KEYS = ["date", "dataset", "origin", "independent_sources",
                    "trust", "chain"]
 
+# One row per (track, distance), because a track can hold several efforts and
+# hanging them off `sessions` would flatten that.
+BEST_EFFORT_KEYS = ["track", "date", "distance_m", "seconds", "start", "end",
+                    "basis"]
+
 DERIVED_TABLES: dict[str, list[str]] = {
+    "best_efforts": BEST_EFFORT_KEYS,
     "provenance": PROVENANCE_KEYS,
     "verdicts": VERDICT_KEYS,
     "contributions": CONTRIBUTION_KEYS,

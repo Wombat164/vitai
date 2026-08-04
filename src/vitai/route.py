@@ -420,6 +420,29 @@ def _cumulative(points: list[Fix]) -> tuple[list[Fix], list[float], str]:
     return points, cum, "derived"
 
 
+# The conventional set, and the reason it is a SET rather than a parameter:
+# storing all of them for every track is cheap, and storing an arbitrary one on
+# request is not a read model. Half and full marathon carry their exact metric
+# distances rather than round numbers, because a 21 km best is not a half.
+STANDARD_DISTANCES_M = (1000.0, 5000.0, 10000.0, 21097.5, 42195.0)
+
+
+def best_efforts(points: list[Fix],
+                 distances: tuple[float, ...] = STANDARD_DISTANCES_M
+                 ) -> list["Effort"]:
+    """Every standard best effort this track can support.
+
+    Shorter than the window means the question cannot be answered, not that
+    the answer is zero, so a track simply yields fewer rows.
+    """
+    out = []
+    for metres in distances:
+        effort = best_effort(points, metres)
+        if effort is not None:
+            out.append(effort)
+    return out
+
+
 def best_effort(points: list[Fix], distance_m: float) -> Effort | None:
     """Fastest elapsed time over any contiguous `distance_m` of the track.
 
