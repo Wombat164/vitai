@@ -16,7 +16,13 @@ degrades on a persona with a long history, the corpus could not previously say
 whether the cause was the history or the code; against a record where every
 field was available from row one, it can.
 
-What she carries that no other persona does.
+Two things she carries that no other persona does.
+
+TWO RPE SCALES IN ONE RECORD. Her watch exports Borg's 6-20 and the strength
+app she types into uses CR10, so the same integer means two different efforts
+in two datasets of one record - an easy run at 12 would read as near-maximal
+on the other scale. Both declare, which is the case `rpe_scale` exists for and
+which no other record can demonstrate.
 
 A DAILY CEILING AND A DAILY FLOOR ON ONE NUTRIENT AXIS. She caps energy and
 floors protein, both per day, which is the shape the nutrition work is built
@@ -124,8 +130,10 @@ def _daily(rng: random.Random, stamp: common.Stamper, end: date) -> list[dict]:
             sleep_h=round(rng.gauss(6.9, 0.6), 1),
             rhr=int(rng.gauss(54, 3)),
             mood=max(1, min(10, int(rng.gauss(7, 1.2)))),
+            mood_scale="nrs-0-10",
             pain=niggle, pain_site="achilles" if niggle else None,
             pain_side="left" if niggle else None,
+            pain_scale="nrs-0-10" if niggle else None,
             coverage="full", source="app", origin="phone",
             capture="connector", recorded_at=stamp.stamp(day)))
     return rows
@@ -133,13 +141,14 @@ def _daily(rng: random.Random, stamp: common.Stamper, end: date) -> list[dict]:
 
 def _sessions(rng: random.Random, stamp: common.Stamper,
               end: date) -> tuple[list[dict], list[dict]]:
-    """Four runs a week from a watch, one of them long.
+    """Four runs a week from a watch that reports RPE on Borg's 6-20.
 
-    Her runs carry an RPE on Borg's 6-20 and her sets carry one on CR10, so
-    the same integer means two different efforts in two datasets of one
-    record. Neither can SAY so yet - `rpe_scale` is not in this contract - and
-    she is the fixture that will demonstrate it the day it is, because she is
-    the only persona whose two sources genuinely disagree about the scale.
+    The scale matters here and nowhere else in the corpus: her strength app
+    uses CR10, so the same integer means two different efforts depending on
+    which dataset it is in. An easy run at 12 would read as near-maximal on
+    the other scale. Both rows declare, which is the case `rpe_scale` exists
+    for and which no other record can demonstrate - hers is the only one whose
+    two sources genuinely differ.
     """
     rows, tracks = [], []
     for day in common.daterange(START, end):
@@ -159,7 +168,7 @@ def _sessions(rng: random.Random, stamp: common.Stamper,
             "sessions", date=day.isoformat(), type="run", distance_km=km,
             duration_s=secs, avg_hr=int(rng.gauss(146, 7)),
             start_time=f"{day.isoformat()}T06:10:00+00:00",
-            rpe=rpe,
+            rpe=rpe, rpe_scale="borg-rpe-6-20",
             setting="outdoor", context="solo", source="watch",
             origin="running-watch", capture="connector",
             track=track, recorded_at=stamp.stamp(day)))
@@ -188,7 +197,7 @@ def _sets(stamp: common.Stamper) -> list[dict]:
                 set_type="working",
                 failure="volitional" if index == 3 else None,
                 rir=0 if index == 3 else 2,
-                rpe=8 if index == 3 else 6,
+                rpe=8 if index == 3 else 6, rpe_scale="borg-cr10",
                 equipment="kettlebell", source="app", origin="phone",
                 capture="manual_entry", read_by="athlete",
                 recorded_at=stamp.stamp(day)))
@@ -268,10 +277,9 @@ def _expectations() -> list[dict]:
          "dates": [], "claim":
              "her runs carry rpe 11-13 and her sets carry rpe 6-8",
          "truth":
-             "the runs are on Borg 6-20 and the sets on CR10, and nothing in "
-             "the record says so: 12 on a run is an easy effort and 8 on a "
-             "set is a hard one, and the integers alone cannot tell them "
-             "apart",
+             "the runs are on Borg 6-20 and the sets on CR10; both rows say "
+             "which, so 12 on a run is an easy effort and 8 on a set is a "
+             "hard one",
          "expect":
              "nothing may compare an rpe across the two datasets without "
              "reading `rpe_scale` first, and nothing may render either as a "
@@ -279,11 +287,9 @@ def _expectations() -> list[dict]:
              "two different quantities - which is exactly what every record "
              "in this corpus would have done before the scale could be "
              "stated, and why she is the only persona who can demonstrate it",
-         "gap": "OPEN in this contract: there is no way to declare which "
-                "scale a number is on, so the two are indistinguishable. She "
-                "is the only persona whose sources genuinely differ, and the "
-                "fixture that will demonstrate the declaration when it "
-                "arrives"},
+         "gap": "none in the engine: each value is validated against its "
+                "declared scale. The gap is in any consumer that pools them, "
+                "and she is the only record that can demonstrate it"},
         {"id": "ines-E2", "kind": "gap", "dataset": "weight",
          "dates": [(START + timedelta(days=39)).isoformat()],
          "claim": "a 65.8 kg reading, 1.4 kg above the trend",
