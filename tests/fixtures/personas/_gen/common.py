@@ -146,13 +146,18 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # generation from 4 to 5; this takes it to 6. Two independent widenings of one
 # dataset, reviewed separately because they are separate claims about what a
 # goal is.
-AUTHORED_AGAINST_CONTRACT = "25"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #246, which adds a declared scale beside each subjective
+# number. REVIEWED rather than bumped: no builder declares one, so every
+# persona keeps its bare `rpe`, `mood` and `pain` - which is the honest state
+# and the one the fixture set needs, because absent-means-unstated is the case
+# a consumer has to handle and the demo now covers the declared one.
+AUTHORED_AGAINST_CONTRACT = "26"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,
     "checks": 3,
     "context": 3,
-    "daily": 11,
+    "daily": 12,
     "emissions": 1,
     "events": 3,
     "goals": 6,
@@ -161,8 +166,8 @@ AUTHORED_AGAINST_GENERATIONS = {
     "meals": 5,
     "measurements": 9,
     "medical": 5,
-    "sessions": 10,
-    "sets": 5,
+    "sessions": 11,
+    "sets": 6,
     "protocols": 1,
     "regimes": 1,
     "thresholds": 3,

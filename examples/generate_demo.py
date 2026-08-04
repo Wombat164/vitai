@@ -205,6 +205,16 @@ def _build(target: Path) -> None:
                         # for the entry to be actionable: which hip.
                         "pain_side": "right" if pain else None,
                         "mood": max(1, min(10, int(rng.gauss(7, 1.5)))),
+                        # WHAT THESE ARE OUT OF (#246). A bare 2 could be two
+                        # out of ten or two out of four, and a client that
+                        # renders "2/10" against an undeclared scale has
+                        # invented the denominator. The personas deliberately
+                        # keep theirs bare, because absent-means-unstated is
+                        # the case a consumer has to handle and a fixture that
+                        # only held the declared one would prove nothing
+                        # about it.
+                        "mood_scale": "nrs-0-10",
+                        "pain_scale": "nrs-0-10" if pain is not None else None,
                         "feel": rng.choice(["fun", "neutral", "neutral", "chore"]),
                         # `coverage` is a claim about how completely the day was
                         # LOGGED, and this generator does not know that - it is
@@ -229,7 +239,7 @@ def _build(target: Path) -> None:
                    "duration_s": int(km * rng.gauss(390, 25)),
                    "avg_hr": int(rng.gauss(166 if hard else 147, 5)),
                    "max_hr": None, "cadence": int(rng.gauss(168, 4)),
-                   "kcal": int(km * 61), "rpe": 7 if hard else 4, "note": None}
+                   "kcal": int(km * 61), "rpe": 7 if hard else 4, "rpe_scale": "borg-cr10", "note": None}
             if gen2:
                 run.update({"_gen": 2, "source": "watch",
                             "start_time": f"{d}T18:10:00+02:00",
@@ -261,7 +271,7 @@ def _build(target: Path) -> None:
                 "duration_s": int(long_km * rng.gauss(372, 18)),
                 "avg_hr": int(rng.gauss(152, 4)), "max_hr": None,
                 "cadence": int(rng.gauss(170, 3)), "kcal": int(long_km * 61),
-                "rpe": 6, "note": None, "_gen": 2, "source": "watch",
+                "rpe": 6, "rpe_scale": "borg-cr10", "note": None, "_gen": 2, "source": "watch",
                 "start_time": f"{d}T{long_start}:00+02:00",
                 "elevation_m": round(max(0.0, rng.gauss(22, 8)), 1),
                 "setting": "outdoor", "route": "river-ten", "place": "home",
@@ -276,7 +286,7 @@ def _build(target: Path) -> None:
                    "distance_km": None,
                    "duration_s": int(rng.gauss(3300, 400)),
                    "avg_hr": None, "max_hr": None, "cadence": None,
-                   "kcal": None, "rpe": rng.choice([5, 6]), "note": None}
+                   "kcal": None, "rpe": rng.choice([5, 6]), "rpe_scale": "borg-cr10", "note": None}
             if gen2:
                 gym.update({"_gen": 2, "source": "watch",
                             "start_time": f"{d}T10:30:00+02:00",
@@ -307,7 +317,7 @@ def _build(target: Path) -> None:
                      "distance_km": 21.1,
                      "duration_s": int(21.1 * 402), "avg_hr": 158,
                      "max_hr": None, "cadence": 166, "kcal": int(21.1 * 61),
-                     "location": None, "rpe": 8,
+                     "location": None, "rpe": 8, "rpe_scale": "borg-cr10",
                      "note": "unplanned - joined a group long run",
                      "_gen": 2, "source": "watch",
                      "start_time": f"{big_run_day.isoformat()}T09:05:00+02:00",
@@ -327,7 +337,7 @@ def _build(target: Path) -> None:
     sessions.append({
         "date": context_day, "type": "walk", "distance_km": 6.4,
         "duration_s": 4920, "avg_hr": 104, "max_hr": None, "cadence": None,
-        "kcal": 290, "rpe": 2, "note": None, "source": "watch",
+        "kcal": 290, "rpe": 2, "rpe_scale": "borg-cr10", "note": None, "source": "watch",
         "start_time": f"{context_day}T14:05:00+02:00", "elevation_m": 18.0,
         "setting": "outdoor", "route": "canal-loop", "place": "home",
         "with": "partner", "context": "family", "planned": None,
@@ -370,7 +380,7 @@ def _build(target: Path) -> None:
     sessions.append({
         "date": context_day, "type": "walk", "distance_km": 6.38,
         "duration_s": 4906, "avg_hr": 103, "max_hr": None, "cadence": None,
-        "kcal": 288, "rpe": 2, "note": None, "_gen": 2, "source": "app",
+        "kcal": 288, "rpe": 2, "rpe_scale": "borg-cr10", "note": None, "_gen": 2, "source": "app",
         "start_time": f"{context_day}T14:05:11", "elevation_m": None,
         "setting": "outdoor", "route": None, "place": None, "with": None,
         "context": None, "planned": None, "weather": None})
@@ -426,7 +436,7 @@ def _build(target: Path) -> None:
     sessions.append({
         "date": console_day, "type": "row", "distance_km": 3.1,
         "duration_s": 906, "avg_hr": None, "max_hr": None, "cadence": 25,
-        "kcal": 148, "location": None, "rpe": 6, "note": None, "_gen": 6,
+        "kcal": 148, "location": None, "rpe": 6, "rpe_scale": "borg-cr10", "note": None, "_gen": 6,
         "source": "gym-console", "start_time": f"{console_day}T19:40:00+02:00",
         "elevation_m": None, "setting": "indoor", "route": None,
         "place": "gym", "with": None, "context": "solo", "planned": None,
@@ -1186,8 +1196,11 @@ def _strength(sessions: list[dict], weight: list[dict]) -> list[dict]:
              equipment="barbell", angle_class="flat", **logged),
         _set(prior["date"], prior["start_time"], "bench-press", 2, 3,
              reps_completed=6, reps_attempted=6, load=60, load_type="external",
-             load_unit="kg", rir=2, rest_s=180, equipment="barbell",
-             angle_class="flat", **logged),
+             # The set carries a perceived exertion and says which scale it is
+             # on (#246). Without it a 7 here is unreadable: "quite light" on
+             # Borg's 6-20 and "very hard" on CR10.
+             load_unit="kg", rir=2, rpe=7, rpe_scale="borg-cr10", rest_s=180,
+             equipment="barbell", angle_class="flat", **logged),
         _set(prior["date"], prior["start_time"], "bench-press", 3, 3,
              reps_completed=4, reps_attempted=5, load=70, load_type="external",
              load_unit="kg", failure="muscular", rir=0, rest_s=180,
