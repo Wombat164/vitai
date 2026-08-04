@@ -485,3 +485,39 @@ def test_unstated_reps_are_not_reported_as_a_failed_attempt():
                          "leg press")
     assert got["load"] is None
     assert "unstated is not zero" in got["detail"]
+
+
+def test_a_volitional_stop_at_zero_reserve_is_legal_and_not_maximal():
+    """The commonest way a set ends, and the pairing the old gloss made read
+    as a contradiction (#244).
+
+    Someone judges he cannot do another WITHOUT starting one and finding out.
+    That is `volitional` - he ended the set - with `rir: 0`, because he
+    believed none were left. It is not `muscular`, which asserts a rep was
+    attempted and lost, and encoding it that way would put a tested limit in
+    the record where nothing was tested.
+
+    It is not evidence of a maximum, and the reason matters: not that reps
+    were left, but that the question was never put.
+    """
+    from vitai.progression import is_maximal_evidence
+    from vitai.schema import validate_record
+
+    from vitai.schema import CURRENT_GENERATION, KEYS
+
+    def a_set(**kw):
+        row = {k: None for k in KEYS["sets"]}
+        row.update({"date": "2030-05-01", "exercise": "bench-press",
+                    "set_index": 1, "reps_completed": 8, "reps_attempted": 8,
+                    "load": 60, "load_type": "external", "load_unit": "kg",
+                    "source": "stated-in-chat", "capture": "narrative",
+                    "read_by": "athlete",
+                    "_gen": CURRENT_GENERATION["sets"]})
+        row.update(kw)
+        return row
+
+    row = a_set(failure="volitional", rir=0, set_type="working")
+    assert validate_record("sets", row) == []
+    assert not is_maximal_evidence(row)
+    # And the tested endings still are.
+    assert is_maximal_evidence(a_set(failure="muscular", rir=0, set_type="working"))
