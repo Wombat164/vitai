@@ -223,3 +223,29 @@ def test_it_matches_a_continuous_search_across_many_shapes():
             continue
         worst = max(worst, e.seconds - truth)
     assert worst < 0.05, f"worst overshoot {worst:.3f}s"
+
+
+def test_a_few_fixes_without_a_device_distance_do_not_lose_the_basis():
+    """Found on a real 11 km run, not on a fixture.
+
+    Polar's TCX carried `DistanceMeters` on 3,742 of 3,744 fixes - the first
+    two, recorded before the watch had a distance to report, were empty. An
+    all-or-nothing test threw the device's entire account of the run away and
+    fell back to the haversine sum, which measured the same run 0.94 per cent
+    longer and made the best 10 km look 21 seconds faster than the watch said.
+    """
+    pts = line(400, dist=True)
+    holed = list(pts)
+    for k in (0, 1):                              # no distance yet at the start
+        holed[k] = Fix(lat=pts[k].lat, lon=pts[k].lon, t=pts[k].t)
+    e = best_effort(holed, 1000)
+    assert e is not None and e.basis == "device"
+
+
+def test_a_track_mostly_without_device_distance_falls_back():
+    """Coverage has to mean something: half a device figure is not one."""
+    pts = line(400, dist=True)
+    holed = [Fix(lat=f.lat, lon=f.lon, t=f.t) if i % 2 else f
+             for i, f in enumerate(pts)]
+    e = best_effort(holed, 1000)
+    assert e is not None and e.basis == "derived"

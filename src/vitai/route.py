@@ -388,24 +388,36 @@ class Effort:
     end_index: int
 
 
-def _cumulative(points: list[Fix]) -> tuple[list[float], str]:
-    """Cumulative distance along the track, and which basis it came from.
+# A track may lose its device distance on a few fixes without losing it as a
+# basis. Demanding EVERY fix carry one threw away a real 11 km run's 3,742
+# device readings because the first two - recorded before the watch had a
+# distance to report - were empty. Nine tenths is the bar: enough that the
+# figure is the device's account of the run rather than a fragment of it, and
+# loose enough to survive the start of one.
+_DEVICE_COVERAGE = 0.9
 
-    The device's own figure where every fix carries one, because that is an
-    observation and the haversine sum is not. Mixed or absent falls back to
-    the derivation rather than interleaving two different quantities.
+
+def _cumulative(points: list[Fix]) -> tuple[list[Fix], list[float], str]:
+    """Points, their cumulative distance, and which basis it came from.
+
+    The device's own figure where the track carries one, because that is an
+    observation and the haversine sum is not. The fixes WITHOUT one are
+    dropped rather than interpolated: a device distance nobody reported is not
+    a device distance, and inventing one would put a derived number inside a
+    window labelled `device`.
     """
-    if all(f.dist is not None for f in points) and len(points) > 1:
-        base = points[0].dist or 0.0
-        cum = [(f.dist or 0.0) - base for f in points]
+    have = [f for f in points if f.dist is not None]
+    if len(have) > 1 and len(have) >= _DEVICE_COVERAGE * len(points):
+        base = have[0].dist or 0.0
+        cum = [(f.dist or 0.0) - base for f in have]
         # A device figure that goes backwards is not a device figure worth
         # trusting; fall through rather than silently sorting it.
         if all(cum[i] <= cum[i + 1] for i in range(len(cum) - 1)):
-            return cum, "device"
+            return have, cum, "device"
     cum = [0.0]
     for i in range(len(points) - 1):
         cum.append(cum[-1] + haversine_m(points[i], points[i + 1]))
-    return cum, "derived"
+    return points, cum, "derived"
 
 
 def best_effort(points: list[Fix], distance_m: float) -> Effort | None:
@@ -459,8 +471,8 @@ def best_effort(points: list[Fix], distance_m: float) -> Effort | None:
     pts = [f for f in points if f.t is not None]
     if len(pts) < 2 or distance_m <= 0:
         return None
-    cum, basis = _cumulative(pts)
-    if cum[-1] < distance_m:
+    pts, cum, basis = _cumulative(pts)
+    if len(pts) < 2 or cum[-1] < distance_m:
         return None
     secs = [(f.t - pts[0].t).total_seconds() for f in pts]
 
