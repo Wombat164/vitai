@@ -121,11 +121,22 @@ def test_an_unknown_origin_never_counts_as_independent():
     assert shares_origin(weight(origin="unknown"), weight(origin="unknown")) is False
 
 
-def test_an_unannotated_record_still_counts_each_row():
-    """A record with no provenance at all had one observation per row as far
-    as anyone can tell. Merging them would silently rewrite a legitimately
-    un-annotated history."""
-    assert independent_witnesses([weight(), weight()]) == 2
+def test_an_unannotated_record_still_counts_each_channel():
+    """A record with no ORIGINS keeps whatever independence it can
+    demonstrate, and merging it away would silently rewrite a legitimately
+    un-annotated history. These rows name a channel and no instrument, which
+    is the ordinary shape of an un-annotated record rather than a silent one.
+
+    NARROWED from "each row" (#211). Two rows down ONE channel are not two
+    witnesses however un-annotated they are: that reading was what let a
+    correction, which appends a second row from the same source, inflate the
+    evidence for the value being corrected. What survives is the part that was
+    actually true - distinct sources still count separately, because with no
+    origins stated the channel is the only independence anyone can show.
+    """
+    assert independent_witnesses([weight(source="scale"),
+                                  weight(source="hand")]) == 2
+    assert independent_witnesses([weight(), weight()]) == 1
 
 
 # ---- what the resolver reports --------------------------------------------------

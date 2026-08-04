@@ -192,6 +192,9 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   Plus the coach behavior it enables: proactively EXPLAIN and COMFORT a
   scary-looking number (a big deficit, an app disagreement) unprompted -
   comfort is coaching. HIGH.
+  > **SPECIALISED by #220 (state model), 2026-08-03.** Implemented, with live
+  > rows, and retained. The general state shape specialises to this rather than
+  > replacing it.
 - **G35 Geodata & location-time provenance** (P1/G5/G32). Routes/GPS on
   sessions + a where-was-I-when signal from many sources (photo geodata,
   calendar events, Maps/Waze route history, chat mentions) feeding
@@ -401,6 +404,10 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   schedule) + a ONE-WAY run leg, enabling further-out point-to-point runs ("bus
   east, run the 12 km home along the dike"); the planner sizes the run leg to the
   goal target. MEDIUM.
+  > **ABSORBED into #220 (state model), 2026-08-03.** The MECHANISM proposed
+  > here is superseded by the general state shape - subject, warrant, extent,
+  > resolved at read time. The CONSTRAINT is retained and must survive it:
+  > places and journeys are entities that states attach to; a route is not a place. Do not re-derive this entry; extend #220.
 - **G45 Plan <-> route <-> goal reconciliation** (P1 / increment-1). A scheduled
   session carries a TARGET (distance/duration/pace) from the coach's plan OR an
   external plan (Runna/imported). A candidate route carries ESTIMATED parameters
@@ -426,6 +433,10 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   machinery under the cold-boot greeting - the router is what lets the app "know
   on opening what to query and what to live look up (if allowed)". HIGH.
 
+  > **ABSORBED into #220 (state model), 2026-08-03.** The MECHANISM proposed
+  > here is superseded by the general state shape - subject, warrant, extent,
+  > resolved at read time. The CONSTRAINT is retained and must survive it:
+  > a world state that is FORECASTABLE can gate a plan before the fact, and a safety rule overrides it. Do not re-derive this entry; extend #220.
 - **G47 Blocking vs enriching questions (answer-gating)** (refines G39). G39
   ranks WHICH slots to ask; this decides WHEN. A slot whose value would CHANGE
   the recommendation is **BLOCKING** and must be resolved BEFORE the answer -
@@ -449,6 +460,10 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   asked once. G34's coarse facilities (scale/gym/AC) generalize into this; the
   planner reads it to constrain what it may propose (no rower where there is no
   rower, no 21:00 skipping above a neighbour). MEDIUM.
+  > **ABSORBED into #220 (state model), 2026-08-03.** The MECHANISM proposed
+  > here is superseded by the general state shape - subject, warrant, extent,
+  > resolved at read time. The CONSTRAINT is retained and must survive it:
+  > a place's facilities vary over time and gate what is possible there. Do not re-derive this entry; extend #220.
 - **G49 Household, dependents & availability windows** (P2/G34). The model must
   know WHO is around and WHEN a session is actually possible. DEPENDENTS with
   ages (data, never assumed - ages gate what they can join in with and whether
@@ -501,6 +516,10 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   their metrics, or their location history. Another person's health data belongs
   to them, in their own record if they want one. Minors get extra restraint. A
   person entity is a planning aid, not a dossier. HIGH.
+  > **ABSORBED into #220 (state model), 2026-08-03.** The MECHANISM proposed
+  > here is superseded by the general state shape - subject, warrant, extent,
+  > resolved at read time. The CONSTRAINT is retained and must survive it:
+  > people are constraint sources, and their availability can EXPAND the athlete's feasible set as well as block it. Do not re-derive this entry; extend #220.
 - **G52 Shared-resource contention & allocation** (extends G48; P2). G48 says a
   place HAS an asset; this says whether it is FREE. Shared assets (a
   crosstrainer, the car, one bike, a single mat, a bookable gym slot) have
@@ -514,6 +533,10 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   state ("the crosstrainer is taken till 19:45 - want the 20:00 slot, or the
   bodyweight version now?"), never a silent omission. MEDIUM.
 
+  > **ABSORBED into #220 (state model), 2026-08-03.** The MECHANISM proposed
+  > here is superseded by the general state shape - subject, warrant, extent,
+  > resolved at read time. The CONSTRAINT is retained and must survive it:
+  > contention is availability, not fault - the planner checks availability, never mere existence. Do not re-derive this entry; extend #220.
 - **G53 Kit, attire, access credentials & carry-load** (P8/G48/G52). The
   logistics layer that silently invalidates otherwise-perfect plans. A planned
   activity carries REQUIREMENTS, and the athlete carries STATE:
@@ -541,6 +564,10 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
     pre-departure checklist is a rare nudge that EARNS its interrupt (G39/P8):
     high value, time-critical, and cheap to act on.
   MEDIUM.
+  > **ABSORBED into #220 (state model), 2026-08-03.** The MECHANISM proposed
+  > here is superseded by the general state shape - subject, warrant, extent,
+  > resolved at read time. The CONSTRAINT is retained and must survive it:
+  > entitlement is a hard feasibility precondition, distinct from both equipment fault and injury. Do not re-derive this entry; extend #220.
 - **G54 Trip chaining & leg-state propagation** (extends G44/G51). A journey is
   a SEQUENCE OF LEGS, and each leg MUTATES the state the next leg depends on -
   so legs cannot be validated independently. Shopping on the way home from the
@@ -559,6 +586,10 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   the options?"). Autonomous booking is never done on the athlete's behalf.
   MEDIUM.
 
+  > **ABSORBED into #220 (state model), 2026-08-03.** The MECHANISM proposed
+  > here is superseded by the general state shape - subject, warrant, extent,
+  > resolved at read time. The CONSTRAINT is retained and must survive it:
+  > state propagates along a sequence; each leg mutates what the next depends on. Do not re-derive this entry; extend #220.
 - **G55 Owned gear inventory & consumable lifecycle** (extends G53/G48/G52).
   G53 covers what is CARRIED for a session; this covers what is OWNED, and it
   behaves differently in three ways:
@@ -622,6 +653,9 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   physiological state alters energy requirements, safe rate bounds, and which
   interventions are permitted at all. Without it the engine will cheerfully help
   an athlete run a dangerous deficit. See [validation-personas.md](validation-personas.md) F3. CRITICAL.
+  > **SPECIALISED by #220 (state model), 2026-08-03.** Implemented, with live
+  > rows, and retained. The general state shape specialises to this rather than
+  > replacing it.
 - **G58 Goal safety & feasibility validation at declaration** (P1/G6/G28).
   CRITICAL. A goal is currently stored as data and tracked faithfully however
   unsafe it is - the engine would report an athlete BEHIND against "12 kg in 6
@@ -643,6 +677,9 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   negative workup must not suppress a NEW or CHANGED symptom** - episode
   resolution carries a scope and an expiry, and re-fires regardless of status.
   Validation F1, F2.
+  > **SPECIALISED by #220 (state model), 2026-08-03.** Implemented, with live
+  > rows, and retained. The general state shape specialises to this rather than
+  > replacing it.
 - **G60 The cadence unit is not the calendar week** (P2/G30). HIGH. Verdicts,
   rollup, streaks and goal periods all bucket by Monday-anchored calendar week.
   For a rotating-shift worker that unit is fiction ("my week never looks the
@@ -677,6 +714,10 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   downshifting is planned and does not. A pause also needs a gentle
   pre-authorised integrity check (the athlete's own request: don't let me use
   the exam as a shield for everything). Validation F8, F9.
+  > **ABSORBED into #220 (state model), 2026-08-03.** The MECHANISM proposed
+  > here is superseded by the general state shape - subject, warrant, extent,
+  > resolved at read time. The CONSTRAINT is retained and must survive it:
+  > a sanctioned pause is declarable, and the absence of shame is not the presence of permission. Do not re-derive this entry; extend #220.
 - **G64 Low-data / deviceless mode + plain language** (P8/P3). HIGH. Two of
   three personas had no wearable and no intention of getting one; one tracks
   nothing at all and distrusts apps. The resolution layer, `kcal_out`, HR caps,

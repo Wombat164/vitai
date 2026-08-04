@@ -59,6 +59,19 @@
 # at import time. This is the world's gym catalogue, never one athlete's
 # programme - the `gym_a`/`gym_b` lesson (G85).
 
+# A LIMIT THIS ANNOTATION HAS, recorded rather than papered over. Some
+# requirements depend on the IMPLEMENT rather than the movement, and the
+# implement is post-coordinated on the set. A barbell back squat needs a rack
+# to unrack from; a goblet squat with the same registry slug needs nothing but
+# the weight. So `squat` carries `kit = ["load-implement"]` and no fixture,
+# which is honest and incomplete: the rack requirement belongs to the
+# barbell-squat COMBINATION, not to the movement.
+#
+# Resolving it properly means requirements on (exercise x equipment) pairs.
+# That is a real extension and not this change. Until then a consumer matching
+# against a place must treat a loaded movement's fixture list as a floor rather
+# than a total.
+
 version = 1
 
 # Fields whose values are also accepted spellings (see vocab._index).
@@ -70,6 +83,7 @@ alias_fields = ["fit"]
 [retired]
 
 [exercises.push-up]
+fixture = []
 label = "Push-up"
 aliases = ["pushup", "press-up", "push ups", "press up"]
 pattern = "push"
@@ -80,6 +94,7 @@ fit = "PUSH_UP"
 source = "free-exercise-db"
 
 [exercises.knee-push-up]
+fixture = []
 label = "Knee push-up"
 aliases = ["box push-up", "modified push-up"]
 pattern = "push"
@@ -97,6 +112,7 @@ load = "loaded"
 plane = "sagittal"
 fit = "BENCH_PRESS"
 source = "free-exercise-db"
+fixture = ["bench"]
 
 [exercises.chest-press]
 label = "Chest press"
@@ -106,8 +122,10 @@ region = ["chest", "shoulder", "upper_arm"]
 load = "loaded"
 plane = "sagittal"
 source = "free-exercise-db"
+fixture = ["chest-press-machine"]
 
 [exercises.chest-fly]
+kit = ["load-implement"]
 label = "Chest fly"
 aliases = ["pec deck", "dumbbell fly", "pec fly", "cable crossover", "cable fly"]
 pattern = "push"
@@ -122,12 +140,14 @@ label = "Dip"
 aliases = ["parallel bar dip", "chest dip", "tricep dip", "assisted dip"]
 pattern = "push"
 region = ["chest", "shoulder", "upper_arm"]
+fixture = ["dip-bars"]
 
 plane = "sagittal"
 fit = "DIP"
 source = "free-exercise-db"
 
 [exercises.floor-press]
+fixture = []
 label = "Floor press"
 pattern = "push"
 region = ["chest", "shoulder", "upper_arm"]
@@ -136,6 +156,7 @@ plane = "sagittal"
 source = "free-exercise-db"
 
 [exercises.overhead-press]
+kit = ["load-implement"]
 label = "Overhead press"
 aliases = ["shoulder press", "military press", "strict press", "ohp", "landmine press"]
 pattern = "push"
@@ -146,6 +167,7 @@ fit = "SHOULDER_PRESS"
 source = "free-exercise-db"
 
 [exercises.push-press]
+kit = ["load-implement"]
 label = "Push press"
 pattern = ["push", "squat"]
 region = ["shoulder", "upper_arm", "thigh"]
@@ -154,6 +176,7 @@ plane = "sagittal"
 source = "free-exercise-db"
 
 [exercises.arnold-press]
+kit = ["load-implement"]
 label = "Arnold press"
 pattern = "push"
 region = ["shoulder", "upper_arm"]
@@ -162,6 +185,7 @@ plane = "transverse"
 source = "free-exercise-db"
 
 [exercises.front-raise]
+kit = ["load-implement"]
 label = "Front raise"
 pattern = "flexion"
 region = ["shoulder"]
@@ -170,6 +194,7 @@ plane = "sagittal"
 source = "free-exercise-db"
 
 [exercises.handstand-push-up]
+fixture = []
 label = "Handstand push-up"
 aliases = ["hspu"]
 pattern = "push"
@@ -179,6 +204,7 @@ plane = "sagittal"
 source = "free-exercise-db"
 
 [exercises.pike-push-up]
+fixture = []
 label = "Pike push-up"
 pattern = "push"
 region = ["shoulder", "upper_arm"]
@@ -191,6 +217,7 @@ label = "Pull-up"
 aliases = ["pullup", "pull ups", "assisted pull-up", "band-assisted pull-up"]
 pattern = "pull"
 region = ["upper_back", "shoulder", "upper_arm"]
+fixture = ["pull-up-bar"]
 
 plane = "sagittal"
 fit = "PULL_UP"
@@ -201,6 +228,7 @@ label = "Chin-up"
 aliases = ["chinup"]
 pattern = "pull"
 region = ["upper_back", "shoulder", "upper_arm"]
+fixture = ["pull-up-bar"]
 
 plane = "sagittal"
 fit = "CHIN_UP"
@@ -214,6 +242,7 @@ region = ["upper_back", "shoulder", "upper_arm"]
 load = "loaded"
 plane = "sagittal"
 source = "free-exercise-db"
+fixture = ["lat-pulldown-station"]
 
 [exercises.straight-arm-pulldown]
 label = "Straight-arm pulldown"
@@ -222,6 +251,7 @@ region = ["upper_back", "shoulder"]
 load = "loaded"
 plane = "sagittal"
 source = "free-exercise-db"
+fixture = ["cable-stack"]
 
 [exercises.horizontal-row]
 label = "Horizontal row"
@@ -231,6 +261,7 @@ region = ["upper_back", "shoulder", "upper_arm"]
 load = "loaded"
 plane = "sagittal"
 source = "curated"
+fixture = ["low-bar"]
 
 [exercises.chest-supported-row]
 label = "Chest-supported row"
@@ -240,6 +271,7 @@ region = ["upper_back", "shoulder"]
 load = "loaded"
 plane = "sagittal"
 source = "free-exercise-db"
+fixture = ["incline-bench"]
 
 [exercises.inverted-row]
 label = "Inverted row"
@@ -249,6 +281,7 @@ region = ["upper_back", "shoulder", "upper_arm"]
 load = "bodyweight"
 plane = "sagittal"
 source = "free-exercise-db"
+fixture = ["low-bar"]
 
 [exercises.face-pull]
 label = "Face pull"
@@ -257,8 +290,10 @@ region = ["upper_back", "shoulder"]
 load = "loaded"
 plane = "transverse"
 source = "free-exercise-db"
+fixture = ["cable-stack"]
 
 [exercises.shrug]
+kit = ["load-implement"]
 label = "Shrug"
 aliases = ["barbell shrug", "dumbbell shrug"]
 pattern = "pull"
@@ -269,6 +304,7 @@ fit = "SHRUG"
 source = "free-exercise-db"
 
 [exercises.reverse-fly]
+kit = ["load-implement"]
 label = "Reverse fly"
 aliases = ["rear delt fly", "reverse pec deck"]
 pattern = "pull"
@@ -278,6 +314,7 @@ plane = "transverse"
 source = "free-exercise-db"
 
 [exercises.squat]
+kit = ["load-implement"]
 label = "Squat"
 aliases = ["barbell squat", "back squat", "smith machine squat", "smith squat", "bodyweight squat", "air squat"]
 pattern = "squat"
@@ -288,6 +325,7 @@ fit = "SQUAT"
 source = "free-exercise-db"
 
 [exercises.front-squat]
+kit = ["load-implement"]
 label = "Front squat"
 pattern = "squat"
 region = ["thigh", "hip", "knee"]
@@ -296,6 +334,7 @@ plane = "sagittal"
 source = "free-exercise-db"
 
 [exercises.goblet-squat]
+kit = ["load-implement"]
 label = "Goblet squat"
 pattern = "squat"
 region = ["thigh", "hip", "knee"]
@@ -312,6 +351,7 @@ load = "loaded"
 plane = "sagittal"
 fit = "LEG_PRESS"
 source = "free-exercise-db"
+fixture = ["leg-press-machine"]
 
 [exercises.hack-squat]
 label = "Hack squat"
@@ -320,6 +360,7 @@ region = ["thigh", "hip", "knee"]
 load = "loaded"
 plane = "sagittal"
 source = "free-exercise-db"
+fixture = ["hack-squat-machine"]
 
 [exercises.box-squat]
 label = "Box squat"
@@ -328,6 +369,7 @@ region = ["thigh", "hip", "knee"]
 load = "loaded"
 plane = "sagittal"
 source = "free-exercise-db"
+fixture = ["box"]
 
 [exercises.wall-sit]
 label = "Wall sit"
@@ -337,6 +379,7 @@ region = ["thigh", "knee"]
 load = "bodyweight"
 plane = "sagittal"
 source = "curated"
+fixture = ["wall"]
 
 [exercises.leg-extension]
 label = "Leg extension"
@@ -347,8 +390,10 @@ load = "loaded"
 plane = "sagittal"
 fit = "LEG_EXTENSION"
 source = "free-exercise-db"
+fixture = ["leg-extension-machine"]
 
 [exercises.deadlift]
+kit = ["load-implement"]
 label = "Deadlift"
 aliases = ["conventional deadlift", "trap-bar deadlift", "hex bar deadlift"]
 pattern = "hinge"
@@ -359,6 +404,7 @@ fit = "DEADLIFT"
 source = "free-exercise-db"
 
 [exercises.romanian-deadlift]
+kit = ["load-implement"]
 label = "Romanian deadlift"
 aliases = ["rdl", "stiff-leg deadlift"]
 pattern = "hinge"
@@ -368,6 +414,7 @@ plane = "sagittal"
 source = "free-exercise-db"
 
 [exercises.sumo-deadlift]
+kit = ["load-implement"]
 label = "Sumo deadlift"
 pattern = "hinge"
 region = ["hip", "hamstring", "lower_back"]
@@ -376,6 +423,7 @@ plane = "sagittal"
 source = "free-exercise-db"
 
 [exercises.good-morning]
+kit = ["load-implement"]
 label = "Good morning"
 pattern = "hinge"
 region = ["hip", "hamstring", "lower_back"]
@@ -391,8 +439,10 @@ region = ["hip", "hamstring"]
 load = "loaded"
 plane = "sagittal"
 source = "free-exercise-db"
+fixture = ["bench"]
 
 [exercises.glute-bridge]
+fixture = []
 label = "Glute bridge"
 aliases = ["bridge"]
 pattern = "hinge"
@@ -409,12 +459,14 @@ region = ["hip", "hamstring", "lower_back"]
 load = "loaded"
 plane = "sagittal"
 source = "free-exercise-db"
+kit = ["kettlebell"]
 
 [exercises.back-extension]
 label = "Back extension"
 aliases = ["hyperextension", "45-degree back extension"]
 pattern = "extension"
 region = ["lower_back", "hip"]
+fixture = ["back-extension-bench"]
 
 plane = "sagittal"
 fit = "BACK_EXTENSION"
@@ -429,6 +481,7 @@ load = "loaded"
 plane = "sagittal"
 fit = "LEG_CURL"
 source = "free-exercise-db"
+fixture = ["leg-curl-machine"]
 
 [exercises.nordic-curl]
 label = "Nordic curl"
@@ -438,8 +491,10 @@ region = ["hamstring", "knee"]
 load = "bodyweight"
 plane = "sagittal"
 source = "curated"
+fixture = ["nordic-anchor"]
 
 [exercises.lunge]
+fixture = []
 label = "Lunge"
 aliases = ["forward lunge", "walking lunge"]
 pattern = "lunge"
@@ -450,6 +505,7 @@ fit = "LUNGE"
 source = "free-exercise-db"
 
 [exercises.reverse-lunge]
+fixture = []
 label = "Reverse lunge"
 pattern = "lunge"
 region = ["thigh", "hip", "knee"]
@@ -458,6 +514,7 @@ plane = "sagittal"
 source = "free-exercise-db"
 
 [exercises.bulgarian-split-squat]
+fixture = ["box"]
 label = "Bulgarian split squat"
 aliases = ["rear-foot-elevated split squat", "rfess"]
 pattern = "lunge"
@@ -467,6 +524,7 @@ plane = "sagittal"
 source = "free-exercise-db"
 
 [exercises.split-squat]
+fixture = []
 label = "Split squat"
 aliases = ["static lunge"]
 pattern = "lunge"
@@ -484,8 +542,10 @@ load = "bodyweight"
 plane = "sagittal"
 fit = "STEP_UP"
 source = "free-exercise-db"
+fixture = ["box"]
 
 [exercises.lateral-lunge]
+fixture = []
 label = "Lateral lunge"
 aliases = ["side lunge"]
 pattern = "lunge"
@@ -495,6 +555,7 @@ plane = "frontal"
 source = "free-exercise-db"
 
 [exercises.curtsy-lunge]
+fixture = []
 label = "Curtsy lunge"
 pattern = "lunge"
 region = ["thigh", "hip"]
@@ -503,6 +564,7 @@ plane = "transverse"
 source = "curated"
 
 [exercises.pistol-squat]
+fixture = []
 label = "Pistol squat"
 aliases = ["single-leg squat"]
 pattern = "squat"
@@ -512,6 +574,7 @@ plane = "sagittal"
 source = "free-exercise-db"
 
 [exercises.calf-raise]
+fixture = []
 label = "Calf raise"
 aliases = ["standing calf raise", "heel raise", "seated calf raise"]
 pattern = "extension"
@@ -522,6 +585,7 @@ fit = "CALF_RAISE"
 source = "free-exercise-db"
 
 [exercises.tibialis-raise]
+fixture = []
 label = "Tibialis raise"
 aliases = ["toe raise"]
 pattern = "flexion"
@@ -531,6 +595,7 @@ plane = "sagittal"
 source = "curated"
 
 [exercises.bicep-curl]
+kit = ["load-implement"]
 label = "Bicep curl"
 aliases = ["biceps curl", "dumbbell curl", "barbell curl", "curl"]
 pattern = "flexion"
@@ -541,6 +606,7 @@ fit = "CURL"
 source = "free-exercise-db"
 
 [exercises.hammer-curl]
+kit = ["load-implement"]
 label = "Hammer curl"
 pattern = "flexion"
 region = ["upper_arm", "forearm", "elbow"]
@@ -555,8 +621,10 @@ region = ["upper_arm", "elbow"]
 load = "loaded"
 plane = "sagittal"
 source = "free-exercise-db"
+fixture = ["preacher-bench"]
 
 [exercises.tricep-extension]
+kit = ["load-implement"]
 label = "Tricep extension"
 aliases = ["triceps extension", "overhead tricep extension", "skull crusher"]
 pattern = "extension"
@@ -574,8 +642,10 @@ region = ["upper_arm", "elbow"]
 load = "loaded"
 plane = "sagittal"
 source = "free-exercise-db"
+fixture = ["cable-stack"]
 
 [exercises.wrist-curl]
+kit = ["load-implement"]
 label = "Wrist curl"
 aliases = ["forearm curl"]
 pattern = "flexion"
@@ -585,6 +655,7 @@ plane = "sagittal"
 source = "free-exercise-db"
 
 [exercises.reverse-wrist-curl]
+kit = ["load-implement"]
 label = "Reverse wrist curl"
 pattern = "extension"
 region = ["forearm", "wrist"]
@@ -593,6 +664,7 @@ plane = "sagittal"
 source = "free-exercise-db"
 
 [exercises.plank]
+fixture = []
 label = "Plank"
 aliases = ["front plank", "forearm plank"]
 pattern = "isometric"
@@ -603,6 +675,7 @@ fit = "PLANK"
 source = "free-exercise-db"
 
 [exercises.side-plank]
+fixture = []
 label = "Side plank"
 pattern = "isometric"
 region = ["abdomen", "hip", "shoulder"]
@@ -611,6 +684,7 @@ plane = "frontal"
 source = "free-exercise-db"
 
 [exercises.crunch]
+fixture = []
 label = "Crunch"
 aliases = ["abdominal crunch"]
 pattern = "flexion"
@@ -629,8 +703,10 @@ load = "bodyweight"
 plane = "sagittal"
 fit = "LEG_RAISE"
 source = "free-exercise-db"
+fixture = ["pull-up-bar"]
 
 [exercises.russian-twist]
+fixture = []
 label = "Russian twist"
 pattern = "rotate"
 region = ["abdomen", "lower_back"]
@@ -639,6 +715,7 @@ plane = "transverse"
 source = "free-exercise-db"
 
 [exercises.woodchop]
+kit = ["load-implement"]
 label = "Cable woodchop"
 aliases = ["woodchopper", "chop"]
 pattern = "rotate"
@@ -655,8 +732,10 @@ region = ["abdomen"]
 load = "loaded"
 plane = "transverse"
 source = "free-exercise-db"
+kit = ["band"]
 
 [exercises.dead-bug]
+fixture = []
 label = "Dead bug"
 pattern = "isometric"
 region = ["abdomen", "lower_back"]
@@ -665,6 +744,7 @@ plane = "sagittal"
 source = "curated"
 
 [exercises.bird-dog]
+fixture = []
 label = "Bird dog"
 pattern = "isometric"
 region = ["lower_back", "abdomen", "hip"]
@@ -680,8 +760,10 @@ region = ["abdomen", "shoulder"]
 load = "bodyweight"
 plane = "sagittal"
 source = "free-exercise-db"
+kit = ["ab-wheel"]
 
 [exercises.mountain-climber]
+fixture = []
 label = "Mountain climber"
 pattern = "flexion"
 region = ["abdomen", "hip", "shoulder"]
@@ -690,6 +772,7 @@ plane = "sagittal"
 source = "free-exercise-db"
 
 [exercises.hollow-hold]
+fixture = []
 label = "Hollow hold"
 pattern = "isometric"
 region = ["abdomen"]
@@ -698,6 +781,7 @@ plane = "sagittal"
 source = "curated"
 
 [exercises.superman]
+fixture = []
 label = "Superman hold"
 pattern = "extension"
 region = ["lower_back", "hip"]
@@ -714,6 +798,7 @@ load = "loaded"
 plane = "sagittal"
 fit = "FARMERS_WALK"
 source = "free-exercise-db"
+kit = ["load-implement"]
 
 [exercises.suitcase-carry]
 label = "Suitcase carry"
@@ -722,6 +807,7 @@ region = ["forearm", "abdomen", "hip"]
 load = "loaded"
 plane = "frontal"
 source = "free-exercise-db"
+kit = ["load-implement"]
 
 [exercises.overhead-carry]
 label = "Overhead carry"
@@ -731,6 +817,7 @@ region = ["shoulder", "abdomen"]
 load = "loaded"
 plane = "sagittal"
 source = "free-exercise-db"
+kit = ["load-implement"]
 
 [exercises.sled-push]
 label = "Sled push"
@@ -740,6 +827,7 @@ region = ["thigh", "hip", "calf"]
 load = "loaded"
 plane = "sagittal"
 source = "curated"
+fixture = ["sled"]
 
 [exercises.sled-drag]
 label = "Sled drag"
@@ -748,6 +836,7 @@ region = ["thigh", "hip", "upper_back"]
 load = "loaded"
 plane = "sagittal"
 source = "curated"
+fixture = ["sled"]
 
 [exercises.box-jump]
 label = "Box jump"
@@ -757,8 +846,10 @@ load = "bodyweight"
 plane = "sagittal"
 fit = "BOX_JUMP"
 source = "free-exercise-db"
+fixture = ["box"]
 
 [exercises.broad-jump]
+fixture = []
 label = "Broad jump"
 aliases = ["standing long jump"]
 pattern = "jump"
@@ -768,6 +859,7 @@ plane = "sagittal"
 source = "curated"
 
 [exercises.jump-squat]
+fixture = []
 label = "Jump squat"
 pattern = "jump"
 region = ["thigh", "hip", "calf"]
@@ -776,6 +868,7 @@ plane = "sagittal"
 source = "free-exercise-db"
 
 [exercises.burpee]
+fixture = []
 label = "Burpee"
 pattern = ["jump", "push", "squat"]
 region = ["thigh", "chest", "shoulder"]
@@ -785,6 +878,7 @@ fit = "BURPEE"
 source = "curated"
 
 [exercises.power-clean]
+kit = ["load-implement"]
 label = "Power clean"
 aliases = ["clean"]
 pattern = ["hinge", "pull"]
@@ -795,6 +889,7 @@ fit = "CLEAN"
 source = "free-exercise-db"
 
 [exercises.clean-and-jerk]
+kit = ["load-implement"]
 label = "Clean and jerk"
 pattern = ["hinge", "push"]
 region = ["hip", "thigh", "shoulder"]
@@ -804,6 +899,7 @@ fit = "CLEAN_AND_JERK"
 source = "free-exercise-db"
 
 [exercises.snatch]
+kit = ["load-implement"]
 label = "Snatch"
 pattern = ["hinge", "push"]
 region = ["hip", "thigh", "shoulder"]
@@ -813,6 +909,7 @@ fit = "SNATCH"
 source = "free-exercise-db"
 
 [exercises.thruster]
+kit = ["load-implement"]
 label = "Thruster"
 pattern = ["squat", "push"]
 region = ["thigh", "hip", "shoulder"]
@@ -822,6 +919,7 @@ fit = "THRUSTER"
 source = "free-exercise-db"
 
 [exercises.jumping-jack]
+fixture = []
 label = "Jumping jack"
 aliases = ["star jump"]
 pattern = "jump"
@@ -838,8 +936,10 @@ region = ["calf", "ankle"]
 load = "bodyweight"
 plane = "sagittal"
 source = "curated"
+kit = ["skipping-rope"]
 
 [exercises.clamshell]
+fixture = []
 label = "Clamshell"
 pattern = "rotate"
 region = ["hip"]
@@ -848,6 +948,7 @@ plane = "transverse"
 source = "curated"
 
 [exercises.hip-flexor-raise]
+fixture = []
 label = "Standing hip flexor raise"
 aliases = ["knee drive"]
 pattern = "flexion"
@@ -864,6 +965,7 @@ region = ["hip", "hamstring"]
 load = "loaded"
 plane = "sagittal"
 source = "curated"
+fixture = ["cable-stack"]
 
 [exercises.pendulum-squat]
 label = "Pendulum squat"
@@ -872,6 +974,7 @@ region = ["thigh", "hip", "knee"]
 load = "loaded"
 plane = "sagittal"
 source = "curated"
+fixture = ["pendulum-squat-machine"]
 
 [exercises.belt-squat]
 label = "Belt squat"
@@ -880,6 +983,7 @@ region = ["thigh", "hip", "knee"]
 load = "loaded"
 plane = "sagittal"
 source = "curated"
+fixture = ["belt-squat-machine"]
 
 [exercises.rope-climb]
 label = "Rope climb"
@@ -888,6 +992,7 @@ region = ["upper_back", "forearm", "upper_arm"]
 load = "bodyweight"
 plane = "sagittal"
 source = "free-exercise-db"
+fixture = ["climbing-rope"]
 
 [exercises.battle-rope]
 label = "Battle rope"
@@ -897,6 +1002,7 @@ region = ["shoulder", "forearm", "abdomen"]
 load = "loaded"
 plane = "sagittal"
 source = "curated"
+fixture = ["battle-rope"]
 
 [exercises.sledgehammer-swing]
 label = "Sledgehammer swing"
@@ -905,8 +1011,10 @@ region = ["abdomen", "shoulder", "upper_back"]
 load = "loaded"
 plane = "transverse"
 source = "curated"
+kit = ["sledgehammer"]
 
 [exercises.hip-airplane]
+fixture = []
 label = "Hip airplane"
 pattern = "rotate"
 region = ["hip", "thigh"]
@@ -915,6 +1023,7 @@ plane = "transverse"
 source = "curated"
 
 [exercises.couch-stretch]
+fixture = ["wall"]
 label = "Couch stretch"
 pattern = "isometric"
 region = ["hip", "thigh"]
@@ -923,6 +1032,7 @@ plane = "sagittal"
 source = "curated"
 
 [exercises.thoracic-rotation]
+fixture = []
 label = "Thoracic rotation"
 aliases = ["open book"]
 pattern = "rotate"
@@ -932,6 +1042,7 @@ plane = "transverse"
 source = "curated"
 
 [exercises.cat-cow]
+fixture = []
 label = "Cat-cow"
 pattern = "flexion"
 region = ["lower_back", "upper_back"]
@@ -940,6 +1051,7 @@ plane = "sagittal"
 source = "curated"
 
 [exercises.shoulder-dislocate]
+kit = ["band"]
 label = "Shoulder dislocate"
 aliases = ["band dislocate", "pass-through"]
 pattern = "rotate"
@@ -956,6 +1068,7 @@ region = ["upper_back", "shoulder"]
 load = "bodyweight"
 plane = "sagittal"
 source = "curated"
+fixture = ["pull-up-bar"]
 
 [exercises.wall-slide]
 label = "Wall slide"
@@ -964,8 +1077,10 @@ region = ["shoulder", "upper_back"]
 load = "bodyweight"
 plane = "frontal"
 source = "curated"
+fixture = ["wall"]
 
 [exercises.neck-flexion]
+fixture = []
 label = "Neck flexion"
 pattern = "flexion"
 region = ["neck"]
@@ -974,6 +1089,7 @@ plane = "sagittal"
 source = "curated"
 
 [exercises.neck-extension]
+fixture = []
 label = "Neck extension"
 pattern = "extension"
 region = ["neck"]
@@ -982,6 +1098,7 @@ plane = "sagittal"
 source = "curated"
 
 [exercises.ankle-dorsiflexion]
+fixture = []
 label = "Ankle dorsiflexion drill"
 aliases = ["knee-to-wall"]
 pattern = "flexion"
@@ -991,6 +1108,7 @@ plane = "sagittal"
 source = "curated"
 
 [exercises.toe-yoga]
+fixture = []
 label = "Toe yoga"
 pattern = "isometric"
 region = ["foot"]
@@ -999,6 +1117,7 @@ plane = "sagittal"
 source = "curated"
 
 [exercises.heel-walk]
+fixture = []
 label = "Heel walk"
 pattern = "gait"
 region = ["shin", "ankle"]
@@ -1007,6 +1126,7 @@ plane = "sagittal"
 source = "curated"
 
 [exercises.toe-walk]
+fixture = []
 label = "Toe walk"
 pattern = "gait"
 region = ["calf", "ankle", "foot"]
@@ -1021,6 +1141,7 @@ region = ["thigh", "hip"]
 load = "loaded"
 plane = "sagittal"
 source = "curated"
+fixture = ["sled"]
 
 # --- machine cardio, whose CONFIGURATION is the point (#99) --------------------
 # #59: "a strength block is a list of sets, a machine session is one
@@ -1046,6 +1167,7 @@ pattern = "gait"
 region = ["thigh", "hip", "calf"]
 plane = "sagittal"
 source = "curated"
+fixture = ["crosstrainer"]
 
 [exercises.stair-climber]
 label = "Stair climber"
@@ -1054,6 +1176,7 @@ pattern = "gait"
 region = ["thigh", "hip", "calf"]
 plane = "sagittal"
 source = "curated"
+fixture = ["stair-climber"]
 
 [exercises.rowing-erg]
 label = "Rowing machine"
@@ -1062,3 +1185,4 @@ pattern = ["hinge", "pull"]
 region = ["thigh", "hip", "upper_back"]
 plane = "sagittal"
 source = "curated"
+fixture = ["rowing-erg"]

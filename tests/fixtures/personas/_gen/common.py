@@ -113,6 +113,10 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # live on VERDICT rows, which are computed rather than recorded, so no builder
 # here writes either and no persona line changes. The pin moves because the
 # read model did.
+# Re-pinned for #207: `meta` gains a `built_on` row and an unqualified build
+# takes its viewpoint from the record rather than the clock. Neither touches a
+# data line - both are properties of the BUILD - so no persona line changes and
+# nothing is reviewed here beyond the pin itself.
 # Re-pinned for #200, which adds `polarity` and `target_hi` to goals. REVIEWED
 # rather than bumped: no builder declares a polarity, absence reads as `floor`,
 # and a floor is exactly what both existing policies already meant, so every
@@ -124,7 +128,7 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # the advisory doing its job rather than a fixture defect. Declaring a polarity
 # on their behalf would be editing what those people said they wanted, which is
 # an editorial decision about the personas and not a migration.
-AUTHORED_AGAINST_CONTRACT = "23"  # vitai.db.CONTRACT_VERSION is a string
+AUTHORED_AGAINST_CONTRACT = "24"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,

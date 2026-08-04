@@ -41,7 +41,7 @@ says so. Abstaining is loud and recoverable; passing is quiet and is not.
 
 from __future__ import annotations
 
-from .vocab import registry, resolve, restriction_matches
+from .vocab import registry, resolve, restriction_matches, values
 
 REGISTRY = "exercises"
 SECTION = "exercises"
@@ -267,4 +267,89 @@ def registry_problems() -> list[str]:
         if not data.get("source"):
             out.append(f"{slug!r} does not say where it came from - `source` "
                        "records the licence position per entry")
+    return out
+
+
+# --- what a movement REQUIRES (#227) -----------------------------------------
+#
+# A prescription that cannot be provisioned is not a plan. These read the
+# `fixture` and `kit` axes so a session's requirements are DERIVED from its
+# exercise list rather than restated by every coach, app and template.
+#
+# The split is ownership, not size: a FIXTURE belongs to the place and is what
+# the athlete would leave behind; KIT belongs to him and is what he takes.
+
+FIXTURES = "fixtures"
+
+
+def fixture_values() -> list[str]:
+    return values(FIXTURES, "fixtures")
+
+
+def kit_values() -> list[str]:
+    return values(FIXTURES, "kit")
+
+
+def fixtures_of(written: object) -> list[str] | None:
+    """The fixtures a movement requires, or None if nobody annotated it.
+
+    **None and [] are different answers and a caller must not conflate them.**
+    `[]` means the movement needs nothing - a floor press, deliberately, as the
+    contrast with a bench press. `None` means the registry has not been
+    annotated for this exercise, and reading it as "needs nothing" is what
+    strands an athlete at a park with a programme written for a rack.
+    """
+    e = entry(written)
+    return None if "fixture" not in e else list(e.get("fixture") or [])
+
+
+def kit_of(written: object) -> list[str] | None:
+    """The kit a movement requires, or None if nobody annotated it.
+
+    Same None/[] distinction as `fixtures_of`.
+    """
+    e = entry(written)
+    return None if "kit" not in e else list(e.get("kit") or [])
+
+
+def requirements(written_list: list) -> dict:
+    """What a set of exercises needs, and what is not known.
+
+    Returns `fixtures`, `kit` and `unannotated`. The third is the load-bearing
+    one: a requirements list that silently omits the movements nobody
+    catalogued would read as complete, and a consumer would answer "you can do
+    this here" on evidence it does not have. Anything matching against a place
+    must refuse, not guess, while `unannotated` is non-empty.
+    """
+    fx: set[str] = set()
+    kt: set[str] = set()
+    unknown: list[str] = []
+    for written in written_list:
+        f, k = fixtures_of(written), kit_of(written)
+        if f is None and k is None:
+            unknown.append(resolve_exercise(written))
+            continue
+        fx.update(f or [])
+        kt.update(k or [])
+    return {"fixtures": sorted(fx), "kit": sorted(kt),
+            "unannotated": sorted(set(unknown))}
+
+
+def validate_fixtures() -> list[str]:
+    """Every `fixture`/`kit` value on an exercise names a fixtures.toml slug."""
+    out: list[str] = []
+    known_fx, known_kit = set(fixture_values()), set(kit_values())
+    for slug, data in (registry(REGISTRY).get(SECTION) or {}).items():
+        for axis, known in (("fixture", known_fx), ("kit", known_kit)):
+            got = data.get(axis)
+            if got is None:
+                continue
+            if not isinstance(got, list):
+                out.append(f"{slug!r} has a non-list {axis} - a movement may "
+                           "need several, and the field is a list")
+                continue
+            for value in got:
+                if value not in known:
+                    out.append(f"{slug!r} names {axis} {value!r}, which is not "
+                               "a fixtures.toml slug")
     return out

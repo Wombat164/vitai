@@ -226,7 +226,21 @@ from .schema import KEYS
 #     `due` is derived from the source's OWN arrivals, never declared: a
 #     source with no established cadence produces `no_input`, exactly as
 #     today.
-# 23: goal POLARITY. `monotonic` and `guarded` both meant "more counts", so a
+# 23: `meta` gains a `built_on` row, and the build's viewpoint defaults to the
+#     RECORD rather than the wall clock. `goal_progress` is materialised
+#     against a viewpoint, so two people building one record on different days
+#     got different databases and nothing recorded the choice: the demo shipped
+#     an empty `goal_progress` beside 109 contribution rows, which reads as a
+#     consumer bug rather than a property of the build.
+#
+#     A consumer may now read `built_on` and say "as of X" instead of guessing,
+#     and an unqualified `vitai build` is reproducible: a record is a closed
+#     thing and building it no longer consults the outside world. An explicit
+#     `--on` still answers "what does this look like now".
+#
+#     #219 also claims 23. The contract follows MERGE order, so whichever
+#     of the two lands second is renumbered rather than assumed.
+# 24: goal POLARITY. `monotonic` and `guarded` both meant "more counts", so a
 #     cap was scored as an accumulation: 1100 kcal a day against a 1200 limit
 #     reported 641.7% for the week and minted four milestones for breaching
 #     it. `polarity` says which direction is progress - floor, ceiling, band
@@ -243,7 +257,7 @@ from .schema import KEYS
 #     row has to be edited to keep the answer it had. Rows whose title says
 #     cap or limit while scoring as a floor now raise a validate ADVISORY
 #     rather than having to be found by hand.
-CONTRACT_VERSION = "23"
+CONTRACT_VERSION = "24"
 
 _TEXT_COLS = {"derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
               # under REAL affinity silently becomes 7.0, which is the defect
@@ -390,7 +404,7 @@ def _cols(keys: list[str]) -> str:
 def build_db(derived: Path, datasets: dict[str, list[dict]],
              verdicts: list[dict] | None = None,
              derivations: dict[str, list[dict]] | None = None,
-             policy: str | None = None) -> Path:
+             policy: str | None = None, built_on: str | None = None) -> Path:
     """Write the read model. `derivations` carries the computed tables
     (contributions, milestones, plan_churn, goal_progress); `verdicts` stays a
     named argument because it predates them and callers pass it positionally.
@@ -416,6 +430,13 @@ def build_db(derived: Path, datasets: dict[str, list[dict]],
         con.execute("INSERT INTO meta VALUES ('contract', ?)", (CONTRACT_VERSION,))
         if policy is not None:
             con.execute("INSERT INTO meta VALUES ('policy', ?)", (policy,))
+        # WHICH DAY THIS WAS BUILT AS OF (#207). `goal_progress` is
+        # materialised against a viewpoint, so without this a consumer cannot
+        # tell "the athlete declared no goals" from "none were in force on the
+        # day someone happened to run the build" - an empty table reads as an
+        # absence either way, and nothing in the database could say otherwise.
+        if built_on is not None:
+            con.execute("INSERT INTO meta VALUES ('built_on', ?)", (built_on,))
         con.commit()
     finally:
         con.close()
