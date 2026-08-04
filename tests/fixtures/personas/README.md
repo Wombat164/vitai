@@ -1,6 +1,6 @@
 # The persona corpus
 
-Nine synthetic athletes, each constructed to stress an axis the model was not
+Ten synthetic athletes, each constructed to stress an axis the model was not
 built for. They are fictional. The failures they found were not.
 
 They live here as PEOPLE, not as test data: a profile, their history, the data
@@ -19,6 +19,21 @@ fixture built from a person tests what you did not.
 | `tom` | 53, taxi driver, BMI 36, loss-regain history, hates apps | occupational activity, medication, regain cycle | 2 |
 | `rachel` | 39, BMI 45, five months on a GLP-1, knee osteoarthritis | medication effects, capacity limits, involuntary intake | 2 |
 | `stefan` | 44, harbour dispatcher, one month of degraded data with no stated cause | confabulation refusal, knowledge cutoffs, silence handling | 4 |
+| `ines` | 41, Porto, freelance translator, two small children, runs before the house wakes | **no legacy**: started after every mechanism existed, so every null means nobody said | 5 |
+
+## The one who has no past
+
+Nine of them began before some mechanism did, so their early rows are silent
+about things the schema could not yet express - and a null in those rows means
+"the field did not exist yet" as often as it means "nobody said". `ines`
+started after all of it, which makes her the control the others cannot be:
+when an output looks wrong on a record with a long history, the corpus can ask
+whether the cause was the history or the code by putting the same question to
+a record with no history to blame.
+
+She earned it on her first build, by reporting a calorie ceiling 87 kcal over
+its cap as `achieved` - a defect no other persona could surface, because none
+of them declares a ceiling and a floor on one nutrient axis.
 
 ## What they deliberately do not carry
 

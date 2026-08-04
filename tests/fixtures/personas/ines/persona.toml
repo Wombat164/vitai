@@ -1,15 +1,15 @@
 # Emitted by generate.py; do not edit by hand. Bump PERSONA_VERSION
-# in _gen/marcus.py only when the history could change an
+# in _gen/ines.py only when the history could change an
 # engine output (docs/persona-doctrine.md).
 
 [persona]
-slug = "marcus"
+slug = "ines"
 version = 1
-seed = 105
-span = ["2027-12-31", "2030-06-30"]
+seed = 110
+span = ["2030-04-21", "2030-06-30"]
 
 [schema]
-contract = "27"
+contract = "26"
 
 [schema.generations]
 achievements = 4

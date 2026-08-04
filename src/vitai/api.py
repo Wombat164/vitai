@@ -949,6 +949,61 @@ class Vitai:
         return plan_churn(d["goals"], d["thresholds"], self.verdicts(today=today),
                           events=d["events"])
 
+    def _best_efforts(self, sessions: list[dict]) -> list[dict]:
+        """The fastest 1k, 5k, 10k, half and full of every stored track (#247).
+
+        THE QUESTION A RUNNER ASKS FIRST, and one no field could answer:
+        `sessions` holds a distance and a duration, so a 10.48 km run and a
+        9.74 km run are comparable on neither, and a pace computed from both
+        averages the warm-up in. The answer lives inside the track or nowhere,
+        and a client that went looking for it had to parse the GPX itself -
+        at which point the number is the client's claim rather than this
+        engine's.
+
+        `basis` SURVIVES INTO THE ROW, and it is the load-bearing column.
+        `device` means the window was measured against the watch's own
+        cumulative distance, which is an observation; `derived` means against
+        the haversine sum this engine computes, which is not. A consumer that
+        cannot tell them apart reads both as a time trial.
+
+        `seconds` is ELAPSED. A stop inside the window counts, because
+        excluding it would be the engine deciding which pauses were real -
+        which is why the column is not called `moving_time`.
+
+        Each track is parsed ONCE per build however many sessions name it. A
+        record with a thousand runs pays for a thousand parses on every build,
+        and the answer there is a cache keyed by track content rather than
+        skipping the work; that is a measurement question and is not guessed
+        at here.
+        """
+        from .route import best_efforts, read_track
+
+        seen: dict[str, list[dict]] = {}
+        out: list[dict] = []
+        for row in sessions:
+            ref = row.get("track")
+            if not ref or ref in seen:
+                continue
+            path = self.root / str(ref)
+            if not path.exists():
+                # A broken pointer is reported by `validate` and never fails a
+                # build (#43): the session is the fact and the track is an
+                # attachment.
+                seen[str(ref)] = []
+                continue
+            try:
+                efforts = best_efforts(read_track(path))
+            except Exception:
+                seen[str(ref)] = []
+                continue
+            seen[str(ref)] = [{
+                "track": str(ref), "date": row.get("date"),
+                "distance_m": e.distance_m, "seconds": round(e.seconds, 3),
+                "start": e.start.isoformat(), "end": e.end.isoformat(),
+                "basis": e.basis} for e in efforts]
+            out += seen[str(ref)]
+        return sorted(out, key=lambda r: (r["track"], r["distance_m"]))
+
     def _derivations(self, resolved: dict, today: date | None = None,
                      cfg: Config | None = None) -> dict[str, list[dict]]:
         d = resolved["canonical"]
@@ -961,6 +1016,7 @@ class Vitai:
                                     medical=d["medical"])
         on = (today or self.on).isoformat()
         return {
+            "best_efforts": self._best_efforts(d["sessions"]),
             "verdicts": verdicts,
             "contributions": contributions,
             "milestones": milestones,
