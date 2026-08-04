@@ -163,7 +163,19 @@ def _build(target: Path) -> None:
             steps = int(rng.gauss(5600, 900))
         row = {"date": d, "steps": max(2500, steps),
                "distance_km": round(max(2.5, steps) * 0.00075, 1),
-               "active_min": int(max(60, rng.gauss(300, 70))),
+               # A FIFTH of what this drew before. Five hours a day, in a
+               # record that also shows 13 km of running a week: the two
+               # magnitudes never belonged to the same person, and against a
+               # 150-a-WEEK goal the engine correctly reported 1414 per cent,
+               # which reads as a bug because it is one. The draw is unchanged
+               # so the day-to-day shape survives; only the scale moves, and
+               # the athlete lands at a plausible two to three times the
+               # guideline the goal encodes.
+               #
+               # Divided AFTER the integer, which is what the committed data
+               # was produced with: rounding the float instead moves six days
+               # by one minute and the drift check fails on them.
+               "active_min": round(int(max(60, rng.gauss(300, 70))) / 5),
                "kcal_out": int(rng.gauss(2850, 220)),
                # Intake is centred BELOW the declared targets (2150 kcal,
                # 145 g), not on them. Generating it at exactly the target made
@@ -718,6 +730,10 @@ def _events(start: date) -> list[dict]:
         _event(d0, "autumn-half", "The autumn half marathon", "competition",
                "2030-09-15", priority="a", place="a river town",
                note="the date the whole run block is planned backwards from"),
+        _event(d0, "spring-5k-race", "The spring 5k", "competition",
+               "2030-05-15", priority="b", place="the park circuit",
+               note="a hard date - the goal that points at it cannot be "
+                    "part-met"),
         _event((start + timedelta(days=30)).isoformat(), "hip-scan",
                "Hip imaging follow-up", "clinical", "2030-07-10",
                priority="c", immovable=True,
@@ -754,11 +770,21 @@ def _policy(start: date) -> tuple[list[dict], list[dict], list[dict]]:
         # Left `active` deliberately: the athlete never closed it, and the
         # engine reporting the arithmetic is not the same as him deciding to
         # abandon it.
+        # A 5k TIME is not a thing this engine measures, it is a thing a race
+        # clock measures. It was carried as 200 km of running a week, which is
+        # not a volume any human runs, and its own rationale gave the game
+        # away by describing the 200 as the total for the whole block. So the
+        # goal says what it is: verified externally, tracked by the clock, no
+        # numeric target, pointed at the race on the date its deadline already
+        # named.
         _goal(d0, "spring-5k", "Sub-22 for the 5k by the spring race",
-              "distance_km", 200, "monotonic", dataset="sessions",
-              session_type="run", deadline="2030-05-15",
+              "external", None, "monotonic", tracker="the race clock",
+              period="none", deadline="2030-05-15",
+              verification="external", deadline_kind="hard",
+              event="spring-5k-race",
               motivator="Wanted one fast one before the half-marathon block",
-              rationale="200 km of running in the block before it",
+              rationale="the clock at the race decides this one, not the "
+                        "training log",
               on_success="hold", on_miss="reflect"),
         _goal(d0, "steps", "Walk 70k steps a week", "steps", 70000,
               "monotonic", dataset="daily",
