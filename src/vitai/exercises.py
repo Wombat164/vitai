@@ -313,26 +313,59 @@ def kit_of(written: object) -> list[str] | None:
 
 
 def requirements(written_list: list) -> dict:
-    """What a set of exercises needs, and what is not known.
+    """What a set of exercises needs, and what this registry cannot say.
 
-    Returns `fixtures`, `kit` and `unannotated`. The third is the load-bearing
-    one: a requirements list that silently omits the movements nobody
-    catalogued would read as complete, and a consumer would answer "you can do
-    this here" on evidence it does not have. Anything matching against a place
-    must refuse, not guess, while `unannotated` is non-empty.
+    Returns `fixtures`, `kit`, `unannotated` and `not_exercises`. The last two
+    are the load-bearing ones: a requirements list that silently omitted what
+    it could not annotate would read as complete, and a consumer would answer
+    "you can do this here" on evidence it does not have. Anything matching
+    against a place must refuse, not guess, while either is non-empty.
+
+    THEY ARE DIFFERENT FACTS AND WERE ONE (#227). A run, a swim and a ride are
+    session TYPES, not movements: they have no row in this registry and never
+    will, because a run is not an exercise. Reporting them as unannotated said
+    the catalogue had a gap, when what it has is a boundary - and the two want
+    opposite responses. A gap is closed by cataloguing the movement; a
+    boundary is not closed at all, it is asked of something else.
+
+    NAMED, NOT COLLAPSED. Both lists carried `resolve_exercise`'s output,
+    which is `unknown` for everything it does not recognise, so a plan holding
+    a run, a swim and a movement nobody catalogued reported one opaque
+    `unknown` and a consumer could not say which of the three it was, or that
+    there were three. They carry what was WRITTEN.
+
+    What this still cannot say is what a run REQUIRES. Doing so needs a
+    vocabulary of places - a road, a pool, open water - and `fixtures.toml` is
+    a gym catalogue: bench, rack, cable-stack. Inventing those slugs here is
+    the write-a-vocabulary-from-one-athlete's-examples hazard #236 exists to
+    gate, so this reports the boundary honestly and does not guess across it.
     """
     fx: set[str] = set()
     kt: set[str] = set()
     unknown: list[str] = []
+    activities: list[str] = []
     for written in written_list:
         f, k = fixtures_of(written), kit_of(written)
         if f is None and k is None:
-            unknown.append(resolve_exercise(written))
+            name = str(written)
+            (activities if _is_session_type(written) else unknown).append(name)
             continue
         fx.update(f or [])
         kt.update(k or [])
     return {"fixtures": sorted(fx), "kit": sorted(kt),
-            "unannotated": sorted(set(unknown))}
+            "unannotated": sorted(set(unknown)),
+            "not_exercises": sorted(set(activities))}
+
+
+def _is_session_type(written: object) -> bool:
+    """Is this an ACTIVITY rather than a movement?
+
+    Asked of the session-type registry, which owns that vocabulary, rather
+    than by a list restated here - a second copy of a 47-value taxonomy is a
+    second thing to keep in step with Strava's.
+    """
+    from .vocab import resolve_session_type
+    return resolve_session_type(written) is not None
 
 
 def validate_fixtures() -> list[str]:
