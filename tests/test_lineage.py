@@ -199,7 +199,7 @@ def test_a_derived_row_survives_a_build(tmp_path: Path) -> None:
             "SELECT derived_from FROM weight WHERE source='calc'").fetchone()[0]
         assert json.loads(stored) == ["weight:2030-05-01:scale"]
         assert con.execute(
-            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "22"
+            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "23"
     finally:
         con.close()
 

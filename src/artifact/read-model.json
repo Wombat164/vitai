@@ -1,0 +1,5861 @@
+{
+  "aggregates_contaminated": {
+    "daily": true,
+    "sessions": false,
+    "weight": false
+  },
+  "emitted": {
+    "as_of": null,
+    "contract": "23",
+    "on": "2030-06-30",
+    "policy": "5b0181fdbb6950df13f3f9b266618d6b87a0ffef596407cbd2d6b5ff7b7aed4f",
+    "rows": {
+      "daily": 84,
+      "sessions": 43,
+      "weight": 62
+    }
+  },
+  "escalations": [],
+  "gates": [
+    {
+      "date": "2030-06-30",
+      "escalation": "This activity is gated until today's check is done and recorded. Not having done it is not the same as passing it - the gate stands until the check says otherwise. Do the check, record the result, rebuild.",
+      "precondition": "hop-test",
+      "reason": "Right achilles soreness after the long run (monitoring) - check 'hop-test': not_done",
+      "restriction": "pattern=jump region=achilles load=loaded",
+      "restricts": "impact",
+      "severity": "mild",
+      "slug": "achilles",
+      "source_kind": "episode",
+      "status": "check_not_done"
+    }
+  ],
+  "goals": [
+    {
+      "breach": null,
+      "bucket": "all",
+      "contains_modelled": false,
+      "counted": null,
+      "dataset": null,
+      "days_to_deadline": null,
+      "deadline": null,
+      "deadline_kind": null,
+      "declared": "2030-04-22",
+      "distance": null,
+      "event": null,
+      "last_edited": "2030-04-22",
+      "metric": null,
+      "milestones": 0,
+      "motivator": "The training worked and the enjoying stopped",
+      "period": "none",
+      "polarity": "floor",
+      "policy": "monotonic",
+      "progress_pct": null,
+      "room_left": null,
+      "scope": "undeclared",
+      "slug": "enjoy-running",
+      "status": "active",
+      "target": null,
+      "target_hi": null,
+      "title": "Enjoy running again, the way I used to",
+      "tracker": null,
+      "unbudgeted": null,
+      "verification": "attested"
+    },
+    {
+      "breach": "under",
+      "bucket": "2030-06-24",
+      "contains_modelled": false,
+      "counted": 13.38,
+      "dataset": "sessions",
+      "days_to_deadline": 77,
+      "deadline": "2030-09-15",
+      "deadline_kind": "hard",
+      "declared": "2030-04-08",
+      "distance": null,
+      "event": "autumn-half",
+      "last_edited": "2030-05-23",
+      "metric": "distance_km",
+      "milestones": 1,
+      "motivator": "Finish the autumn half without limping",
+      "period": "weekly",
+      "polarity": "floor",
+      "policy": "guarded",
+      "progress_pct": 44.6,
+      "room_left": null,
+      "scope": "declared",
+      "slug": "running",
+      "status": "active",
+      "target": 30,
+      "target_hi": null,
+      "title": "Build to 30 km a week, injury-free",
+      "tracker": null,
+      "unbudgeted": 0.0,
+      "verification": "measured"
+    },
+    {
+      "breach": null,
+      "bucket": "all",
+      "contains_modelled": false,
+      "counted": null,
+      "dataset": null,
+      "days_to_deadline": null,
+      "deadline": null,
+      "deadline_kind": null,
+      "declared": "2030-04-29",
+      "distance": null,
+      "event": null,
+      "last_edited": "2030-04-29",
+      "metric": "external",
+      "milestones": 0,
+      "motivator": "Losing it to a neighbour stung more than expected",
+      "period": "none",
+      "polarity": "floor",
+      "policy": "monotonic",
+      "progress_pct": null,
+      "room_left": null,
+      "scope": "undeclared",
+      "slug": "segment",
+      "status": "active",
+      "target": null,
+      "target_hi": null,
+      "title": "Take back the riverside segment",
+      "tracker": "a public segment leaderboard",
+      "unbudgeted": null,
+      "verification": "external"
+    },
+    {
+      "breach": "under",
+      "bucket": "2030-06-24",
+      "contains_modelled": true,
+      "counted": 65290.0,
+      "dataset": "daily",
+      "days_to_deadline": null,
+      "deadline": null,
+      "deadline_kind": null,
+      "declared": "2030-04-08",
+      "distance": null,
+      "event": null,
+      "last_edited": "2030-05-27",
+      "metric": "steps",
+      "milestones": 3,
+      "motivator": "Keep the desk job from winning",
+      "period": "weekly",
+      "polarity": "floor",
+      "policy": "monotonic",
+      "progress_pct": 84.8,
+      "room_left": null,
+      "scope": "declared",
+      "slug": "steps",
+      "status": "active",
+      "target": 77000,
+      "target_hi": null,
+      "title": "Walk 77k steps a week",
+      "tracker": null,
+      "unbudgeted": 0.0,
+      "verification": "measured"
+    },
+    {
+      "breach": null,
+      "bucket": "all",
+      "contains_modelled": false,
+      "counted": null,
+      "dataset": "weight",
+      "days_to_deadline": 216,
+      "deadline": "2031-02-01",
+      "deadline_kind": "soft",
+      "declared": "2030-04-22",
+      "distance": null,
+      "event": null,
+      "last_edited": "2030-06-17",
+      "metric": "kg",
+      "milestones": 0,
+      "motivator": "The hill on the way home stops being an event",
+      "period": "none",
+      "polarity": "floor",
+      "policy": "monotonic",
+      "progress_pct": null,
+      "room_left": null,
+      "scope": "inferred",
+      "slug": "weight",
+      "status": "active",
+      "target": 78,
+      "target_hi": null,
+      "title": "Down to 78 kg, unhurried",
+      "tracker": null,
+      "unbudgeted": null,
+      "verification": "measured"
+    }
+  ],
+  "rollup": "# Weekly rollup\n\nGenerated 2030-06-30 - derived, do not edit.\n\n## Weight\n\n| Date | kg | 7d avg |\n|---|---|---|\n| 2030-06-15 | 76.9 | 76.9 |\n| 2030-06-16 | 76.6 | 77.0 |\n| 2030-06-17 | 76.7 | 76.9 |\n| 2030-06-18 | 76.3 | 76.8 |\n| 2030-06-19 | 76.4 | 76.6 |\n| 2030-06-20 | 76.6 | 76.6 |\n| 2030-06-21 | 76.4 | 76.6 |\n| 2030-06-22 | 76.5 | 76.5 |\n| 2030-06-24 | 76.1 | 76.4 |\n| 2030-06-25 | 76.5 | 76.4 |\n| 2030-06-26 | 76.0 | 76.3 |\n| 2030-06-27 | 76.2 | 76.3 |\n| 2030-06-28 | 76.1 | 76.2 |\n| 2030-06-29 | 75.9 | 76.1 |\n\n**Rate:** losing 0.37 kg/week (target: losing 0.35 kg/week) - **NOT READABLE - weigh-in times vary too much**\n\n> Judge on this line, never a single morning.\n\n> Weigh-ins span 12.2 h, which alone can account for about 1.01 kg - as much as the 0.37 kg/week this line reports, so the trend is not yet separable from weigh-in timing. Weigh at a consistent time before reading it as progress.\n\n## Steps\n\n- 9,533/day average over the last 14 days (14 logged)\n- best day 16,356 on 2030-06-20\n- 84 days logged in total\n\n## Training by week\n\n| Week of | km | Runs | Gym | Avg HR | Easy-cap? |\n|---|---|---|---|---|---|\n| 2030-04-08 | 14.6 | 2 | 0 | 152 | OK |\n| 2030-04-15 | 12.7 | 2 | 1 | 158 | OVER +6 |\n| 2030-04-22 | 10.9 | 2 | 1 | 157 | OVER +5 |\n| 2030-04-29 | 11.8 | 2 | 1 | 144 | OK |\n| 2030-05-06 | 14.4 | 2 | 2 | 146 | OK |\n| 2030-05-13 | 12.2 | 2 | 2 | 160 | OVER +8 |\n| 2030-05-20 | 12.0 | 2 | 1 | 156 | OVER +4 |\n| 2030-05-27 | 13.4 | 2 | 1 | 145 | OK |\n| 2030-06-03 | 12.1 | 2 | 2 | 145 | OK |\n| 2030-06-10 | 12.7 | 2 | 2 | 146 | OK |\n| 2030-06-17 | 31.9 | 3 | 2 | 159 | OVER +7 |\n| 2030-06-24 | 13.4 | 2 | 0 | 152 | OK |\n\n## Tripwires\n\n- **Sleep 6.6h avg** - under the 7h floor\n- Steps 9,327/day avg - floor met\n\n## Gates\n\n- **impact blocked** - Right achilles soreness after the long run (monitoring) - check 'hop-test': not_done\n\n> A gate clears when the record says the episode resolved, not by argument.\n\n## Coming up\n\n- **Hip imaging follow-up** in 10 days (2030-07-10) - fixed date\n- **The autumn half marathon** in 77 days (2030-09-15) - fixed date\n\n## Coverage\n\n- weight: 62 - daily: 84 - sessions: 43\n\n> Sparse and continuous beats rich and abandoned.\n",
+  "series": {
+    "daily": [
+      {
+        "date": "2030-05-02",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 1673
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2647
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 49
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 7.6
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 12283
+          }
+        }
+      },
+      {
+        "date": "2030-05-03",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2061
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2771
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 49
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 8.1
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 11351
+          }
+        }
+      },
+      {
+        "date": "2030-05-04",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2460
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2623
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 50
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 6.3
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 6806
+          }
+        }
+      },
+      {
+        "date": "2030-05-05",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2333
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2796
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 48
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 6.8
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 8242
+          }
+        }
+      },
+      {
+        "date": "2030-05-06",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 1986
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2778
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 49
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 7.1
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 10846
+          }
+        }
+      },
+      {
+        "date": "2030-05-07",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 1947
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2950
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 48
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 7.0
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 15035
+          }
+        }
+      },
+      {
+        "date": "2030-05-08",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2259
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2794
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 50
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 6.4
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 12092
+          }
+        }
+      },
+      {
+        "date": "2030-05-09",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2053
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2710
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 52
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 7.3
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 11381
+          }
+        }
+      },
+      {
+        "date": "2030-05-10",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2165
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2756
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 49
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 8.0
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 12550
+          }
+        }
+      },
+      {
+        "date": "2030-05-11",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 1801
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2905
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 50
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 7.9
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 10354
+          }
+        }
+      },
+      {
+        "date": "2030-05-12",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 1826
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2753
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 53
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 8.0
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 10169
+          }
+        }
+      },
+      {
+        "date": "2030-05-13",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 1860
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2954
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 53
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 6.5
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 11660
+          }
+        }
+      },
+      {
+        "date": "2030-05-14",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2136
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2931
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 51
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 7.8
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 13163
+          }
+        }
+      },
+      {
+        "date": "2030-05-15",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2186
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 3118
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 51
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 7.9
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 9324
+          }
+        }
+      },
+      {
+        "date": "2030-05-16",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2272
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 3076
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 55
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 8.8
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 8752
+          }
+        }
+      },
+      {
+        "date": "2030-05-17",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2206
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2881
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 48
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 6.7
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 14871
+          }
+        }
+      },
+      {
+        "date": "2030-05-18",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2208
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2768
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 51
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 6.4
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 12375
+          }
+        }
+      },
+      {
+        "date": "2030-05-19",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2696
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 2681
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 52
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 8.3
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 8453
+          }
+        }
+      },
+      {
+        "date": "2030-05-20",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2118
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2583
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 49
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 7.8
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 10541
+          }
+        }
+      },
+      {
+        "date": "2030-05-21",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 1951
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 3097
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 50
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6.7
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 10523
+          }
+        }
+      },
+      {
+        "date": "2030-05-22",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2341
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2915
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 48
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 7.6
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 13841
+          }
+        }
+      },
+      {
+        "date": "2030-05-23",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 1885
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2889
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 46
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 7.2
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 11759
+          }
+        }
+      },
+      {
+        "date": "2030-05-24",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2247
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2809
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 47
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6.2
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 8816
+          }
+        }
+      },
+      {
+        "date": "2030-05-25",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 1911
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2907
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 50
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6.8
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 4625
+          }
+        }
+      },
+      {
+        "date": "2030-05-26",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 1496
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2750
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 50
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 8.3
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 8008
+          }
+        }
+      },
+      {
+        "date": "2030-05-27",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2195
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 3020
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 52
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 8.2
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 4906
+          }
+        }
+      },
+      {
+        "date": "2030-05-28",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 1807
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 3372
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 50
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 8.3
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 5819
+          }
+        }
+      },
+      {
+        "date": "2030-05-29",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2048
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2520
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 51
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6.9
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 5828
+          }
+        }
+      },
+      {
+        "date": "2030-05-30",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2097
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2602
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 52
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 7.4
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 5342
+          }
+        }
+      },
+      {
+        "date": "2030-05-31",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 1812
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2867
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 52
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6.7
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 4794
+          }
+        }
+      },
+      {
+        "date": "2030-06-01",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2366
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2500
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 51
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 8.1
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 4776
+          }
+        }
+      },
+      {
+        "date": "2030-06-02",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 1932
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2811
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 47
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 8.1
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6435
+          }
+        }
+      },
+      {
+        "date": "2030-06-03",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2112
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2758
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 47
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6.2
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 14980
+          }
+        }
+      },
+      {
+        "date": "2030-06-04",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2313
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2928
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 55
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 7.4
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 13548
+          }
+        }
+      },
+      {
+        "date": "2030-06-05",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 1884
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2766
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 54
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 7.0
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 15557
+          }
+        }
+      },
+      {
+        "date": "2030-06-06",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 1891
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2899
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 51
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 7.8
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 11744
+          }
+        }
+      },
+      {
+        "date": "2030-06-07",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 1889
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2932
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 52
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6.6
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6940
+          }
+        }
+      },
+      {
+        "date": "2030-06-08",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 1979
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 3420
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 51
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6.7
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 10450
+          }
+        }
+      },
+      {
+        "date": "2030-06-09",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "app+watch",
+            "value": 2210
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "app+watch",
+            "value": 2662
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "app+watch",
+            "value": 50
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "app+watch",
+            "value": 7.5
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "app+watch",
+            "value": 6943
+          }
+        }
+      },
+      {
+        "date": "2030-06-10",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2287
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2978
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 46
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 7.8
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 8478
+          }
+        }
+      },
+      {
+        "date": "2030-06-11",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 1867
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2266
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 51
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 7.8
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 14092
+          }
+        }
+      },
+      {
+        "date": "2030-06-12",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2053
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2863
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 52
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 7.0
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 10937
+          }
+        }
+      },
+      {
+        "date": "2030-06-13",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2136
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 3014
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 51
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6.7
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 13352
+          }
+        }
+      },
+      {
+        "date": "2030-06-14",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2004
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2786
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 49
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 8.3
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 12271
+          }
+        }
+      },
+      {
+        "date": "2030-06-15",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 1647
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 3045
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 53
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6.4
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 5866
+          }
+        }
+      },
+      {
+        "date": "2030-06-16",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 1936
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2773
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 47
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 8.5
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 4471
+          }
+        }
+      },
+      {
+        "date": "2030-06-17",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2241
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2563
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 50
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 8.6
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 9903
+          }
+        }
+      },
+      {
+        "date": "2030-06-18",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2363
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": true,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 3050
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 51
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 7.8
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 10712
+          }
+        }
+      },
+      {
+        "date": "2030-06-19",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2369
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2906
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 49
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 7.6
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 9801
+          }
+        }
+      },
+      {
+        "date": "2030-06-20",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 1789
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2957
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 52
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 7.9
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 16356
+          }
+        }
+      },
+      {
+        "date": "2030-06-21",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 1884
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2933
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 52
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 7.9
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 11785
+          }
+        }
+      },
+      {
+        "date": "2030-06-22",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2405
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2642
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 51
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6.1
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 3743
+          }
+        }
+      },
+      {
+        "date": "2030-06-23",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 1757
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2344
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 53
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 7.0
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 5873
+          }
+        }
+      },
+      {
+        "date": "2030-06-24",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 1743
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2676
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 46
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 7.7
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 14439
+          }
+        }
+      },
+      {
+        "date": "2030-06-25",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2006
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2812
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 48
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 5.2
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 12376
+          }
+        }
+      },
+      {
+        "date": "2030-06-26",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2252
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2978
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 48
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 7.1
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 10111
+          }
+        }
+      },
+      {
+        "date": "2030-06-27",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2015
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 3031
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 56
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6.7
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 8473
+          }
+        }
+      },
+      {
+        "date": "2030-06-28",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2200
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2928
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 53
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6.4
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 9411
+          }
+        }
+      },
+      {
+        "date": "2030-06-29",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 1580
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 3222
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 54
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6.2
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 4625
+          }
+        }
+      },
+      {
+        "date": "2030-06-30",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kcal_in": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 1730
+          },
+          "kcal_out": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 2977
+          },
+          "rhr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 50
+          },
+          "sleep_h": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 7.0
+          },
+          "steps": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 5855
+          }
+        }
+      }
+    ],
+    "sessions": [
+      {
+        "date": "2030-04-09",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 150
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 6.88
+          }
+        }
+      },
+      {
+        "date": "2030-04-11",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 154
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 7.68
+          }
+        }
+      },
+      {
+        "date": "2030-04-16",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 150
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 8.6
+          }
+        }
+      },
+      {
+        "date": "2030-04-18",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 166
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 4.13
+          }
+        }
+      },
+      {
+        "date": "2030-04-23",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 167
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 3.98
+          }
+        }
+      },
+      {
+        "date": "2030-04-25",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 147
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 6.89
+          }
+        }
+      },
+      {
+        "date": "2030-04-30",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 150
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 5.36
+          }
+        }
+      },
+      {
+        "date": "2030-05-02",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 139
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 6.45
+          }
+        }
+      },
+      {
+        "date": "2030-05-07",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 147
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 7.83
+          }
+        }
+      },
+      {
+        "date": "2030-05-09",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 146
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 6.57
+          }
+        }
+      },
+      {
+        "date": "2030-05-14",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 167
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 4.38
+          }
+        }
+      },
+      {
+        "date": "2030-05-16",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 152
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 7.81
+          }
+        }
+      },
+      {
+        "date": "2030-05-21",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 164
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 5.65
+          }
+        }
+      },
+      {
+        "date": "2030-05-23",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 147
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6.35
+          }
+        }
+      },
+      {
+        "date": "2030-05-28",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 143
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6.34
+          }
+        }
+      },
+      {
+        "date": "2030-05-30",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 147
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 7.06
+          }
+        }
+      },
+      {
+        "date": "2030-06-04",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 144
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6.87
+          }
+        }
+      },
+      {
+        "date": "2030-06-06",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 146
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 5.27
+          }
+        }
+      },
+      {
+        "date": "2030-06-11",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 147
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6.33
+          }
+        }
+      },
+      {
+        "date": "2030-06-13",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 146
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6.4
+          }
+        }
+      },
+      {
+        "date": "2030-06-16",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "app+watch",
+            "value": 104
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "app+watch",
+            "value": 6.4
+          }
+        }
+      },
+      {
+        "date": "2030-06-18",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 172
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 4.67
+          }
+        }
+      },
+      {
+        "date": "2030-06-18",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "app",
+            "value": 96
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "app",
+            "value": 2.1
+          }
+        }
+      },
+      {
+        "date": "2030-06-20",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 147
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 6.14
+          }
+        }
+      },
+      {
+        "date": "2030-06-21",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "distance_km": {
+            "artifact": null,
+            "capture": "photo",
+            "modelled": false,
+            "origin": "gym-console",
+            "read_by": "model",
+            "source": "gym-console",
+            "value": 3.1
+          }
+        }
+      },
+      {
+        "date": "2030-06-23",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 158
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "unknown",
+            "value": 21.1
+          }
+        }
+      },
+      {
+        "date": "2030-06-25",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 144
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 7.84
+          }
+        }
+      },
+      {
+        "date": "2030-06-27",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "avg_hr": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 160
+          },
+          "distance_km": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "watch",
+            "value": 5.54
+          }
+        }
+      }
+    ],
+    "weight": [
+      {
+        "date": "2030-04-10",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 79.4
+          }
+        }
+      },
+      {
+        "date": "2030-04-12",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 80.1
+          }
+        }
+      },
+      {
+        "date": "2030-04-13",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 80.0
+          }
+        }
+      },
+      {
+        "date": "2030-04-14",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 80.2
+          }
+        }
+      },
+      {
+        "date": "2030-04-15",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 80.0
+          }
+        }
+      },
+      {
+        "date": "2030-04-16",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 79.9
+          }
+        }
+      },
+      {
+        "date": "2030-04-17",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 79.7
+          }
+        }
+      },
+      {
+        "date": "2030-04-18",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 79.9
+          }
+        }
+      },
+      {
+        "date": "2030-04-19",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 79.6
+          }
+        }
+      },
+      {
+        "date": "2030-04-21",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 79.9
+          }
+        }
+      },
+      {
+        "date": "2030-04-23",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 79.2
+          }
+        }
+      },
+      {
+        "date": "2030-04-24",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 79.4
+          }
+        }
+      },
+      {
+        "date": "2030-04-25",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 79.2
+          }
+        }
+      },
+      {
+        "date": "2030-04-28",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 79.1
+          }
+        }
+      },
+      {
+        "date": "2030-04-30",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 79.1
+          }
+        }
+      },
+      {
+        "date": "2030-05-01",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 78.9
+          }
+        }
+      },
+      {
+        "date": "2030-05-02",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 78.8
+          }
+        }
+      },
+      {
+        "date": "2030-05-03",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 78.6
+          }
+        }
+      },
+      {
+        "date": "2030-05-04",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 79.3
+          }
+        }
+      },
+      {
+        "date": "2030-05-05",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 79.0
+          }
+        }
+      },
+      {
+        "date": "2030-05-06",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 78.7
+          }
+        }
+      },
+      {
+        "date": "2030-05-08",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 78.2
+          }
+        }
+      },
+      {
+        "date": "2030-05-09",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 78.0
+          }
+        }
+      },
+      {
+        "date": "2030-05-12",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 77.9
+          }
+        }
+      },
+      {
+        "date": "2030-05-13",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 78.2
+          }
+        }
+      },
+      {
+        "date": "2030-05-14",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 78.8
+          }
+        }
+      },
+      {
+        "date": "2030-05-15",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 77.9
+          }
+        }
+      },
+      {
+        "date": "2030-05-16",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 78.0
+          }
+        }
+      },
+      {
+        "date": "2030-05-17",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 77.8
+          }
+        }
+      },
+      {
+        "date": "2030-05-18",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": null,
+            "read_by": null,
+            "source": "scale",
+            "value": 78.0
+          }
+        }
+      },
+      {
+        "date": "2030-05-20",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 77.7
+          }
+        }
+      },
+      {
+        "date": "2030-05-21",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 78.3
+          }
+        }
+      },
+      {
+        "date": "2030-05-22",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 77.8
+          }
+        }
+      },
+      {
+        "date": "2030-05-23",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 78.2
+          }
+        }
+      },
+      {
+        "date": "2030-05-24",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 77.7
+          }
+        }
+      },
+      {
+        "date": "2030-05-25",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 77.4
+          }
+        }
+      },
+      {
+        "date": "2030-05-26",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 77.6
+          }
+        }
+      },
+      {
+        "date": "2030-06-03",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 76.9
+          }
+        }
+      },
+      {
+        "date": "2030-06-04",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 77.4
+          }
+        }
+      },
+      {
+        "date": "2030-06-05",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 77.2
+          }
+        }
+      },
+      {
+        "date": "2030-06-06",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 77.1
+          }
+        }
+      },
+      {
+        "date": "2030-06-07",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 77.5
+          }
+        }
+      },
+      {
+        "date": "2030-06-09",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "vendor-api+vendor-export",
+            "value": 76.4
+          }
+        }
+      },
+      {
+        "date": "2030-06-10",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 77.2
+          }
+        }
+      },
+      {
+        "date": "2030-06-12",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "athlete+scale",
+            "read_by": null,
+            "source": "hand+vendor-api",
+            "value": 77.4
+          }
+        }
+      },
+      {
+        "date": "2030-06-13",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 76.8
+          }
+        }
+      },
+      {
+        "date": "2030-06-15",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 76.9
+          }
+        }
+      },
+      {
+        "date": "2030-06-16",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 76.6
+          }
+        }
+      },
+      {
+        "date": "2030-06-17",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 76.7
+          }
+        }
+      },
+      {
+        "date": "2030-06-18",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 76.3
+          }
+        }
+      },
+      {
+        "date": "2030-06-19",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 76.4
+          }
+        }
+      },
+      {
+        "date": "2030-06-20",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 76.6
+          }
+        }
+      },
+      {
+        "date": "2030-06-21",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 76.4
+          }
+        }
+      },
+      {
+        "date": "2030-06-22",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 76.5
+          }
+        }
+      },
+      {
+        "date": "2030-06-24",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 76.1
+          }
+        }
+      },
+      {
+        "date": "2030-06-25",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 76.5
+          }
+        }
+      },
+      {
+        "date": "2030-06-26",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 76.0
+          }
+        }
+      },
+      {
+        "date": "2030-06-27",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 76.2
+          }
+        }
+      },
+      {
+        "date": "2030-06-28",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": "derived_external",
+            "modelled": false,
+            "origin": "athlete",
+            "read_by": "athlete",
+            "source": "notebook",
+            "value": 76.1
+          }
+        }
+      },
+      {
+        "date": "2030-06-29",
+        "device": null,
+        "supersedes": null,
+        "values": {
+          "kg": {
+            "artifact": null,
+            "capture": null,
+            "modelled": false,
+            "origin": "scale",
+            "read_by": null,
+            "source": "scale",
+            "value": 75.9
+          }
+        }
+      }
+    ]
+  },
+  "status": "75.9 kg (2030-06-29)",
+  "verdicts": [
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "easy_hr",
+      "reason": null,
+      "refusal": null,
+      "target": 152.0,
+      "value": 152,
+      "verdict": "on_target",
+      "week": "2030-04-08"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "pain_gate",
+      "reason": null,
+      "refusal": null,
+      "target": 3.0,
+      "value": 1.0,
+      "verdict": "on_target",
+      "week": "2030-04-08"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "rhr",
+      "reason": null,
+      "refusal": null,
+      "target": 56.0,
+      "value": 49.571,
+      "verdict": "on_target",
+      "week": "2030-04-08"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "sleep",
+      "reason": null,
+      "refusal": null,
+      "target": 7.0,
+      "value": 7.386,
+      "verdict": "on_target",
+      "week": "2030-04-08"
+    },
+    {
+      "contains_modelled": true,
+      "due": null,
+      "goal": "steps",
+      "metric": "steps",
+      "reason": null,
+      "refusal": null,
+      "target": 9000.0,
+      "value": 9752.714,
+      "verdict": "on_target",
+      "week": "2030-04-08"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "weight_rate",
+      "reason": "no_input",
+      "refusal": "nothing recorded",
+      "target": null,
+      "value": null,
+      "verdict": "no_data",
+      "week": "2030-04-08"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "easy_hr",
+      "reason": null,
+      "refusal": null,
+      "target": 152.0,
+      "value": 158,
+      "verdict": "behind",
+      "week": "2030-04-15"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "pain_gate",
+      "reason": null,
+      "refusal": null,
+      "target": 3.0,
+      "value": 1.0,
+      "verdict": "on_target",
+      "week": "2030-04-15"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "rhr",
+      "reason": null,
+      "refusal": null,
+      "target": 56.0,
+      "value": 49.857,
+      "verdict": "on_target",
+      "week": "2030-04-15"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "sleep",
+      "reason": null,
+      "refusal": null,
+      "target": 7.0,
+      "value": 7.786,
+      "verdict": "on_target",
+      "week": "2030-04-15"
+    },
+    {
+      "contains_modelled": true,
+      "due": null,
+      "goal": "steps",
+      "metric": "steps",
+      "reason": null,
+      "refusal": null,
+      "target": 9000.0,
+      "value": 10811.429,
+      "verdict": "on_target",
+      "week": "2030-04-15"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "weight_rate",
+      "reason": null,
+      "refusal": null,
+      "target": 0.35,
+      "value": 0.133,
+      "verdict": "on_target",
+      "week": "2030-04-15"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "easy_hr",
+      "reason": null,
+      "refusal": null,
+      "target": 152.0,
+      "value": 157,
+      "verdict": "behind",
+      "week": "2030-04-22"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "pain_gate",
+      "reason": null,
+      "refusal": null,
+      "target": 3.0,
+      "value": 0.0,
+      "verdict": "on_target",
+      "week": "2030-04-22"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "rhr",
+      "reason": null,
+      "refusal": null,
+      "target": 56.0,
+      "value": 52.714,
+      "verdict": "on_target",
+      "week": "2030-04-22"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "sleep",
+      "reason": null,
+      "refusal": null,
+      "target": 7.0,
+      "value": 7.2,
+      "verdict": "on_target",
+      "week": "2030-04-22"
+    },
+    {
+      "contains_modelled": true,
+      "due": null,
+      "goal": "steps",
+      "metric": "steps",
+      "reason": null,
+      "refusal": null,
+      "target": 9000.0,
+      "value": 10957.286,
+      "verdict": "on_target",
+      "week": "2030-04-22"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "weight_rate",
+      "reason": null,
+      "refusal": null,
+      "target": 0.35,
+      "value": 0.608,
+      "verdict": "ahead",
+      "week": "2030-04-22"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "easy_hr",
+      "reason": null,
+      "refusal": null,
+      "target": 152.0,
+      "value": 144.5,
+      "verdict": "on_target",
+      "week": "2030-04-29"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "pain_gate",
+      "reason": null,
+      "refusal": null,
+      "target": 3.0,
+      "value": 1.0,
+      "verdict": "on_target",
+      "week": "2030-04-29"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "rhr",
+      "reason": null,
+      "refusal": null,
+      "target": 56.0,
+      "value": 48.714,
+      "verdict": "on_target",
+      "week": "2030-04-29"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "sleep",
+      "reason": null,
+      "refusal": null,
+      "target": 7.0,
+      "value": 7.486,
+      "verdict": "on_target",
+      "week": "2030-04-29"
+    },
+    {
+      "contains_modelled": true,
+      "due": null,
+      "goal": "steps",
+      "metric": "steps",
+      "reason": null,
+      "refusal": null,
+      "target": 9000.0,
+      "value": 9710.286,
+      "verdict": "on_target",
+      "week": "2030-04-29"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "weight_rate",
+      "reason": null,
+      "refusal": null,
+      "target": 0.35,
+      "value": 0.275,
+      "verdict": "on_target",
+      "week": "2030-04-29"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "easy_hr",
+      "reason": null,
+      "refusal": null,
+      "target": 152.0,
+      "value": 146.5,
+      "verdict": "on_target",
+      "week": "2030-05-06"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "pain_gate",
+      "reason": null,
+      "refusal": null,
+      "target": 3.0,
+      "value": 2.0,
+      "verdict": "on_target",
+      "week": "2030-05-06"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "rhr",
+      "reason": null,
+      "refusal": null,
+      "target": 56.0,
+      "value": 50.143,
+      "verdict": "on_target",
+      "week": "2030-05-06"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "sleep",
+      "reason": null,
+      "refusal": null,
+      "target": 7.0,
+      "value": 7.386,
+      "verdict": "on_target",
+      "week": "2030-05-06"
+    },
+    {
+      "contains_modelled": true,
+      "due": null,
+      "goal": "steps",
+      "metric": "steps",
+      "reason": null,
+      "refusal": null,
+      "target": 9000.0,
+      "value": 11775.286,
+      "verdict": "on_target",
+      "week": "2030-05-06"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "weight_rate",
+      "reason": null,
+      "refusal": null,
+      "target": 0.35,
+      "value": 0.75,
+      "verdict": "ahead",
+      "week": "2030-05-06"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "easy_hr",
+      "reason": null,
+      "refusal": null,
+      "target": 152.0,
+      "value": 159.5,
+      "verdict": "behind",
+      "week": "2030-05-13"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "pain_gate",
+      "reason": null,
+      "refusal": null,
+      "target": 3.0,
+      "value": 2.0,
+      "verdict": "on_target",
+      "week": "2030-05-13"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "rhr",
+      "reason": null,
+      "refusal": null,
+      "target": 56.0,
+      "value": 51.571,
+      "verdict": "on_target",
+      "week": "2030-05-13"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "sleep",
+      "reason": null,
+      "refusal": null,
+      "target": 7.0,
+      "value": 7.486,
+      "verdict": "on_target",
+      "week": "2030-05-13"
+    },
+    {
+      "contains_modelled": true,
+      "due": null,
+      "goal": "steps",
+      "metric": "steps",
+      "reason": null,
+      "refusal": null,
+      "target": 9000.0,
+      "value": 11228.286,
+      "verdict": "on_target",
+      "week": "2030-05-13"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "weight_rate",
+      "reason": null,
+      "refusal": null,
+      "target": 0.35,
+      "value": 0.083,
+      "verdict": "behind",
+      "week": "2030-05-13"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "easy_hr",
+      "reason": null,
+      "refusal": null,
+      "target": 152.0,
+      "value": 155.5,
+      "verdict": "behind",
+      "week": "2030-05-20"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "pain_gate",
+      "reason": null,
+      "refusal": null,
+      "target": 3.0,
+      "value": 2.0,
+      "verdict": "on_target",
+      "week": "2030-05-20"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "rhr",
+      "reason": null,
+      "refusal": null,
+      "target": 56.0,
+      "value": 48.571,
+      "verdict": "on_target",
+      "week": "2030-05-20"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "sleep",
+      "reason": null,
+      "refusal": null,
+      "target": 7.0,
+      "value": 7.229,
+      "verdict": "on_target",
+      "week": "2030-05-20"
+    },
+    {
+      "contains_modelled": true,
+      "due": null,
+      "goal": "steps",
+      "metric": "steps",
+      "reason": null,
+      "refusal": null,
+      "target": 9000.0,
+      "value": 9730.429,
+      "verdict": "on_target",
+      "week": "2030-05-20"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "weight_rate",
+      "reason": null,
+      "refusal": null,
+      "target": 0.35,
+      "value": 0.302,
+      "verdict": "on_target",
+      "week": "2030-05-20"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "easy_hr",
+      "reason": null,
+      "refusal": null,
+      "target": 152.0,
+      "value": 145,
+      "verdict": "on_target",
+      "week": "2030-05-27"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "pain_gate",
+      "reason": null,
+      "refusal": null,
+      "target": 3.0,
+      "value": 2.0,
+      "verdict": "on_target",
+      "week": "2030-05-27"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "rhr",
+      "reason": null,
+      "refusal": null,
+      "target": 56.0,
+      "value": 50.714,
+      "verdict": "on_target",
+      "week": "2030-05-27"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "sleep",
+      "reason": null,
+      "refusal": null,
+      "target": 7.0,
+      "value": 7.671,
+      "verdict": "on_target",
+      "week": "2030-05-27"
+    },
+    {
+      "contains_modelled": true,
+      "due": null,
+      "goal": "steps",
+      "metric": "steps",
+      "reason": null,
+      "refusal": null,
+      "target": 9000.0,
+      "value": 5414.286,
+      "verdict": "behind",
+      "week": "2030-05-27"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "weight_rate",
+      "reason": "no_input",
+      "refusal": "nothing recorded",
+      "target": null,
+      "value": null,
+      "verdict": "no_data",
+      "week": "2030-05-27"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "easy_hr",
+      "reason": null,
+      "refusal": null,
+      "target": 152.0,
+      "value": 145,
+      "verdict": "on_target",
+      "week": "2030-06-03"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "pain_gate",
+      "reason": null,
+      "refusal": null,
+      "target": 3.0,
+      "value": 1.0,
+      "verdict": "on_target",
+      "week": "2030-06-03"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "rhr",
+      "reason": null,
+      "refusal": null,
+      "target": 56.0,
+      "value": 51.429,
+      "verdict": "on_target",
+      "week": "2030-06-03"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "sleep",
+      "reason": null,
+      "refusal": null,
+      "target": 7.0,
+      "value": 7.029,
+      "verdict": "on_target",
+      "week": "2030-06-03"
+    },
+    {
+      "contains_modelled": true,
+      "due": null,
+      "goal": "steps",
+      "metric": "steps",
+      "reason": null,
+      "refusal": null,
+      "target": 9000.0,
+      "value": 11451.714,
+      "verdict": "on_target",
+      "week": "2030-06-03"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "weight_rate",
+      "reason": "no_input",
+      "refusal": "nothing recorded",
+      "target": null,
+      "value": null,
+      "verdict": "no_data",
+      "week": "2030-06-03"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "easy_hr",
+      "reason": null,
+      "refusal": null,
+      "target": 152.0,
+      "value": 146.5,
+      "verdict": "on_target",
+      "week": "2030-06-10"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "pain_gate",
+      "reason": null,
+      "refusal": null,
+      "target": 3.0,
+      "value": 1.0,
+      "verdict": "on_target",
+      "week": "2030-06-10"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "rhr",
+      "reason": null,
+      "refusal": null,
+      "target": 56.0,
+      "value": 49.857,
+      "verdict": "on_target",
+      "week": "2030-06-10"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "sleep",
+      "reason": null,
+      "refusal": null,
+      "target": 7.0,
+      "value": 7.5,
+      "verdict": "on_target",
+      "week": "2030-06-10"
+    },
+    {
+      "contains_modelled": true,
+      "due": null,
+      "goal": "steps",
+      "metric": "steps",
+      "reason": null,
+      "refusal": null,
+      "target": 8000.0,
+      "value": 9923.857,
+      "verdict": "on_target",
+      "week": "2030-06-10"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "weight_rate",
+      "reason": "not_supported",
+      "refusal": "measured, not judgeable",
+      "target": 0.35,
+      "value": 0.103,
+      "verdict": "no_data",
+      "week": "2030-06-10"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "easy_hr",
+      "reason": null,
+      "refusal": null,
+      "target": 152.0,
+      "value": 159,
+      "verdict": "behind",
+      "week": "2030-06-17"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "pain_gate",
+      "reason": null,
+      "refusal": null,
+      "target": 3.0,
+      "value": 1.0,
+      "verdict": "on_target",
+      "week": "2030-06-17"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "rhr",
+      "reason": null,
+      "refusal": null,
+      "target": 56.0,
+      "value": 51.143,
+      "verdict": "on_target",
+      "week": "2030-06-17"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "sleep",
+      "reason": null,
+      "refusal": null,
+      "target": 7.0,
+      "value": 7.557,
+      "verdict": "on_target",
+      "week": "2030-06-17"
+    },
+    {
+      "contains_modelled": true,
+      "due": null,
+      "goal": "steps",
+      "metric": "steps",
+      "reason": null,
+      "refusal": null,
+      "target": 8000.0,
+      "value": 9739,
+      "verdict": "on_target",
+      "week": "2030-06-17"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "weight_rate",
+      "reason": "not_supported",
+      "refusal": "measured, not judgeable",
+      "target": 0.35,
+      "value": 0.497,
+      "verdict": "no_data",
+      "week": "2030-06-17"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "easy_hr",
+      "reason": null,
+      "refusal": null,
+      "target": 152.0,
+      "value": 152,
+      "verdict": "on_target",
+      "week": "2030-06-24"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "intake_floor",
+      "reason": null,
+      "refusal": null,
+      "target": 1200.0,
+      "value": 2023.857,
+      "verdict": "on_target",
+      "week": "2030-06-24"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "pain_gate",
+      "reason": null,
+      "refusal": null,
+      "target": 3.0,
+      "value": 2.0,
+      "verdict": "on_target",
+      "week": "2030-06-24"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "protein_floor",
+      "reason": null,
+      "refusal": null,
+      "target": 0.8,
+      "value": 1.741,
+      "verdict": "on_target",
+      "week": "2030-06-24"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "rhr",
+      "reason": null,
+      "refusal": null,
+      "target": 56.0,
+      "value": 50.714,
+      "verdict": "on_target",
+      "week": "2030-06-24"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "sleep",
+      "reason": null,
+      "refusal": null,
+      "target": 7.0,
+      "value": 6.614,
+      "verdict": "behind",
+      "week": "2030-06-24"
+    },
+    {
+      "contains_modelled": true,
+      "due": null,
+      "goal": "steps",
+      "metric": "steps",
+      "reason": null,
+      "refusal": null,
+      "target": 8000.0,
+      "value": 9327.143,
+      "verdict": "on_target",
+      "week": "2030-06-24"
+    },
+    {
+      "contains_modelled": false,
+      "due": null,
+      "goal": null,
+      "metric": "weight_rate",
+      "reason": "not_supported",
+      "refusal": "measured, not judgeable",
+      "target": 0.35,
+      "value": 0.35,
+      "verdict": "no_data",
+      "week": "2030-06-24"
+    }
+  ]
+}
