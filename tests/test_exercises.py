@@ -393,3 +393,56 @@ def test_no_two_entries_claim_the_same_spelling():
             assert key not in seen or seen[key] == slug, (
                 f"{spelling!r} is claimed by both {seen.get(key)} and {slug}")
             seen[key] = slug
+
+
+# --- fixtures and kit: what a movement requires (#227) ------------------------
+
+def test_every_fixture_and_kit_value_names_a_registry_slug():
+    """The registry cannot reference equipment that does not exist."""
+    from vitai.exercises import validate_fixtures
+    assert validate_fixtures() == []
+
+
+def test_absent_and_empty_are_different_answers():
+    """`[]` means the movement needs nothing; `None` means nobody annotated it.
+
+    Conflating them is what strands an athlete at a park with a programme
+    written for a rack, so the distinction is asserted rather than assumed.
+    """
+    from vitai.exercises import fixtures_of
+    assert fixtures_of("floor-press") == []          # needs nothing, deliberately
+    assert fixtures_of("bench-press") == ["bench"]   # needs a bench
+    assert fixtures_of("no-such-movement") is None   # unknown, not free
+
+
+def test_requirements_are_derived_from_the_exercise_list():
+    from vitai.exercises import requirements
+    got = requirements(["push-up", "bench-press", "pull-up"])
+    assert got["fixtures"] == ["bench", "pull-up-bar"]
+    assert got["unannotated"] == []
+
+
+def test_a_bodyweight_session_requires_nothing():
+    from vitai.exercises import requirements
+    got = requirements(["push-up", "plank", "lunge", "burpee"])
+    assert got == {"fixtures": [], "kit": [], "unannotated": []}
+
+
+def test_an_unannotated_movement_is_reported_rather_than_treated_as_free():
+    """The refusal case: a consumer must not answer 'you can do this here'
+    on a requirements list that silently omitted what it did not know."""
+    from vitai.exercises import requirements
+    got = requirements(["push-up", "no-such-movement"])
+    assert got["unannotated"] == ["unknown"]
+
+
+def test_the_registry_is_fully_annotated():
+    """Every catalogued movement says what it needs.
+
+    Not a style rule: an unannotated exercise makes `requirements` refuse, so
+    a gap here disables provisioning for any session containing it.
+    """
+    from vitai.exercises import exercises, fixtures_of, kit_of
+    missing = [e for e in exercises()
+               if fixtures_of(e) is None and kit_of(e) is None]
+    assert missing == []
