@@ -1,0 +1,14 @@
+# ines - Porto. Started the record after every mechanism existed.
+[athlete]
+timezone = "Europe/Lisbon"
+
+[targets]
+# An approach goal: she is not cutting or bulking, she is converging.
+phases = [[64.0, 62.0, 0.15]]
+
+[tripwires]
+steps_floor = 6000
+sleep_floor_h = 6.5
+
+[resolution]
+source_order = ["scale", "watch", "app", "hand"]

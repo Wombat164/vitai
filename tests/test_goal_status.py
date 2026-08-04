@@ -202,3 +202,30 @@ def test_both_axes_reach_the_read_model_and_the_old_name_still_works(tmp_path):
     # `achieved` was terminal, and the engine stopped measuring a goal the
     # moment it left `active`.
     assert "sustaining" in {a for _, _, a in rows}
+
+
+def test_a_ceiling_over_its_cap_is_not_achieved():
+    """FOUND BY A PERSONA. `achievement_of` tested `counted >= target`
+    whatever the polarity, so a ceiling held 87 kcal OVER its cap reported
+    `achieved` - the same shape as the defect polarity was added to remove,
+    surviving one layer down in the axis that reports how it is going.
+
+    It took a record whose goals declare a ceiling and a floor on one nutrient
+    axis to surface it, which is what the corpus is for.
+    """
+    assert achievement_of(2287, 2200, "active", None, "ceiling") != "achieved"
+    assert achievement_of(2100, 2200, "active", None, "ceiling") == "achieved"
+    # And a floor is unchanged.
+    assert achievement_of(129, 110, "active", None, "floor") == "achieved"
+
+
+def test_a_band_is_met_only_inside_it():
+    assert achievement_of(1500, 1000, "active", None, "band", 2000) == "achieved"
+    assert achievement_of(2500, 1000, "active", None, "band", 2000) != "achieved"
+    assert achievement_of(500, 1000, "active", None, "band", 2000) != "achieved"
+
+
+def test_an_approach_has_no_met_without_a_tolerance():
+    """Inventing one would make the engine decide how close is close enough.
+    `distance` already says how far off it is."""
+    assert achievement_of(62.0, 62.0, "active", None, "approach") is None
