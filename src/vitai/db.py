@@ -277,7 +277,22 @@ from .schema import KEYS
 #
 #     #219 also claims 24. The contract follows MERGE order, so whichever of
 #     the two lands second is renumbered rather than assumed.
-# 26: `best_efforts` - the fastest 1k, 5k, 10k, half and full of every stored
+# 26: a declared SCALE beside each subjective number. `rpe`, `mood` and `pain`
+#     validated as bare numerics, and a bare number with no scale is not
+#     interpretable - for RPE it is ambiguous between two standard scales both
+#     in common use, where a stored 7 is "quite light" on one and "very hard"
+#     on the other.
+#
+#     `rpe_scale` on sessions and sets, `mood_scale` and `pain_scale` on
+#     daily, naming a slug from `semantics/scales.toml`. Post-coordinated
+#     rather than fixed per field, so an imported row can say which scale its
+#     source used.
+#
+#     ABSENT MEANS UNSTATED and a consumer must not invent a denominator:
+#     rendering "4 out of 10" against an undeclared scale asserts a bound the
+#     record never carried. Where a scale IS declared the value is validated
+#     against its range, which is the point of declaring one.
+# 27: `best_efforts` - the fastest 1k, 5k, 10k, half and full of every stored
 #     track. The question a runner asks first, and one no field could answer:
 #     `sessions` holds a distance and a duration, so a 10.48 km run and a
 #     9.74 km run are comparable on neither, and a pace computed from both
@@ -297,8 +312,10 @@ from .schema import KEYS
 #     it would be the engine deciding which pauses were real. That is why the
 #     column is not called `moving_time`.
 #
-#     #253 also claims 26; the contract follows MERGE order.
-CONTRACT_VERSION = "26"
+#     #253 claimed 26 as well and merged first, so this is 27. The
+#     contract follows MERGE order, which is exactly why both sides
+#     said so in their own comment rather than assuming.
+CONTRACT_VERSION = "27"
 
 _TEXT_COLS = {"derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
               # under REAL affinity silently becomes 7.0, which is the defect
@@ -314,6 +331,7 @@ _TEXT_COLS = {"derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
               # and stay numeric.
               "polarity", "breach",
               "lifecycle_status", "achievement_status",
+              "rpe_scale", "mood_scale", "pain_scale",
               # `due` is an ISO date too (#202).
               "due",
               "date", "type", "source", "location", "note",

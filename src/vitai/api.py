@@ -1451,8 +1451,29 @@ class Vitai:
                 # G26: report EVERY malformed line.
                 problems += [f"MALFORMED: {e}" for e in parse_errors]
                 for n, rec in found:
-                    problems += [f"{path.name} line {n}: {p}"
-                                 for p in validate_record(name, rec)]
+                    found_problems = validate_record(name, rec)
+                    if not found_problems:
+                        continue
+                    # ALREADY CORRECTED IS NOT STILL WRONG (#245). A problem
+                    # on a line a later line has replaced describes a mistake
+                    # that was already caught. It cannot be fixed, because the
+                    # line cannot be edited, so reporting it as a problem
+                    # means the number can never reach zero - and a validator
+                    # whose output can never reach zero is one people stop
+                    # reading, including for the problems that ARE actionable.
+                    #
+                    # Not silenced: the line really is malformed and the log
+                    # really does contain it, and a record that hid its own
+                    # history of mistakes would be a worse record. It is
+                    # reported quietly, and says which line replaced it.
+                    by = _superseded_by(name, rec, found)
+                    if by is not None:
+                        advisories += [
+                            f"{path.name} line {n} (already corrected by line "
+                            f"{by}): {p}" for p in found_problems]
+                    else:
+                        problems += [f"{path.name} line {n}: {p}"
+                                     for p in found_problems]
                 # PER FILE, unlike the checks below: the rule is "this file's
                 # clock started", and a file is what has a clock.
                 advisories += unstamped_after_the_clock_started(path.name,
@@ -1745,6 +1766,45 @@ class Vitai:
         if days:
             return f"{len(days)} days logged (latest {days[-1]['date']})"
         return "nothing logged yet - one number is a complete day"
+
+
+def _superseded_by(dataset: str, rec: dict,
+                   rows: list[tuple[int, dict]]) -> int | None:
+    """The line that replaced this one, or None if it still stands (#245).
+
+    TWO WAYS A LINE STOPS DETERMINING THE RECORD, and a record uses whichever
+    its dataset supports.
+
+    `supersedes` names a line and retires it. And for an identity-keyed
+    dataset - `goals`, `medical`, `thresholds` - a later row with the same
+    slug simply wins, which is the documented effective-dating pattern and the
+    only one available there: four rows of one goal share a line key, so a
+    reference retires the most recent rather than the one below it, and no
+    sequence of appends reaches the earliest.
+
+    Returns the LINE NUMBER rather than a flag, because "already corrected" is
+    only useful if the reader can see by what.
+    """
+    from .jsonl import identity_of, line_key
+
+    ident = identity_of(dataset, rec)
+    for n, other in rows:
+        if other is rec:
+            continue
+        if str(other.get("supersedes") or "") == line_key(dataset, rec):
+            return n
+    if ident is None:
+        return None
+    # Effective-dating: the LAST row for this identity is the one in force.
+    same = [n for n, other in rows if identity_of(dataset, other) == ident]
+    return same[-1] if same and same[-1] != _line_of(rec, rows) else None
+
+
+def _line_of(rec: dict, rows: list[tuple[int, dict]]) -> int | None:
+    for n, other in rows:
+        if other is rec:
+            return n
+    return None
 
 
 def _viewpoint(on):
