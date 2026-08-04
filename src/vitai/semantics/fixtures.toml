@@ -1,0 +1,162 @@
+# Fixtures and kit - what a movement REQUIRES, so a plan can be provisioned.
+#
+# WHAT WAS WRONG. Three vocabularies described equipment and none of them could
+# talk to the others. `sets.equipment` was free text and post-hoc - it recorded
+# what was used, after the fact. `context.facilities` was a comma-separated
+# string ("gym,routes"). And `exercises.toml` registered 111 movements and could
+# not say what any of them needed: the nearest attribute is `load`, which
+# distinguishes bodyweight from loaded and cannot tell a bench press from a leg
+# press. So a prescription saying "needs a squat rack" could not be matched
+# against a place saying "gym", and no amount of work on either side fixed it
+# alone.
+#
+# THE SPLIT, and it is the ownership axis rather than a size one. A FIXTURE
+# belongs to the place and is what you would leave behind; KIT belongs to the
+# athlete and is what he would take with him. The same object class falls on
+# either side depending on whose it is - his own dumbbells are kit, a gym's
+# dumbbells are a fixture he happens to use - which is why this is two lists
+# rather than one and why neither is a list of object types.
+#
+# WHY IT LIVES ON THE EXERCISE. Requirements are DERIVED from the movement, once,
+# rather than restated by every coach, app and template that ever prescribes it.
+# 111 exercises annotated once beats every prescription carrying its own
+# equipment prose forever. This is the move `restrictions.toml` already made:
+# post-coordinated axes on a registry rather than free text at the point of use.
+#
+# POST-COORDINATION STILL HOLDS. `bench-press` requires a bench and says nothing
+# about barbell versus dumbbell - that is `sets.equipment` at execution time, and
+# folding it in here would recreate the fused `incline_dumbbell_bench_press`
+# vocabulary the exercise registry exists to refuse. A fixture is named ONLY
+# where the movement cannot be performed without it.
+#
+# ABSENT IS NOT EMPTY. An exercise with no `fixture` key has not been annotated;
+# an exercise with `fixture = []` requires nothing. A consumer must not read the
+# first as the second, or an unannotated movement becomes one you can do
+# anywhere - which is the direction that strands an athlete at a park with a
+# programme written for a rack.
+
+version = 1
+
+# --- fixtures: belong to the place -------------------------------------------
+[fixtures]
+
+[fixtures.bench]
+label = "Flat or adjustable bench"
+aliases = ["weight bench", "flat bench"]
+
+[fixtures.incline-bench]
+label = "Incline bench"
+note = "A chest-supported row needs the incline specifically; a flat bench will not serve."
+
+[fixtures.preacher-bench]
+label = "Preacher curl bench"
+
+[fixtures.rack]
+label = "Squat or power rack"
+aliases = ["squat rack", "power rack", "cage"]
+
+[fixtures.pull-up-bar]
+label = "Pull-up bar"
+aliases = ["chin-up bar", "high bar"]
+
+[fixtures.dip-bars]
+label = "Dip bars"
+aliases = ["parallel bars"]
+
+[fixtures.cable-stack]
+label = "Cable machine with a selectorised stack"
+aliases = ["cable", "pulley", "functional trainer"]
+
+[fixtures.lat-pulldown-station]
+label = "Lat pulldown station"
+
+[fixtures.leg-press-machine]
+label = "Leg press machine"
+
+[fixtures.leg-curl-machine]
+label = "Leg curl machine"
+
+[fixtures.leg-extension-machine]
+label = "Leg extension machine"
+
+[fixtures.hack-squat-machine]
+label = "Hack squat machine"
+
+[fixtures.pendulum-squat-machine]
+label = "Pendulum squat machine"
+
+[fixtures.belt-squat-machine]
+label = "Belt squat machine"
+
+[fixtures.chest-press-machine]
+label = "Chest press machine"
+note = "Named only where the machine is the movement. A free-weight chest press is `bench-press`."
+
+[fixtures.pec-deck]
+label = "Pec deck or fly machine"
+
+[fixtures.back-extension-bench]
+label = "Back extension bench or GHD"
+aliases = ["roman chair", "ghd", "hyperextension bench"]
+
+[fixtures.nordic-anchor]
+label = "Nordic curl bench or a fixed anchor for the ankles"
+note = "A partner holding the ankles also serves, which is a person rather than a fixture - so this is annotated on the movement and a place lacking it is not necessarily a blocker."
+
+[fixtures.box]
+label = "Plyo box or a stable raised platform"
+aliases = ["plyo box", "step"]
+
+[fixtures.sled]
+label = "Push or drag sled"
+aliases = ["prowler"]
+
+[fixtures.climbing-rope]
+label = "Climbing rope"
+
+[fixtures.battle-rope]
+label = "Battle rope"
+
+[fixtures.low-bar]
+label = "Bar or rings set low enough to row under"
+aliases = ["rings", "smith bar", "suspension trainer"]
+
+[fixtures.crosstrainer]
+label = "Cross-trainer or elliptical"
+aliases = ["elliptical"]
+
+[fixtures.rowing-erg]
+label = "Rowing ergometer"
+aliases = ["erg", "concept2"]
+
+[fixtures.stair-climber]
+label = "Stair climber"
+aliases = ["stairmaster"]
+
+[fixtures.wall]
+label = "A wall"
+note = "Trivially available almost everywhere, and named anyway: a wall sit outdoors on open ground is not possible, and a requirement that is usually satisfied is still a requirement."
+
+# --- kit: belongs to the athlete ---------------------------------------------
+[kit]
+
+[kit.load-implement]
+label = "Something to carry or lift"
+note = "Deliberately unspecific. A farmer's carry needs load; whether it is a dumbbell, a kettlebell or a shopping bag is `sets.equipment` at execution time."
+
+[kit.kettlebell]
+label = "Kettlebell"
+
+[kit.ab-wheel]
+label = "Ab wheel"
+
+[kit.skipping-rope]
+label = "Skipping rope"
+aliases = ["jump rope"]
+
+[kit.sledgehammer]
+label = "Sledgehammer"
+
+[kit.band]
+label = "Resistance band"
+aliases = ["resistance band", "loop band"]
