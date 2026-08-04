@@ -1145,6 +1145,43 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   then schedule removal at a stated generation.
   HIGH. Tracked as #126.
 
+- **G90 Compute the pattern, never name the state** (P3/G38/G82). Three places
+  in this repo held incompatible positions on whether the engine may infer
+  motivation, and two of them shipped: #28 Rule 1 permitted "infer motivations"
+  with no confirmation at all, `cross-metric-inference.md` carried a
+  deterministic classifier concluding a psychological state from a training
+  pattern, and #231/#232 barred exactly that. Settled here (#234) so the
+  motivation cluster has a rule to be built against rather than acquiring one
+  afterwards.
+  **The distinction is between three claims, and only the middle one is
+  barred.**
+  1. "Frequency fell without a corresponding load rise" is an OBSERVATION.
+     Computable, checkable, falsifiable, and no psychology in it.
+  2. "Motivation dipped" is a DIAGNOSIS: a claim about his mind, derived from
+     behaviour, with no anchor in anything he said and no way to be wrong.
+  3. "Here is a pattern - does this sound like motivation to you?" is a
+     PROPOSAL, which G38 already establishes as the legitimate middle.
+  So the arithmetic was never the problem and does not change. Compute any
+  pattern over observations, including the exact rule that document carries.
+  What may not happen is the naming: no derived row may carry a mental state
+  as a value, because the engine cannot be wrong about it in any way the
+  athlete could check. Where the engine wants that reading it PROPOSES it and
+  the athlete accepts or declines; only the accepted version becomes a
+  declared state, and a decline is permanent (G82).
+  **"Declared, never derived" was the wrong formulation** and it is corrected
+  here rather than defended. It bars computing and proposing along with
+  asserting, which throws away the useful two thirds to prevent the harmful
+  third. The rule is DECLARED, NEVER ASSERTED: the engine may act on an
+  observation without asserting the state behind it, which is the same
+  distinction #220 rule 2 already drew for sleep.
+  **Why it had to be settled before the field exists rather than after.** A
+  motivation or appraisal field would ship into a repo already containing a
+  written rule for filling it. Not a proposal - a document describing intended
+  engine behaviour. The sequence without a settlement is: add the field, the
+  documented classifier populates it, and a declared-only construct becomes a
+  derived one within one release, at which point every consumer downstream is
+  reading the engine's opinion of his mind and cannot tell that is what it is.
+
 ## The frame: a guardrailed world model (belief-state, not a learned net)
 
 vitai is a **world model of a person** in the cognitive-science sense - a

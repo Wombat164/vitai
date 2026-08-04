@@ -176,11 +176,20 @@ extrapolation the coach must hedge.
   travel-days + caregiving/on-call flag + stress/sleep-debt), correlate its
   7/14-day rolling delta against session-frequency at a 1-tick lag (load
   LEADS the drop - Kinnunen).
-- Classify: context-driven dip = load-composite rising + frequency drop
-  coincident/lagging + enjoyment/intent NOT declining. Motivation dip =
-  frequency falls WITHOUT a load rise, or precedes it, or enjoyment also
-  falls. Use the person's OWN load-vs-adherence history, not population
-  thresholds.
+- Classify the PATTERN, and never the person (G90). Two shapes, and the
+  arithmetic is unchanged: a LOAD-COINCIDENT dip is load-composite rising +
+  frequency drop coincident/lagging + enjoyment/intent NOT declining; a
+  LOAD-INDEPENDENT dip is frequency falling without a load rise, or preceding
+  it, or enjoyment falling with it. Use the person's OWN load-vs-adherence
+  history, not population thresholds.
+  These names describe frequency and load, which is all the record holds.
+  The earlier wording called the second one a "motivation dip", and that
+  single word was the whole violation: it concludes a psychological state from
+  a training pattern, with no anchor in anything he said and no way for him to
+  show it wrong. Compute the shape freely; do not name the state. Where that
+  reading is worth having, PROPOSE it (G38) and let him accept or decline -
+  only the accepted version becomes a declared state, and a decline is
+  permanent (G82).
 - Response ladder (Marlatt lapse-vs-relapse): one context-driven period ->
   auto-adjust to a reduced-dose maintenance target + neutral acknowledgment,
   NOT a broken-streak alert; sustained -> renegotiate the plan; only a flat
