@@ -117,7 +117,14 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # takes its viewpoint from the record rather than the clock. Neither touches a
 # data line - both are properties of the BUILD - so no persona line changes and
 # nothing is reviewed here beyond the pin itself.
-AUTHORED_AGAINST_CONTRACT = "23"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #235, which splits goal status into a declared lifecycle axis
+# and a derived achievement one. REVIEWED rather than bumped: no builder
+# DECLARES a lifecycle, so every persona goal keeps the `status` it was
+# authored with and reads forward through the one canonicaliser. The goals
+# lines gain a null `lifecycle_status` and a bumped `_gen`, which is the
+# ordinary consequence of regenerating against a wider schema, and every
+# counted value and milestone count across all nine came back identical.
+AUTHORED_AGAINST_CONTRACT = "24"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,
@@ -126,7 +133,7 @@ AUTHORED_AGAINST_GENERATIONS = {
     "daily": 11,
     "emissions": 1,
     "events": 3,
-    "goals": 4,
+    "goals": 5,
     "inferences": 4,
     "journal": 3,
     "meals": 5,

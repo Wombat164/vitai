@@ -38,6 +38,13 @@ plan they will follow, not the best plan.
    have a history to append to rather than overwriting the past.
 6. **Write `data/goals.jsonl`.** A goal in `plan.md` prose is unqueryable;
    make it data. For each one capture:
+   - `lifecycle_status`: where the goal is in its own life - `proposed`,
+     `planned`, `accepted`, `active`, `on_hold`, `completed`, `cancelled` or
+     `rejected`. DECLARED, always: a goal becomes active because he says so
+     and never because the arithmetic moved. Do NOT record how it is GOING
+     here - that is derived and the engine writes it on the progress row;
+     the two were one field and mixing them is what this vocabulary was split
+     to stop;
    - `metric` + `target`, and `dataset`/`session_type` to scope which events
      count (`distance_km` is walking on a daily line, running on a session);
    - `policy`: `monotonic` where more always counts (steps, protein), or
