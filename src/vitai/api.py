@@ -101,13 +101,34 @@ class Vitai:
         # first cut validated here and re-normalised inline in `situation()`,
         # which accepted a `datetime` the constructor rejects for a stated
         # reason - the same value refused at one door and taken at the next.
-        self.on = _viewpoint(on) or date.today()
-        # WHETHER ANYONE ASKED (#207). `self.on` cannot answer it: a caller
-        # who passes today's date and a caller who passes nothing end up
-        # holding the same value, and only one of them made a choice. `build`
-        # needs the difference, because an unqualified build must be a
-        # function of the record and a requested one must be honoured exactly.
-        self._on_requested = on is not None
+        # ONE VIEWPOINT, EVERYWHERE (#207, and the split it left behind).
+        # `build` and `rollup` took theirs from the record while every query
+        # surface took the wall clock, so the API and the read model built
+        # from the same record disagreed - `goals()` answered zero rows for
+        # every fixture in this repo while the built `goal_progress` was full.
+        #
+        # The record's own horizon is now the default for all of them, and the
+        # reason it is safe for the SAFETY surfaces is the one that decided
+        # it: answering "what is blocked" as of the last day the record knows
+        # about is over-restrictive when a record is stale, while the wall
+        # clock silently assumes nothing has changed since the last row. Both
+        # are assumptions; only one of them errs toward keeping a gate shut.
+        #
+        # RESOLVED LAZILY, because finding the horizon reads every dataset and
+        # a constructor that did I/O would make `Vitai(root)` expensive for
+        # callers that never ask.
+        self._on_given = _viewpoint(on)
+        self._on_resolved: date | None = None
+        # THE CLOCK IS READ HERE AND NOWHERE BELOW. A record with no dated
+        # rows has no horizon to take a viewpoint from, and the fallback has
+        # to come from somewhere - but reading it lazily would put a
+        # `date.today()` deep in the engine, which is exactly what the
+        # boundary rule forbids and what a test catches.
+        # Only when it will be needed. A caller who named a viewpoint has
+        # already answered the question, and reading the clock anyway would
+        # make an engine pinned to a past date touch the outside world for a
+        # value it never uses.
+        self._clock = None if self._on_given is not None else date.today()
         # Per-instance read cache. See `_forget`.
         self._loaded: dict[str, list[dict]] = {}
         self._resolved: dict | None = None
@@ -396,6 +417,20 @@ class Vitai:
         """Raw claims, exactly as recorded. See `canonical()` for adjudicated."""
         return {name: self.dataset(name) for name in KEYS}
 
+    @property
+    def on(self) -> date:
+        """The viewpoint every surface answers from.
+
+        What the caller asked for, or the last day this record has a row for.
+        Falls back to the wall clock only for a record with no dated rows,
+        which has no horizon and nothing whose visibility a viewpoint decides.
+        """
+        if self._on_given is not None:
+            return self._on_given
+        if self._on_resolved is None:
+            self._on_resolved = self.last_recorded() or self._clock
+        return self._on_resolved
+
     def _forget(self) -> None:
         """Drop the per-instance read cache. Called by every write path.
 
@@ -409,6 +444,9 @@ class Vitai:
         """
         self._loaded.clear()
         self._resolved = None
+        # The horizon moves when a row is appended, so the viewpoint a caller
+        # did not name has to be found again.
+        self._on_resolved = None
 
     def _converged(self) -> dict[str, list[dict]]:
         """Datasets with duplicate CAPTURES resolved to one row each (#105).
@@ -845,8 +883,7 @@ class Vitai:
         # <today>" while the `weekly.md` written by `build()` beside it said
         # the record's own date - two renderings of one report disagreeing
         # about when they were made.
-        on = today or (self.on if self._on_requested
-                       else self.last_recorded() or self.on)
+        on = today or self.on
         # `today=on`, not `today=today`. Passing the un-defaulted parameter
         # left `build_report` to fall back to its own `date.today()`, so the
         # report itself was still dated by the wall clock while every table
@@ -1005,8 +1042,7 @@ class Vitai:
         # An explicit `today=` or `on=` still wins, because "what does this
         # look like now" is a real question. What changes is the answer when
         # nobody asked it.
-        on = today or (self.on if self._on_requested
-                       else self.last_recorded() or self.on)
+        on = today or self.on
         resolved = self.resolution()
         d = dict(resolved["canonical"])
         # An inference whose justification was retracted stops being presented

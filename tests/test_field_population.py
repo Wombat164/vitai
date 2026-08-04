@@ -133,7 +133,6 @@ UNWRITTEN = (
     "sets.read_by",
     "sets.resistance_level",
     "sets.round",
-    "sets.rpe",
     "sets.side",
     "sets.tempo",
     "thresholds.note",
@@ -148,6 +147,15 @@ UNWRITTEN = (
 )
 
 UNREAD = (
+    # Written by the demo since #246 and rendered by nothing. Validation
+    # is not a consumer: `kg_lo` is validated too, and is the example this
+    # file cites for that mode. A client that wants to show "4 out of 10"
+    # still cannot, because nothing carries the bound to a surface - the
+    # record now holds the fact and a consumer for it is separate work.
+    "daily.mood_scale",
+    "daily.pain_scale",
+    "sessions.rpe_scale",
+    "sets.rpe_scale",
     "achievements.occurred_date",
     "daily.alcohol",
     "daily.coverage",

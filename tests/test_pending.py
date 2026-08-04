@@ -226,10 +226,19 @@ def test_due_reaches_the_read_model(tmp_path):
     assert got == [(PENDING, "2030-06-10")]
 
 
-def test_a_build_without_a_viewpoint_is_unchanged(tmp_path):
-    """No viewpoint, no claim about what is still coming. This is the
-    behaviour every existing record already has."""
+def test_an_unnamed_viewpoint_comes_from_the_record(tmp_path):
+    """This asserted that a caller who names no viewpoint gets no claim about
+    what is still coming, because there was no viewpoint to make one from -
+    `self.on` was the wall clock, and against a 2030 record every source was
+    long overdue.
+
+    There is always a viewpoint now: the record's own last day. So the same
+    call answers what it would have answered had the caller named that date,
+    which is the point of one viewpoint everywhere.
+    """
     root = _repo(tmp_path)
-    rows = [r for r in Vitai(root).verdicts()
-            if r["metric"] == "weight_rate" and r["reason"]]
-    assert all(r["reason"] != PENDING for r in rows)
+    unnamed = [r for r in Vitai(root).verdicts() if r["metric"] == "weight_rate"]
+    named = [r for r in Vitai(root, on=date(2030, 6, 10)).verdicts()
+             if r["metric"] == "weight_rate"]
+    assert unnamed == named
+    assert any(r["reason"] == PENDING for r in unnamed)
