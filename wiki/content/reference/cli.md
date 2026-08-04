@@ -144,6 +144,86 @@ and invalid lines are REJECTED (never repaired) before anything is appended
 to `data/inferences.jsonl`. `--dry-run` prints without appending. Inferred
 knowledge never feeds the deterministic number path.
 
+## The client surface (#158)
+
+Three commands are what a third-party agent reaches for, and they are the
+reason this page exists at all. Anything the flagship app can do is reachable
+here, on the same terms: a capability that works only inside the app is a
+defect in the interface, not a convenience of the app.
+
+```
+vitai situation [--root ROOT] [--on YYYY-MM-DD] [--recent RECENT]
+```
+
+Everything a coach needs to know before it says anything: what is open, what
+is gated, what was recently recorded. `--on` pins the viewpoint; the default
+is the record's own horizon, not the wall clock, so a stale record answers as
+of the last day it knows about rather than assuming nothing has changed.
+
+```
+vitai claim [--root ROOT] [--dataset DATASET] [--said SAID]
+            [--read-by READ_BY] [--corrects DATE/SOURCE]
+```
+
+Append what someone said, with its provenance. `--corrects` supersedes an
+earlier line rather than editing it. This is the only write path an agent
+gets, and it appends claims: it never touches the deterministic number path.
+
+```
+vitai mcp [--root ROOT]
+```
+
+Serve the same surface over MCP. First-class, not an adapter bolted on: the
+CLI and the MCP server expose the same operations with the same vocabulary.
+
+## Reading the record
+
+```
+vitai events [--root ROOT] [--json] [--on YYYY-MM-DD]
+vitai meals  [--root ROOT] [--on YYYY-MM-DD] [--json]
+vitai sets   [--root ROOT] [--machine MACHINE] [--on YYYY-MM-DD] [--json]
+             [{list,progression}]
+vitai journal [--root ROOT] [--kind KIND] [--status STATUS] [--about ABOUT]
+```
+
+Dated fixtures, itemised meals, strength sets, and what the athlete said.
+`sets progression` reads load and reps over time for one movement; `--machine`
+scopes it, because a stack number is a pin position and 66 on two machines is
+two different loads.
+
+## Tracks
+
+```
+vitai route [--root ROOT] [--session REF] [--against GPX] [--barometric]
+            [--json] [gpx]
+```
+
+Deterministic geometry for one GPS or TCX track: length, elevation gain,
+stops, shape, and the best efforts inside it. `--against` compares two tracks
+for route similarity. `--barometric` trusts the file's own elevation instead
+of smoothing GPS vertical noise. Never compute route geometry outside this
+command: an improvised script is not reproducible and its numbers are not
+evidence.
+
+## Evidence, keys and conformance
+
+```
+vitai artifact [--root ROOT] [--out PATH] [--date YYYY-MM-DD]
+               {ls,get,verify} [sha256:<64 hex>]
+vitai key     [--root ROOT] {new,check} [phrase ...]
+vitai conform [--root ROOT] [--transport IMPL] [--custody IMPL] [--at PATH]
+vitai schema  [--json]
+vitai append  [--root ROOT] dataset
+```
+
+`artifact verify` re-hashes stored evidence and reports what no longer
+matches. `key check` verifies a written-down phrase before you rely on it.
+`conform` runs an implementation of a transport or custody interface against
+the engine's own suite, which is how a third-party implementation proves
+itself rather than asserting. `schema` prints the dataset shapes, `--json` for
+machine use. `append` takes JSONL on stdin and validates before writing;
+invalid lines are rejected, never repaired.
+
 ## The rollup (`derived/weekly.md`)
 
 - **Weight**: last 14 points with 7-day rolling average, plus a rate line -

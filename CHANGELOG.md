@@ -3,6 +3,112 @@
 All notable changes to vitai. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [SemVer](https://semver.org/).
 
+## [0.5.0] - 2026-08-04
+
+Contract 19 to 27. The increment where the engine learned to say how much it
+vouches for a number, and stopped answering questions it had not understood.
+
+Everything here is additive: old lines keep validating and a consumer that
+ignores every new column sees the previous behaviour. What changes is what a
+consumer can now ask, and what the engine will now refuse.
+
+### The theme, if there is one
+
+A record that holds a number and a record that stands behind it are different
+records. Most of this release is the second kind arriving in pieces: a value
+that says which rows it was computed from, a subjective figure that says what
+scale it is on, an effort that says whether it was measured or derived, and a
+goal that says whether it was reached or merely closed.
+
+The other half came from building a consumer. vitai-lens was tested
+adversarially by four subagents playing athletes, and it confabulated - with no
+model in it anywhere. Not numbers: every figure it printed was exact. It
+fabricated the frames around them. Several refusals in this release exist
+because of what that found.
+
+### Added
+
+- **`best_efforts`** (contract 27): the fastest 1k, 5k, 10k, half and full
+  inside every stored track, one row per (track, distance). The question a
+  runner asks first, and one no field could answer - a distance and a duration
+  make two runs of different lengths comparable on neither. `basis` says
+  whether the window was measured against the device's own cumulative distance
+  or the engine's haversine sum, and on a real 11 km run those differ by
+  twenty seconds over ten kilometres.
+- **Declared scales** (contract 26): `rpe_scale`, `mood_scale`, `pain_scale`.
+  A bare RPE is ambiguous between two standard scales in common use, where a
+  stored 7 is "quite light" on one and "very hard" on the other. Absent means
+  unstated, and a consumer must not invent a denominator.
+- **Goal lifecycle split from achievement** (contract 25): whether a goal is
+  still being pursued and whether it was reached are two questions, and one
+  column answered both.
+- **Goal polarity** (contract 24): which direction counts as progress. A
+  ceiling and a floor are not the same goal with the sign flipped.
+- **`built_on` and a record-derived viewpoint** (contract 23): an unqualified
+  build takes its viewpoint from the record's last date rather than the wall
+  clock, so the same record built on two days gives the same database.
+- **`pending`** (contract 22): a refusal that means "not yet" rather than "no".
+- **`emissions`** (contract 21): what the engine told the athlete, and when. A
+  judgement nobody was shown had no consequence to retract.
+- **`derived_from` and `derived_op`** (contract 20): which rows a computed
+  value stands on, and how, in the athlete's own words. Declared, not
+  executable.
+- **A daily goal period and a nutrition target**, with the declaration gate
+  that refuses a target set beneath a safety floor. The floor stays
+  non-suppressible underneath it.
+- **Exercise requirements**: what a movement needs before it can be
+  prescribed, so a plan can be costed against a place.
+- **`ines`**, a tenth persona with no history, so her nulls are the real kind
+  rather than "the field did not exist yet". She caught a polarity defect on
+  her first build.
+
+### Changed
+
+- **One supersede retires one row.** It used to retire every row whose key
+  matched, and `line_key` falls back to date-and-source, so a correction aimed
+  at one of ten sessions retired all ten. Silent data loss through the
+  correction path.
+- **Independent sources are counted, not rows.** Rows standing on a shared
+  input now count as one witness however many rows they are.
+- **`volitional` names the mechanism, not the reserve.** Stopping at a judged
+  limit without testing it is `volitional` with `rir: 0`, which is how most
+  sets actually end.
+- **`validate` distinguishes a line already corrected from one still wrong.**
+  A validator whose output can never reach zero is one people stop reading.
+
+### Fixed
+
+- **`best_effort` was up to eleven per cent slow on unevenly sampled tracks.**
+  Elapsed time as the window slides is piecewise linear, so the minimum sits
+  at a breakpoint - and breakpoints come in two families, the window's end
+  crossing a fix and its start crossing one. Only the first was evaluated.
+  Verified against a continuous search at 1 mm resolution: 6,372,612 positions
+  and 120 candidates now agree to nine decimal places.
+- **A few fixes without a device distance no longer lose the basis.** A real
+  watch carried `DistanceMeters` on all but the first two of several thousand
+  fixes, and an all-or-nothing test threw the device's entire account away.
+- **`Vitai.goals()` returned zero rows** on every fixture in the repo, because
+  the query surfaces took their viewpoint from the wall clock while `build`
+  took its from the record.
+- **Achievement ignored polarity**, so a ceiling held 87 kcal over its cap
+  reported `achieved`.
+
+### Documentation
+
+- Every contract row now names the release that shipped it. Rows 2 to 15 said
+  `unreleased` while 16 to 19 said 0.4.0, which cannot both be true, and the
+  README and the wiki disagreed with each other about 16 to 19. Taken from the
+  tags: 0.3.0 shipped contract 15, 0.4.0 shipped 19.
+- The wiki documented an ordinal syntax that was removed as unsound. It was
+  the only place that syntax still existed, which is the worst place for it to
+  survive: someone writing a correction against it would get a refusal with no
+  explanation.
+- The CLI reference documented 14 of 27 commands. The missing ones included
+  `situation`, `claim` and `mcp` - the entire client surface, which is
+  precisely what a client author opens that page for.
+- Three datasets were missing from the data-model reference: `emissions`,
+  `protocols`, `regimes`.
+
 ## [0.4.0] - 2026-08-02
 
 The increment where the engine grew a surface a client can build on.

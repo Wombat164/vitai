@@ -31,6 +31,11 @@ edited in place.
 | `journal.jsonl` | something said or decided | `kind`, `text`, `about`, `status` |
 | `inferences.jsonl` | a MODEL-inferred claim | `statement`, `confidence`, `model`, `depends_on` |
 | `artifacts.jsonl` | evidence kept for a value | `sha256`, `media_type`, `bytes`, `removed` |
+| `protocols.jsonl` | the CONDITIONS a measurement was taken under | `slug`, `text`, `supersedes` |
+| `regimes.jsonl` | a span of claims declared UNANCHORED | `from_date`, `to_date`, `dataset`, `field`, `anchored_by` |
+| `emissions.jsonl` | what the engine SAID, and under which policy | `kind`, `metric`, `statement`, `basis_claims`, `policy_asof`, `contract` |
+
+The last three are easy to mistake for machinery and are not. A `regime` does not delete anything: the claims stay in `claims`, what ends is their standing as values, and **an emptied interval is not missing data**. `emissions` records what the engine said and under which policy, so an answer given last month can be distinguished from the same answer given today under different config. `protocols` carries the conditions a measurement was taken under, which is why two weigh-ins with the same number are not always the same reading.
 
 ## Two datasets are finer-grained than they look
 
@@ -111,8 +116,17 @@ than retiring the whole block.
 
 | key | says |
 |---|---|
-| `derived_from` | the rows this value was computed from, as `dataset:date:source` references (plus an ordinal where a date and source name more than one row) |
+| `derived_from` | the rows this value was computed from, as `dataset:date:source` references |
 | `derived_op` | how, in the athlete's own words |
+
+A reference can name more than one row, because a date and a source do not
+always identify one. There is no ordinal to disambiguate it: a positional one
+was built and removed as unsound (#239), since positions are assigned at read
+time in merged order and a device syncing a row stamped earlier renumbers the
+group, so a reference written last week would name a different row. Naming an
+earlier row exactly needs an ordinal STORED on it at write time, which is open
+work. Until then a reference that matches several rows is reported by
+`validate` and is not silently resolved.
 
 Both are **declared, not executable**. `derived_op` is a description; nothing
 re-runs it, and a consumer must not treat it as a formula. A row carrying
