@@ -359,8 +359,15 @@ def load_report(data_dir: Path, name: str,
 EVENT_DATASETS = frozenset({"emissions"})
 
 
-def retire(dataset: str, rows: list[dict]) -> list[dict]:
+def retire(dataset: str, rows: list[dict], applied: set | None = None
+           ) -> list[dict]:
     """`rows` with every superseded line dropped, in order.
+
+    `applied` collects the references that actually retired something. A
+    correction that spent its reference DID apply; one that did not is the
+    dead line `schema.corrections_that_did_not_apply` reports. Asking retire
+    is exact, where inferring it from what survives stopped being possible the
+    moment one reference stopped retiring every match.
 
     Walk backwards so a line can only be superseded by a LATER one. This
     matters for the identity datasets, where a same-day correction shares its
@@ -374,15 +381,67 @@ def retire(dataset: str, rows: list[dict]) -> list[dict]:
     """
     if dataset in EVENT_DATASETS:
         return list(rows)
+    # WHAT ONE REFERENCE RETIRES (#239). The old rule dropped EVERY row whose
+    # key matched, and `line_key` falls back to `<date>/<source>`, so one
+    # correction aimed at one of ten sessions on a day retired all ten. On a
+    # live record seven sessions in ten shared a key with something, so that
+    # was the ordinary case rather than an edge, and it is the silent data
+    # loss #16 exists to prevent arriving through the correction path.
+    #
+    # Walking backwards, a reference to K now retires:
+    #
+    #   - every EARLIER ROW THAT IS ITSELF A CORRECTION NAMING K. Two
+    #     corrections naming one reference are the same intent expressed
+    #     twice; the later wins and takes the earlier with it. That is what
+    #     brings a chain down, and what lets a re-appended repair clear a
+    #     correction that sorted too early to apply. A row retired that way
+    #     does NOT fire its own reference again - counting it twice would
+    #     retire a second, unrelated row, which is the original harm coming
+    #     back through the repair path.
+    #   - and ONE other row keyed K: the most recent, which is the one a
+    #     correction written straight afterwards means. The rest of the day
+    #     survives. A row that corrects a DIFFERENT key is still an ordinary
+    #     row here and is eligible.
+    #
+    # NO POSITIONAL ORDINALS. An earlier cut named rows `K#0`, `K#1` so an
+    # author could point at one exactly. Ordinals assigned at read time are
+    # positions in the MERGED order, and `devices.merge` orders by
+    # `(recorded_at, device, position)` - so a phone syncing a row stamped
+    # earlier inserts ahead of rows already there and renumbers the group.
+    # A reference written last week then names a different row, and something
+    # already retired comes back. `identity` records the same weakness for its
+    # own scheme. Naming an earlier row exactly needs an ordinal STORED on the
+    # row, the way `sets` carries `set_index`, which is a schema change and
+    # only reaches rows written after it.
     records: list[dict] = []
-    refs: set[str] = set()
+    one: dict[str, int] = {}
+    chained: set[str] = set()
+    spent: set[str] = set()
     for r in reversed(rows):
-        dropped = line_key(dataset, r) in refs
-        if r.get("supersedes"):
-            refs.add(r["supersedes"])
+        base = line_key(dataset, r)
+        ref = str(r["supersedes"]) if r.get("supersedes") else None
+        superseded_correction = ref is not None and ref in chained
+        consumed = None
+        if superseded_correction:
+            dropped, consumed = True, ref
+        elif ref != base and one.get(base, 0) > 0:
+            one[base] -= 1
+            dropped, consumed = True, base
+        else:
+            dropped = False
+        # A correction retired as a duplicate of a later one does not also
+        # spend its reference; anything else still does, so a chain through
+        # several keys comes down whole.
+        if dropped and consumed is not None:
+            spent.add(consumed)
+        if ref is not None and not superseded_correction:
+            chained.add(ref)
+            one[ref] = one.get(ref, 0) + 1
         if not dropped:
             records.append(r)
     records.reverse()
+    if applied is not None:
+        applied.update(spent)
     return records
 
 

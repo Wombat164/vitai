@@ -370,6 +370,37 @@ def _build(target: Path) -> None:
         "origin_evidence": "the console's own display",
         "capture": "photo", "read_by": "model"})
 
+    # THE UNNAMEABLE PAIR (#239). Two rides on one morning, same watch,
+    # neither carrying a vendor id - which is the ORDINARY shape, not an edge
+    # case: measured on a live record, seven sessions in ten shared a key with
+    # something. Before ordinals, correcting either retired both, so two real
+    # activities became one through the correction path.
+    #
+    # The third line corrects the SECOND ride's distance with a bare
+    # reference, which names the most recent - the one a correction written
+    # straight afterwards means. The first ride survives, and that is the
+    # whole point.
+    pair_day = (END - timedelta(days=16)).isoformat()
+    for n, (km, secs, at, sup) in enumerate((
+            (14.2, 2380, "08:28:00", None),
+            (31.6, 4510, "08:47:00", None),
+            (33.1, 4510, "09:02:00", f"{pair_day}/watch"))):
+        sessions.append({
+            "date": pair_day, "type": "cycle", "distance_km": km,
+            "duration_s": secs, "avg_hr": None, "max_hr": None,
+            "cadence": None, "kcal": None, "location": None, "rpe": None,
+            "note": ("mis-typed as one ride; this is the second, corrected"
+                     if sup else None),
+            "_gen": 6, "source": "watch",
+            "start_time": f"{pair_day}T{at}+02:00",
+            "elevation_m": None, "setting": "outdoor", "route": None,
+            "place": None, "with": None, "context": "solo", "planned": None,
+            "weather": None,
+            "recorded_at": f"{pair_day}T20:{10 + n:02d}:00+02:00",
+            "track": None, "activity_id": None, "activity_source": None,
+            "origin": "watch", "path": None, "origin_evidence": None,
+            "capture": "connector", "read_by": None, "supersedes": sup})
+
     # A vendor-CLASSIFIED session (#88) and a MODELLED burn (#49) on the same
     # day. Neither is wrong to hold - what was wrong is that nothing said so:
     # a classifier's guess sat beside the athlete's own assertions under one

@@ -1884,15 +1884,17 @@ def impossible_claim_problems(dataset: str,
 def supersedes_problems(dataset: str, rows: list[tuple[int, dict]]) -> list[str]:
     """A correction that cannot say WHICH line it corrects (#43).
 
-    `supersedes` retires every line matching its reference, and for a dataset
-    with no per-row identity that can be more than one: two runs on a day from
-    one watch share `<date>/<source>`, so correcting either silently deletes
-    both. That is the same harm as a false merge - two activities becoming
-    one - arriving through the correction path.
+    A bare `supersedes` retires the MOST RECENT line matching its reference
+    (#239). It used to retire every one of them, which for a dataset with no
+    per-row identity meant correcting one of ten sessions on a day deleted all
+    ten - the same harm as a false merge, arriving through the correction
+    path.
 
-    Reported rather than resolved, because the engine cannot know which was
-    meant. The fix is to give the rows an identity (`activity_id` on
-    sessions), and this says so.
+    So the ambiguity is no longer destructive, and it has not gone away: where
+    several lines answer to one reference, the engine picks the newest and the
+    author may have meant another. Reported rather than resolved, because the
+    engine cannot know which was meant, and the fix is a vendor identity on
+    the rows - which only reaches rows written after an importer supplies it.
     """
     from .jsonl import line_key
     problems: list[str] = []
@@ -1913,9 +1915,10 @@ def supersedes_problems(dataset: str, rows: list[tuple[int, dict]]) -> list[str]
         if len(hit) > 1:
             problems.append(
                 f"{dataset}.jsonl line {n}: 'supersedes' {ref!r} matches "
-                f"{len(hit)} lines ({', '.join(map(str, hit))}) - a correction "
-                "that cannot say which line it corrects would retire all of "
-                "them. Give these rows an identity (activity_id) first")
+                f"{len(hit)} lines ({', '.join(map(str, hit))}) - the most "
+                "recent is the one retired, and it may not be the one meant. "
+                "Give these rows a vendor identity (activity_id) so a "
+                "correction can say which one it corrects")
         elif not hit:
             problems.append(
                 f"{dataset}.jsonl line {n}: 'supersedes' {ref!r} matches no "
@@ -1957,7 +1960,7 @@ def corrections_that_did_not_apply(dataset: str,
     nothing said so.
     """
     from .devices import merge
-    from .jsonl import line_key, retire
+    from .jsonl import retire
     # IN MERGED ORDER, which is the whole point. `validate` hands these over
     # in FILE order, one device file after another, and in file order the
     # correction sits below its target and applies perfectly. The defect is
@@ -1966,31 +1969,31 @@ def corrections_that_did_not_apply(dataset: str,
     # `merge` over a single unnamed stream is the same code path with one
     # actor, so a single-file record is ordered exactly as `load` orders it.
     lines = merge([("", [r for _, r in rows])], dataset)
-    survived = retire(dataset, lines)
-    by_key: dict[str, list[dict]] = {}
-    for r in survived:
-        by_key.setdefault(line_key(dataset, r), []).append(r)
+    applied: set[str] = set()
+    retire(dataset, lines, applied=applied)
 
     out = []
-    for r in survived:
+    seen: set[str] = set()
+    for r in lines:
         if not (ref := r.get("supersedes")):
             continue
-        # Everything still alive under the referenced key EXCEPT this line.
-        # A correction shares its target's key in the commonest shape, so
-        # counting itself would report every correction ever written.
-        stale = [o for o in by_key.get(str(ref), []) if o is not r]
-        if not stale:
+        ref = str(ref)
+        # ASKED OF `retire`, not inferred from what survived (#239). The old
+        # check counted anything still alive under the reference as proof the
+        # correction did nothing - which was sound while one reference retired
+        # every match, and became a false alarm the moment it retired one. A
+        # surviving sibling is now the ordinary, intended outcome.
+        if ref in applied or ref in seen:
             continue
-        when = ", ".join(sorted({str(o.get("date")) for o in stale})[:4])
+        seen.add(ref)
         out.append(
             f"{dataset}: a correction of {ref!r} did "
-            f"NOT apply - the line it names is still in the record (dated "
-            f"{when}), so the value it was meant to replace is what every "
-            f"reader sees. It sorted before the line it corrects, which "
-            f"happens when a correction carries no recorded_at and its target "
-            f"does, or when two devices stamp out of order. Append the "
-            f"correction again with `vitai append` and the engine will stamp "
-            f"it late enough to take effect")
+            f"NOT apply - it retired nothing, so the value it was meant to "
+            f"replace is what every reader sees. Either it sorted before the "
+            f"line it corrects, which happens when a correction carries no "
+            f"recorded_at and its target does, or the reference names no line "
+            f"at all. Append the correction again with `vitai append` and the "
+            f"engine will stamp it late enough to take effect")
     return out
 
 
