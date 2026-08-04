@@ -145,3 +145,81 @@ def test_it_runs_on_the_demo_track():
         assert e.seconds > 0
         assert e.distance_m == 10000
         assert e.start_index < e.end_index
+
+
+def _brute(pts: list[Fix], distance_m: float, step: float = 0.2) -> float | None:
+    """Slide the window continuously, both edges free. Slow and obviously
+    right, which is the only kind of oracle worth having."""
+    cum = [0.0]
+    for i in range(len(pts) - 1):
+        cum.append(cum[-1] + haversine_m(pts[i], pts[i + 1]))
+    secs = [(p.t - pts[0].t).total_seconds() for p in pts]
+
+    def at(x: float) -> float:
+        lo, hi = 0, len(cum) - 1
+        while lo < hi - 1:
+            m = (lo + hi) // 2
+            if cum[m] <= x:
+                lo = m
+            else:
+                hi = m
+        seg = cum[lo + 1] - cum[lo]
+        f = 0.0 if seg <= 0 else (x - cum[lo]) / seg
+        return secs[lo] + f * (secs[lo + 1] - secs[lo])
+
+    if cum[-1] < distance_m:
+        return None
+    best, x = None, distance_m
+    while x <= cum[-1]:
+        e = at(x) - at(x - distance_m)
+        if best is None or e < best:
+            best = e
+        x += step
+    return best
+
+
+def test_it_matches_a_continuous_search_on_uneven_sampling():
+    """The defect that anchoring only ONE edge produced.
+
+    Elapsed time as the window slides is piecewise linear in the end position,
+    so the minimum is at a breakpoint - and breakpoints come in two kinds: the
+    END crossing a fix, and the START crossing one. Evaluating only the first
+    reported 229.2 s for a 1500 m window whose true best was 206.5 s, eleven
+    per cent slow, on this exact track.
+
+    Regular one-second sampling hides it almost entirely. Smart recording,
+    which varies the interval, does not.
+    """
+    import random
+    t0 = datetime(2030, 1, 1, 12, 0, 0)
+    rng = random.Random(190)
+    pts, t = [], 0.0
+    for i in range(60):
+        pts.append(Fix(lat=51.0 + i * 0.0012, lon=3.0,
+                       t=t0 + timedelta(seconds=t)))
+        t += rng.choice([2.0, 30.0, 60.0])
+    truth = _brute(pts, 1500.0)
+    e = best_effort(pts, 1500.0)
+    assert truth is not None and e is not None
+    assert abs(e.seconds - truth) < 0.05
+
+
+def test_it_matches_a_continuous_search_across_many_shapes():
+    """One counterexample is an anecdote; the property is exactness."""
+    import random
+    t0 = datetime(2030, 1, 1, 12, 0, 0)
+    worst = 0.0
+    for trial in range(40):
+        rng = random.Random(trial)
+        pts, t = [], 0.0
+        for i in range(rng.choice([60, 120])):
+            pts.append(Fix(lat=51.0 + i * 0.0012, lon=3.0,
+                           t=t0 + timedelta(seconds=t)))
+            t += rng.choice([2.0, 30.0, 60.0])
+        d = rng.choice([500.0, 1500.0, 3000.0])
+        truth = _brute(pts, d)
+        e = best_effort(pts, d)
+        if truth is None or e is None:
+            continue
+        worst = max(worst, e.seconds - truth)
+    assert worst < 0.05, f"worst overshoot {worst:.3f}s"

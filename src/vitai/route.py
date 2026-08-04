@@ -429,27 +429,64 @@ def best_effort(points: list[Fix], distance_m: float) -> Effort | None:
         return None
     secs = [(f.t - pts[0].t).total_seconds() for f in pts]
 
+    def _at(x: float, lo: int) -> tuple[float, int]:
+        """Time at cumulative distance `x`, and the fix it falls after."""
+        k = lo
+        while k + 1 < len(cum) and cum[k + 1] < x:
+            k += 1
+        if k + 1 >= len(cum):
+            return secs[-1], len(cum) - 1
+        seg = cum[k + 1] - cum[k]
+        f = 0.0 if seg <= 0 else max(0.0, min(1.0, (x - cum[k]) / seg))
+        return secs[k] + f * (secs[k + 1] - secs[k]), k
+
+    # BOTH FAMILIES OF BREAKPOINT, and the second one is not optional.
+    #
+    # Elapsed time as the window slides is piecewise linear in the end
+    # position, so its minimum is at a breakpoint - and breakpoints come in two
+    # kinds: the END crossing a fix, and the START crossing one. Evaluating
+    # only the first is what this did, and it is not a rounding difference: on
+    # a track with coarse, uneven sampling it reported 229.2 s for a 1500 m
+    # window whose true best was 206.5 s, eleven per cent slow. The error is
+    # always pessimistic, which is the safe direction and still wrong.
+    #
+    # Regular one-second sampling hides this almost entirely. Smart recording,
+    # which varies the interval, does not.
     best: Effort | None = None
+
+    def consider(t_start: float, t_end: float, i: int, j: int) -> None:
+        nonlocal best
+        elapsed = t_end - t_start
+        if elapsed <= 0:
+            return
+        if best is None or elapsed < best.seconds:
+            best = Effort(
+                distance_m=float(distance_m), seconds=elapsed,
+                start=pts[0].t + timedelta(seconds=t_start),
+                end=pts[0].t + timedelta(seconds=t_end),
+                basis=basis, start_index=i, end_index=j)
+
+    # End anchored on a fix, start interpolated.
     i = 0
     for j in range(1, len(pts)):
-        # Advance the trailing edge while the window is still long enough.
         while i + 1 < j and cum[j] - cum[i + 1] >= distance_m:
             i += 1
         if cum[j] - cum[i] < distance_m:
             continue
-        # Interpolate the start edge so the window is exactly distance_m.
-        seg = cum[i + 1] - cum[i]
-        want = (cum[j] - distance_m) - cum[i]
-        frac = 0.0 if seg <= 0 else max(0.0, min(1.0, want / seg))
-        t_start = secs[i] + frac * (secs[i + 1] - secs[i])
-        elapsed = secs[j] - t_start
-        if elapsed <= 0:
-            continue
-        if best is None or elapsed < best.seconds:
-            best = Effort(
-                distance_m=float(distance_m), seconds=elapsed,
-                start=pts[0].t + timedelta(seconds=t_start), end=pts[j].t,
-                basis=basis, start_index=i, end_index=j)
+        t_start, k = _at(cum[j] - distance_m, i)
+        consider(t_start, secs[j], k, j)
+
+    # Start anchored on a fix, end interpolated.
+    j = 1
+    for i in range(len(pts)):
+        target = cum[i] + distance_m
+        if target > cum[-1]:
+            break
+        if j < i:
+            j = i
+        t_end, k = _at(target, j)
+        j = k
+        consider(secs[i], t_end, i, min(k + 1, len(pts) - 1))
     return best
 
 
