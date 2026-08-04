@@ -1386,7 +1386,15 @@ class Vitai:
             problems += recorded_at_problems(name, rows)
             problems += unranked_source_problems(name, rows, ranked)
             problems += impossible_claim_problems(name, rows)
-            problems += supersedes_problems(name, rows)
+            # ADVISORY since #239, and the demotion is the point of that
+            # change. While one reference retired every matching line, an
+            # ambiguous correction DELETED data, and failing the build was
+            # proportionate to that. It now retires one row deterministically
+            # - the most recent - so what is left is that the author may have
+            # meant another. That is worth saying and not worth refusing a
+            # build over, and a record whose only fault is a shape the engine
+            # already handles has no legal path to green (#38).
+            advisories += supersedes_problems(name, rows)
             advisories += corrections_that_did_not_apply(name, rows)
             advisories += timestamp_advisories(name, rows)
             if name == "goals":
