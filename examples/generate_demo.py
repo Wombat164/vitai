@@ -116,6 +116,7 @@ def _build(target: Path) -> None:
 
     start = END - timedelta(days=DAYS - 1)
     weight, daily, sessions = [], [], []
+    long_runs = []
     kg = 80.2
     for i in range(DAYS):
         d = (start + timedelta(days=i)).isoformat()
@@ -163,7 +164,19 @@ def _build(target: Path) -> None:
             steps = int(rng.gauss(5600, 900))
         row = {"date": d, "steps": max(2500, steps),
                "distance_km": round(max(2.5, steps) * 0.00075, 1),
-               "active_min": int(max(60, rng.gauss(300, 70))),
+               # A FIFTH of what this drew before. Five hours a day, in a
+               # record that also shows 13 km of running a week: the two
+               # magnitudes never belonged to the same person, and against a
+               # 150-a-WEEK goal the engine correctly reported 1414 per cent,
+               # which reads as a bug because it is one. The draw is unchanged
+               # so the day-to-day shape survives; only the scale moves, and
+               # the athlete lands at a plausible two to three times the
+               # guideline the goal encodes.
+               #
+               # Divided AFTER the integer, which is what the committed data
+               # was produced with: rounding the float instead moves six days
+               # by one minute and the drift check fails on them.
+               "active_min": round(int(max(60, rng.gauss(300, 70))) / 5),
                "kcal_out": int(rng.gauss(2850, 220)),
                # Intake is centred BELOW the declared targets (2150 kcal,
                # 145 g), not on them. Generating it at exactly the target made
@@ -221,13 +234,43 @@ def _build(target: Path) -> None:
                 run.update({"_gen": 2, "source": "watch",
                             "start_time": f"{d}T18:10:00+02:00",
                             "elevation_m": round(max(0.0, rng.gauss(35, 15)), 1),
-                            "setting": "outdoor", "route": "canal-loop",
+                            "setting": "outdoor",
+                            # Two routes, alternating by week. One route for
+                            # every run made "which route" a question with one
+                            # possible answer.
+                            "route": ("canal-loop" if (i // 7) % 2 == 0
+                                      else "hill-repeats"),
                             "place": "home", "with": None, "context": "solo",
                             "planned": "running",
                             "weather": rng.choice(["dry", "dry", "rain", "wind"])})
             else:
                 run["location"] = None
             sessions.append(run)
+        # A Sunday long run every other week, on the route the athlete calls
+        # the ten-kilometre one. Its distance varies the way a real one does,
+        # which is the point: asking for "the 10k" has to pick among several
+        # runs that are near ten kilometres and none that is exactly ten.
+        if gen2 and dow == 6 and (i // 7) % 2 == 1:
+            long_km = round(rng.gauss(10.1, 0.45), 2)
+            # NOT `start`: that name holds the block's first date in the
+            # enclosing scope, and rebinding it to a clock time turned every
+            # subsequent `start + timedelta(days=i)` into a TypeError.
+            long_start = "09:20"
+            long_run = {
+                "date": d, "type": "run", "distance_km": long_km,
+                "duration_s": int(long_km * rng.gauss(372, 18)),
+                "avg_hr": int(rng.gauss(152, 4)), "max_hr": None,
+                "cadence": int(rng.gauss(170, 3)), "kcal": int(long_km * 61),
+                "rpe": 6, "note": None, "_gen": 2, "source": "watch",
+                "start_time": f"{d}T{long_start}:00+02:00",
+                "elevation_m": round(max(0.0, rng.gauss(22, 8)), 1),
+                "setting": "outdoor", "route": "river-ten", "place": "home",
+                "with": None, "context": "solo", "planned": "running",
+                "weather": rng.choice(["dry", "dry", "wind", "rain"]),
+                "track": f"tracks/river-ten-{d}.gpx",
+            }
+            sessions.append(long_run)
+            long_runs.append((d, long_start, long_km, long_run["duration_s"]))
         if dow in (5, 6) and rng.random() < 0.8:            # weekend gym
             gym = {"date": d, "type": "strength",
                    "distance_km": None,
@@ -265,7 +308,18 @@ def _build(target: Path) -> None:
                      "duration_s": int(21.1 * 402), "avg_hr": 158,
                      "max_hr": None, "cadence": 166, "kcal": int(21.1 * 61),
                      "location": None, "rpe": 8,
-                     "note": "unplanned - joined a group long run"})
+                     "note": "unplanned - joined a group long run",
+                     "_gen": 2, "source": "watch",
+                     "start_time": f"{big_run_day.isoformat()}T09:05:00+02:00",
+                     "elevation_m": 41.0, "setting": "outdoor",
+                     # NO ROUTE, but a track. The athlete joined a group and
+                     # went somewhere they have no name for; the watch recorded
+                     # it anyway. `route` is a name a PERSON gave a place,
+                     # `track` is the data. A record where every track has a
+                     # route conflates the two, and this row separates them.
+                     "route": None, "place": "home", "with": "a group",
+                     "context": "social", "planned": None, "weather": "dry",
+                     "track": f"tracks/group-long-run-{big_run_day.isoformat()}.gpx"})
     # A richly-contextful day: a rainy Sunday walk with a partner on a route
     # the athlete has a name for. None of it is a number, and all of it is
     # what makes the day legible six months later.
@@ -285,6 +339,18 @@ def _build(target: Path) -> None:
     # identically on any machine.
     tracks = target / "tracks"
     tracks.mkdir(exist_ok=True)
+    # One stored track per long run. Not one per run: a named route with no
+    # kept file is the ordinary case, and a demo where everything has a GPX
+    # would misrepresent how records actually look.
+    for _d, _start, _km, _dur in long_runs:
+        (tracks / f"river-ten-{_d}.gpx").write_text(
+            _route_gpx("river-ten", _d, _start, _km, _dur),
+            encoding="utf-8", newline="\n")
+    # The group run's track, filed under its own name because it has no route.
+    (tracks / f"group-long-run-{big_run_day.isoformat()}.gpx").write_text(
+        _route_gpx("river-ten", big_run_day.isoformat(), "09:05",
+                   21.1, int(21.1 * 402)),
+        encoding="utf-8", newline="\n")
     (tracks / "canal-loop-2030-06-16.gpx").write_text(
         _demo_gpx(context_day), encoding="utf-8", newline="\n")
     # The same walk as the watch recorded it, in TCX - which carries the
@@ -537,6 +603,82 @@ def _build(target: Path) -> None:
             _jsonl(rows), encoding="utf-8", newline="\n")
 
 
+# The routes the athlete has names for. Real records have a handful, reused
+# constantly, and the name is the thing a person remembers six months later -
+# not the coordinates. Each carries the shape its track should have, so a
+# route-matching consumer has more than one thing to match.
+#
+# Coordinates are fictional and deliberately coarse. A public demo repository
+# is the last place real location data should ever be, and a synthetic athlete
+# with a plausible-looking home is still a pattern worth not modelling.
+ROUTES = {
+    "canal-loop": {
+        "lat": 51.2100, "lon": 3.2200, "climb": 0.55, "bend": 0.0016,
+        "note": "flat towpath, there and back",
+    },
+    "hill-repeats": {
+        "lat": 51.2260, "lon": 3.2410, "climb": 2.10, "bend": 0.0004,
+        "note": "the same short rise, several times",
+    },
+    "river-ten": {
+        "lat": 51.1980, "lon": 3.2050, "climb": 0.20, "bend": 0.0031,
+        "note": "out along the river and back, the ten-kilometre one",
+    },
+}
+
+
+# One degree of latitude is about 111.32 km. These tracks are short and far
+# from the poles, so the flat approximation is fine - and using it is what
+# lets a track be built to a TARGET LENGTH.
+_M_PER_DEG_LAT = 111_320.0
+
+
+def _route_gpx(route: str, day: str, start_hhmm: str, km: float,
+               duration_s: int, fix_every_s: int = 10) -> str:
+    """A synthetic track for a named route, BUILT TO THE SESSION'S OWN FIGURES.
+
+    The geometry used to be fixed, so every track came out about 2 km whatever
+    the row beside it said. A session claiming 10.48 km with a 2 km track is a
+    fivefold contradiction sitting in the demo, and the first consumer to
+    compare the two would have found it - which is the demo's entire job.
+    Distance and elapsed time now come from the session, so the track's implied
+    pace IS the session's pace and the two agree by construction.
+
+    Deterministic - no RNG - so the demo stays byte-reproducible, which is what
+    lets CI prove it.
+    """
+    import math
+    r = ROUTES[route]
+    hh, mm = (int(x) for x in start_hhmm.split(":"))
+    n_out = max(8, int(duration_s / (2 * fix_every_s)))
+    n = n_out * 2
+    # Out and back, so each leg covers half the distance.
+    step_deg = (km * 1000.0 / 2.0) / n_out / _M_PER_DEG_LAT
+    dt = duration_s / n
+    pts = []
+    for i in range(n):
+        leg = i if i < n_out else n - 1 - i           # out, then back
+        secs = int(round(i * dt))
+        pts.append((
+            r["lat"] + leg * step_deg,
+            r["lon"] + r["bend"] * math.sin(leg * math.pi / n_out),
+            # The climb profile is per-100-metres-of-latitude, so it stays the
+            # same gradient whatever the step size works out to be.
+            round(4.0 + leg * r["climb"] * (step_deg / 0.00010), 1),
+            f"{day}T{(hh + (mm * 60 + secs) // 3600) % 24:02d}:"
+            f"{((mm * 60 + secs) // 60) % 60:02d}:{secs % 60:02d}Z",
+        ))
+    body = "\n".join(
+        f'   <trkpt lat="{lat:.5f}" lon="{lon:.5f}"><ele>{ele}</ele>'
+        f"<time>{t}</time></trkpt>" for lat, lon, ele, t in pts)
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<gpx version="1.1" creator="vitai-demo" '
+            'xmlns="http://www.topografix.com/GPX/1/1">\n'
+            f" <trk><name>{route}</name><trkseg>\n"
+            f"{body}\n"
+            " </trkseg></trk>\n</gpx>\n")
+
+
 def _demo_gpx(day: str) -> str:
     """A short synthetic track: a there-and-back along a canal, with a gentle
     rise. Deterministic - no RNG - so the demo stays byte-reproducible."""
@@ -718,6 +860,10 @@ def _events(start: date) -> list[dict]:
         _event(d0, "autumn-half", "The autumn half marathon", "competition",
                "2030-09-15", priority="a", place="a river town",
                note="the date the whole run block is planned backwards from"),
+        _event(d0, "spring-5k-race", "The spring 5k", "competition",
+               "2030-05-15", priority="b", place="the park circuit",
+               note="a hard date - the goal that points at it cannot be "
+                    "part-met"),
         _event((start + timedelta(days=30)).isoformat(), "hip-scan",
                "Hip imaging follow-up", "clinical", "2030-07-10",
                priority="c", immovable=True,
@@ -754,11 +900,21 @@ def _policy(start: date) -> tuple[list[dict], list[dict], list[dict]]:
         # Left `active` deliberately: the athlete never closed it, and the
         # engine reporting the arithmetic is not the same as him deciding to
         # abandon it.
+        # A 5k TIME is not a thing this engine measures, it is a thing a race
+        # clock measures. It was carried as 200 km of running a week, which is
+        # not a volume any human runs, and its own rationale gave the game
+        # away by describing the 200 as the total for the whole block. So the
+        # goal says what it is: verified externally, tracked by the clock, no
+        # numeric target, pointed at the race on the date its deadline already
+        # named.
         _goal(d0, "spring-5k", "Sub-22 for the 5k by the spring race",
-              "distance_km", 200, "monotonic", dataset="sessions",
-              session_type="run", deadline="2030-05-15",
+              "external", None, "monotonic", tracker="the race clock",
+              period="none", deadline="2030-05-15",
+              verification="external", deadline_kind="hard",
+              event="spring-5k-race",
               motivator="Wanted one fast one before the half-marathon block",
-              rationale="200 km of running in the block before it",
+              rationale="the clock at the race decides this one, not the "
+                        "training log",
               on_success="hold", on_miss="reflect"),
         _goal(d0, "steps", "Walk 70k steps a week", "steps", 70000,
               "monotonic", dataset="daily",

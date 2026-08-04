@@ -628,6 +628,27 @@ class Vitai:
         from .route import analyse, read_track
         return analyse(read_track(gpx_path), barometric=barometric)
 
+    def best_effort(self, gpx_path, distance_m: float = 10000):
+        """The fastest contiguous `distance_m` of one track, or None.
+
+        The question a runner actually asks - "what is my best 10k" - and one
+        no field in the record could answer. `sessions` holds a distance and a
+        duration, so a 10.48 km run and a 9.74 km run are comparable on
+        neither, and a pace would have to be computed from both. The answer
+        lives inside the track or nowhere.
+
+        None means the track is shorter than the window or carries no times.
+        That is "the record cannot answer this", not zero.
+
+        Read `.basis` before quoting the result. `device` means the window was
+        measured against the watch's own cumulative distance, which is an
+        observation; `derived` means against the haversine sum, which is not.
+
+        NOT PERSISTED to the read model, so a client cannot reach it (#247).
+        """
+        from .route import best_effort, read_track
+        return best_effort(read_track(gpx_path), distance_m)
+
     def sessions_with_tracks(self) -> list[dict]:
         """Sessions that name a stored track, soonest first (#43)."""
         return [r for r in self.canonical("sessions") if r.get("track")]
