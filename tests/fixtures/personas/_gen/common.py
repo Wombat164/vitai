@@ -146,7 +146,10 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # generation from 4 to 5; this takes it to 6. Two independent widenings of one
 # dataset, reviewed separately because they are separate claims about what a
 # goal is.
-AUTHORED_AGAINST_CONTRACT = "25"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #247, which adds the `best_efforts` table. Nothing here
+# changes: it is a DERIVED table computed from stored tracks, and no persona
+# ships one, so every persona yields zero rows and no data line moves.
+AUTHORED_AGAINST_CONTRACT = "26"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,
