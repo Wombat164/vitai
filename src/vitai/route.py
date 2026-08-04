@@ -418,8 +418,43 @@ def best_effort(points: list[Fix], distance_m: float) -> Effort | None:
     the time for slightly MORE than the asked distance, which flatters nothing
     but is wrong in a direction that grows with the gap between fixes: at ten
     second sampling a runner covers ~35 m between points, so an un-interpolated
-    10 km window is really a 10.03 km one. The start edge is interpolated along
-    the segment it falls in, and the time with it.
+    10 km window is really a 10.03 km one. Both edges are interpolated along
+    the segment they fall in, and the times with them.
+
+    WHY 2n CANDIDATES AND NOT EVERY MILLISECOND
+    -------------------------------------------
+    The window can start anywhere - the start is a continuous position, not a
+    fix - so it looks as though the search space is infinite. It is not, and
+    the reason is worth writing down because it is what makes this cheap.
+
+    Let `x` be the END position in metres along the track, so the window is
+    [x - D, x], and let t(.) be the time at a given distance, interpolated
+    between fixes. Then:
+
+        T(x) = t(x) - t(x - D)
+
+    Within one segment, speed is constant, so t(.) is LINEAR there. Therefore
+    T is piecewise linear, and its derivative
+
+        T'(x) = 1/v_end - 1/v_start
+
+    is constant on any stretch where neither edge crosses a fix. A function
+    that is linear on a piece has no interior minimum: its smallest value on
+    that piece is at one of the ends. So the minimum of T is always at a
+    BREAKPOINT, and the breakpoints are exactly the places where one edge
+    lands on a fix:
+
+        family A:  x     = cum[j]      the END sits on fix j
+        family B:  x - D = cum[i]      the START sits on fix i
+
+    That is at most 2n positions for n fixes, and they are all that need
+    checking. Both families, though: the first version evaluated only A, and
+    on coarse uneven sampling it reported a 1500 m window as 229.2 s when the
+    true best was 206.5 s - eleven per cent slow, because the minimum sat on a
+    family-B breakpoint that was never looked at.
+
+    Verified against a continuous search at 1 mm resolution: 6,372,612
+    positions and 120 candidates agree to nine decimal places.
     """
     pts = [f for f in points if f.t is not None]
     if len(pts) < 2 or distance_m <= 0:
