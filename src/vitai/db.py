@@ -277,7 +277,22 @@ from .schema import KEYS
 #
 #     #219 also claims 24. The contract follows MERGE order, so whichever of
 #     the two lands second is renumbered rather than assumed.
-CONTRACT_VERSION = "25"
+# 26: a declared SCALE beside each subjective number. `rpe`, `mood` and `pain`
+#     validated as bare numerics, and a bare number with no scale is not
+#     interpretable - for RPE it is ambiguous between two standard scales both
+#     in common use, where a stored 7 is "quite light" on one and "very hard"
+#     on the other.
+#
+#     `rpe_scale` on sessions and sets, `mood_scale` and `pain_scale` on
+#     daily, naming a slug from `semantics/scales.toml`. Post-coordinated
+#     rather than fixed per field, so an imported row can say which scale its
+#     source used.
+#
+#     ABSENT MEANS UNSTATED and a consumer must not invent a denominator:
+#     rendering "4 out of 10" against an undeclared scale asserts a bound the
+#     record never carried. Where a scale IS declared the value is validated
+#     against its range, which is the point of declaring one.
+CONTRACT_VERSION = "26"
 
 _TEXT_COLS = {"derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
               # under REAL affinity silently becomes 7.0, which is the defect
@@ -292,6 +307,7 @@ _TEXT_COLS = {"derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
               # and stay numeric.
               "polarity", "breach",
               "lifecycle_status", "achievement_status",
+              "rpe_scale", "mood_scale", "pain_scale",
               # `due` is an ISO date too (#202).
               "due",
               "date", "type", "source", "location", "note",

@@ -876,6 +876,25 @@ CURRENT_GENERATION["goals"] += 1
 for _k in ("polarity", "target_hi"):
     KEY_GENERATION.setdefault("goals", {})[_k] = CURRENT_GENERATION["goals"]
     KEYS["goals"].append(_k)
+
+
+# --- what a subjective number is out of (#246) -------------------------------
+#
+# POST-COORDINATED beside the value rather than fixed per field. A stored
+# `rpe: 7` is "quite light" on Borg's 6-20 and "very hard" on CR10, and
+# nothing in the record said which - so the difference, which is the whole
+# signal, was unrecoverable. Fixing one scale per field in the schema would be
+# cheaper and would force that choice on every record including imported ones,
+# and a vendor export may well use the other.
+#
+# ABSENT MEANS UNSTATED. No reader may invent a denominator: rendering "4 out
+# of 10" against an undeclared scale asserts a bound the record never carried.
+for _ds, _keys in (("sessions", ("rpe_scale",)), ("sets", ("rpe_scale",)),
+                   ("daily", ("mood_scale", "pain_scale"))):
+    CURRENT_GENERATION[_ds] += 1
+    for _k in _keys:
+        KEY_GENERATION.setdefault(_ds, {})[_k] = CURRENT_GENERATION[_ds]
+        KEYS[_ds].append(_k)
 # --- goal lifecycle, split from achievement (#235) ---------------------------
 #
 # `status` mixed two axes. `lifecycle_status` takes over the one the athlete
@@ -1201,6 +1220,7 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
         problems += _regime_problems(rec)
     if dataset == "emissions":
         problems += _emission_problems(rec)
+    problems += _scale_problems(dataset, rec)
     if dataset in ("weight", "measurements") and rec.get("protocol") is not None:
         if not SLUG_RE.match(str(rec["protocol"])):
             problems.append(
@@ -1311,6 +1331,52 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
 # The intake floor a declared target may not be set beneath. Imported from
 # `safety` at call time rather than restated here: one number, one owner, and
 # a restated constant is a second definition waiting to drift from the first.
+# Which value each `_scale` column governs.
+SCALED_FIELDS = {"rpe_scale": "rpe", "mood_scale": "mood",
+                 "pain_scale": "pain"}
+
+
+def scales() -> dict:
+    """The registered scales, by slug."""
+    from .vocab import registry
+    return registry("scales").get("scales") or {}
+
+
+def _scale_problems(dataset: str, rec: dict) -> list[str]:
+    """A declared scale must be one we know, and the value must fit it (#246).
+
+    Declaring a scale is what makes the number interpretable, so a scale that
+    bounds nothing is worse than none: it reads as though the question was
+    settled. The range check is the point of declaring.
+    """
+    out = []
+    known = scales()
+    for column, field in SCALED_FIELDS.items():
+        if column not in KEYS.get(dataset, []):
+            continue
+        declared = rec.get(column)
+        if declared is None:
+            continue
+        if rec.get(field) is None:
+            out.append(f"{column!r} declares what {field!r} is out of, and "
+                       f"there is no {field!r} on this line")
+            continue
+        spec = known.get(str(declared))
+        if spec is None:
+            out.append(f"{declared!r} is not a scale this engine knows; one "
+                       f"of {', '.join(sorted(known))}. Every scale here is "
+                       "published prior art with a citation")
+            continue
+        value = rec.get(field)
+        if isinstance(value, _NUMERIC) and not isinstance(value, bool):
+            if not spec["min"] <= value <= spec["max"]:
+                out.append(f"{field!r} is {value!r}, outside {declared} "
+                           f"({spec['min']} to {spec['max']}). A value its own "
+                           "declared scale cannot hold means one of the two is "
+                           "wrong, and the engine cannot tell which")
+    return out
+
+
 def _floor_problems(rec: dict) -> list[str]:
     """A target declared under a safety floor is refused (#191).
 
