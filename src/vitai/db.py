@@ -257,7 +257,27 @@ from .schema import KEYS
 #     row has to be edited to keep the answer it had. Rows whose title says
 #     cap or limit while scoring as a floor now raise a validate ADVISORY
 #     rather than having to be found by hand.
-CONTRACT_VERSION = "24"
+#     #219 also claimed 23 and was renumbered past it; see the note on 24.
+# 25: goal status SPLITS into two axes. `status` mixed where a goal is in its
+#     own life with how it is going against its target, which is #199's
+#     two-scoring-systems bug at the vocabulary level: `goals` held the first,
+#     `verdicts` held the second, they were built by different code, and the
+#     demo had them disagreeing about steps.
+#
+#     `goals` gains `lifecycle_status` (DECLARED) and `status` is retired at
+#     that generation - old lines keep validating and read forward through one
+#     canonicaliser. `goal_progress` gains `lifecycle_status` and
+#     `achievement_status` (DERIVED, never authored: a goals line is a
+#     declaration, and the engine does not write its opinion into one).
+#
+#     `status` KEEPS its column on `goal_progress`, carrying the same value as
+#     `lifecycle_status`, so a consumer reading the old name is not broken.
+#     `achieved` splits: forward it is lifecycle `completed`, and the
+#     achievement half is derived.
+#
+#     #219 also claims 24. The contract follows MERGE order, so whichever of
+#     the two lands second is renumbered rather than assumed.
+CONTRACT_VERSION = "25"
 
 _TEXT_COLS = {"derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
               # under REAL affinity silently becomes 7.0, which is the defect
@@ -271,6 +291,7 @@ _TEXT_COLS = {"derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
               # `polarity` and `breach` are words; a band's bounds are numbers
               # and stay numeric.
               "polarity", "breach",
+              "lifecycle_status", "achievement_status",
               # `due` is an ISO date too (#202).
               "due",
               "date", "type", "source", "location", "note",
@@ -356,7 +377,12 @@ PROGRESS_KEYS = ["slug", "title", "metric", "policy", "status", "period",
                  # Appended (#200), so a positional reader keeps every column
                  # it knew. `progress_pct` above is now the FLOOR's measure
                  # and is null for the other three polarities.
-                 "polarity", "target_hi", "room_left", "distance", "breach"]
+                 "polarity", "target_hi", "room_left", "distance", "breach",
+                 # Appended (#235), so a positional reader keeps every column
+                 # it knew. `status` above stays, carrying the same value as
+                 # `lifecycle_status`, so a consumer reading the old name is
+                 # not broken by the split.
+                 "lifecycle_status", "achievement_status"]
 
 # Increment 2: the adjudication trail. Primary dataset tables hold CANONICAL
 # rows; these say where those rows came from and what was overruled.

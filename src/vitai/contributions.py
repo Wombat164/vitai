@@ -30,8 +30,10 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from .clocks import order_key
-from .policy import _event_index, days_between, deadline_of, state
-from .schema import (ATTESTED, EXTERNAL, GOAL_DATASETS, KEYS, MEASURED, polarity_of,
+from .policy import (_event_index, days_between, deadline_of,
+                     lifecycle_of, state)
+from .schema import (ATTESTED, EXTERNAL, GOAL_DATASETS, KEYS, MEASURED,
+                     polarity_of,
                      verification_of)
 
 ADVANCES, PARTIAL, UNBUDGETED, NEUTRAL, REGRESSES = (
@@ -182,7 +184,7 @@ def compute_contributions(goals: list[dict], thresholds: list[dict],
 
     for when, dataset, rec in _events(daily, sessions):
         in_force = state(goals, thresholds, when)
-        for goal in in_force.active_goals():
+        for goal in in_force.measured_goals():
             slug, metric = goal.get("slug"), goal.get("metric")
             if not slug or not metric or verification_of(goal) in (
                     EXTERNAL, ATTESTED):
@@ -273,6 +275,12 @@ def _milestones(goal: dict, slug: str, when: str, bucket: str,
     Left unminted rather than invented; it wants the declaration-time value,
     which is a design decision rather than an oversight.
     """
+    # A COMPLETED GOAL MINTS NOTHING (#235). It is measured so its
+    # achievement can be read, not scored again: passing a quarter of a target
+    # already completed is not an achievement, and re-minting on every rebuild
+    # is the celebratory defect this engine has taken out once already.
+    if lifecycle_of(goal) == "completed":
+        return []
     target = goal.get("target")
     if polarity_of(goal) != "floor":
         return []
@@ -347,6 +355,54 @@ def _standing(goal: dict, counted: float | None,
         # off the value sits.
         out["distance"] = round(abs(value - edge), 3)
     return out
+def achievement_of(counted: float | None, target: object,
+                   lifecycle: str | None, days_left: int | None) -> str | None:
+    """How this goal is going against its target (#235).
+
+    DERIVED, NEVER AUTHORED. A goals line is a DECLARATION, so the engine does
+    not write its opinion into one; this lands on the progress row instead.
+
+    NOT YET UNIFIED WITH `verdicts`, and the issue asked for that. This
+    derives from counted-against-target; `verdicts` still scores thresholds
+    per metric-week by different code, so the two can still disagree about one
+    metric. Splitting the vocabulary is what makes the unification expressible
+    - both axes now have somewhere to live - but the unification itself is
+    #199, which has its own settled decision about precedence and is not
+    smuggled in here.
+
+    Returns None where the engine cannot say: an attested goal nobody can
+    measure, a goal drawing on a dataset the contribution engine does not
+    iterate, or one with no target to be measured against. A word here would
+    be an answer to a question the engine was not able to ask.
+    """
+    usable = (counted is not None and isinstance(target, (int, float))
+              and not isinstance(target, bool))
+    if not usable:
+        return None
+    met = float(counted) >= float(target)
+
+    # STILL HOLDING IT. `achieved` is terminal and maintenance is not, so a
+    # goal that reached its target and is keeping it had nowhere to live.
+    if lifecycle == "completed":
+        # STILL HOLDING IT, or nothing sayable yet. A completed goal is judged
+        # against the CURRENT bucket, which is usually half-elapsed, so
+        # reporting a shortfall would assert "not met" about a goal the
+        # athlete closed BECAUSE it was met - and would flip on a Monday.
+        # Detecting a maintenance goal that has genuinely lapsed needs the
+        # period to be known-closed, which the progress row cannot see.
+        return "sustaining" if met else None
+    if lifecycle in ("cancelled", "rejected"):
+        return "achieved" if met else "not_achieved"
+    if met:
+        return "achieved"
+    # THE WINDOW CLOSED with the target unmet. FHIR's reading, checked rather
+    # than assumed: `not-achieved` is "has not been met", which is exactly
+    # this. `not-attainable` means "not possible to be met" - the modal claim
+    # G58's declaration-time gate makes, which does not exist, so nothing here
+    # emits that word and it is not in the vocabulary.
+    if days_left is not None and days_left < 0:
+        return "not_achieved"
+    return "in_progress" if float(counted) > 0 else "no_progress"
 
 
 def goal_progress(goals: list[dict], thresholds: list[dict], daily: list[dict],
@@ -393,7 +449,13 @@ def goal_progress(goals: list[dict], thresholds: list[dict], daily: list[dict],
             "title": goal.get("title"),
             "metric": goal.get("metric"),
             "policy": goal.get("policy"),
-            "status": goal.get("status"),
+            # The retired name keeps its column so a consumer reading it is
+            # not broken by the split; both now come from the successor.
+            "status": lifecycle_of(goal),
+            "lifecycle_status": lifecycle_of(goal),
+            "achievement_status": achievement_of(
+                counted if countable else None, target,
+                lifecycle_of(goal), days_between(on, deadline_of(goal, index)[0])),
             "period": goal.get("period"),
             "bucket": bucket,
             "target": target,

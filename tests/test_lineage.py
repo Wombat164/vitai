@@ -25,6 +25,7 @@ from vitai.provenance import derivation_groups, independent_witnesses
 from vitai.resolution import (_lineage_to_claim_id, derivation_cycles,
                               stale_derivations)
 from vitai.schema import CURRENT_GENERATION, KEYS, validate_record
+from vitai.db import CONTRACT_VERSION
 
 
 def a_weight(**kw):
@@ -199,7 +200,7 @@ def test_a_derived_row_survives_a_build(tmp_path: Path) -> None:
             "SELECT derived_from FROM weight WHERE source='calc'").fetchone()[0]
         assert json.loads(stored) == ["weight:2030-05-01:scale"]
         assert con.execute(
-            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == "24"
+            "SELECT value FROM meta WHERE key='contract'").fetchone()[0] == CONTRACT_VERSION
     finally:
         con.close()
 

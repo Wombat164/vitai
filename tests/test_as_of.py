@@ -21,6 +21,7 @@ import pytest
 
 from vitai.api import Vitai
 from vitai.jsonl import known_by, load
+from vitai.db import CONTRACT_VERSION
 
 UTC = timezone.utc
 
@@ -315,7 +316,7 @@ def test_the_read_model_carries_the_policy_it_was_built_under(tmp_path):
     finally:
         con.close()
     assert meta["policy"] == engine.policy
-    assert meta["contract"] == "24"
+    assert meta["contract"] == CONTRACT_VERSION
 
 
 def test_a_read_model_built_without_a_policy_omits_the_row(tmp_path):
@@ -339,7 +340,7 @@ def test_a_read_model_built_without_a_policy_omits_the_row(tmp_path):
             con.close()
 
     assert set(meta()) == {"contract"}
-    assert meta(policy="abc") == {"contract": "24", "policy": "abc"}
+    assert meta(policy="abc") == {"contract": CONTRACT_VERSION, "policy": "abc"}
 
 
 def test_a_regime_empties_its_interval_and_backfills_nothing():

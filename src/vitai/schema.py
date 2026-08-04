@@ -440,7 +440,43 @@ def polarity_of(goal: dict) -> str:
 # cannot tell an aspiration from a decision - which matters, because
 # treating a musing as a commitment is how an athlete ends up held to
 # something they never actually chose.
+# RETIRED at the generation below in favour of the two vocabularies that
+# follow (#235). Kept, and kept validating, because every goal line written
+# before the split carries it and an old line is not wrong (G25).
 GOAL_STATUSES = {"proposed", "active", "paused", "achieved", "abandoned"}
+
+# TWO AXES, because the old list mixed them and that mixture is #199's
+# two-scoring-systems bug at the vocabulary level. `achieved` was an
+# achievement value living in a lifecycle list: `goals` held the lifecycle
+# axis, `verdicts` held the achievement axis, they were built by different
+# code, and the shipped demo had them disagreeing about steps. One object with
+# two columns rather than two subsystems. FHIR split these in 2014 and the
+# names below follow it, which is also where three values we were about to
+# invent separately already live.
+#
+# WHERE THE GOAL IS IN ITS OWN LIFE. Declared by the athlete: a goal becomes
+# active because he says so, and never because the arithmetic moved.
+LIFECYCLE_STATUSES = {"proposed", "planned", "accepted", "active", "on_hold",
+                      "completed", "cancelled", "rejected"}
+
+# HOW IT IS GOING AGAINST ITS TARGET. Derived, never authored: a goals line is
+# a declaration, so this lands on the progress row rather than in the record.
+#
+# A SHORTER LIST THAN FHIR'S, and deliberately: every value here has something
+# that emits it. `improving` and `worsening` need a trend, and a progress row
+# is a snapshot with no previous value to compare against; `no_change` is the
+# approach-goal reading of standing still, which needs polarity (#200). Adding
+# them now would put words in a closed vocabulary that nothing can produce,
+# which is the specified-and-never-written class (#204) arriving in the
+# vocabulary that was meant to fix a different one. They land with their
+# producers.
+# `not_attainable` is absent for the same reason: FHIR means "not possible to
+# be met", which is the modal claim G58's declaration-time feasibility gate
+# makes. A deadline that passed with the target unmet is `not_achieved` - "has
+# not been met" - and calling it not-attainable would be using the word for
+# the case it is not for.
+ACHIEVEMENT_STATUSES = {"in_progress", "no_progress", "achieved",
+                        "sustaining", "not_achieved"}
 
 # Journal entry kinds. `claim` is the athlete asserting a fact about
 # themselves (checkable against the record); `worry` is a concern worth
@@ -840,6 +876,20 @@ CURRENT_GENERATION["goals"] += 1
 for _k in ("polarity", "target_hi"):
     KEY_GENERATION.setdefault("goals", {})[_k] = CURRENT_GENERATION["goals"]
     KEYS["goals"].append(_k)
+# --- goal lifecycle, split from achievement (#235) ---------------------------
+#
+# `status` mixed two axes. `lifecycle_status` takes over the one the athlete
+# declares; the achievement axis is DERIVED and lives on the progress row,
+# not here, because a goals line is a declaration and the engine does not get
+# to write its opinion into one.
+CURRENT_GENERATION["goals"] += 1
+KEY_GENERATION.setdefault("goals", {})["lifecycle_status"] = \
+    CURRENT_GENERATION["goals"]
+KEYS["goals"].append("lifecycle_status")
+# G25's other half: `status` stops being EXPECTED here and stays legal
+# forever. An old line carrying it validates unchanged and reads forward
+# through the one canonicaliser in `policy`.
+KEY_RETIREMENT.setdefault("goals", {})["status"] = CURRENT_GENERATION["goals"]
 
 
 def key_generation(dataset: str, key: str) -> int:
@@ -1287,6 +1337,21 @@ def _band_problems(rec: dict) -> list[str]:
         return [f"'target_hi' is the upper bound of a BAND, and this goal is "
                 f"{polarity or 'a floor'}. Only a band has two bounds"]
     return []
+def _lifecycle(rec: dict) -> str | None:
+    """The goal's lifecycle, successor first (#235).
+
+    Schema validation cannot import `policy` - `policy` imports this module -
+    so the forward map is applied through a thin local reader rather than
+    duplicated. `policy.LIFECYCLE_FORWARD` remains the one table; this is the
+    second CALLER of it, not a second copy, which is the distinction G89's
+    hip_pain instance turned on.
+    """
+    from .policy import LIFECYCLE_FORWARD
+    declared = rec.get("lifecycle_status")
+    if declared:
+        return str(declared)
+    old = rec.get("status")
+    return LIFECYCLE_FORWARD.get(str(old), str(old)) if old else None
 
 
 def _enum(rec: dict, key: str, allowed: set[str], *,
@@ -1954,7 +2019,14 @@ def _validate_policy(dataset: str, rec: dict) -> list[str]:
             if not isinstance(rec.get(k), str) or not rec.get(k):
                 problems.append(f"'{k}' must be a non-empty string")
         problems += _enum(rec, "policy", GOAL_POLICIES)
-        problems += _enum(rec, "status", GOAL_STATUSES)
+        problems += _enum(rec, "status", GOAL_STATUSES, optional=True)
+        problems += _enum(rec, "lifecycle_status", LIFECYCLE_STATUSES,
+                          optional=True)
+        if rec.get("status") is None and rec.get("lifecycle_status") is None:
+            problems.append(
+                "a goal needs a lifecycle: 'lifecycle_status' is one of "
+                f"{', '.join(sorted(LIFECYCLE_STATUSES))}. A line written "
+                "before the split may carry 'status' instead")
         problems += _enum(rec, "period", GOAL_PERIODS)
         problems += _enum(rec, "on_period_end", ON_PERIOD_END, optional=True)
         problems += _enum(rec, "set_by", AUTHORS, optional=True)
@@ -2019,7 +2091,7 @@ def _validate_policy(dataset: str, rec: dict) -> list[str]:
             if not isinstance(rec.get("tracker"), str) or not rec.get("tracker"):
                 problems.append("an external goal needs 'tracker' (where it lives)")
         elif (how != ATTESTED and rec.get("target") is None
-                and rec.get("status") == "active"):
+                and _lifecycle(rec) == "active"):
             problems.append("an active non-external goal needs a numeric 'target'")
         if rec.get("policy") == "guarded" and rec.get("guard_pct") is None:
             problems.append("a guarded goal needs 'guard_pct' (the ramp headroom)")

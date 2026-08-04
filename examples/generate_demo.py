@@ -698,6 +698,37 @@ def _policy(start: date) -> tuple[list[dict], list[dict], list[dict]]:
     """The demo's dated policy: goals, threshold changes, one achievement."""
     d0 = start.isoformat()
     goals = [
+        # THE TWO ACHIEVEMENT STATES THAT HAD NOWHERE TO LIVE (#235), because
+        # the old vocabulary mixed lifecycle with achievement and `achieved`
+        # was terminal.
+        #
+        # SUSTAINING: reached and still being held. `achieved` said the story
+        # was over; this athlete hit his weekly active-minutes floor months ago
+        # and is keeping it, which is a different fact from having hit it once.
+        #
+        # `active_min` deliberately: no other demo goal claims that metric, and
+        # a second goal on one metric would make the demo exhibit the
+        # first-match-wins ambiguity `_goal_for` already concedes it should not
+        # be resolving.
+        _goal(d0, "active-minutes", "Keep 150 active minutes a week",
+              "active_min", 150, "monotonic", dataset="daily",
+              status="achieved",
+              motivator="Everything else works better when this one does",
+              rationale="Reached it in the spring; the point now is not to lose it",
+              on_success="hold", on_miss="reflect"),
+        # NOT ACHIEVED: the window closed. Not a prediction - the deadline is
+        # in the past and the target was not met. FHIR's `not-attainable`
+        # means "not POSSIBLE to be met", which is the modal claim G58's
+        # declaration gate makes; this is the plainer "has not been met".
+        # Left `active` deliberately: the athlete never closed it, and the
+        # engine reporting the arithmetic is not the same as him deciding to
+        # abandon it.
+        _goal(d0, "spring-5k", "Sub-22 for the 5k by the spring race",
+              "distance_km", 200, "monotonic", dataset="sessions",
+              session_type="run", deadline="2030-05-15",
+              motivator="Wanted one fast one before the half-marathon block",
+              rationale="200 km of running in the block before it",
+              on_success="hold", on_miss="reflect"),
         _goal(d0, "steps", "Walk 70k steps a week", "steps", 70000,
               "monotonic", dataset="daily",
               motivator="Keep the desk job from winning",

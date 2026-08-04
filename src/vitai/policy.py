@@ -87,10 +87,61 @@ class State:
         return None
 
     def active_goals(self) -> tuple[dict, ...]:
-        return tuple(g for g in self.goals if g.get("status") == "active")
+        return tuple(g for g in self.goals if lifecycle_of(g) == "active")
+
+    def measured_goals(self) -> tuple[dict, ...]:
+        """Goals the engine keeps measuring, which outlives being active.
+
+        A COMPLETED GOAL IS STILL MEASURED (#235). `achieved` was terminal and
+        maintenance is not: an athlete who reached a floor and is holding it is
+        in a different state from one who reached it once, and the engine could
+        not tell them apart because it stopped counting the moment the goal
+        left `active`. That is what made `sustaining` inexpressible - not the
+        missing word, the missing measurement.
+
+        Measured is not the same as SCORED-AGAINST. A completed goal is
+        counted so its achievement can be read; it mints no milestones,
+        because passing a quarter of a target you already completed is not an
+        achievement, and re-minting on every rebuild would be the celebratory
+        defect polarity work already took out once.
+        """
+        return tuple(g for g in self.goals
+                     if lifecycle_of(g) in ("active", "completed"))
 
     def threshold(self, key: str) -> float | None:
         return self.thresholds.get(key)
+
+
+# The one place `status` is read forward (#235, G89). A retirement is not done
+# until every reader prefers the successor, and re-implementing the fallback at
+# each reader is how `hip_pain` ended up dual-active in five modules rather than
+# retired in one.
+#
+# `achieved` SPLITS, which is the whole point of the change: it was an
+# achievement value in a lifecycle list, so forward it becomes lifecycle
+# `completed`, and the achievement half is derived on the progress row rather
+# than carried here.
+LIFECYCLE_FORWARD = {
+    "proposed": "proposed",
+    "active": "active",
+    "paused": "on_hold",
+    "abandoned": "cancelled",
+    "achieved": "completed",
+}
+
+
+def lifecycle_of(goal: dict) -> str | None:
+    """Where this goal is in its own life, successor first.
+
+    Prefers `lifecycle_status`; falls back to mapping the retired `status`
+    forward. Returns None when a line carries neither, which validation
+    refuses on a new line and cannot happen on an old one.
+    """
+    declared = goal.get("lifecycle_status")
+    if declared:
+        return str(declared)
+    old = goal.get("status")
+    return LIFECYCLE_FORWARD.get(str(old), str(old)) if old else None
 
 
 def _in_force(records: list[dict], dataset: str, on: str) -> dict[str, dict]:
