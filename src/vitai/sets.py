@@ -27,9 +27,18 @@ that failed mid-rep; completed counts reps finished. `73 FAILED` with nothing
 completed is `reps_attempted: 1, reps_completed: 0, failure: "muscular"`.
 
 **Failure is three states, not a flag.** `technical` (form broke first),
-`muscular` (the rep could not be completed) and `volitional` (stopped by
-choice, reps left) are three different events, and "to failure" is ambiguous
-across all three. `null` means UNSTATED - and a null-failure set must never be
+`muscular` (a rep was attempted and could not be completed) and `volitional`
+(the athlete ended the set) are three different events, and "to failure" is
+ambiguous across all three.
+
+`volitional` names the MECHANISM and says nothing about reserve; `rir`
+carries that. The commonest way a set ends is that someone judges he cannot
+do another without starting one and finding out, which is `volitional` with
+`rir: 0` - not a contradiction, and not `muscular`, because `muscular`
+asserts a rep was attempted and lost. A `volitional` set must not be read as
+sub-maximal without checking `rir`, which is the mirror of the rule below.
+
+`null` means UNSTATED - and a null-failure set must never be
 read as maximal by anything downstream. That refusal is #100's to enforce;
 this module's job is that the field exists and is first-class.
 

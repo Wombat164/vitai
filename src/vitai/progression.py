@@ -66,9 +66,12 @@ MASS_LOADS = ("external", "bodyweight_plus")
 MAXIMAL_SET_TYPES = ("working", "amrap", "backoff", "drop", "rest_pause",
                      "myo_rep", "cluster")
 
-# A set is evidence of a maximum only when the athlete says the rep could not
-# be completed. `volitional` is explicitly NOT - it means reps were left - and
-# null means nobody said, which is the case that manufactured a false max.
+# A set is evidence of a maximum only when the athlete says a rep was
+# attempted and could not be completed. `volitional` is explicitly NOT, and
+# the reason is that NOTHING WAS TESTED rather than that reps were left: the
+# set ended because he stopped it, which is the commonest ending and is
+# usually at perceived failure with `rir: 0`. Null means nobody said, which is
+# the case that manufactured a false max.
 MAXIMAL_FAILURES = ("muscular", "technical")
 
 
@@ -122,10 +125,16 @@ def is_maximal_evidence(rec: dict) -> bool:
     read as maximal against a stated max and was not: the next set held 92% of
     it, where genuine failure leaves 55-70%.
 
-    `null` means nobody said. `volitional` means reps were left. Neither is
-    evidence of a limit, and treating either as one manufactures a fact the
-    athlete never claimed - which is how a real record acquired a max several
-    reps below the truth.
+    `null` means nobody said. `volitional` means the athlete ended the set,
+    which is usually at PERCEIVED failure - `rir: 0` and no rep attempted.
+    Neither is evidence of a limit: one because nobody said, the other because
+    nobody found out. Treating either as one manufactures a fact the athlete
+    never claimed, which is how a real record acquired a max several reps
+    below the truth.
+
+    Note the direction. Reading `volitional` as sub-maximal is the mirror
+    error and loses the same information: at `rir: 0` he believed there were
+    none left, and the honest answer is that the question was not put.
     """
     return (rec.get("failure") in MAXIMAL_FAILURES
             and set_type_of(rec) in MAXIMAL_SET_TYPES)

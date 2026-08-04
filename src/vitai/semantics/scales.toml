@@ -1,0 +1,49 @@
+# Scales - what a subjective number is out of.
+#
+# `rpe`, `mood` and `pain` validated as bare numerics and nothing else. A bare
+# number with no declared scale is not interpretable, and for RPE it is
+# ambiguous between two standard scales that are both in common use: a stored
+# `rpe: 7` is "quite light" on one and "very hard" on the other, and the
+# difference is the whole signal.
+#
+# POST-COORDINATED, not fixed per field (#246). Declaring one scale per field
+# in the schema would be cheaper and would force one choice on every record,
+# including imported ones - and a vendor export may well use the other scale.
+# A `_scale` column beside the value lets a row say which was meant, in
+# keeping with how this schema treats every other fused axis.
+#
+# ABSENT MEANS UNSTATED, and no reader may invent a denominator. A consumer
+# rendering "4 out of 10" against an undeclared scale has asserted a bound the
+# record never carried; the honest render is the bare number and a note that
+# no scale was declared. That is less useful, and being less useful is not a
+# reason to make something up.
+#
+# NOT A PLACE TO INVENT SCALES. Every entry here is external prior art with a
+# citation. A record that needs a scale nobody published is describing
+# something this registry should not be guessing at.
+
+version = 1
+
+[scales.borg-cr10]
+label = "Borg CR10"
+min = 0
+max = 10
+note = "the category-ratio scale, and what almost every training app means by RPE today"
+citation = "Borg 1982, Psychophysical bases of perceived exertion"
+
+[scales.borg-rpe-6-20]
+label = "Borg RPE 6-20"
+min = 6
+max = 20
+# The original, designed so the value times ten approximates heart rate -
+# which is why the range starts at 6 rather than 0 and is the tell when a
+# record's numbers are read against the wrong one.
+note = "the original scale; value x10 approximates heart rate"
+citation = "Borg 1970, Perceived exertion as an indicator of somatic stress"
+
+[scales.nrs-0-10]
+label = "Numeric rating scale, 0-10"
+min = 0
+max = 10
+note = "the standard clinical self-report scale; 0 is none and 10 is the worst imaginable"
+citation = "Hawker et al 2011, Measures of adult pain (Arthritis Care Res)"
