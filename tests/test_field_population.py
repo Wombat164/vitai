@@ -88,8 +88,6 @@ UNWRITTEN = (
     "emissions.surface",
     "emissions.week",
     "events.reason",
-    "goals.lifecycle_status",
-    "goals.polarity",
     "goals.target_hi",
     "inferences.depends_on",
     "inferences.note",
@@ -130,7 +128,6 @@ UNWRITTEN = (
     "sets.lever_pos",
     "sets.pad_pos",
     "sets.path",
-    "sets.read_by",
     "sets.resistance_level",
     "sets.round",
     "sets.side",
@@ -143,10 +140,24 @@ UNWRITTEN = (
     "weight.kg_hi",
     "weight.kg_lo",
     "weight.modelled",
-    "weight.protocol",
 )
 
 UNREAD = (
+    # Written by ines from row one, and read by nothing that groups a trend
+    # by it. The reading she took on the gym scale after dinner is labelled
+    # `fed-evening-clothed` and still enters the weekly mean beside her
+    # `fasted-post-void` ones, which is her expectation ines-E2.
+    "weight.protocol",
+    # Written by ines, validated by `schema`, and rendered by nothing.
+    # Validation is not a consumer: `kg_lo` is validated too, and the
+    # issue names it as the example of mode two. A client that wants to
+    # show "4 out of 10" still cannot, because nothing carries the bound
+    # to the surface (#246 gave the record the fact; a consumer for it
+    # is separate work).
+    "daily.mood_scale",
+    "daily.pain_scale",
+    "sessions.rpe_scale",
+    "sets.rpe_scale",
     "achievements.occurred_date",
     # The declared scales from #246. Written by the engine and read by nothing
     # INSIDE it, which is what an interface field looks like before a consumer

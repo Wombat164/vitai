@@ -364,7 +364,9 @@ def _standing(goal: dict, counted: float | None,
         out["distance"] = round(abs(value - edge), 3)
     return out
 def achievement_of(counted: float | None, target: object,
-                   lifecycle: str | None, days_left: int | None) -> str | None:
+                   lifecycle: str | None, days_left: int | None,
+                   polarity: str = "floor",
+                   target_hi: object = None) -> str | None:
     """How this goal is going against its target (#235).
 
     DERIVED, NEVER AUTHORED. A goals line is a DECLARATION, so the engine does
@@ -387,7 +389,26 @@ def achievement_of(counted: float | None, target: object,
               and not isinstance(target, bool))
     if not usable:
         return None
-    met = float(counted) >= float(target)
+    # WHICH DIRECTION COUNTS. This tested `counted >= target` whatever the
+    # polarity, so a CEILING held 87 kcal over its cap reported `achieved` -
+    # the same shape as the defect polarity was added to remove, surviving one
+    # layer down in the axis that reports how it is going. Found by the first
+    # persona whose goals declare a ceiling and a floor on one nutrient.
+    value, edge = float(counted), float(target)
+    if polarity == "ceiling":
+        met = value <= edge
+    elif polarity == "band":
+        hi = target_hi if isinstance(target_hi, (int, float)) else None
+        if hi is None or isinstance(target_hi, bool):
+            return None
+        met = edge <= value <= float(hi)
+    elif polarity == "approach":
+        # There is no "met" for a value being converged on without a stated
+        # tolerance, and inventing one would make the engine decide how close
+        # is close enough. `distance` already says how far off it is.
+        return None
+    else:
+        met = value >= edge
 
     # STILL HOLDING IT. `achieved` is terminal and maintenance is not, so a
     # goal that reached its target and is keeping it had nowhere to live.
@@ -463,7 +484,8 @@ def goal_progress(goals: list[dict], thresholds: list[dict], daily: list[dict],
             "lifecycle_status": lifecycle_of(goal),
             "achievement_status": achievement_of(
                 counted if countable else None, target,
-                lifecycle_of(goal), days_between(on, deadline_of(goal, index)[0])),
+                lifecycle_of(goal), days_between(on, deadline_of(goal, index)[0]),
+                polarity_of(goal), goal.get("target_hi")),
             "period": goal.get("period"),
             "bucket": bucket,
             "target": target,
