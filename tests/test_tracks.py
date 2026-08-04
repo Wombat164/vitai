@@ -112,16 +112,24 @@ def test_two_runs_on_one_day_from_one_watch_share_a_correction_key():
     assert line_key("sessions", a) == line_key("sessions", b)
 
 
-def test_correcting_one_of_two_same_day_runs_used_to_retire_both(tmp_path):
-    """And it is silent: two real activities become one, which is the harm
-    #16 exists to prevent, arriving through the correction path."""
+def test_correcting_one_of_two_same_day_runs_retires_one(tmp_path):
+    """This asserted the DEFECT until #239: both runs were retired, two real
+    activities becoming one, which is the harm #16 exists to prevent arriving
+    through the correction path. Measured on a live record, seven sessions in
+    ten shared a key with something, so it was the ordinary case rather than
+    an edge.
+
+    A bare reference now retires the most recent row it names - the one a
+    correction written straight afterwards means - and leaves the rest of the
+    day alone.
+    """
     root = repo(tmp_path)
     write(root, "sessions", [
         session(distance_km=5.0), session(distance_km=8.0),
         session(distance_km=8.5, supersedes="2030-05-01/watch"),
     ])
     survived = [r["distance_km"] for r in load(root / "data", "sessions")]
-    assert survived == [8.5], "the 5 km run was deleted by a correction to the 8"
+    assert survived == [5.0, 8.5], "the 5 km run was not the one corrected"
 
 
 def test_an_activity_id_makes_the_correction_precise(tmp_path):
