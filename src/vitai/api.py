@@ -407,6 +407,31 @@ class Vitai:
         return verify(self.artifacts, self.datasets())
 
     def dataset(self, name: str) -> list[dict]:
+        """One dataset's live rows: everything recorded, superseded rows gone.
+
+        THE SUPPORTED WAY TO READ A DATASET, said here because the obvious
+        alternative is wrong in a way that looks right. Applying `supersedes`
+        by hand means getting chains, corrections that correct corrections,
+        and the event datasets that never retire at all each correct
+        separately. A consumer that tried it dropped every row sharing a
+        reference's key, and - not a variant of that bug - dropped each
+        correction along with its target, because a correction carries the
+        same `<date>/<source>` as the row it names. The record got shorter
+        every time someone fixed a typo, and one at a time it looked like
+        nothing (#258).
+
+        Rows are raw CLAIMS: what each source said, not what the engine
+        decided between them where two disagree. For the adjudicated view,
+        one canonical record per quantity per date, use `canonical()`.
+
+        Malformed lines are quarantined rather than raised, so a read
+        proceeds from the good rows; `Vitai.load_report()` names what was
+        dropped. THAT method and not `jsonl.load_report`, which is the
+        internal one - pointing a consumer at a private module is how this
+        docstring's own issue started. Honours this instance's `as_of`, so a
+        reconstruction reads
+        the record as it stood at that instant rather than as it stands now.
+        """
         if name not in KEYS:
             raise KeyError(f"unknown dataset {name!r}; one of {sorted(KEYS)}")
         if name not in self._loaded:
@@ -415,7 +440,12 @@ class Vitai:
         return self._loaded[name]
 
     def datasets(self) -> dict[str, list[dict]]:
-        """Raw claims, exactly as recorded. See `canonical()` for adjudicated."""
+        """Every dataset's live rows, keyed by name. `dataset()` for one.
+
+        Raw claims with supersedes applied, exactly as `dataset()` returns
+        them and subject to the same caveats. See `canonical()` for the
+        adjudicated view.
+        """
         return {name: self.dataset(name) for name in KEYS}
 
     @property
@@ -864,6 +894,22 @@ class Vitai:
         return banner(self.safety(on) if every else self.urgent(on))
 
     def verdicts(self, today: date | None = None) -> list[dict]:
+        """Weekly goal attainment: one dict per (week, metric), ISO weeks.
+
+        Each row carries `week`, `metric`, `value`, `target`, the `goal` it
+        serves, and a `verdict` from a closed vocabulary - `on_target`,
+        `ahead`, `behind`, `no_data`. Where the verdict is `no_data` the row
+        also says WHY in `reason`, because one word covered four different
+        states distinguishable only by which fields were null (#177). A
+        `pending` reason means the question is answerable and not yet, and
+        carries `due`: the day the source is expected by, after which the
+        reason drops back to `no_input` and the row keeps `due` so a late
+        source reads as late rather than as still coming (#202).
+
+        `today` is the viewpoint, and it defaults to this instance's - not to
+        the wall clock. The same rows populate the read model's `verdicts`
+        table, so a SQL consumer and an API consumer see one answer.
+        """
         d = self.canonical()
         # `today=on`, not `today=today`, for the reason `rollup` records
         # below: the un-defaulted parameter leaves the pinned viewpoint on the
@@ -878,6 +924,17 @@ class Vitai:
                                 medical=d["medical"])
 
     def rollup(self, today: date | None = None) -> str:
+        """The weekly report as Markdown - the same text `build` writes out.
+
+        Returns the text rather than a path, and writes nothing: `build()`
+        is what puts them in `derived/weekly.md`. Weight with its rolling
+        average and rate, training by week, the tripwires, the gates and
+        escalations in force, and how sparse the record is.
+
+        `today` is the viewpoint, defaulting to this instance's, and it dates
+        the report as well as bounding it - a rollup whose header disagreed
+        with its own contents is the defect the comments below record.
+        """
         d = self.canonical()
         # THE SAME DEFAULT `build` USES (#207), because this renders the same
         # artifact. Left on the wall clock, `rollup()` stamped "Generated

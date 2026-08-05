@@ -1536,7 +1536,7 @@ def test_it_speaks_the_protocol(tmp_path):
     assert replies[0]["result"]["protocolVersion"]
     assert {t["name"] for t in replies[1]["result"]["tools"]} == \
         {"situation", "schema", "validate", "status", "day", "window",
-         "goals", "safety", "claim", "said"}
+         "goals", "safety", "claim", "said", "dataset"}
     payload = json.loads(replies[2]["result"]["content"][0]["text"])
     assert payload["contract"]
 
