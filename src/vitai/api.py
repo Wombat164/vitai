@@ -551,12 +551,30 @@ class Vitai:
                 if isinstance(value, bool) or not isinstance(value, (int, float)):
                     return (1, 0.0, str(value if value is not None else ""))
                 return (0, float(value), "")
+            # `set_index` IS BLOCK-SCOPED - "the set's position in its
+            # block" - so what orders a session depends on whether a block was
+            # stated (#230).
+            #
+            # WITH one, the counters order everything: a swim medley is four
+            # lengths of four strokes in a fixed order, and sorting the name
+            # first returned backstroke, breaststroke, butterfly, front crawl.
+            # Alphabetical, and not an order anybody swam.
+            #
+            # WITHOUT one, the exercise is the only scope those indices have,
+            # and comparing them across movements invents an order: three
+            # deadlifts and three benches numbered 1-3 each interleave into a
+            # superset nobody performed. A block-less session is NORMAL, so
+            # this is not an edge case, and the name goes back in front where
+            # it is doing real work.
+            blockless = r.get("block") is None
+            name = str(r.get("exercise") or "")
             return (str(r.get("date") or ""),
                     (r.get("session_start") is None,
                      str(r.get("session_start") or "")),
-                    str(r.get("exercise") or ""),
-                    *(counter(r.get(k))
-                      for k in ("block", "round", "set_index")))
+                    counter(r.get("block")),
+                    name if blockless else "",
+                    *(counter(r.get(k)) for k in ("round", "set_index")),
+                    name)
 
         return sorted(rows, key=where)
     def meals(self, on: str | None = None) -> list[dict]:

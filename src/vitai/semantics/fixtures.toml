@@ -138,6 +138,24 @@ label = "A wall"
 note = "Trivially available almost everywhere, and named anyway: a wall sit outdoors on open ground is not possible, and a requirement that is usually satisfied is still a requirement."
 
 # --- kit: belongs to the athlete ---------------------------------------------
+# Swimmable water (#230 part 1). A fixture because it belongs to the place and
+# is unambiguously what you leave behind.
+#
+# THE COARSE HALF OF THE REQUIREMENT, and it says so rather than implying it
+# is the whole one. What swimming actually needs is "water, at least 12 m of
+# straight line - preferably more - OR an active countercurrent", and a slug
+# has no room for the parameter and no way to express the alternative: a 4 m
+# countercurrent pool satisfies the requirement completely while failing any
+# length test. Expressing that is #230 part 2 and needs parametric
+# requirements, which do not exist yet.
+#
+# What this slug buys in the meantime is the answer that was wrong before it:
+# a garage with a rack and no water now REFUSES a swim rather than provisioning
+# one, which is the direction a provisioning check has to fail.
+[fixtures.swimmable-water]
+label = "Swimmable water"
+aliases = ["pool", "lane pool", "swimming pool", "open water", "lido"]
+
 [kit]
 
 [kit.load-implement]
@@ -156,6 +174,14 @@ aliases = ["jump rope"]
 
 [kit.sledgehammer]
 label = "Sledgehammer"
+
+[kit.pull-buoy]
+label = "Pull buoy"
+aliases = ["buoy", "pullbuoy"]
+
+[kit.kickboard]
+label = "Kickboard"
+aliases = ["board", "kick board"]
 
 [kit.band]
 label = "Resistance band"

@@ -1186,3 +1186,143 @@ region = ["thigh", "hip", "upper_back"]
 plane = "sagittal"
 source = "curated"
 fixture = ["rowing-erg"]
+
+# --- swimming (#230 part 1) --------------------------------------------------
+#
+# A LENGTH IS ALREADY A ROW, which is the useful surprise: the `sets` model
+# fits lane work as it stands. A length is one row, the stroke is `exercise`,
+# the length number is `set_index`, the time is `duration_s`, the rest before
+# the next is `rest_s`, and a 4 x 50 is `block` plus `round`. A medley set is
+# four rows with four different exercises - the same shape a circuit already
+# uses - because a swim set is N lengths and the stroke can change every
+# length, where a lifting set is N reps of one movement by definition.
+#
+# THE NAMES ARE PRIOR ART. The four competitive strokes and the medley are
+# World Aquatics' own vocabulary, so this is not a taxonomy written from one
+# athlete's examples - the hazard G85 records ten instances of. What IS ours
+# is the axis assignment below, so every entry says `source = "curated"`
+# rather than claiming a database it did not come from.
+#
+# PULL AND KICK ARE MOVEMENTS, NOT MODIFIERS. A pull set and a kick set load
+# different regions - one is arms and upper back with the legs supported, the
+# other legs alone - so folding them into an equipment axis would make a
+# restriction on the lower limb unable to see that half the session was legs.
+# That is the same reasoning that keeps `knee-push-up` a separate entry.
+#
+# `fixture = ["swimmable-water"]`, and it is the COARSE HALF of a requirement
+# this model cannot yet state in full. `[]` would have meant "needs nothing -
+# a floor press", which answers "you can swim in your garage"; omitting the
+# key would have left every stroke unannotated, which the registry's own
+# completeness guard refuses because a gap there disables provisioning for any
+# session containing the movement.
+#
+# What is still unsayable is "at least 12 m of straight line, OR an active
+# countercurrent": a slug has no room for a parameter, and a list reads as AND
+# where the countercurrent is an alternative. That is #230 part 2, and this
+# annotation does not pretend to cover it.
+#
+# NO `gait`. It is defined as "walking, running, locomotion", and the standard
+# lower-limb instruction is "no running, swimming is fine" - so a restriction
+# written `pattern = gait` would have blocked every stroke, which is the
+# over-restriction this vocabulary exists to prevent.
+
+[exercises.front-crawl]
+label = "Front crawl"
+aliases = ["freestyle", "free", "crawl", "front-crawl"]
+pattern = "pull"
+region = ["shoulder", "upper_back", "upper_arm", "thigh"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+fixture = ["swimmable-water"]
+
+[exercises.backstroke]
+label = "Backstroke"
+aliases = ["back crawl", "back", "backstroke"]
+pattern = "pull"
+region = ["shoulder", "upper_back", "upper_arm", "thigh"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+fixture = ["swimmable-water"]
+
+[exercises.breaststroke]
+label = "Breaststroke"
+aliases = ["breast", "breaststroke", "frog"]
+# ADDUCTION, which no other stroke carries. The whip kick is a forceful hip
+# adduction and `pattern.adduction` exists precisely for groin and adductor
+# gates, so leaving it off cleared the movement most associated with adductor
+# injury from the gate written for adductor injury.
+#
+# An earlier draft omitted `upper_back` here and claimed that was why a
+# shoulder episode leaves breaststroke available. It is not: all four strokes
+# carry `shoulder`, so a shoulder restriction blocks all four identically, and
+# the lats drive the breaststroke pull in any case. The claim described a
+# behaviour the model does not produce, so it is gone and the region is
+# honest.
+pattern = ["pull", "adduction"]
+region = ["chest", "shoulder", "upper_back", "upper_arm", "hip", "knee"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+fixture = ["swimmable-water"]
+
+[exercises.butterfly]
+label = "Butterfly"
+aliases = ["fly", "butterfly"]
+pattern = "pull"
+region = ["shoulder", "upper_back", "upper_arm", "lower_back", "thigh"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+fixture = ["swimmable-water"]
+
+[exercises.individual-medley]
+label = "Individual medley"
+aliases = ["im", "medley", "individual medley"]
+# A medley is a SET-level fact - four lengths of four strokes - so a session
+# whose strokes were written down is four rows and never uses this entry. It
+# exists for a distance recorded as medley with the strokes not broken out,
+# which is a real thing a watch exports.
+#
+# THE UNION OF ALL FOUR, and it has to be exact. An earlier draft claimed the
+# union and omitted `hip` and `knee` - breaststroke's own contributions - so a
+# knee restriction blocked breaststroke and ALLOWED a medley of which a
+# quarter is breaststroke. Failing open is the one direction a gate may not
+# fail, and this entry is used precisely when nobody can say which quarter it
+# was.
+pattern = ["pull", "adduction"]
+region = ["chest", "shoulder", "upper_back", "upper_arm", "lower_back",
+          "hip", "knee", "thigh"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+fixture = ["swimmable-water"]
+
+[exercises.swim-pull]
+label = "Pull (arms only)"
+aliases = ["pull set", "arms only", "pull"]
+# Legs supported by a buoy and doing nothing, so the lower limb is absent from
+# `region` rather than merely secondary. That absence is the point: it is what
+# lets a knee restriction leave a pull set available.
+pattern = "pull"
+region = ["shoulder", "upper_back", "upper_arm", "forearm"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+fixture = ["swimmable-water"]
+kit = ["pull-buoy"]
+
+[exercises.swim-kick]
+label = "Kick (legs only)"
+aliases = ["kick set", "legs only", "kick"]
+# Hip and knee flexion-extension, not `gait`: a flutter kick is not walking,
+# and labelling it so would have made "no running" bar the kick set that is
+# usually the point of prescribing swimming.
+pattern = ["flexion", "extension"]
+region = ["thigh", "hip", "knee", "calf", "ankle"]
+load = "bodyweight"
+plane = "sagittal"
+source = "curated"
+fixture = ["swimmable-water"]
+kit = ["kickboard"]
