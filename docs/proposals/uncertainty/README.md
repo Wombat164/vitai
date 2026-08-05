@@ -48,13 +48,36 @@ sort order. The published construct is a partial order over conflicting
 claims, under which the behaviour #167 asks for is the default semantics
 rather than a new rule, and a genuine tie surfaces as a refusal.
 
-**Do not import numeric accuracy figures.** No incumbent platform models
+**No imported accuracy CLAIMS in arithmetic.** No incumbent platform models
 measurement error at all. Where published figures exist they cover the random
 term only and are contradicted by field observation. A borrowed
 population-level figure is a confident wrong number about confidence. Store
 instrument identity, comparability and competence; compute coverage, which is
-honest because it comes from the data itself; and admit numeric uncertainty
-only from this record's own replicates or overlap windows.
+honest because it comes from the data itself.
+
+Numeric uncertainty enters arithmetic from exactly **three** routes, and the
+distinction is between a *claim about what an instrument can do* and an
+*observation or a definition*:
+
+1. **This record's own replicates and its own overlap windows.** `u` is
+   canonicalised only when `basis` is `own-replicates` or `overlap`.
+2. **A per-reading figure the source reports alongside the reading**
+   (`u_obs`), which is an observation rather than an import, is carried with
+   provenance, is adjudicated like any other claim, and is never an anchor.
+3. **Definitional constants**: a display resolution step, a declared
+   measurand looseness, a unit conversion, a cited published formula
+   coefficient, a scale's declared range. These are not accuracy figures and
+   live in the registry with their citation.
+
+What stays banned is unchanged and is the whole point: a datasheet,
+validation-study or judgement figure keeps `u = null`, and its `u_given`
+survives as an auditable annotation that may inform rendering copy and never
+arithmetic.
+
+*Reworded 2026-08-05 (#264). The schema in `01-schema.md` already drew all
+three lines correctly - the `u_obs` slot, the `basis`-gated canonicaliser, and
+the `resolution_step` contribution. Only this prose summary was absolute, and
+read literally it banned the engine's own design and blocked #171.*
 
 **Accuracy and trust are different axes, and there is a third.** A value can
 be measured perfectly by a working instrument and still not mean what its

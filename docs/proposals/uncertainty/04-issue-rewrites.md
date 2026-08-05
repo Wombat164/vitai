@@ -479,7 +479,14 @@ from W3C SSN/SOSA ssn-system where they exist:
   already carries its diurnal component as a code constant - the capability
   data makes it declarable instead of hardcoded.
 
-## Numbers only where this record measured them itself
+## No imported accuracy claims in arithmetic
+
+*Heading reworded 2026-08-05 (#264). The old one, "numbers only where this
+record measured them itself", was read as banning a per-reading figure the
+source reports with the reading and any definitional constant. The schema
+below never did either; the ban is on accuracy CLAIMS, not on observations
+and not on definitions. See this proposal's README for the three admitted
+routes.*
 
 The survey of what vendors actually publish kills a numeric import outright:
 essentially only power meters publish figures, those cover the random term

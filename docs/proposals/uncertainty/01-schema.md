@@ -126,10 +126,12 @@ them by up to 20 %, one vendor's marketing figure is half its own service
 tolerance, and the backbone sources of a typical record publish nothing.
 A borrowed number would be a confident wrong number about confidence, which
 is the exact defect #171 warns against. What IS stored: instrument identity,
-a competence flag, a comparability class earned by overlap, and numbers ONLY
-where THIS record measured them itself. Borrowed figures may be archived as
-annotations (`u_given` + basis) but are never canonicalised into an
-engine-consumed `u`.
+a competence flag, a comparability class earned by overlap, and numbers only
+from the three admitted routes: this record's own replicates and overlap
+windows, a per-reading figure the source reports with the reading (`u_obs`,
+section 4), and definitional constants such as `resolution_step`. Borrowed
+accuracy CLAIMS may be archived as annotations (`u_given` + basis) but are
+never canonicalised into an engine-consumed `u`.
 
 New PRIVATE-RECORD dataset `capabilities.jsonl`, policy-dataset semantics
 (effective-dated, append-only, identity-keyed like `goals`; it never enters

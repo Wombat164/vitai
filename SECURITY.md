@@ -9,10 +9,17 @@ content repo private, and choosing what you let an LLM read.
 
 ## Threat model, plainly
 
-- **The engine** (`vitai build|validate|status`) is offline: stdlib-only
-  Python, no network calls, no telemetry, reads and writes only inside the
-  content repo you point it at. Its outputs are deterministic and
-  reviewable.
+- **The engine's build path** (`vitai build|validate|status`) is offline:
+  stdlib-only Python, no network calls, no telemetry, reads and writes only
+  inside the content repo you point it at. Its outputs are deterministic and
+  reviewable. **Nothing is ever fetched while a build runs**, so building your
+  record cannot leak it.
+- **Anything that does reach the network is separate, named and opt-in.** Some
+  capture-side capabilities can look something up for you (resolving a place
+  name, for example). Those are never part of a build, they are default-deny
+  and asked per use, the request is recorded, and what comes back enters your
+  record as a claim you can see and correct. If you never grant one, the tool
+  makes no network call at all.
 - **The skills** are instructions for an LLM agent (e.g. Claude Code)
   operating on your content repo. Anything that agent can read, its model
   provider processes. If that is not acceptable for some of your medical

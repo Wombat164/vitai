@@ -25,9 +25,13 @@ needs a very good reason stated in the PR body.
    providers - not in code, tests, fixtures, examples, or commit messages.
    CI runs `scripts/personal_gate.py` (hash-based, blocking) plus a secrets
    scan. If the gate fires, your change contains something private.
-3. **The engine stays deterministic.** No network, no wall-clock
-   nondeterminism in outputs, no LLM in the number path. Skills (markdown)
-   may be judgment-heavy; `src/` may not.
+3. **The engine stays deterministic, and the build is network-free.** Nothing
+   is fetched while a build runs; no wall-clock nondeterminism in outputs; no
+   LLM in the number path. Any capability that does touch the network is
+   capture-side, gated by the permission model (default deny, per use,
+   recorded), never runs during a build, and its results enter the record as
+   claims with provenance. Skills (markdown) may be judgment-heavy; `src/`
+   may not.
 4. **Append-only is sacred.** Nothing may edit, reorder or rewrite a data
    line; corrections flow through `supersedes`.
 5. **Schema changes touch three places together**: `schema.py`, the

@@ -10,8 +10,20 @@ template ships in `src/vitai/templates/`).
   measurements, real locations, real device IDs - not in code, comments,
   tests, fixtures, examples, or commit messages. Test data is synthetic.
 - **The engine stays deterministic and stdlib-only.** No dependencies, no
-  network, no wall-clock nondeterminism in outputs (report generation takes
-  an injectable `today`). Same input, same output.
+  wall-clock nondeterminism in outputs (report generation takes an injectable
+  `today`). Same input, same output.
+- **The BUILD is network-free.** Nothing is fetched while a build runs: same
+  input, same output. Network exists only in capture-side tools, is gated by
+  the permission model (default deny, per use, recorded), never runs during a
+  build, and its results enter the record as CLAIMS with provenance, never as
+  derived truth.
+
+  *Reworded 2026-08-05 (#264). The flat "no network" was contradicted by three
+  decisions already taken: #84's settled resolver ladder including
+  `hosted-coarse` and `hosted`, #224's outward asking channel, and G46's gated
+  live lookups. The rationale was always that the BUILD is a function of the
+  record; the old wording covered the whole engine and made ordered work a
+  paper violation.*
 - **No LLM in the number path.** Anything numeric the athlete will be judged
   or coached on is computed here, in reviewable Python, not by a model. The
   skills READ engine outputs.

@@ -102,7 +102,17 @@ lines, `vitai build`, commit. The rule the whole design serves:
 ## The data model
 
 One JSON object per line, keys never omitted (`null` for unknown), units in
-the key name. Three datasets record what happened:
+the key name.
+
+Field names carry a **display** unit, for human writability. The
+**authoritative** unit is UCUM, declared per field in the schema registry and
+per connector in its manifest; no new field bakes a unit into its name without
+its UCUM declaration landing in the same change. (Added 2026-08-05, #264: three
+documents already pointed at UCUM while this sentence read as settled the other
+way. Whether the unit eventually moves onto the value is a separate and
+expensive decision, tracked in #260.)
+
+Three datasets record what happened:
 
 | File | One line per | Example keys |
 |---|---|---|
