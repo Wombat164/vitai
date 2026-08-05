@@ -906,6 +906,16 @@ class Vitai:
         reason drops back to `no_input` and the row keeps `due` so a late
         source reads as late rather than as still coming (#202).
 
+        `statistic` says what KIND of number `value` is and `window_days`
+        over what population, both from contract 29. They are not decoration:
+        one column carried a maximum, a between-window change, a composite
+        index and six averages, and `steps` at 9752 for a week is the DAILY
+        AVERAGE, so a consumer totalling it reports a week five thousand
+        steps a day short of the one that happened. `pain_gate` is the WORST
+        day. The safety floors are means over fourteen days on a row keyed by
+        one week, which is why the population is stated rather than inferred
+        from `week`. Both are null on a refusal, which has no number.
+
         `today` is the viewpoint, and it defaults to this instance's - not to
         the wall clock. The same rows populate the read model's `verdicts`
         table, so a SQL consumer and an API consumer see one answer.

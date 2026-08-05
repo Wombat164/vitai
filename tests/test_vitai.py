@@ -1650,7 +1650,8 @@ def test_a_consumer_ignoring_the_reason_sees_the_previous_behaviour():
     ORIGINAL = ["week", "metric", "value", "target", "verdict", "goal"]
     assert VERDICT_KEYS[:len(ORIGINAL)] == ORIGINAL
     # And the appended ones are known, so a column cannot arrive unnoticed.
-    assert VERDICT_KEYS[len(ORIGINAL):] == ["reason", "due"]
+    assert VERDICT_KEYS[len(ORIGINAL):] == ["reason", "due", "statistic",
+                                            "window_days"]
 
 
 def test_the_reason_reaches_the_read_model(tmp_path):
