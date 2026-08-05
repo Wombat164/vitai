@@ -821,6 +821,13 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   (G15) - both are true, and the DIVERGENCE is itself the signal (in
   perimenopause, fragmented sleep with normal duration is the presentation).
   Resolution must not collapse a perceived measure into a measured one.
+  *Scoped 2026-08-05 (#264). "A client MAY be subjective; the engine may not"
+  governs COMPUTATION and VOICE, not contents. The engine already stores
+  subjective claims and must keep doing so - `rpe`, `mood`, `feel`, each with
+  its declared scale (#253) - and storing an answer to a subjective question
+  does not make the engine subjective. What it may not do is produce a
+  subjective judgement as its own output, or collapse a perceived quantity into
+  a measured one, which is this guardrail.*
 - **G76 Logging bias is not the same as logging coverage** (P1/G26). MEDIUM.
   "I log breakfast and lunch because those are the meals that already look
   fine" - her logged 1580-1710 kcal days are systematically biased low, not
