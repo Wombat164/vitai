@@ -33,6 +33,22 @@ read in an afternoon, and the coaching comes from an **LLM loaded with skills
 and your full profile** - not a one-size-fits-all algorithm. Progress you can
 prove, in a record no vendor can take away.
 
+### At a glance
+
+|  |  |
+|---|---|
+| **Your data lives** | in a private git repo you own, as plain-text JSONL |
+| **The engine is** | pure Python 3.11+, **zero dependencies**, deterministic, offline |
+| **The LLM does** | coaching and ingestion. It never computes a number you are judged on |
+| **Corrections** | append a new line; nothing is ever edited or deleted |
+| **Weekly cost** | designed to stay under three minutes |
+| **It will not** | diagnose, screen for, or tell you to see anyone about a condition |
+
+> [!NOTE]
+> **New here?** The [Quickstart](#quickstart) is four commands. If you would
+> rather read first, [the docs site](https://wombat164.github.io/vitai/) is
+> organised by what you are trying to do.
+
 ## See it
 
 A synthetic demo athlete lives in [`examples/demo/`](examples/demo/)
@@ -105,12 +121,10 @@ One JSON object per line, keys never omitted (`null` for unknown), units in
 the key name.
 
 Field names carry a **display** unit, for human writability. The
-**authoritative** unit is UCUM, declared per field in the schema registry and
-per connector in its manifest; no new field bakes a unit into its name without
-its UCUM declaration landing in the same change. (Added 2026-08-05, #264: three
-documents already pointed at UCUM while this sentence read as settled the other
-way. Whether the unit eventually moves onto the value is a separate and
-expensive decision, tracked in #260.)
+**authoritative** unit is [UCUM](https://ucum.org/), declared per field in the
+schema registry and per connector in its manifest, so a connector author never
+has to infer a unit from a name. See
+[docs/schema-versioning.md](docs/schema-versioning.md).
 
 Three datasets record what happened:
 
@@ -177,7 +191,11 @@ not in code - the engine is the same for everyone, the thresholds are yours.
 Once you change one, record it in `thresholds.jsonl` so the old value keeps
 governing the weeks it governed.
 
-### Safety is a branch, not a sentence
+Five design decisions that shaped the rest. Expand what you need.
+
+<details>
+<summary><b>Safety is a branch, not a sentence</b></summary>
+
 
 One decision in this system is not a coaching input: whether the engine
 stops. It used to live as prose in a skill file, which meant a coach
@@ -215,7 +233,12 @@ bounds outside which no training is programmed - the resting-heart-rate floor
 sits below a trained athlete's genuinely low rate, because a layer that
 refuses at normal physiology teaches people to ignore it.
 
-### Where it hurts
+
+</details>
+
+<details>
+<summary><b>Where it hurts</b></summary>
+
 
 `pain_site` is a closed vocabulary rather than free text, so "knee", "Knee",
 "IT band" and "patella" are one countable place rather than four unrelated
@@ -231,7 +254,12 @@ instrument, trimmed to the musculoskeletal sites a training record can act
 on. No clinical ontology is vendored; see
 [docs/prior-art-anatomy.md](docs/prior-art-anatomy.md) for why.
 
-### One truth per quantity
+
+</details>
+
+<details>
+<summary><b>One truth per quantity</b></summary>
+
 
 Two sources will eventually describe the same day, and a calorie is burned
 once. The engine resolves competing claims into ONE canonical value per
@@ -249,7 +277,12 @@ Each canonical value carries a justification, so a correction cascades:
 retract the observation and anything that stood on it retracts too, rather
 than lingering as a belief whose evidence no longer exists.
 
-### What a computed value stands on
+
+</details>
+
+<details>
+<summary><b>What a computed value stands on</b></summary>
+
 
 Some numbers are observed and some are worked out from other numbers, and the
 record says which. A row that was computed names its inputs in `derived_from`
@@ -284,7 +317,12 @@ guessing.
 Lineage that leads back to itself, directly or around a loop, is an error
 rather than a finding - a value cannot be an input to its own computation.
 
-### Schema migrations
+
+</details>
+
+<details>
+<summary><b>Schema migrations</b></summary>
+
 
 | Contract | Version | Change | What an existing repo must do |
 |---|---|---|---|
@@ -321,6 +359,9 @@ history lives beside `CONTRACT_VERSION`, at more length and with the
 reasoning. The two had drifted - this table stopped at contract 8 and the
 wiki's at 4, while the engine was at 16 - and a test now holds all three
 together, because that drift was invisible until somebody went looking.
+
+
+</details>
 
 ## Skills
 
@@ -391,26 +432,41 @@ something.
 
 ## Documentation
 
-- Docs site: <https://wombat164.github.io/vitai/> (built from `wiki/`)
-- **Model spine: [docs/model.md](docs/model.md)** - eight core principles,
-  five artifact kinds, the full gap map. Read this first.
-- **The line: [docs/medical-boundary.md](docs/medical-boundary.md)** - what
-  the engine is for, what it may say, and the one exception. Read before
-  adding any feature, string or field that touches injury, pain or care.
-- Validation: [docs/persona-doctrine.md](docs/persona-doctrine.md) - how the
-  ten synthetic athletes work, and what makes one valid.
-- Design: [ARCHITECTURE.md](ARCHITECTURE.md) - the layers and what is
-  deliberately not built
-- The design conversation: [docs/the-loop.md](docs/the-loop.md) (185+
-  question acceptance-test bank, gaps G1-G33),
-  [docs/cross-metric-inference.md](docs/cross-metric-inference.md),
-  [docs/plan-v3.md](docs/plan-v3.md) (the build plan)
-- Research: [docs/prior-art.md](docs/prior-art.md) - the survey behind the
-  design; [docs/prior-art-world-model.md](docs/prior-art-world-model.md) -
-  vitai as a guardrailed world model;
-  [docs/prior-art-anatomy.md](docs/prior-art-anatomy.md) - naming the place
+**Start here:** the [docs site](https://wombat164.github.io/vitai/), built from
+`wiki/` and organised by what you are trying to do - getting started, CLI
+reference, data model, architecture, the platform contract, the boundary.
+
+The files below are the engineering record. They are written for someone
+changing the engine, not for someone using it.
+
+| Read this | when you want |
+|---|---|
+| **[docs/model.md](docs/model.md)** | the spine: eight principles, five artifact kinds, the full gap map. **Read first.** |
+| **[docs/medical-boundary.md](docs/medical-boundary.md)** | what the engine is for, what it may say, and the one exception. **Read before touching anything about injury, pain or care.** |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | the layers, and what is deliberately not built |
+| [docs/vocabularies.md](docs/vocabularies.md) | one axis per vocabulary, post-coordinate, registry not code |
+| [docs/schema-versioning.md](docs/schema-versioning.md) | what counts as a breaking change, and how a retired key announces itself |
+| [docs/persona-doctrine.md](docs/persona-doctrine.md) | how the ten synthetic athletes work, and what makes one valid |
+| [docs/the-loop.md](docs/the-loop.md) | the design conversation: a 185-question acceptance bank |
+
+<details>
+<summary><b>Research and prior art</b></summary>
+
+- [docs/prior-art.md](docs/prior-art.md) - the landscape survey behind the
+  design, and why the position is unoccupied
+- [docs/prior-art-schemas.md](docs/prior-art-schemas.md) - which published
+  health, activity, calendar, plan and provenance schemas are worth conforming
+  to, and which are dead. Red-teamed; carries a staleness caveat
+- [docs/prior-art-world-model.md](docs/prior-art-world-model.md) - vitai as a
+  guardrailed world model
+- [docs/prior-art-anatomy.md](docs/prior-art-anatomy.md) - naming the place
   that hurts
-- Brand: [assets/BRAND.md](assets/BRAND.md)
+- [docs/cross-metric-inference.md](docs/cross-metric-inference.md),
+  [docs/plan-v3.md](docs/plan-v3.md)
+
+</details>
+
+Brand assets and usage: [assets/BRAND.md](assets/BRAND.md)
 
 ## Contributing
 
