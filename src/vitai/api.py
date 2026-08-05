@@ -27,7 +27,7 @@ from statistics import mean
 from . import __version__
 from .config import Config, load_config, policy_digest
 from .contributions import compute_contributions, goal_progress
-from .db import CONTRACT_VERSION, build_db
+from .db import CONTRACT_VERSION, DERIVED_TABLES, build_db
 from .clocks import is_aware
 from .jsonl import EVENT_DATASETS, append, append_many, load
 from . import query
@@ -1006,6 +1006,52 @@ class Vitai:
         d = self.datasets()
         return plan_churn(d["goals"], d["thresholds"], self.verdicts(today=today),
                           events=d["events"])
+
+    def derived(self, name: str) -> list[dict]:
+        """One DERIVED table's rows, by the name the contract gives it.
+
+        The read model's tables are the consumer contract, and a consumer
+        reads that contract by TABLE NAME. `best_efforts` had no public path
+        at all, so the only ways in were a private attribute, a direct query
+        against the table this contract exists to insulate consumers from, or
+        re-parsing the tracks - at which point the number is the caller's
+        claim rather than this engine's (#267, and #257 three weeks earlier).
+
+        THESE ARE NOT ALIASES FOR THE NAMED ACCESSORS, and the difference is
+        not cosmetic. `goals()` computes `goal_progress` over `datasets()` -
+        RAW claims - while this returns the table, computed over the resolved
+        canonical rows. On a record where one session reached it twice, the
+        two report different progress against the same goal, because the raw
+        read counts the duplicate. `contributions()` differs the same way and
+        `churn()` will as soon as a contested goal or threshold row exists.
+        Which of the two is right is a live question and not this method's to
+        settle; what this method owes a caller is to say they differ. Only
+        `resolution()` and `retractions()` return the same objects.
+
+        Rows are the derivation's own output, which may carry MORE than the
+        table declares: `resolution` rows carry `by_capture` and `gates` rows
+        carry `restriction`, neither of which is in the contract's column
+        list, so SQLite drops them and this does not. The declared columns are
+        the contract; the extras are visible here and must not be relied on.
+
+        What DOES survive intact is anything saying what kind of number a
+        value is - `best_efforts.basis` above all. `device` means measured
+        against the watch's own cumulative distance and `derived` means
+        against the engine's haversine sum; on a real 11 km track the two
+        differ by twenty seconds over ten kilometres, so a time quoted
+        without it has thrown away its own epistemic class.
+
+        Computed fresh on every call. A cache here was stale the moment
+        `vitai.toml` changed under it - `verdicts()` re-reads the config per
+        call, so a cached `derived("verdicts")` disagreed with it after a
+        threshold edit with no write in between, which is two answers to one
+        question from one instance.
+        """
+        if name not in DERIVED_TABLES:
+            raise KeyError(f"unknown derived table {name!r}; one of "
+                           f"{sorted(DERIVED_TABLES)}")
+        return self._derivations(self.resolution(), today=self.on).get(
+            name) or []
 
     def session_weeks(self, on: date | str | None = None) -> list[dict]:
         """How far and how often, per week, per the engine's type vocabulary.
