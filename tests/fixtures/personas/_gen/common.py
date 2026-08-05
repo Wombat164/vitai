@@ -192,7 +192,9 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # #139 moves `events` the same way, for the same reason: a fixture gains an
 # explicit `outcome: null`, which is the ordinary state of one - nobody has
 # said - and never "did not happen".
-AUTHORED_AGAINST_CONTRACT = "31"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #185/#189, which adds `answers` to `verdicts`. A DERIVED
+# column on a derived table: no persona line changes, only the contract stamp.
+AUTHORED_AGAINST_CONTRACT = "32"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,

@@ -53,6 +53,36 @@ CONTRAINDICATED = "contraindicated"  # judging it would be actively harmful
 SUPPRESSED = "suppressed"            # the athlete asked not to be scored
 
 PENDING = "pending"                  # answerable, and not yet: a source is due
+# WHAT THE ENGINE WILL VOUCH FOR, beside the reason it will not (#185/#189).
+#
+# An athlete asks "have I had enough protein today". Three things are being
+# asked and they are not equally answerable: protein against a target is one
+# logged quantity against a stated goal, and energy balance is a DIFFERENCE OF
+# TWO INEXACT AGGREGATES. Subtracting those does not average their errors, it
+# amplifies the relative one - two large separately-inexact numbers differencing
+# to a small one is the worst arithmetic available, and "400 kcal left" can
+# carry uncertainty larger than the figure.
+#
+# The engine returned both with the same confidence and only one deserved it.
+# So a judged row now says which:
+#
+#   magnitude - render the number, at the resolution it supports
+#   direction - render ahead, behind, on track, and NEVER a figure
+#
+# ONE FIELD WITH THE REFUSALS, not a parallel table. #177 already shipped a
+# vocabulary for what the engine will not answer and enforced totality in both
+# directions; this is the positive half of the same question, and keeping them
+# apart would ship two vocabularies for one thing. `provisional` - a day still
+# open, so the number is "so far" rather than final - is the third value this
+# field is shaped for, and it belongs to the day-completeness work, which this
+# issue's own Related section files separately.
+#
+# A CLIENT CANNOT DERIVE THIS. It would have to reimplement the per-field
+# policy, every client would derive it slightly differently, and that
+# duplication is what this engine exists to prevent.
+MAGNITUDE, DIRECTION = "magnitude", "direction"
+ANSWERS = {MAGNITUDE, DIRECTION}
+
 REFUSAL_REASONS = {NO_INPUT, NO_POLICY, NOT_SUPPORTED, CONTRAINDICATED,
                    SUPPRESSED, PENDING}
 
@@ -137,6 +167,84 @@ COMPOSITE = "composite-of-summaries"
 PERIOD_CHANGE = "period-over-period-change"
 
 
+# Which metrics survive as a number, and which only as a direction.
+#
+# `energy_availability` is (mean intake - exercise per day) / fat-free mass:
+# expenditure carries 20 to over 90 per cent error in the validation
+# literature, systematic and activity-dependent, self-reported intake carries
+# its own under-reporting on top, and the difference amplifies both.
+#
+# `weight_rate` is not a vendor estimate - it is two means of the same scale -
+# and it still does not survive, on this project's own pre-registered
+# measurement: the median 95 per cent half-width on a week-over-week rate is
+# 1.74 times the entire decision half-band. A rate whose interval swamps the
+# band it is judged against is a direction, and reporting it to three decimal
+# places was the engine claiming a precision it had already measured away.
+#
+# Everything else is one logged or measured quantity against a stated policy,
+# which is the shape that does survive.
+ANSWERS_BY_METRIC = {
+    # One logged or measured quantity against a stated policy - the shape
+    # that survives. Self-report under-reports, but one-signed and into a
+    # SAFETY FLOOR, so the bias errs toward firing rather than toward
+    # silence, and both are gated on at least 7 of 14 days carrying a value.
+    "intake_floor": MAGNITUDE,
+    "protein_floor": MAGNITUDE,
+    "steps": MAGNITUDE,
+    "sleep": MAGNITUDE,
+    "rhr": MAGNITUDE,
+    # A count of reports is exact.
+    "symptom_chest_pain": MAGNITUDE,
+    "symptom_syncope": MAGNITUDE,
+
+    # (mean intake - exercise per day) / fat-free mass. Expenditure carries 20
+    # to over 90 per cent error in the validation literature, self-report
+    # carries its own on top, and the difference amplifies the relative error
+    # rather than averaging it.
+    "energy_availability": DIRECTION,
+    # NOT a vendor estimate - two means of the same scale - and it still does
+    # not survive. This project's pre-registered run measured a median
+    # `u_rate / half-band` of 1.74 and found that MORE THAN HALF of scored
+    # weeks admit no verdict word at all.
+    #
+    # Which is worth stating plainly: that result does not support `direction`
+    # either. Its own decision was that the DECISION UNIT is wrong and a
+    # refusal predicate ships, which is #171's to build. `direction` is the
+    # strictly weaker of the two tokens this field has, so it is an
+    # improvement on claiming a magnitude and it is not the answer.
+    "weight_rate": DIRECTION,
+    # An unweighted mean of per-session average heart rates, at intensity by
+    # construction - a 20-minute jog weighing the same as a 2-hour run. The
+    # per-field table adopted at the same gate says avg_hr is usable at rest
+    # and NOT at intensity, so a magnitude here would contradict this
+    # project's own shipped policy.
+    "easy_hr": DIRECTION,
+    # A 0-10 ordinal whose SCALE is declared per row (contract 26) and does
+    # not reach the verdict. `magnitude` says render the number at the
+    # resolution it supports, and a bare ordinal with no denominator has
+    # none - which is verbatim the defect contract 26 exists to name. The
+    # value is exact as reported; what is missing is the bound. Carrying the
+    # scale through to this row would make it a magnitude honestly.
+    "pain_gate": DIRECTION,
+}
+
+
+def _answers(metric: str) -> str:
+    """What the engine will vouch for on this metric.
+
+    CLOSED WORLD, like `statistic` beside it. A default would hand every new
+    metric the STRONGER claim silently, which is the failure this field
+    exists to fix arriving through the door marked convenience.
+    """
+    if metric not in ANSWERS_BY_METRIC:
+        raise ValueError(
+            f"{metric!r} reports a number and nothing says what it is good "
+            f"for: add it to ANSWERS_BY_METRIC as {MAGNITUDE!r} or "
+            f"{DIRECTION!r}. Defaulting would promise a magnitude for a "
+            "figure that may not carry one")
+    return ANSWERS_BY_METRIC[metric]
+
+
 def _week_key(d: str) -> str:
     # ONE definition of a week, in `weeks` (#208). It was four copies of the
     # arithmetic and TWO contracts: this one raises on a value that is not a
@@ -205,11 +313,27 @@ def _row(week: str, metric: str, value: float | None, target: float | None,
     # metric uses, so the exceptions are the rows that say so.
     if value is not None and window_days is None:
         window_days = 7
+    # EVERY JUDGED ROW SAYS WHAT IT IS GOOD FOR, AND NO REFUSAL DOES - the
+    # same totality `reason` has, in the other direction.
+    #
+    # Keyed on the VERDICT and not on the value, which the first cut got
+    # wrong. A refusal often keeps its number: `not_supported` fires when
+    # weigh-in drift accounts for the whole rate, so not even the sign is
+    # supported, and `contraindicated` fires when judging would be actively
+    # harmful. Stamping those rows `direction` told a consumer the engine
+    # vouches for ahead-or-behind on exactly the rows where it had just said
+    # it vouches for nothing. #185's own table is explicit: a refusal gets
+    # the reason and no number at all.
+    #
+    # Derived from the metric rather than passed in, because a caller free to
+    # choose is a caller free to promise a magnitude for a figure that cannot
+    # carry one.
+    answers = None if (value is None or verdict == NODATA) else _answers(metric)
     return {"week": week, "metric": metric,
             "value": round(value, 3) if value is not None else None,
             "target": target, "verdict": verdict, "goal": goal,
             "reason": reason, "due": due, "statistic": statistic,
-            "window_days": window_days}
+            "window_days": window_days, "answers": answers}
 
 
 def _awaiting(rows: list[dict], field: str, week: str,
