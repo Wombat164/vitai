@@ -205,6 +205,36 @@ parseable; the MCP tool returns rows only, so an agent that needs to know asks
 `validate`.
 
 ```
+vitai derived [--root ROOT] [--json] <table>
+```
+
+One DERIVED table's rows, by the name the contract gives it - `best_efforts`,
+`session_weeks`, `verdicts`, `goal_progress` and the rest. These are build
+output, rebuilt from the record every time and never a place to write.
+
+Keyed by table name because that is the name a consumer has: the contract
+history names tables, and several of these were reachable only under a command
+whose name differs. `best_efforts` had no public path at all, which left a
+private attribute, a direct query against a table the contract exists to
+insulate you from, or re-parsing the tracks - at which point the number is
+yours rather than the engine's.
+
+**These are not aliases for the named commands.** `vitai goals` computes from
+the raw claims; the `goal_progress` table computes from the resolved canonical
+rows. Where one session reached the record twice, the two report different
+progress against the same goal, because the raw read counts the duplicate. The
+same holds for the contributions behind `vitai goals`, and for churn as soon
+as a contested goal or threshold row exists. Pick one and stay on it.
+
+**Read `basis` before quoting a `best_efforts` time.** `device` means the
+window was measured against the watch's own cumulative distance, an
+observation; `derived` means against the haversine sum the engine computes,
+which is not. On a real 11 km track the two differ by twenty seconds over ten
+kilometres.
+
+Same rows from `Vitai.derived(name)` and from the `derived` MCP tool.
+
+```
 vitai events [--root ROOT] [--json] [--on YYYY-MM-DD]
 vitai meals  [--root ROOT] [--on YYYY-MM-DD] [--json]
 vitai sets   [--root ROOT] [--machine MACHINE] [--on YYYY-MM-DD] [--json]

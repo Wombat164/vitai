@@ -818,6 +818,18 @@ CLI_MAY_IMPORT = {
     "mcp": {"serve"},
     "jsonl": {"DataError"},
     "schema": {"KEYS"},
+    # The NAME LIST of the read model's derived tables, for argparse
+    # `choices` and NOTHING ELSE, allowed for the reason `schema.KEYS` is: it
+    # is the engine's own inventory rather than logic, and taking it from the
+    # engine is what stops the CLI's list going stale the day a table is
+    # added. An agent reaches the same list through the `derived` tool's enum.
+    #
+    # The first cut also read the dict's VALUES, to print "N of M columns".
+    # That was the rule breaking quietly: no permitted door gives an agent a
+    # derived table's declared column list, so the CLI could answer a
+    # question MCP could not. The summary now counts only what the rows
+    # carry, which any consumer can do for itself.
+    "db": {"DERIVED_TABLES"},
     "": {"__version__"},          # `from . import __version__`
 }
 
@@ -1536,7 +1548,7 @@ def test_it_speaks_the_protocol(tmp_path):
     assert replies[0]["result"]["protocolVersion"]
     assert {t["name"] for t in replies[1]["result"]["tools"]} == \
         {"situation", "schema", "validate", "status", "day", "window",
-         "goals", "safety", "claim", "said", "dataset"}
+         "goals", "safety", "claim", "said", "dataset", "derived"}
     payload = json.loads(replies[2]["result"]["content"][0]["text"])
     assert payload["contract"]
 
