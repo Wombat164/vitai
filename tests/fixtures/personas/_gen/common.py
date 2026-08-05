@@ -166,7 +166,12 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # nothing here writes a session, reads a week or declares a field, and the
 # only thing in a persona that changes is the contract stamp in its
 # `persona.toml`. Verified by regenerating and diffing rather than asserted.
-AUTHORED_AGAINST_CONTRACT = "28"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #261 step 2, which adds `statistic` to `verdicts`. A DERIVED
+# column, computed from rows the personas already ship, so like the three
+# above it moves no data line: nothing here writes a verdict or declares a
+# statistic, and the only change in a persona is the contract stamp in its
+# `persona.toml`. Verified by regenerating and diffing rather than asserted.
+AUTHORED_AGAINST_CONTRACT = "29"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,

@@ -26,6 +26,7 @@ from .clocks import weigh_in_timing
 from .config import Config, overlay, phase_rate_for
 from .policy import state
 from .schema import EXTERNAL_METRIC
+from .schema import statistics as _statistics
 
 ON, AHEAD, BEHIND, NODATA = "on_target", "ahead", "behind", "no_data"
 
@@ -123,6 +124,19 @@ def expected_next(rows: list[dict], on: date, field: str) -> date | None:
     return min(ahead) if ahead else max(due)
 
 
+# From the registry, so the code cannot know a statistic the vocabulary does
+# not (semantics/statistics.toml). A module constant because the vocabulary
+# is a shipped file rather than record data - `vocab.registry` is itself
+# cached, so this is about saying the set is fixed, not about the file read.
+STATISTICS = frozenset(_statistics())
+
+AVERAGE = "average"
+MAXIMUM = "maximum"
+COUNT = "count"
+COMPOSITE = "composite-of-summaries"
+PERIOD_CHANGE = "period-over-period-change"
+
+
 def _week_key(d: str) -> str:
     # ONE definition of a week, in `weeks` (#208). It was four copies of the
     # arithmetic and TWO contracts: this one raises on a value that is not a
@@ -138,7 +152,9 @@ def _weeks_covered(*datasets: list[dict]) -> list[str]:
 
 def _row(week: str, metric: str, value: float | None, target: float | None,
          verdict: str, goal: str | None = None,
-         reason: str | None = None, due: str | None = None) -> dict:
+         reason: str | None = None, due: str | None = None,
+         statistic: str | None = None,
+         window_days: int | None = None) -> dict:
     # A reason is REQUIRED with a refusal and forbidden without one, so a new
     # refusal site cannot ship unlabelled and a judged row cannot carry a
     # reason nobody asked for. This is the totality the issue asks for, held
@@ -164,10 +180,36 @@ def _row(week: str, metric: str, value: float | None, target: float | None,
             "Without an instant it is `no_input` wearing optimism, and a "
             "metric that is pending forever is a broken connector nobody "
             "will notice")
+    # WHAT KIND OF NUMBER `value` IS (#261 layer 1). Required wherever there
+    # is a value, and held here rather than at each caller for the reason
+    # `reason` is: a new metric must not be able to ship unlabelled. One
+    # column carried a maximum, a week-over-week change and six averages, and
+    # a consumer reading the weekly `steps` average as a weekly total saw a
+    # week five thousand steps a day short of the one that happened.
+    if value is not None and statistic not in STATISTICS:
+        raise ValueError(
+            f"{metric!r} reports a value, so it says what KIND of number it "
+            f"is: one of {', '.join(sorted(STATISTICS))}, got {statistic!r}. "
+            "An aggregate whose statistic a reader has to infer from the "
+            "metric name is one they will infer wrongly")
+    # And a refusal carries none: there is no number for it to describe, and
+    # a statistic beside a null value describes nothing.
+    if value is None and statistic is not None:
+        raise ValueError(f"{metric!r} has no value, so it has no statistic "
+                         f"to declare (got {statistic!r})")
+    # OVER WHAT. A statistic with no stated population is half an answer, and
+    # the half it leaves out is the one that misleads: `intake_floor` is a
+    # mean over FOURTEEN days on a row keyed by one week, so a consumer
+    # reading "average" against the week it can see reads it over the wrong
+    # population. Defaults to the keyed week, which is what every weekly
+    # metric uses, so the exceptions are the rows that say so.
+    if value is not None and window_days is None:
+        window_days = 7
     return {"week": week, "metric": metric,
             "value": round(value, 3) if value is not None else None,
             "target": target, "verdict": verdict, "goal": goal,
-            "reason": reason, "due": due}
+            "reason": reason, "due": due, "statistic": statistic,
+            "window_days": window_days}
 
 
 def _awaiting(rows: list[dict], field: str, week: str,
@@ -309,7 +351,7 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
         goal = _goal_for(goals_for[wk], "weight_rate")
         if target is None:
             rows.append(_row(wk, "weight_rate", rate, None, NODATA, goal,
-                             reason=NO_POLICY))
+                             reason=NO_POLICY, statistic=PERIOD_CHANGE))
             continue
         # #37: a rate whose weigh-in times are spread widely enough to
         # account for it is not a rate, and this is the machine-readable
@@ -323,13 +365,14 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
         if timing["known"] and not timing["unknown"] and (
                 timing["drift_kg"] >= abs(rate)):
             rows.append(_row(wk, "weight_rate", rate, target, NODATA, goal,
-                             reason=NOT_SUPPORTED))
+                             reason=NOT_SUPPORTED, statistic=PERIOD_CHANGE))
             continue
         if abs(rate - target) <= 0.25:
             verdict = ON
         else:
             verdict = AHEAD if rate > target else BEHIND
-        rows.append(_row(wk, "weight_rate", rate, target, verdict, goal))
+        rows.append(_row(wk, "weight_rate", rate, target, verdict, goal,
+                         statistic=PERIOD_CHANGE))
 
     # --- easy-run HR discipline: weekly avg of run avg_hr vs cap ------------
     by_week_hr: dict[str, list[int]] = defaultdict(list)
@@ -344,7 +387,8 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
         avg = mean(hrs)
         aim, goal = _target_for(goals_for[wk], "easy_hr", float(cap))
         rows.append(_row(wk, "easy_hr", avg, aim,
-                         ON if avg <= aim else BEHIND, goal))
+                         ON if avg <= aim else BEHIND, goal,
+                         statistic=AVERAGE))
 
     # --- daily floors/gates, weekly aggregated ------------------------------
     daily_by_week: dict[str, list[dict]] = defaultdict(list)
@@ -364,7 +408,8 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
                 aim, goal = _target_for(active, "steps",
                                         float(eff.steps_floor))
                 rows.append(_row(wk, "steps", avg, aim,
-                                 ON if avg >= aim else BEHIND, goal))
+                                 ON if avg >= aim else BEHIND, goal,
+                                 statistic=AVERAGE))
         if eff.sleep_floor_h is not None:
             sleeps = [d["sleep_h"] for d in days if d.get("sleep_h") is not None]
             if sleeps:
@@ -372,7 +417,8 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
                 aim, goal = _target_for(active, "sleep_h",
                                         float(eff.sleep_floor_h))
                 rows.append(_row(wk, "sleep", avg, aim,
-                                 ON if avg >= aim else BEHIND, goal))
+                                 ON if avg >= aim else BEHIND, goal,
+                                 statistic=AVERAGE))
         if eff.pain_gate is not None:
             # `pain` after the gen-2 generalization; old lines arrive here
             # already mapped from `hip_pain` by resolution.canonical_daily.
@@ -392,14 +438,15 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
                 rows.append(_row(wk, "pain_gate", float(worst), float(eff.pain_gate),
                                  ON if worst <= eff.pain_gate else BEHIND,
                                  _goal_for(active, "pain")
-                                 or _goal_for(active, "hip_pain")))
+                                 or _goal_for(active, "hip_pain"),
+                                 statistic=MAXIMUM))
         if eff.rhr_baseline is not None:
             rhrs = [d["rhr"] for d in days if d.get("rhr") is not None]
             if rhrs:
                 avg = mean(rhrs)
                 rows.append(_row(wk, "rhr", avg, float(eff.rhr_baseline + 5),
                                  ON if avg <= eff.rhr_baseline + 5 else BEHIND,
-                                 _goal_for(active, "rhr")))
+                                 _goal_for(active, "rhr"), statistic=AVERAGE))
 
     # Safety floors that need no configuration (G68). Every rule above is
     # opt-in: it produces nothing until the athlete sets a threshold. That is
@@ -421,7 +468,8 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
     # is that the record says so.
     if _drops_rate_verdict(medical or [], weeks):
         rows = [_row(r["week"], r["metric"], r["value"], r["target"], NODATA,
-                     r["goal"], reason=CONTRAINDICATED)
+                     r["goal"], reason=CONTRAINDICATED,
+                     statistic=r["statistic"])
                 if r["metric"] == "weight_rate" else r for r in rows]
 
     # G33, last: a suppressed metric is still RECORDED, just not scored. The
@@ -429,7 +477,7 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
     # stops is the judging.
     if cfg.suppressed_metrics:
         rows = [_row(r["week"], r["metric"], r["value"], r["target"], NODATA,
-                     r["goal"], reason=SUPPRESSED)
+                     r["goal"], reason=SUPPRESSED, statistic=r["statistic"])
                 if r["metric"] in cfg.suppressed_metrics else r
                 for r in rows]
     rows.sort(key=lambda r: (r["week"], r["metric"]))
@@ -479,7 +527,8 @@ def _default_floor_rows(weight: list[dict], daily: list[dict],
     if len(intakes) >= 7:
         mean_intake = sum(intakes) / len(intakes)
         out.append(_row(wk, "intake_floor", mean_intake, floor,
-                        BEHIND if mean_intake <= floor else ON))
+                        BEHIND if mean_intake <= floor else ON,
+                        statistic=AVERAGE, window_days=RED_S_WINDOW_DAYS))
 
     kg = _latest_weight(weight, end)
     proteins = [float(r["protein_g"]) for r in window
@@ -487,12 +536,20 @@ def _default_floor_rows(weight: list[dict], daily: list[dict],
     if kg and len(proteins) >= 7:
         per_kg = (sum(proteins) / len(proteins)) / kg
         out.append(_row(wk, "protein_floor", per_kg, PROTEIN_FLOOR_G_PER_KG,
-                        BEHIND if per_kg < PROTEIN_FLOOR_G_PER_KG else ON))
+                        BEHIND if per_kg < PROTEIN_FLOOR_G_PER_KG else ON,
+                        statistic=AVERAGE, window_days=RED_S_WINDOW_DAYS))
 
     ea, _terms = energy_availability(daily, weight, sessions)
     if ea is not None:
+        # NOT an average, despite being built from one. It is
+        # (mean intake - exercise per day) / fat-free mass, and on a record
+        # with fewer than fourteen logged intakes the two terms do not share
+        # a denominator - the mean is over the days that carry one, the
+        # second divides by the window length regardless. So it is the mean
+        # of no per-day series that exists.
         out.append(_row(wk, "energy_availability", ea, EA_LOW_THRESHOLD,
-                        BEHIND if ea < EA_LOW_THRESHOLD else ON))
+                        BEHIND if ea < EA_LOW_THRESHOLD else ON,
+                        statistic=COMPOSITE, window_days=RED_S_WINDOW_DAYS))
     out += _symptom_rows(weight, daily, sessions, medical)
     return out
 
@@ -516,5 +573,5 @@ def _symptom_rows(weight: list[dict], daily: list[dict], sessions: list[dict],
         if metric and row.get("date"):
             key = (_week_key(str(row["date"])), metric)
             counts[key] = counts.get(key, 0) + 1
-    return [_row(wk, metric, float(n), 0.0, BEHIND)
+    return [_row(wk, metric, float(n), 0.0, BEHIND, statistic=COUNT)
             for (wk, metric), n in sorted(counts.items())]

@@ -168,7 +168,10 @@ def test_pending_is_in_the_refusal_vocabulary():
 
 
 def test_every_judged_row_carries_a_null_due():
-    row = _row(WEEK, "weight_rate", 0.3, 0.35, "on_target")
+    # `statistic` is required beside a value (contract 29); this test is
+    # about `due`, so it declares one rather than dodging the gate.
+    row = _row(WEEK, "weight_rate", 0.3, 0.35, "on_target",
+               statistic="period-over-period-change")
     assert row["due"] is None and row["reason"] is None
 
 

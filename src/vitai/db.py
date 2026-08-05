@@ -328,9 +328,25 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     Claims 28 on the assumption nothing else bumps first. The contract
 #     follows MERGE order, so if another table lands ahead of this one it
 #     becomes 29 - said here rather than assumed.
-CONTRACT_VERSION = "28"
+# 29: `verdicts` gains `statistic` - what KIND of number `value` is, from
+#     `semantics/statistics.toml`. One column carried a maximum, a
+#     week-over-week change and six averages: `steps` at 9752 for a week is
+#     the DAILY AVERAGE, and a consumer reading it as the weekly total saw a
+#     week five thousand steps a day short of the one that happened. Adopted
+#     from IEEE 1752.1's `descriptive-statistic` where its terms reach, under
+#     a `vitai` namespace where they do not - a between-window comparison is
+#     not a descriptive statistic of a set and the standard has no term for
+#     it. Also `window_days`, because a statistic with no stated population
+#     is half an answer and the missing half is the misleading one: the
+#     safety floors are means over FOURTEEN days on a row keyed by one week.
+#     Both are required wherever there is a value, enforced where the rows
+#     are built, so a new metric cannot ship unlabelled.
+#
+CONTRACT_VERSION = "29"
 
-_TEXT_COLS = {"derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
+_TEXT_COLS = {"statistic",            # a slug, and REAL affinity would
+                                      # have made `column_affinity` lie about it
+              "derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
               # under REAL affinity silently becomes 7.0, which is the defect
               # the `activity_id` note below already warns about
               #
@@ -412,7 +428,7 @@ _TEXT_COLS = {"derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
 # reading positionally sees the new column last (#177). It is null on every
 # judged row and never null on a refusal.
 VERDICT_KEYS = ["week", "metric", "value", "target", "verdict", "goal",
-                "reason", "due"]
+                "reason", "due", "statistic", "window_days"]
 
 # Derived tables (rebuilt every build, like everything else in derived/).
 CONTRIBUTION_KEYS = ["date", "goal", "metric", "dataset", "period", "value",

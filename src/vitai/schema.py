@@ -1342,6 +1342,12 @@ def scales() -> dict:
     return registry("scales").get("scales") or {}
 
 
+def statistics() -> dict:
+    """The registered descriptive statistics, by slug (#261 layer 1)."""
+    from .vocab import registry
+    return registry("statistics").get("statistics") or {}
+
+
 def _scale_problems(dataset: str, rec: dict) -> list[str]:
     """A declared scale must be one we know, and the value must fit it (#246).
 

@@ -1,0 +1,135 @@
+# Descriptive statistics - what KIND of number an aggregate is.
+#
+# A weekly row carrying `steps: 9752` does not say whether that is the week's
+# total or its daily average. It is the average, and read as a total it is a
+# week in which the athlete walked five thousand steps a day less than they
+# did. Nothing in the record said which, and every consumer guessed.
+#
+# The ambiguity was not uniform, which is what made guessing plausible:
+# `pain_gate` is a MAXIMUM (the worst day, because a gate is about the worst
+# day), `weight_rate` compares two windows, `energy_availability` is a
+# composite of summaries with different denominators, and the rest are
+# averages. One column, four kinds of number, no label.
+#
+# ADOPTED FROM IEEE 1752.1 (#261 layer 1). `term` carries the standard's own
+# string VERBATIM, because our slug and its term are not always spelled the
+# same - `standard deviation` has a space where a slug wants a hyphen - and a
+# mapping stated in a field can be checked, where one implied by a slug
+# cannot. `tests/fixtures/ieee_1752_descriptive_statistic.json` holds the
+# published enum, fetched from the schema's own w3id URL, and a test asserts
+# every `term` below is in it. That is the difference between conforming and
+# saying we conform (#263).
+#
+# A SUBSET, not the whole enum. The standard publishes seventeen terms
+# including percentiles, quartiles and quintiles; these are the ones this
+# engine computes. Adding one here is a claim that something emits it.
+#
+# LAYER 3 for what the standard does not define (#261). Two of ours are not
+# in the enum and are not bent into `average` to claim a standard term, which
+# would have been the flattering choice. Checked, not assumed: the published
+# enum was read and contains no between-window or composite term.
+#
+# The standard's stated default is that a value with NO descriptive statistic
+# is an individual measurement. We do not rely on it - every aggregate this
+# engine emits declares one - because a default is a thing a reader has to
+# know about, and the whole complaint here is that readers did not know.
+
+version = 1
+
+[statistics.average]
+namespace = "ieee-1752.1"
+term = "average"
+label = "average"
+over = "set"
+note = "the arithmetic mean of the values in the population"
+citation = "IEEE 1752.1, descriptive-statistic (w3id.org/ieee/ieee-1752-schema)"
+
+[statistics.count]
+namespace = "ieee-1752.1"
+term = "count"
+label = "count"
+over = "set"
+note = "how many values there were, not what they were"
+citation = "IEEE 1752.1, descriptive-statistic (w3id.org/ieee/ieee-1752-schema)"
+
+[statistics.maximum]
+namespace = "ieee-1752.1"
+term = "maximum"
+label = "maximum"
+over = "set"
+# The one that reads most wrongly as an average. A pain gate at 1.0 for a week
+# means the worst day was 1, not that the days averaged 1 - and a consumer
+# that averaged it would report a week containing one bad day as a calm one.
+note = "the largest value in the population"
+citation = "IEEE 1752.1, descriptive-statistic (w3id.org/ieee/ieee-1752-schema)"
+
+[statistics.minimum]
+namespace = "ieee-1752.1"
+term = "minimum"
+label = "minimum"
+over = "set"
+note = "the smallest value in the population"
+citation = "IEEE 1752.1, descriptive-statistic (w3id.org/ieee/ieee-1752-schema)"
+
+[statistics.median]
+namespace = "ieee-1752.1"
+term = "median"
+label = "median"
+over = "set"
+note = "the middle value; robust where one gap or one holiday would drag a mean"
+citation = "IEEE 1752.1, descriptive-statistic (w3id.org/ieee/ieee-1752-schema)"
+
+[statistics.sum]
+namespace = "ieee-1752.1"
+term = "sum"
+label = "sum"
+over = "set"
+note = "the total of the values in the population"
+citation = "IEEE 1752.1, descriptive-statistic (w3id.org/ieee/ieee-1752-schema)"
+
+[statistics.standard-deviation]
+namespace = "ieee-1752.1"
+# A SPACE in the standard, a hyphen in our slug. Stated rather than assumed:
+# a consumer exporting to 1752.1 needs the term, and deriving it from the slug
+# by guessing at the separator is how a conformance claim quietly fails.
+term = "standard deviation"
+label = "standard deviation"
+over = "set"
+note = "spread of the values in the population"
+citation = "IEEE 1752.1, descriptive-statistic (w3id.org/ieee/ieee-1752-schema)"
+
+[statistics.variance]
+namespace = "ieee-1752.1"
+term = "variance"
+label = "variance"
+over = "set"
+note = "the square of the standard deviation"
+citation = "IEEE 1752.1, descriptive-statistic (w3id.org/ieee/ieee-1752-schema)"
+
+[statistics.period-over-period-change]
+namespace = "vitai"
+label = "period-over-period change"
+over = "two-populations"
+# NOT a descriptive statistic of one set, which is why it is not borrowed. It
+# compares two windows, so it can exist where either is thin and it says
+# nothing about the values inside them.
+#
+# THE DIRECTION OF SUBTRACTION IS THE METRIC'S OWN and is deliberately not
+# fixed here: `weight_rate` is previous minus current, so that losing weight
+# reads positive. A consumer must not assume an order, and this note used to
+# state one, which was worse than stating none.
+note = "the difference between two windows' summaries; the order of subtraction is the metric's own and must not be assumed, and window_days is the size of EACH window rather than the span of the comparison"
+citation = "no term in the published 1752.1 enum covers a between-window comparison (checked against the fixture)"
+
+[statistics.composite-of-summaries]
+namespace = "vitai"
+label = "composite of summaries"
+over = "several-populations"
+# `energy_availability` is (mean intake - exercise per day) / fat-free mass.
+# Three inputs, and on a short record the first two do not even share a
+# denominator: the mean is over the days that carry an intake, the second
+# divides by the window length whether or not every day logged one. So it is
+# not the mean of any per-day series, and labelling it `average` would have
+# told a consumer it was.
+note = "computed from several summaries, which may be over different populations; not the mean of any one series"
+citation = "no term in the published 1752.1 enum covers a composite index (checked against the fixture)"
