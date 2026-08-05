@@ -362,10 +362,34 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     latest reading of ANY kind - a body-fat percentage answering a waist
 #     ceiling. `daily.rhr` is a level in a flow dataset and is out for the
 #     same reason it always was.
-CONTRACT_VERSION = "30"
+# 31: `medical` gains `body_side` and `events` gains `outcome`, both found by
+#     the persona corpus rather than by reading the schema.
+#
+#     A left-knee episode and a right-knee episode were the same episode, so
+#     gating "the knee" banned a movement the athlete performs perfectly well
+#     on the other leg - over-restriction, which is its own harm. `daily` has
+#     carried `pain_side` since generation 2; this is the same field on the
+#     dataset that does the gating, validated by the same rule rather than a
+#     second copy of it.
+#
+#     And a confirmed, immovable race passed with no session row, its status
+#     still `confirmed` forever - so a race that happened and produced no
+#     data, one the athlete did not attend, and one that never took place all
+#     read identically. `outcome` is a SECOND AXIS, the split #235 made for
+#     goals: `status` is what the fixture is, `outcome` is what became of it.
+#
+#     BOTH OPTIONAL. Absent means nobody has said, never "did not happen",
+#     and a consumer rendering an unanswered outcome as a miss accuses an
+#     athlete of skipping a race the record knows nothing about.
+CONTRACT_VERSION = "31"
 
 _TEXT_COLS = {"statistic",            # a slug, and REAL affinity would
                                       # have made `column_affinity` lie about it
+              # Both word-valued (#145, #139), and `pain_side` was already
+              # here while its own mirror was not - so `column_affinity`, the
+              # accessor #257 published precisely so consumers stop guessing,
+              # answered REAL for two columns holding "left" and "took_place".
+              "body_side", "outcome",
               "derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
               # under REAL affinity silently becomes 7.0, which is the defect
               # the `activity_id` note below already warns about

@@ -177,7 +177,22 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # latest weigh-in where it previously scored nothing. That is a change to
 # what the read model says, not to any data line - no builder writes a goal
 # polarity or an observation - and the diff is checked rather than asserted.
-AUTHORED_AGAINST_CONTRACT = "30"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #145, which adds `body_side` to `medical` at generation 6.
+#
+# UNLIKE the derived-column re-pins above, this one DOES move persona lines:
+# 28 medical rows each gain an explicit `body_side: null` and a generation
+# stamp, because the builders write every key. What does not move is any
+# VALUE - checked by diffing rather than asserted, and the count of
+# non-generation changes is zero.
+#
+# `null` is right for all 28. The key is optional, an episode written before
+# it never owed one, and filling a side in for a persona nobody re-examined
+# would be inventing a clinical fact to make a fixture look complete.
+#
+# #139 moves `events` the same way, for the same reason: a fixture gains an
+# explicit `outcome: null`, which is the ordinary state of one - nobody has
+# said - and never "did not happen".
+AUTHORED_AGAINST_CONTRACT = "31"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,
@@ -185,13 +200,13 @@ AUTHORED_AGAINST_GENERATIONS = {
     "context": 3,
     "daily": 12,
     "emissions": 1,
-    "events": 3,
+    "events": 4,
     "goals": 6,
     "inferences": 4,
     "journal": 3,
     "meals": 5,
     "measurements": 9,
-    "medical": 5,
+    "medical": 6,
     "sessions": 11,
     "sets": 6,
     "protocols": 1,
