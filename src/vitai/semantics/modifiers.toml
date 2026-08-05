@@ -104,6 +104,41 @@ aliases = ["plates"]
 label = "Medicine ball"
 aliases = ["med ball", "medball", "slam ball", "wall ball"]
 
+# Swim kit (#230 part 1). KIT in the #229 sense - the athlete brings it, so it
+# travels with them rather than belonging to a place, which is the distinction
+# that decides whether a session is provisionable somewhere.
+#
+# Equipment and not a separate axis: a pull buoy modifies how a length was
+# swum exactly as a dumbbell modifies how a press was pressed, and the
+# equipment axis already exists on `sets`. A second axis meaning the same
+# thing for one sport is the pre-coordination this registry refuses.
+#
+# THE PARTIAL FORMS ARE NOT HERE. `swim-pull` and `swim-kick` are EXERCISES,
+# because they load different regions - arms with the legs supported, or legs
+# alone - and a restriction on the lower limb has to be able to see the
+# difference. The buoy below is the kit that makes a pull set possible; the
+# pull set is the movement.
+
+[equipment.pull_buoy]
+label = "Pull buoy"
+aliases = ["buoy", "pullbuoy", "pull-buoy"]
+
+[equipment.kickboard]
+label = "Kickboard"
+aliases = ["board", "kick board"]
+
+[equipment.swim_fins]
+label = "Fins"
+aliases = ["fins", "flippers", "swim fins"]
+
+[equipment.hand_paddles]
+label = "Hand paddles"
+aliases = ["paddles", "hand paddle"]
+
+[equipment.snorkel]
+label = "Centre snorkel"
+aliases = ["snorkel", "centre snorkel", "center snorkel"]
+
 # --- axis: angle class --------------------------------------------------------
 # The CLASS. Degrees are parametric and live in `angle_deg`, because "incline"
 # on one bench is not "incline" on another and a class cannot be subtracted.
