@@ -27,6 +27,23 @@ They are used here only to separate "people build on this" from "a spec nobody
 implements", which is a real distinction and the one that decides whether
 conforming buys anything.
 
+### Two standing caveats on how to read this document
+
+**Absence claims stale fastest.** Several verdicts here are "nothing adoptable
+exists" (prediction intervals, drifting mass, a logged-meal schema). That is
+the claim type most likely to be quietly wrong later, and one of them was
+already too strong in the first draft. **Re-verify any absence claim before
+building on it if the date at the top of this document is more than about a
+year old.** The engine's own rule applies: never assert how long something
+lasts, assert when the record stopped knowing.
+
+**This document is descriptive and unchecked, and that is deliberate.** #263
+sets the rule that no descriptive schema ships without a derivation or a check.
+A survey is upstream of every artefact that rule governs: its verdicts become
+issues, and the obligation attaches there. So this file will drift, and it is
+not the place to enforce against. Do not cite it as standing authority; cite
+the issue that took the decision.
+
 ## The three-line verdict
 
 1. **IEEE 1752.1 for the framing and for what it defines.** Already decided in
@@ -34,10 +51,13 @@ conforming buys anything.
    earlier analysis missed.
 2. **FHIR for vocabularies and for mapping outward**, never as our model.
    Specifically its goal vocabularies, which we independently arrived at, and
-   its shape for predictions, which answers a question we were about to design
-   from scratch.
-3. **Nothing at all for prediction intervals and measurement uncertainty.**
-   Both bodies punt. That gap is the finding of this survey.
+   its shape for predictions, which **confirms** a design we had already
+   reached rather than supplying one. #196 shipped the contract, surface,
+   clocks and `basis_claims` quartet before this survey existed.
+3. **Nothing for prediction intervals specifically.** Both bodies offer bare
+   low/high pairs that cannot say what kind of interval they are. Measurement
+   uncertainty is better served than the first draft of this document claimed:
+   W3C SSN's System Capabilities module is real prior art for #171.
 
 ## Health measures and metadata
 
@@ -48,14 +68,25 @@ conforming buys anything.
 | Where | `opensource.ieee.org/omh/1752`, schemas resolvable via `w3id.org/ieee/ieee-1752-schema/` |
 | Last activity | 2026-08-03 |
 | Substantive commits | 2026-03-19 and 2026-05-04, both on the survey schemas |
-| Size | 47 schema files, JSON Schema draft-07 |
+| Size | 45 schema files (47 paths under `schemas/`, two of which are READMEs), JSON Schema draft-07 |
 
 Two corrections to the earlier analysis in #261, both of which change what
 conformance is worth.
 
-**`omh/1752-2` is not a second standard.** It is an identical mirror: same 47
-files, same commit list, same head. Anyone finding it and concluding a 1752.2
-is in draft will be wrong. The published standard is still 1752.1-2021.
+**`omh/1752-2` currently holds no second standard, but a second standard
+exists.** The repository is a byte-identical mirror: same 158 blobs with the
+same blob SHAs, same head commit, same commit list, and it is not a GitLab fork
+object. The published standard is still 1752.1-2021.
+
+**IEEE P1752.2 is nonetheless a real and active working-group project**,
+chartered for the representation of *cardiovascular, respiratory and metabolic*
+measures. Its schemas have not landed in that repository yet, which is why the
+mirror misleads in both directions.
+
+This bears directly on the namespace decision below: **heart rate and blood
+pressure sit inside P1752.2's chartered scope.** Our namespace claim for those
+two is therefore best-until-1752.2-ships rather than settled, and anything
+built there should expect a mapping obligation later.
 
 **The working group's live work in 2026 is the `survey` schemas**, and those
 were not in the earlier survey at all. They matter to us more than anything
@@ -71,12 +102,35 @@ What 1752.1 covers, precisely:
 - `survey`: eight schemas
 - `utility`: eighteen, including `unit-value`, `unit-value-range`,
   `descriptive-statistic`, `time-frame`, `time-interval`, `body-posture`,
-  and typed unit values for kcal, length, speed, percent, frequency,
-  temperature, illuminance and sound
+  and a family of typed unit values for kcal, length, speed, percent,
+  frequency, temperature, illuminance and sound
 
-What it does not cover, still true: body weight, body composition, heart rate,
-blood pressure, nutrition. Those stay in a vitai namespace under
+**Two parts of this are not adoptable, and listing them without saying so was
+an error in the first draft.**
+
+**The typed unit-value family is pre-coordinated** and we should take only the
+generic `unit-value`. A separate type per quantity kind bakes the quantity into
+the type system, which is the units-in-field-names defect (G33) one level up,
+and this engine's first settled decision is to post-coordinate. `unit-value`
+plus a UCUM code says the same thing without closing the space.
+
+**The sleep schemas are not a single block.** Sleep stages, onset latency, wake
+after sleep onset and time in bed are descriptive and safe. **Apnea-hypopnea
+index and arousal index are not**: an AHI is the measurand of a sleep-disorder
+screen, and an engine that computes and emits one is making a detection
+capability claim. Those two enter only as a recorded device or clinician
+statement, never as an engine-computed output, per record-never-infer.
+
+What 1752.1 does not cover: body weight, body composition, heart rate, blood
+pressure, nutrition. Those stay in a vitai namespace under
 `schema_id.namespace`, which is what that field exists for.
+
+Split by how durable that is, because it is not uniform:
+
+- **Heart rate and blood pressure**: inside P1752.2's chartered scope. Expect
+  to map outward eventually. Design accordingly rather than deeply.
+- **Weight, body composition, nutrition**: outside every chartered scope found.
+  Ours for the foreseeable future.
 
 ### The survey schemas, and why they are the find
 
@@ -100,12 +154,56 @@ distinction four of our open issues are circling:
   where the engine owns the question's schema and the athlete owns the answer
 
 #232's framing and `survey-item` (a question plus its provided answers) are the
-same shape. We should not design that vocabulary ourselves. The answer types
-are already split the way #212 wants: `survey-categorical-answer`,
-`survey-date-answer`, `survey-time-answer`, `survey-unit-value-answer`.
+same shape. The answer types are typed in the same spirit as #212's two-tier
+instinct: `survey-categorical-answer`, `survey-date-answer`,
+`survey-time-answer`, `survey-unit-value-answer`. Note that this is a
+resemblance rather than a match, since #212 asks for coarse day-phase beside
+precise time and these are answer-value types.
 
-**Recommendation: pull the survey schemas into #224/#232 before either is
-designed, and put `end_status` in front of #93 and #221.**
+### The recommendation, downgraded after review
+
+An earlier draft said **adopt** `end_status` and pull the survey schemas into
+#224 and #232 before either is designed. **Both halves are withdrawn**, and the
+reasoning against them is more instructive than the original finding.
+
+**`end_status` is strictly poorer than our own analysis.** It has three values
+and no *declined* state. #93 says absence has five meanings; #146 requires
+passive and active channel silence to be distinguishable; #224, from G82, holds
+that a decline is permanent and is itself an answer. `missed` collapses "never
+delivered", "delivered and never seen", and "seen and refused" into one token,
+which is precisely the conflation #146 exists to remove. Adopting it would bake
+in a vocabulary we have already out-reasoned.
+
+**And note how it got selected**: because it matched the four issues in front
+of the author. That is G85's failure mode relocated from *writing* a vocabulary
+to *choosing* one, which is a way this document could go wrong repeatedly and
+quietly. The defence against it is that the selection criteria here were fixed
+before the sweep; where a verdict rests on resemblance to our own open issues
+instead, it is suspect.
+
+**The survey schemas also say nothing about #224's actual problem**, which is
+question identity and lifecycle, permanent declines, answers as claims with
+provenance, and default-deny permission across three egress surfaces. IEEE
+1752's survey schemas are a delivery-and-response format for administered
+research instruments, and they structurally assume re-administration: the
+sample data ships three instances of every survey. G82 bars re-asking. Importing
+that frame before #224's constraints are written would make the frame the thing
+the constraints get bent around.
+
+**Revised recommendation: grounding, not adoption.** The typed answers are
+genuinely useful to #212. `end_status` is worth citing as evidence that a
+standards body found the distinction worth drawing at all, and worth nothing
+beyond that. Design #224 from its own constraints first, then check the answer
+typing against 1752.
+
+**A better absence vocabulary exists and this survey missed it.** FHIR
+`Observation.dataAbsentReason` is on a **Normative** resource and carries
+`unknown` (with children `asked-unknown`, `temp-unknown`, `not-asked`,
+`asked-declined`), `masked`, `not-applicable`, `unsupported`, `as-text`,
+`error`, `not-performed`, `not-permitted`. It has the declined state, it
+separates not-asked from asked-and-unanswered, and `masked` is a suppression
+label rather than a deletion, which is this engine's own rule. **That is the
+one to take to #93 and #146.**
 
 ### `header`, confirming the #239 answer
 
@@ -138,8 +236,9 @@ blood pressure, glucose, nutrition), and it must not be cited as a live target.
 ### openEHR: alive, wrong shape
 
 `openEHR/specifications-RM` last pushed 2026-07-24; `ehrbase` at 378 stars is
-actively developed. But there is no npm presence at all and the Python
-implementations are hobby-scale or abandoned. openEHR is an archetype-driven
+actively developed. But its npm presence is negligible (a handful of packages
+all under about 25 weekly downloads) and the Python implementations found were
+hobby-scale or abandoned. openEHR is an archetype-driven
 clinical server model. Adopting it means adopting its tooling.
 
 **Verdict: not a target. Note it and move on.**
@@ -183,11 +282,31 @@ than an inferred case, and `outcome`. Both worth an issue.
 **Verdict: adopt the vocabulary as prior-art grounding per G85. Do not adopt
 the resource model.**
 
+### Plans: `PlanDefinition` outranks everything else cited here
+
+The first draft of this survey covered goals, calendars and events and skipped
+FHIR's plan resources, which was a real omission.
+
+- **`PlanDefinition`** is at maturity **4**, higher than `Goal` or
+  `RiskAssessment` (both 2), and it is the published version of exactly what
+  #226 argues: a prescription is a **template**, instantiated into a
+  `CarePlan` (maturity 2) for a particular subject. Template and instance are
+  separate resources, which is #226's whole point.
+- **The `Timing` datatype**, and `Timing.repeat` in particular
+  (frequency, period, dayOfWeek, bounds), is the published shape for "three
+  times a week". That is training-plan recurrence and it is **distinct from
+  calendar recurrence**: a `RRULE` names occurrences on a calendar, while
+  `Timing.repeat` states a rate without committing to days. #221 and #226 need
+  the second, and JSCalendar gives the first.
+
+**Verdict: study before building #226. This is the closest published match to
+a training plan found anywhere in the survey.**
+
 ## Events and calendars
 
 | Standard | Status | Ecosystem |
 |---|---|---|
-| **RFC 5545 iCalendar** | Internet Standard, 2009 | `ical-generator` 605k/wk, `ical.js` 434k/wk, `node-ical` 247k/wk; PyPI `icalendar` 7.2.2, 2026-07-20 |
+| **RFC 5545 iCalendar** | **Proposed Standard**, 2009 (it never advanced to Internet Standard) | `ical-generator` 605k/wk, `ical.js` 434k/wk, `node-ical` 247k/wk; PyPI `icalendar` 7.2.2, 2026-07-20 |
 | **RFC 8984 JSCalendar** | Standards Track, July 2021, not obsoleted | `@dwk/calendar` 272/wk, `jscalendar-kit` 2/wk |
 
 JSCalendar is the better-designed object model and it explicitly aims to be
@@ -222,7 +341,15 @@ synonyms* rather than UCUM codes directly, so `kg` is fine but the mapping is
 not identity everywhere. Conforming means conforming to their binding, not to
 UCUM raw.
 
-**Verdict: adopt. It is the one vocabulary with no serious competitor.**
+**Verdict: adopt, and be precise about what that means today.** G33 records
+that units are currently baked into field names, and #260 calls the
+unit-in-value migration the most expensive of its four changes. So "adopt UCUM"
+does **not** license that migration on the strength of this survey. What it
+licenses now is the #260 middle path: **connector manifests declare the UCUM
+unit per field.** The storage migration remains its own decision.
+
+Adopt the codes and the binding as registry data. Never a conversion library:
+that would be a runtime dependency.
 
 ## Nutrition: the gap nobody fills
 
@@ -238,8 +365,13 @@ UCUM raw.
 There is no maintained, widely adopted schema for a logged meal.
 
 **Verdict: our namespace, and say so plainly rather than implying we looked
-less hard than we did. This also means #214's meal-level detail problem has no
-standard to defer to.**
+less hard than we did. This also means #96's itemised-meal-estimate problem has
+no standard to defer to.**
+
+**FoodOn** (228 stars, pushed 2026-07-31) is worth naming as *vocabulary*
+grounding for food identity in that namespace, the way UCUM is named for units.
+It does not weaken the verdict, because a food ontology is not a schema for
+what somebody ate.
 
 ## Activity file formats
 
@@ -256,8 +388,10 @@ reading the profile rather than depending on the SDK.
 
 ## Provenance: PROV-O is stable, not alive
 
-`w3c/prov` has 1 star. The npm ports run 35 to 408 weekly downloads. The PyPI
-`prov` package is at 3.0.0, 2026-07-27, which is the healthiest signal it has.
+`w3c/prov` has 1 star. Every npm package implementing it is in the low single
+or double digits of weekly downloads (`prov` at 2, `provenance` at 5,
+`@ontologies/prov` at 0). The PyPI `prov` package is at 3.0.0, 2026-07-27,
+which is the healthiest signal it has.
 
 PROV-O is a 2013 W3C Recommendation. It is finished rather than abandoned, and
 its `wasDerivedFrom` / `wasGeneratedBy` / `Activity` triple is the conceptual
@@ -272,7 +406,9 @@ This is the area the operator asked about, and the survey's real finding.
 
 ### FHIR `RiskAssessment` is the shape, and it is a separate resource
 
-Maturity 2, Trial Use. Its elements:
+Maturity 2, Trial Use. Its load-bearing elements for this question (the full
+resource also carries `status`, `subject`, `condition`, `relativeRisk`,
+`mitigation` and `note`):
 
 | element | card | what it holds |
 |---|---|---|
@@ -282,7 +418,7 @@ Maturity 2, Trial Use. Its elements:
 | `performer` | 0..1 | who or what produced it |
 | `prediction.outcome` | 0..1 | what is predicted |
 | `prediction.probability[x]` | 0..1 | decimal **or Range** |
-| `prediction.qualitativeRisk` | 0..1 | low / medium / high |
+| `prediction.qualitativeRisk` | 0..1 | negligible / low / moderate / high / certain (example binding) |
 | `prediction.when[x]` | 0..1 | the window the prediction applies to |
 | `prediction.rationale` | 0..1 | free text explanation |
 
@@ -298,6 +434,16 @@ Three structural lessons, and the first is the important one:
 3. `rationale` is free text, and `derived_op` already made the matching call:
    declared, never executable.
 
+**One hard carve-out before anyone builds to this shape.** `RiskAssessment` is
+a clinical risk resource, and two of its elements are unadoptable here on the
+medical boundary: `prediction.outcome` is condition-valued, and
+`qualitativeRisk` renders a health risk on a graded scale. Emitting either is
+naming a condition or claiming a screening capability. **Adopt the structure
+(`method`, `basis`, `occurrence`, an interval, a horizon) and none of the
+clinical vocabulary.** Predictions here are about quantities the record already
+holds, a weight or a pace, and never about conditions or risks. #262 is already
+clean on this; the shape must not be cited without the carve-out.
+
 ### Model documentation is dead as tooling
 
 - `tensorflow/model-card-toolkit`: **archived** 2023-07-26. PyPI
@@ -309,13 +455,25 @@ Three structural lessons, and the first is the important one:
 **Verdict: no maintained schema for "which model produced this number".
 Model Cards remain a useful checklist and a dead standard.**
 
-### Measurement uncertainty: nothing schema-shaped, anywhere
+### Interval semantics: the gap is narrower than first stated, and real
 
-This is the honest and slightly uncomfortable conclusion.
+The first draft of this section said nothing schema-shaped existed anywhere.
+That was too strong, and the correction matters because it hands #171 a
+standard it can use.
 
-- IEEE 1752.1's only interval type is `unit-value-range`: `low_value`,
-  `high_value`, `unit`. No confidence level, no distribution, no statement of
-  what kind of interval it is.
+**W3C SSN's System Capabilities module is prior art for #171**, and it is a W3C
+Recommendation with an active repository (`w3c/sdw-sosa-ssn`, pushed
+2026-07-31). `ssn-system:SystemCapability` carries `Accuracy`, `Precision`,
+`Drift` and `Resolution`, **scoped to declared operating conditions**. That is
+#171's own phrasing (standard uncertainty with its own provenance,
+condition-scoped) already standardised. It should be adopted there.
+
+What remains genuinely absent is narrower and still blocking: **no interchange
+schema says what KIND of interval a value-interval is.**
+
+- IEEE 1752.1's value-interval types (`unit-value-range` and
+  `duration-unit-value-range`) are bare `low_value` / `high_value` / `unit`.
+  No confidence level, no distribution, no statement of kind.
 - FHIR's `probability[x]` allows a `Range` and says nothing about what the
   range means either.
 - `descriptive-statistic` covers `standard deviation` and `variance`, but it
@@ -432,12 +590,15 @@ the impedance is high.**
 `Device` gives identity, owner and status. `Group` gives membership. Both
 usable as grounding.
 
-The caution concerns pets. `Patient` is **Normative** from R4 and carries no
-species, breed or animal-specific elements at all; animals are accommodated by
-the general resource and by extension. So the most mature health data standard
-there is, having gone normative, does **not** model an animal as a variant of a
-person. Anyone reaching for "a pet is a person with a species field" is
-choosing a shape HL7 does not use.
+The caution concerns pets. `Patient` is **Normative** from R4 and its core
+resource carries no species, breed or animal-specific elements. STU3 had
+`Patient.animal` in core; R4 removed it, and it survives as the standard
+`patient-animal` extension with `species`, `breed` and `genderStatus`.
+
+So the shape "a pet is a person with a species field" is not one HL7 refuses.
+It is one HL7 **demoted from the core resource to an optional extension when
+that resource went normative**, which is a weaker and more useful signal: the
+modelling works, and it was judged not to belong in the thing everyone loads.
 
 For our purposes the boundary in #220 already settles most of it: a state about
 a person or an animal may qualify a statement about the athlete and may never
@@ -469,10 +630,24 @@ Its `Status` object carries three fields:
 State | Health | HealthRollup
 ```
 
-**`HealthRollup` is the worst health of anything contained beneath this
-element.** That is #220's phrase "composing through containment", already
-specified, already implemented by every server vendor, and already carrying the
-lesson that a rolled-up value must be a *separate field* from the local one.
+**`HealthRollup` is the health state of the resource *and its dependent
+resources*, carried beside the local `Health` rather than replacing it.**
+
+Three precisions, because the loose reading of this is wrong in ways that
+matter to #220:
+
+- It includes the resource **itself**, not only what is beneath it.
+- It composes over **dependency**, not containment. DSP0268 gives an explicit
+  example where a computer system's rollup degrades for a power supply that is
+  not subordinate to it. #220 already separates `contains` from `depends_on`,
+  and Redfish is evidence for the second, not the first.
+- It is **not normatively worst-of**. The specification's own redundancy
+  example has a Critical power supply rolling up as only Warning, because the
+  redundancy policy absorbs it. The roll-up rule is implementation policy.
+
+That last point is the useful one. A rollup is not a `max()`; it is a policy
+over the graph, and a model that hard-codes worst-of cannot express "this is
+covered by redundancy" or, here, "the other machine will do".
 
 That last point is the one worth taking. #220 proposes that a room's condition
 reaches its contents. If the resolved value overwrites the local value, you can
@@ -484,19 +659,28 @@ related reason: a thing can be degraded *and* predicted-to-fail at once, and one
 enum forces a false choice. #220's "a state may carry more than one verb"
 (`blocks`, `discourages`, `qualifies`) is the same insight.
 
-### The two-axis pattern, three times independently
+### The two-axis pattern, and an honest account of how much support it has
 
 | resource | axis one | axis two |
 |---|---|---|
 | FHIR `Goal` | `lifecycleStatus` | `achievementStatus` |
-| FHIR `Location` | `status` | `operationalStatus` |
+| FHIR `Location` | `status` | `operationalStatus` (scoped by FHIR to beds and rooms) |
 | Redfish `Status` | `State` | `Health` |
 
-Three standards bodies, three domains, same separation: **where the thing is in
-its lifecycle** is not **how the thing is doing**. #235 found it for goals by
-argument. It is worth recording that the argument has independent support,
-because it means the pattern generalises to states and #220 should build it in
-from the start rather than rediscovering it a fourth time.
+An earlier draft of this document called that "three standards bodies, three
+domains, independently". **That claim is withdrawn.** Two of the three rows are
+HL7, which is one body with cross-resource design review, and Redfish descends
+from DMTF CIM, whose separation of administrative from operational state goes
+back to ITU X.731 and OSI systems management. At most two lineages, arguably
+one, and both grew up in the same enterprise-modelling tradition.
+
+The honest argument is **survivorship rather than convergence**: the split has
+been load-bearing in production standards for around thirty years and nobody
+has collapsed it back. That is weaker than independent rediscovery and it is
+still a good reason to build it in from the start.
+
+#220 does not need the inflated version. #235 reached the same separation for
+goals by argument, before any of this was surveyed.
 
 ### What none of them have
 
@@ -571,15 +755,26 @@ engine's haversine sum, is the same instinct already shipped.
 The real prior art is FIT lap messages and the TCX `Lap` element, both vendor
 defined and both widely produced.
 
-The distinction worth preserving: a **lap** is segmentation *declared* by the
-athlete or the device, at the moment, by pressing a button. A **split** is
-segmentation *computed* afterwards by whoever is reading. Strava's metric and
-standard splits are the second; a lap is the first.
+The distinction worth preserving is warrant, and **it needs three values, not
+two.** A first pass had it as declared-versus-derived, which misfiles the
+commonest case:
 
-They are the same shape and different claims, and #220's warrant axis
-(`declared` versus `derived`) is exactly the distinction. **Do not merge them
-into one table.** A lap is evidence about what the athlete was doing; a split
-is an artefact of the reader's chosen interval.
+| | who segmented | what it is evidence of |
+|---|---|---|
+| **athlete-pressed lap** | the athlete, at the moment | intent. Real evidence about what was being done |
+| **device auto-lap** | the device, by configuration, every kilometre | a device-computed split recorded at capture. **No intent in it at all** |
+| **reader-computed split** | whoever is reading, afterwards | an artefact of the reader's chosen interval |
+
+Most laps in real files are auto-laps. Treating every FIT lap message as
+`declared` **fabricates intent the athlete never expressed**, which is the same
+class of error as naming a state.
+
+There is a second consequence from the other direction: a split is computable
+from the stored track, so under derive-never-store it belongs in the derived
+tier, while an athlete-pressed lap is an observation and belongs in the record.
+Merging them stores derivable data in ground truth *and* lets a reader-chosen
+interval masquerade as evidence of intent. **Do not merge them into one
+table**, and give the warrant three values here.
 
 A loop, similarly, has no standard and needs none: a closed path is start and
 end within some distance of each other, and that distance is a **choice**, so
@@ -611,8 +806,19 @@ And #84 already has the ordering right: **derive a place inventory from the
 record's own tracks before naming anything.** An address schema inverts that,
 because it starts from the naming.
 
-**Verdict: no address schema until #205's coarsening is implemented. Then
-Overture as the vocabulary, and only for names the athlete chose to attach.**
+**Verdict: no street-address schema until #205's coarsening is implemented.
+Then Overture as the vocabulary, and only for names the athlete chose to
+attach.**
+
+**Scope of that hold, stated precisely, because it must not re-gate settled
+work.** #84 already reversed "any hosted geocoding call is a design failure" as
+a policy decision dressed as an engineering one, and settled the resolver
+ladder (`none` / `local` / `hosted-coarse` / `hosted`, defaulting to `local`,
+with per-place overrides and masking). This hold does **not** touch that. It
+touches adopting a rich address *schema*, whose Overture fields would raise
+what the record holds about where the athlete lives. #84 tier 1, anonymous
+clustered entities derived locally with no network call, is safe now and should
+proceed.
 
 ### Positional accuracy, and a correction to this document
 
@@ -650,11 +856,17 @@ grounds that a set with `failure: null` is never a maximum.
 | Area | Target | Standing |
 |---|---|---|
 | Framing, metadata, identifiers | **IEEE 1752.1** | adopt (#261) |
-| Surveys, questions, non-response | **IEEE 1752.1 `survey`** | adopt; feeds #224, #232, #93, #221 |
-| Sleep, physical activity | **IEEE 1752.1** | adopt where defined |
-| Units | **UCUM**, via 1752's binding | adopt |
+| Question and answer typing | IEEE 1752.1 `survey` | **grounding only**, not adoption; see the downgrade above |
+| Absence and non-response | **FHIR `Observation.dataAbsentReason`** (Normative) | the one to take to #93 and #146 |
+| Plans as templates, and rate-based recurrence | **FHIR `PlanDefinition`** (maturity 4), `Timing.repeat` | study before #226 |
+| Instrument capability, condition-scoped | **W3C SSN System Capabilities** | adopt for #171 |
+| Physical activity, sleep stages and latency | **IEEE 1752.1** | adopt |
+| Apnea-hypopnea and arousal indices | IEEE 1752.1 | **do not emit**; recorded statements only |
+| Typed unit-value family (`kcal-unit-value` etc) | IEEE 1752.1 | **do not adopt**; pre-coordinated. Generic `unit-value` only |
+| Units | **UCUM**, via 1752's binding | adopt as registry data; see the G33 scoping note |
 | Goal lifecycle and achievement | **FHIR `Goal`** | vocabulary grounding only; already convergent |
-| Predictions | **FHIR `RiskAssessment`** | adopt the shape, not the resource |
+| Predictions | **FHIR `RiskAssessment`** | adopt the structure only; its clinical vocabulary is barred |
+| Food identity | **FoodOn** | vocabulary grounding inside the vitai namespace |
 | Lineage | **W3C PROV-O** | cite as grounding; do not serialise |
 | Calendar shape | **RFC 8984 JSCalendar** | borrow shapes |
 | Calendar interchange | **RFC 5545 iCalendar** | import and export |
@@ -679,19 +891,47 @@ grounds that a set with `failure: null` is never a maximum.
 
 ## What this changes
 
-- **#261 gains a fourth answer**: adopt the survey schemas, which the original
-  three-way split did not consider because the earlier survey missed them.
-- **#224 and #232 should not design a question vocabulary.** One exists, it is
-  maintained, and its answer typing already matches what #212 asked for.
-- **#93 and #221 gain a published discriminator** in `end_status`.
+- **#261 gains a scope caveat**: heart rate and blood pressure fall inside
+  IEEE P1752.2's chartered scope, so the namespace decision for those two has
+  an expiry date. Weight, body composition and nutrition do not.
+- **#93 and #146 gain a real absence vocabulary**, and it is FHIR
+  `dataAbsentReason` rather than 1752's `end_status`, which has no declined
+  state and cannot carry what those issues already require.
+- **#224 and #232 keep their design work.** The survey schemas are grounding,
+  not a vocabulary to adopt; they assume re-administration, which G82 bars.
+- **#212 gains a resemblance, not a match**, in the typed answer schemas.
+- **#226 gains `PlanDefinition` and `Timing.repeat`**, which is the closest
+  published match to a training plan in the whole survey, and at maturity 4
+  outranks everything else cited here.
+- **#171 gains W3C SSN System Capabilities**, condition-scoped accuracy and
+  precision, which is that issue's own shape already standardised.
 - **#240's vocabulary is a documented subset of FHIR's**, which is worth
   recording and changes no behaviour.
-- **The prediction question has a shape to build to** and, for the interval
-  semantics, a confirmed absence of prior art rather than an unsearched one.
-  Recorded as #262.
-- **#84 gains `mode: instance | kind`**, which it needs and does not have.
-- **#220 gains three specific borrowings** (rollup beside local, multiple
-  status verbs, two axes from the start) and confirmation that its warrant
-  axis and its `corroborated_by` distinction are genuinely novel.
+- **#262 gains a structure to build to** and a confirmed, narrower gap: no
+  schema anywhere states what *kind* of interval an interval is.
+- **#84 gains `mode: instance | kind`**, which it needs and does not have. Its
+  settled resolver ladder is untouched by the address hold.
+- **#220 gains three borrowings**, all corrected from the first draft: a rollup
+  sits beside the local value, composes over **dependency** rather than
+  containment, and is **policy rather than worst-of**. Its warrant axis and its
+  `corroborated_by` distinction remain genuinely novel.
 - **#215 and #216 gain EPCIS aggregation** as the pattern for containment
   that starts and ends, and confirmation that drifting mass has no prior art.
+- **#96 has no standard to defer to** for itemised meal estimates. FoodOn is
+  vocabulary grounding for food identity only.
+
+## Review history
+
+This document was red-teamed on 2026-08-05 by two independent reviews, one
+verifying every figure against its source and one attacking the reasoning
+against repo doctrine. The numeric layer reproduced exactly. The interpretive
+layer did not, and the corrections are folded in above rather than appended:
+the P1752.2 scope finding, the Redfish roll-up definition, the withdrawal of
+the "three bodies independently" claim, the `end_status` downgrade, the
+`RiskAssessment` medical-boundary carve-out, the three-valued lap warrant, the
+UCUM scoping, and four missed schema families.
+
+Two of those corrections had already propagated into issue comments before
+review, on #261 and #220, and both comments have been corrected in place.
+That is the argument for the staleness caveat at the top: this document was
+wrong in public for about an hour, and it will be wrong again.
