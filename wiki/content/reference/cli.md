@@ -179,6 +179,32 @@ CLI and the MCP server expose the same operations with the same vocabulary.
 ## Reading the record
 
 ```
+vitai dataset [--root ROOT] [--json] <name>
+```
+
+One dataset's live rows, with `supersedes` already applied - `--json` for the
+rows themselves, and the default for a summary of how many survived, over what
+span, and which declared fields carry a value.
+
+**This is how you read a dataset, and reading the JSONL yourself is
+unsupported.** The correction rule has more edges than it looks: chains,
+corrections that correct corrections, event datasets that never retire, and
+the fact that a correction carries the same `<date>/<source>` as the row it
+names. A consumer that re-derived it in nine obvious lines dropped every row
+sharing a reference's key AND dropped each correction along with its target,
+so its copy of the record got shorter every time somebody fixed a typo, and
+one correction at a time it looked like nothing (#258).
+
+Same rows from `Vitai.dataset(name)` in the API and from the `dataset` MCP
+tool. Rows are raw claims; `vitai resolve` is where two sources disagreeing
+gets adjudicated.
+
+An unparseable line is quarantined rather than raised, so a read proceeds from
+the good rows. `--json` reports that on stderr, leaving the JSONL on stdout
+parseable; the MCP tool returns rows only, so an agent that needs to know asks
+`validate`.
+
+```
 vitai events [--root ROOT] [--json] [--on YYYY-MM-DD]
 vitai meals  [--root ROOT] [--on YYYY-MM-DD] [--json]
 vitai sets   [--root ROOT] [--machine MACHINE] [--on YYYY-MM-DD] [--json]

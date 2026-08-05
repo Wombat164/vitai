@@ -32,6 +32,7 @@ import sys
 from pathlib import Path
 
 from .api import Vitai, schema
+from .schema import KEYS
 
 PROTOCOL = "2024-11-05"
 
@@ -75,6 +76,25 @@ TOOLS: dict[str, dict] = {
     "goals": {
         "method": "goals",
         "properties": {},
+    },
+    # The read path an agent would otherwise re-derive. Without it the only
+    # way to see a dataset through this adapter was to read the JSONL and
+    # apply `supersedes` by hand, which is the nine lines that deleted a row
+    # and its own correction together (#258). An adapter that leaves the
+    # correction rule to the caller has handed out the one part of this
+    # engine that is easy to get wrong and quiet about being wrong.
+    "dataset": {
+        "method": "dataset",
+        "properties": {
+            # The enum comes from the engine, so the tool describes its own
+            # legal values and a wrong name is refused by the caller's own
+            # schema check rather than by a KeyError after the fact. The CLI
+            # gets this from argparse `choices`; an agent should not be the
+            # surface that has to guess.
+            "name": {"type": "string", "enum": sorted(KEYS),
+                     "description": "which dataset, e.g. weight or sessions"},
+        },
+        "required": ["name"],
     },
     "safety": {
         "method": "safety",
