@@ -98,7 +98,9 @@ be interrogated for costs more than it returns:
   the lifecycle stays joined up, set `restricts` when something is off the
   table, and close the episode with `status: resolved` plus a
   `resolved_date`. Record `provider_type` (gp/physio/specialist) and never
-  the clinician's identity.
+  the clinician's identity. Set `body_side` (left/right/bilateral) wherever
+  the site has two: a gate naming only "the knee" restricts the leg that is
+  fine as well, and `validate` will say so.
 
   **If they describe something dangerous, write `severity: red_flag`.** You
   can only ever raise an escalation, never lower one - the engine has its own

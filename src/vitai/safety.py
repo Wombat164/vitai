@@ -443,6 +443,16 @@ def check_result(checks: list[dict], slug: str, on: str | date) -> str:
     return "not_done"
 
 
+def _episode_reason(episode: dict) -> str:
+    """An episode's gate reason, carrying its side where one was recorded."""
+    where = ""
+    site, side = episode.get("body_site"), episode.get("body_side")
+    if site and side:
+        where = (f" - {site}, both sides" if side == "bilateral"
+                 else f" - {side} {site}")
+    return f"{episode.get('title')} ({episode.get('status')}){where}"
+
+
 def gates_on(medical: list[dict], on: str | date,
              pain_gate: int | None = None,
              daily: list[dict] | None = None,
@@ -489,7 +499,13 @@ def gates_on(medical: list[dict], on: str | date,
             # `is_gated` matches); the post-coordinated spec rides alongside
             # so a gate can finally say what the clinician actually said.
             "restriction": episode.get("restriction"),
-            "reason": f"{episode.get('title')} ({episode.get('status')})",
+            # WHICH SIDE, where the episode says (#145). A gate reading
+            # "the calf" leaves an athlete to guess which leg is restricted,
+            # and guessing wrong in the cautious direction means resting a
+            # limb that is fine - over-restriction, which is its own harm.
+            # Silent where no side was recorded, because naming one the
+            # record does not hold would be worse than saying less.
+            "reason": _episode_reason(episode),
             "severity": episode.get("severity"),
             "status": "blocked",
             "precondition": None,

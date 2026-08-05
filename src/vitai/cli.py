@@ -389,6 +389,15 @@ def cmd_events(args: argparse.Namespace) -> None:
             bits.append("fixed date")
         if row.get("status") == "tentative":
             bits.append("not yet confirmed")
+        # WHAT BECAME OF IT (#139). A fixture whose date has passed and whose
+        # outcome nobody recorded says nothing here, which is the honest
+        # rendering: unanswered is not "did not happen", and printing a miss
+        # for a race nobody has reported on accuses the athlete of skipping
+        # something the record simply does not know about.
+        if outcome := row.get("outcome"):
+            bits.append({"took_place": "took place",
+                         "did_not_attend": "did not attend"}.get(
+                             str(outcome), str(outcome)))
         print(" - ".join(bits))
 
 

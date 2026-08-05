@@ -516,6 +516,36 @@ VERIFICATIONS = {MEASURED, EXTERNAL, ATTESTED}
 # stay on the record rather than vanish - the entry is history either way.
 EVENT_STATUSES = {"tentative", "confirmed", "cancelled"}
 
+# WHAT HAPPENED WHEN THE DATE ARRIVED (#139), which `status` cannot say.
+#
+# A confirmed, immovable, priority-a race passed with no session row. Its
+# status is still `confirmed` and will stay that way forever, so three
+# genuinely different things read identically: a race that happened and
+# produced no data, a race the athlete did not go to, and a race that never
+# took place. The first is the COMMON one, because a race day is exactly when
+# logging is least likely.
+#
+# A SECOND AXIS, not more values on the first - the same split #235 made for
+# goals, where `status` mixed where a goal was in its life with how it was
+# going. `status` is what the fixture IS (still tentative, confirmed, called
+# off in advance); `outcome` is what became of it. A cancelled race is
+# expressible today and stays that way; what had no home is a date that
+# arrived.
+#
+# Semantics from FHIR `Appointment.status`, which draws exactly this line:
+# `fulfilled` for one that took place and `noshow` for one the person did not
+# attend. Our slugs are spelled for a reader of this record and `fhir` records
+# the term they map to, the same way `semantics/statistics.toml` carries its
+# IEEE terms - a mapping stated in a field can be checked, one implied by a
+# slug cannot.
+#
+# ABSENT MEANS NOBODY HAS SAID, and that is the ordinary state of a future
+# fixture. It must never be read as "did not happen": a consumer that renders
+# an unanswered outcome as a miss accuses an athlete of skipping a race that
+# has not happened yet.
+EVENT_OUTCOMES = {"took_place", "did_not_attend"}
+EVENT_OUTCOME_FHIR = {"took_place": "fulfilled", "did_not_attend": "noshow"}
+
 
 # Event kinds and priorities are OPEN axes (an athlete will have a fixture we
 # never imagined), so they live in semantics/events.toml - registry, not code.
@@ -895,6 +925,33 @@ for _ds, _keys in (("sessions", ("rpe_scale",)), ("sets", ("rpe_scale",)),
     for _k in _keys:
         KEY_GENERATION.setdefault(_ds, {})[_k] = CURRENT_GENERATION[_ds]
         KEYS[_ds].append(_k)
+# --- what became of a fixture (#139) ----------------------------------------
+CURRENT_GENERATION["events"] += 1
+KEY_GENERATION.setdefault("events", {})["outcome"] = \
+    CURRENT_GENERATION["events"]
+KEYS["events"].append("outcome")
+
+# --- which side an episode is on (#145) --------------------------------------
+#
+# `daily` has carried `pain_side` since generation 2, added so laterality
+# POST-COORDINATES rather than being baked into a site name, which is the FHIR
+# and openEHR pattern. `medical` had no equivalent, so a left-knee episode and
+# a right-knee episode were the same episode.
+#
+# That matters for a restriction rather than for tidiness: gating "the knee"
+# bans a movement the athlete performs perfectly well on the other leg, and
+# over-restriction is its own harm - which the restriction vocabulary already
+# says in as many words.
+#
+# OPTIONAL, and the reason is the whole point of this mechanism. Requiring a
+# side would refuse every episode already written, and an episode entered
+# before the field existed never owed one. `validate` advises where a paired
+# site carries no side; it does not refuse.
+CURRENT_GENERATION["medical"] += 1
+KEY_GENERATION.setdefault("medical", {})["body_side"] = \
+    CURRENT_GENERATION["medical"]
+KEYS["medical"].append("body_side")
+
 # --- goal lifecycle, split from achievement (#235) ---------------------------
 #
 # `status` mixed two axes. `lifecycle_status` takes over the one the athlete
@@ -1481,8 +1538,6 @@ def _validate_medical(rec: dict) -> list[str]:
     rather than silently produce no gate. A missing gate is the failure mode
     that matters here - the athlete trains on an injury nobody flagged.
     """
-    from .anatomy import is_site, known_sites
-
     problems: list[str] = []
     for key in ("slug", "title"):
         if not isinstance(rec.get(key), str) or not rec.get(key):
@@ -1506,9 +1561,15 @@ def _validate_medical(rec: dict) -> list[str]:
     problems += _enum(rec, "severity", SEVERITIES)
     problems += _enum(rec, "provider_type", PROVIDER_TYPES, optional=True)
 
-    if (site := rec.get("body_site")) is not None and not is_site(site):
-        problems.append(f"unknown 'body_site' {site!r} - use one of "
-                        f"{', '.join(known_sites())} (semantics/body_sites.toml)")
+    # The SAME rule `daily` uses, called rather than mirrored (#145), with one
+    # difference stated rather than left to be discovered: a side is OPTIONAL
+    # here. Requiring one would refuse every episode already written, and an
+    # episode entered before the field existed never owed a side. What a
+    # paired site with no side gets instead is an advisory - see
+    # `side_advisories` - because "the knee" still does not say which knee to
+    # stop loading. A midline site takes no side at all, and that is refused.
+    problems += _validate_location(rec, "body_site", "body_side",
+                                   needs_side=False)
     if (od := rec.get("onset_date")) is not None and _bad_date(od):
         problems.append(f"bad onset_date {od!r} (ISO-8601 YYYY-MM-DD)")
     if (rd := rec.get("resolved_date")) is not None:
@@ -1620,8 +1681,104 @@ def _restriction_classes(rec: dict) -> list[str]:
     return _tokens(rec.get("restricts"))
 
 
+def side_advisories(rows: list[tuple[int, dict]]) -> list[str]:
+    """Episodes on a paired site that do not say which one (#145).
+
+    The field is optional and stays optional - requiring it would refuse every
+    episode already written, and one entered before it existed never owed a
+    side. But an open episode on a paired site with no side is the exact case
+    #145 is about: a gate on "the knee" bans a movement the athlete performs
+    perfectly well on the other leg, and over-restriction is its own harm.
+
+    ADVISORY, never a problem, and only where the episode can still GATE. A
+    resolved episode restricts nothing, so naming its side changes no answer,
+    and repeating the note once per line of one episode is noise about a
+    decision already taken.
+
+    Written because it was CLAIMED. Two comments said `validate` advises on
+    this while nothing did, which is the specified-and-never-written defect
+    this repo keeps finding in other people's work.
+    """
+    from .anatomy import is_paired, resolve
+
+    latest: dict = {}
+    for n, rec in rows:
+        if rec.get("slug"):
+            latest[rec["slug"]] = (n, rec)
+
+    out = []
+    for n, rec in latest.values():
+        site = rec.get("body_site")
+        if not site or rec.get("body_side") or not is_paired(site):
+            continue
+        if rec.get("status") in ("resolved", "cancelled"):
+            continue
+        if not rec.get("restricts") and not rec.get("restriction"):
+            continue
+        out.append(
+            f"line {n}: episode {rec.get('slug')!r} is on the "
+            f"{resolve(site)}, which exists on both sides, and does not say "
+            f"which. A gate naming only the site restricts the limb that is "
+            f"fine as well; set 'body_side' to left, right or bilateral")
+    return out
+
+
+def _validate_event_outcome(rec: dict) -> list[str]:
+    """An outcome is about a date that has ARRIVED (#139).
+
+    Two things the pair must not be able to say. An outcome on a fixture still
+    in the future asserts what became of something that has not happened, and
+    an outcome on a fixture cancelled in advance says it both did not take
+    place and took place - the two axes contradicting each other rather than
+    describing different things.
+    """
+    outcome = rec.get("outcome")
+    if outcome is None:
+        return []
+    problems = []
+    when, line = rec.get("event_date") or rec.get("date"), rec.get("date")
+    # PARSED, not compared as text. `date.fromisoformat` accepts basic form
+    # (`20300915`) and week dates (`2030-W20-1`), so `'-' < '0'` let a future
+    # outcome through and refused a past one written in the other spelling.
+    both = None
+    if when and line and not _bad_date(str(when)) and not _bad_date(str(line)):
+        both = (date.fromisoformat(str(when)), date.fromisoformat(str(line)))
+    if both and both[0] > both[1]:
+        problems.append(
+            f"'outcome' says what became of this fixture, and {when!r} is "
+            "later than the day this line was written. A date still to come "
+            "has no outcome; leave it null until it has arrived")
+    if rec.get("status") == "cancelled":
+        problems.append(
+            "a cancelled fixture did not take place, so it has no 'outcome' - "
+            "`status` already says what became of it")
+    return problems
+
+
 def _validate_pain_location(rec: dict) -> list[str]:
-    """`pain_site` against the curated registry, `pain_side` against anatomy.
+    """`pain_site` against the curated registry, `pain_side` against anatomy."""
+    # BOTH flags follow `pain`, which is what this rule always did: a daily
+    # row naming a midline site and a side with no pain score was legal, and
+    # tightening that silently would fail lines already written, forever, with
+    # no remedy but a correction.
+    scored = bool(rec.get("pain"))
+    return _validate_location(rec, "pain_site", "pain_side",
+                              needs_side=scored, check_midline=scored)
+
+
+def _validate_location(rec: dict, site_key: str, side_key: str,
+                       needs_side: bool, check_midline: bool = True) -> list[str]:
+    """One site-and-side rule, for every dataset that carries a pair (#145).
+
+    `daily` had this and `medical` had no side at all, so a left-knee episode
+    and a right-knee episode were the same episode - and gating "the knee"
+    bans a movement the athlete performs perfectly well on the other leg,
+    which is the over-restriction the restriction vocabulary already warns
+    about.
+
+    Written once rather than mirrored: two copies of a rule about paired
+    anatomy are two chances for one of them to learn about a new midline site
+    alone.
 
     Imported lazily so `schema` stays importable without touching the
     filesystem - validation is the only thing that needs the registry, and a
@@ -1631,34 +1788,34 @@ def _validate_pain_location(rec: dict) -> list[str]:
     from .anatomy import SIDES, describe, is_paired, is_site, known_sites, resolve
 
     problems: list[str] = []
-    site = rec.get("pain_site")
-    side = rec.get("pain_side")
+    site = rec.get(site_key)
+    side = rec.get(side_key)
 
     if site and not is_site(site):
         problems.append(
-            f"unknown 'pain_site' {site!r} - use one of {', '.join(known_sites())} "
+            f"unknown {site_key!r} {site!r} - use one of {', '.join(known_sites())} "
             "(or an alias the registry knows; add one in semantics/body_sites.toml "
             "rather than inventing a site here)")
         return problems
 
     if side is not None and side not in SIDES:
-        problems.append(f"'pain_side' must be one of {sorted(SIDES)} or null, "
+        problems.append(f"{side_key!r} must be one of {sorted(SIDES)} or null, "
                         f"got {side!r}")
     if side is not None and not site:
-        problems.append("'pain_side' without a 'pain_site' says nothing")
+        problems.append(f"{side_key!r} without a {site_key!r} says nothing")
 
-    if site and rec.get("pain"):
+    if site and needs_side:
         # A paired structure without a side is not actionable: "my knee hurts"
         # does not tell a coach which knee to stop loading. Midline sites take
         # no side at all, and claiming one would be a false precision.
         if is_paired(site) and side is None:
             problems.append(
-                f"'{resolve(site)}' exists on both sides - set 'pain_side' to "
+                f"'{resolve(site)}' exists on both sides - set {side_key!r} to "
                 "left, right or bilateral")
-        if not is_paired(site) and side is not None:
-            problems.append(
-                f"'{resolve(site)}' is a midline site ({describe(site)}) and "
-                "takes no 'pain_side'")
+    if check_midline and site and not is_paired(site) and side is not None:
+        problems.append(
+            f"'{resolve(site)}' is a midline site ({describe(site)}) and "
+            f"takes no {side_key!r}")
     return problems
 
 
@@ -2330,6 +2487,8 @@ def _validate_policy(dataset: str, rec: dict) -> list[str]:
         problems += _enum(rec, "kind", EVENT_KINDS)
         problems += _enum(rec, "priority", EVENT_PRIORITIES, optional=True)
         problems += _enum(rec, "status", EVENT_STATUSES, optional=True)
+        problems += _enum(rec, "outcome", EVENT_OUTCOMES, optional=True)
+        problems += _validate_event_outcome(rec)
         problems += _enum(rec, "set_by", AUTHORS, optional=True)
         # The whole point of the dataset: a fixture without a date is not a
         # fixture, and it is what everything else here is planned backwards from.

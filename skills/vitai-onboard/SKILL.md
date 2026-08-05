@@ -84,7 +84,10 @@ plan they will follow, not the best plan.
    is not a milestone (the engine derives those). Set `immovable` where the
    date is not theirs to move, and `priority` `a`/`b`/`c` for how much the
    plan bends - an A fixture gets a taper, a C is trained through. A goal
-   anchored to an event by slug inherits a hard deadline.
+   anchored to an event by slug inherits a hard deadline. Once a fixture's
+   date has passed, append a line with `outcome` (`took_place` or
+   `did_not_attend`) - a race that happened and logged nothing is the common
+   case, and without the outcome it is indistinguishable from one skipped.
 8. **Fill the content repo's `CLAUDE.md`**: settled decisions (with
    evidence), how this athlete works, standing sensitivities. This file is
    what makes session two as good as session one.

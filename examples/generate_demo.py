@@ -905,14 +905,16 @@ def _event(date: str, slug: str, title: str, kind: str, event_date: str,
     rec = {"date": date, "slug": slug, "title": title, "kind": kind,
            "event_date": event_date, "priority": None, "immovable": True,
            "place": None, "status": "confirmed", "set_by": "athlete",
-           "reason": None, "note": None}
+           # NULL until the day is past (#139), which is the ordinary state of
+           # a fixture and must never be read as "did not happen".
+           "reason": None, "note": None, "outcome": None}
     rec.update(kw)
     return rec
 
 
 def _events(start: date) -> list[dict]:
-    """Two dated fixtures: the one the block is built around, and one that is
-    simply true and constrains it (G86)."""
+    """Dated fixtures: the one the block is built around, one that is simply
+    true and constrains it (G86), and one restated with its outcome."""
     d0 = start.isoformat()
     return [
         _event(d0, "autumn-half", "The autumn half marathon", "competition",
@@ -922,6 +924,17 @@ def _events(start: date) -> list[dict]:
                "2030-05-15", priority="b", place="the park circuit",
                note="a hard date - the goal that points at it cannot be "
                     "part-met"),
+        # THE OUTCOME, once the day is past (#139). The race happened and the
+        # record holds no session for it, which is the common case rather than
+        # the exotic one: a race day is exactly when logging is least likely.
+        # Without this row the demo could not tell that apart from a race the
+        # athlete skipped, and neither could any consumer built against it.
+        _event((start + timedelta(days=40)).isoformat(), "spring-5k-race",
+               "The spring 5k", "competition", "2030-05-15", priority="b",
+               place="the park circuit", outcome="took_place",
+               note="ran it; the watch was left at home, so there is no "
+                    "session row and that is a gap in the log rather than "
+                    "in the running"),
         _event((start + timedelta(days=30)).isoformat(), "hip-scan",
                "Hip imaging follow-up", "clinical", "2030-07-10",
                priority="c", immovable=True,
@@ -1121,7 +1134,7 @@ def _policy(start: date) -> tuple[list[dict], list[dict], list[dict]]:
 
 
 def _medical(start: date, end: date) -> list[dict]:
-    """Two episodes: one closed, one still gating (G11).
+    """Two episodes: one closed, one still gating (G11), on opposite sides.
 
     The resolved calf strain shows a complete lifecycle - onset, physio visit,
     resolution - so the episode window is visible with both ends. The achilles
@@ -1135,19 +1148,22 @@ def _medical(start: date, end: date) -> list[dict]:
     return [
         {"date": (start + timedelta(days=9)).isoformat(), "slug": "calf-strain",
          "kind": "injury", "title": "Left calf strain on a hill rep",
-         "body_site": "calf", "severity": "moderate", "status": "active",
+         "body_site": "calf", "body_side": "left",
+         "severity": "moderate", "status": "active",
          "resolved_date": None, "restricts": "run impact",
          "provider_type": None, "source": "athlete",
          "note": "pulled up mid-session, walked home"},
         {"date": (start + timedelta(days=14)).isoformat(), "slug": "calf-strain",
          "kind": "visit", "title": "Physio assessment - left calf",
-         "body_site": "calf", "severity": "mild", "status": "monitoring",
+         "body_site": "calf", "body_side": "left",
+         "severity": "mild", "status": "monitoring",
          "resolved_date": None, "restricts": "impact",
          "provider_type": "physio", "source": "athlete",
          "note": "cleared to walk and cycle; graded return to running"},
         {"date": (start + timedelta(days=31)).isoformat(), "slug": "calf-strain",
          "kind": "injury", "title": "Left calf strain resolved",
-         "body_site": "calf", "severity": "none", "status": "resolved",
+         "body_site": "calf", "body_side": "left",
+         "severity": "none", "status": "resolved",
          "resolved_date": (start + timedelta(days=31)).isoformat(),
          "restricts": None, "provider_type": "physio", "source": "athlete",
          "note": "full sessions with no symptoms for two weeks"},
@@ -1156,7 +1172,13 @@ def _medical(start: date, end: date) -> list[dict]:
         # morning check passes, and stands on a day nobody ran it.
         {"date": (end - timedelta(days=4)).isoformat(), "slug": "achilles",
          "kind": "symptom", "title": "Right achilles soreness after the long run",
-         "body_site": "achilles", "severity": "mild", "status": "monitoring",
+         # THE OTHER LEG (#145), and it agrees with the title, which already
+         # said "Right achilles". One episode per side is what makes the field
+         # worth having: a consumer gating "the calf" must not stop the work
+         # this athlete can do on the other leg, and a fixture where every
+         # episode shares a side could not show that.
+         "body_site": "achilles", "body_side": "right",
+         "severity": "mild", "status": "monitoring",
          "resolved_date": None, "restricts": "impact", "provider_type": None,
          "source": "athlete",
          "note": "stiff first thing; eases once warm - watching it",
@@ -1170,6 +1192,14 @@ def _medical(start: date, end: date) -> list[dict]:
         # date, which the record could not express until the split.
         {"date": (end - timedelta(days=1)).isoformat(), "slug": "old-ankle",
          "kind": "injury", "title": "Ankle sprain (recalled, pre-record)",
+         # NO SIDE, deliberately: it predates the field in the story this
+         # record tells, which is the shape most real episodes have.
+         #
+         # It draws no advisory, and that is the rule working rather than
+         # failing. `side_advisories` fires only where an episode can still
+         # GATE - open, and restricting something - because a resolved
+         # episode restricts nothing and naming its side changes no answer.
+         # This one is resolved.
          "body_site": "ankle", "severity": "none", "status": "resolved",
          "resolved_date": "2028-05-01", "restricts": None,
          "provider_type": "physio", "source": "athlete",

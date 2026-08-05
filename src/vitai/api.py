@@ -1619,6 +1619,7 @@ class Vitai:
         from .schema import (corrections_that_did_not_apply,
                              impossible_claim_problems, recorded_at_problems,
                              period_advisories, polarity_advisories,
+                             side_advisories,
                              supersedes_problems,
                              timestamp_advisories,
                              unranked_source_problems,
@@ -1696,6 +1697,8 @@ class Vitai:
             if name == "goals":
                 advisories += polarity_advisories(rows)
                 advisories += period_advisories(rows)
+            if name == "medical":
+                advisories += side_advisories(rows)
             # A missing track file is NOT a missing session: the session is
             # the fact and the track is an attachment, so a broken pointer is
             # reported and never fails the build (#43).
