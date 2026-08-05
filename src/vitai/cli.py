@@ -119,6 +119,24 @@ def _fmt_goal(row: dict) -> str:
         head = "your word is the measure"
     elif row.get("metric") == "external" or row.get("verification") == "external":
         head = f"tracked in {row.get('tracker')}"
+    elif row.get("observed") is not None:
+        # A LEVEL goal (#273). This branch has to come before the `counted is
+        # None` one below, because a level goal always has a null `counted` -
+        # so without it the primary human surface printed "not scored here"
+        # about the very goal the level shape was added to score, which is the
+        # P9 half of the fix landing nowhere.
+        polarity = row.get("polarity") or "floor"
+        room, observed = row.get("room_left"), row["observed"]
+        if polarity == "ceiling" and room is not None:
+            head = (f"{observed:g}, aiming for {target:g} or under"
+                    + (f" - OVER by {abs(room):g}" if row.get("breach")
+                       else f" - {room:g} to spare"))
+        elif polarity == "floor" and room is not None:
+            head = (f"{observed:g}, aiming for {target:g} or over"
+                    + (f" - {abs(room):g} to go" if row.get("breach")
+                       else f" - {room:g} clear"))
+        else:
+            head = f"{observed:g}, aiming for {target:g}"
     elif counted is None:
         # A goal scoped to a dataset the contribution engine cannot read.
         # Saying "0%" here would report a goal it cannot see as a goal going

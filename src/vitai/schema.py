@@ -1797,6 +1797,28 @@ _CAPPISH = ("cap", "limit", "under ", "below", "no more than", "at most",
             "max ")
 
 
+def _still_open(rows: list[tuple[int, dict]]) -> set:
+    """Slugs whose LATEST line is still scorable and still undeclared.
+
+    A goal's lifecycle is its latest line's, not each line's, and its polarity
+    likewise - the record is append-only, so a goal declared correctly today
+    still holds the line that omitted it. Filtering per line meant a goal
+    completed in one year and a goal cured by restatement both kept drawing
+    the advisory forever, and in an append-only record the athlete has no
+    remedy for it. Measured on the persona corpus: three advisories on one
+    record, two of them for goals long since closed.
+    """
+    latest: dict = {}
+    for _n, rec in rows:
+        slug = rec.get("slug")
+        if slug:
+            latest[slug] = rec
+    return {slug for slug, rec in latest.items()
+            if _lifecycle(rec) in ("active", "proposed", "planned",
+                                   "accepted", "on_hold")
+            and not rec.get("polarity")}
+
+
 def polarity_advisories(rows: list[tuple[int, dict]]) -> list[str]:
     """Goals whose words say cap and whose scoring says floor (#200).
 
@@ -1814,6 +1836,7 @@ def polarity_advisories(rows: list[tuple[int, dict]]) -> list[str]:
     with a separate guard, and refusing it would make the engine the author of
     a goal it only read the label of.
     """
+    open_goals = _still_open(rows)
     out = []
     for n, rec in rows:
         if rec.get("polarity") or rec.get("target") is None:
@@ -1822,7 +1845,13 @@ def polarity_advisories(rows: list[tuple[int, dict]]) -> list[str]:
         # never counted, so the hazard the advisory describes does not exist
         # for it, and repeating the warning once per restatement line of the
         # same slug is noise about a decision already taken.
-        if rec.get("status") not in ("active", "proposed", "paused"):
+        #
+        # THE GOAL's standing, not this line's. `status` retired on `goals`
+        # at contract 25 and a line written since carries `lifecycle_status`,
+        # so reading the old key alone silently skipped every goal written
+        # after the split - inert for new lines ever since, which is the
+        # specified-and-never-fires version of the defect (#273).
+        if rec.get("slug") not in open_goals:
             continue
         title = str(rec.get("title") or "").lower()
         if any(w in title for w in _CAPPISH):
@@ -1832,6 +1861,52 @@ def polarity_advisories(rows: list[tuple[int, dict]]) -> list[str]:
                 "scored as a floor - progress counts UP and holding under the "
                 "value reads as exceeding it. Declare 'ceiling' if that is "
                 "what it is")
+    out += _anchor_polarity_advisories(rows)
+    return out
+
+
+def _anchor_polarity_advisories(rows: list[tuple[int, dict]]) -> list[str]:
+    """A LEVEL goal with no declared polarity (#273).
+
+    The `floor` default is safe for a flow - more steps is progress, whoever
+    wrote the goal - and unsafe for a level, where the direction is the whole
+    content of the goal. "Down to 78 kg" defaulted to a floor, which scores
+    as though more kilograms were progress, and the class is not obscure:
+    losing weight is the motivating case of the whole record.
+
+    NOT the title heuristic above, which needs the word `cap` to fire and
+    would need `down to` and `under` and `below` and every phrasing after
+    that. This fires on the SHAPE of the goal - a level metric with no
+    direction declared - which is a fact about the row rather than a reading
+    of its prose.
+
+    Advisory rather than a problem, because old lines keep validating. The
+    engine says the direction is undeclared; it does not decide it.
+    """
+    from .contributions import ANCHOR_DATASETS
+
+    open_goals = _still_open(rows)
+    out = []
+    for n, rec in rows:
+        if rec.get("polarity") or rec.get("target") is None:
+            continue
+        # See the note in `polarity_advisories`.
+        if rec.get("slug") not in open_goals:
+            continue
+        metric = rec.get("metric")
+        declared = rec.get("dataset")
+        hosts = {ds for ds in ANCHOR_DATASETS
+                 if isinstance(metric, str) and metric in KEYS.get(ds, ())}
+        if declared is not None and declared not in ANCHOR_DATASETS:
+            continue
+        if not hosts:
+            continue
+        out.append(
+            f"line {n}: goal {rec.get('slug')!r} names {metric!r}, which is a "
+            f"LEVEL rather than something that accumulates, and has no "
+            f"'polarity' - so it is scored as a floor and moving DOWN reads "
+            f"as going backwards. Declare 'ceiling' to reach a level from "
+            f"above, 'floor' from below")
     return out
 
 
@@ -1851,7 +1926,11 @@ def period_advisories(rows: list[tuple[int, dict]]) -> list[str]:
     for n, rec in rows:
         if rec.get("polarity") != "ceiling" or rec.get("target") is None:
             continue
-        if rec.get("status") not in ("active", "proposed", "paused"):
+        # `_lifecycle` and not `status`, which retired at 25 - this one was
+        # left inert when the other two were fixed, which is how a defect
+        # survives its own diagnosis.
+        if _lifecycle(rec) not in ("active", "proposed", "planned",
+                                   "accepted", "on_hold"):
             continue
         if rec.get("tracker") == "sum" and rec.get("period") in (None, "none"):
             out.append(

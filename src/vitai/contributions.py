@@ -59,6 +59,37 @@ BASELINE_WEEKS = 4
 # it does not know, which is both true and safe.
 CONTRIBUTING_DATASETS = frozenset({"daily", "sessions"})
 
+# The other half of `GOAL_DATASETS`, and the split already meant this without
+# saying so: `daily` and `sessions` hold FLOWS, which accumulate over a period,
+# and `weight` and `measurements` hold LEVELS, which do not.
+#
+# "Down to 78 kg" was scored as an accumulation, so it counted nothing and
+# reported nothing - no count, no percentage, no breach - while the flow goals
+# beside it worked (#273). `counted` was not broken: it was correctly
+# declining a question it was not built for, and nothing else answered it.
+#
+# A level is scored as the LATEST observation against the target, which is
+# what a person means by "am I past it". Nothing new is computed - `_standing`
+# already turns a value and a target into `room_left` and `breach` per
+# polarity (#200); it was never given a value to work with.
+#
+# NOT EVERY LEVEL IS HERE, and the limits are worth stating rather than
+# discovering.
+#
+# `daily.rhr` is a level living in a flow dataset, so a resting-heart-rate
+# goal still scores as an accumulation. Separating them needs a per-metric
+# declaration, which is #194's taxonomy and not this.
+#
+# `measurements` is deliberately NOT here, though it holds levels and is a
+# goal dataset. It is entity-attribute-value: the quantity is in `value`,
+# keyed by `kind`, so a goal would have to name the metric `value` and would
+# then be scored against the latest reading of ANY kind - a body-fat
+# percentage answering a waist-circumference ceiling. Scoring it needs a
+# kind-keyed read, and shipping it without one would replace "reports
+# nothing" with "reports the wrong instrument", which is the trade this whole
+# change exists to refuse.
+ANCHOR_DATASETS = frozenset({"weight"})
+
 # How a goal's scope was arrived at. `dataset` unset is NOT the default - it is
 # UNSTATED, and collapsing the two lets the engine assert something nobody said
 # (the same "absent is not a value" line #35 draws for `recorder`).
@@ -438,9 +469,49 @@ def achievement_of(counted: float | None, target: object,
     return "in_progress" if float(counted) > 0 else "no_progress"
 
 
+def _observed(rows: list[dict], metric: str, on: str) -> float | None:
+    """The latest value of a level metric on or before `on`.
+
+    LATEST, not mean and not sum: a level goal asks which side of a number the
+    athlete is on now, and an average over the period answers a different
+    question - one already answered by `weight_rate` in `verdicts`, which is
+    where "are you moving at the right speed" belongs.
+
+    Ordered by `clocks.order_key`, which is the engine's own sort and not a
+    fifth one invented here: it compares `recorded_at` as an INSTANT, because
+    comparing stamps as text orders two rows written either side of a timezone
+    change by wall clock, and it sorts an unstamped row before a stamped one
+    on the same date rather than by whichever string happened to be shorter.
+
+    A MODELLED value is not an observation. The contract has said since 12
+    that a consumer reading a column must check `modelled`, and a level goal
+    scored against a vendor's estimate would report an inference as a
+    measurement - so a row that names this metric as modelled is skipped, and
+    a record holding only modelled values for it reports nothing rather than
+    reporting the estimate.
+    """
+    from .clocks import order_key
+
+    def _stated(rec: dict) -> bool:
+        modelled = rec.get("modelled")
+        fields = modelled.split() if isinstance(modelled, str) else (modelled or [])
+        return metric not in fields
+
+    seen = [r for r in rows
+            if r.get("date") and str(r["date"]) <= on
+            and isinstance(r.get(metric), (int, float))
+            and not isinstance(r.get(metric), bool)
+            and _stated(r)]
+    if not seen:
+        return None
+    seen.sort(key=order_key)
+    return float(seen[-1][metric])
+
+
 def goal_progress(goals: list[dict], thresholds: list[dict], daily: list[dict],
                   sessions: list[dict], on: str,
-                  events: list[dict] | None = None) -> list[dict]:
+                  events: list[dict] | None = None,
+                  weight: list[dict] | None = None) -> list[dict]:
     """Per-goal standing as of `on`: counted progress in the current period.
 
     This is what `vitai goals` renders and what a dashboard reads. Progress is
@@ -449,6 +520,7 @@ def goal_progress(goals: list[dict], thresholds: list[dict], daily: list[dict],
     """
     contributions, milestones = compute_contributions(goals, thresholds, daily,
                                                       sessions)
+    anchor_rows = {"weight": weight or []}
     in_force = state(goals, thresholds, on)
     declared, edited = _declaration_dates(goals)
     index = _event_index(events)
@@ -474,7 +546,27 @@ def goal_progress(goals: list[dict], thresholds: list[dict], daily: list[dict],
         unbudgeted = sum(c["value"] - c["counted"] for c in contributions
                          if c["goal"] == slug and c["period"] == bucket)
         target = goal.get("target")
-        standing = _standing(goal, counted if countable else None, target)
+        # A LEVEL is scored on its latest observation, not on a sum (#273).
+        # `observed` and not `counted`, because `counted` means accumulated
+        # and one word for two quantities is the overloading this engine keeps
+        # taking back out of other fields.
+        # DECLARED, or not scored. The `floor` default is what made "down to
+        # 78" read as though more kilograms were progress, and scoring an
+        # undeclared level against it does not fix that - it upgrades a null
+        # to a confident inversion. Measured on the persona corpus: a goal 6.1
+        # kg OVER its loss target reported `achieved`, at 109%.
+        #
+        # So an undeclared level still reports nothing, exactly as before, and
+        # `validate` says why and what to write. Silence a consumer can see is
+        # better than a verdict pointing the wrong way, which is the same
+        # judgement #200 made when it refused to read direction out of a title.
+        anchored = (settled_here and scope in ANCHOR_DATASETS
+                    and goal.get("polarity") is not None)
+        metric = goal.get("metric")
+        observed = _observed(anchor_rows.get(scope) or [], str(metric), on) \
+            if anchored and isinstance(metric, str) else None
+        standing = _standing(goal, observed if anchored
+                             else (counted if countable else None), target)
         pct = standing["progress_pct"]
         deadline, hardness, anchor = deadline_of(goal, index)
         rows.append({
@@ -487,7 +579,8 @@ def goal_progress(goals: list[dict], thresholds: list[dict], daily: list[dict],
             "status": lifecycle_of(goal),
             "lifecycle_status": lifecycle_of(goal),
             "achievement_status": achievement_of(
-                counted if countable else None, target,
+                observed if anchored else (counted if countable else None),
+                target,
                 lifecycle_of(goal), days_between(on, deadline_of(goal, index)[0]),
                 polarity_of(goal), goal.get("target_hi")),
             "period": goal.get("period"),
@@ -499,6 +592,11 @@ def goal_progress(goals: list[dict], thresholds: list[dict], daily: list[dict],
             "distance": standing["distance"],
             "breach": standing["breach"],
             "counted": round(counted, 3) if countable else None,
+            # The level, where the goal names one. Null on a flow goal, and
+            # `counted` is null on a level goal - which side carries the
+            # number is how a consumer tells the two shapes apart without
+            # being taught which metrics accumulate.
+            "observed": round(observed, 3) if observed is not None else None,
             "unbudgeted": round(unbudgeted, 3) if countable else None,
             "progress_pct": pct,
             "dataset": scope,
