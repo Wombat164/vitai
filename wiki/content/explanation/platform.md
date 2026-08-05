@@ -46,6 +46,33 @@ policy, so a host cannot be gamed by an athlete who blows through a ramp
 guard. `contributions` explains any single event's effect on any single goal,
 which is what a UI needs to answer "why did this run not move my bar".
 
+## Headline figures: what a client may put in large type
+
+A conformance client deleted four stat tiles because each was a derivation the
+engine does not emit. Three of those answers are worth stating, because every
+client will otherwise invent its own.
+
+**The rate was already there.** `verdicts` emits `weight_rate` judged against
+the phase target, and `Vitai.status()` carries the same figure as one number
+with a `direction` word. The client displayed neither and computed its own over
+a different window. That is a discoverability failure rather than a missing
+feature: reach for what the engine emits before deriving a second one.
+
+**The weight average says what it is over.** `status()` carries `mean_kg_7d`,
+and it is the mean of the last seven WEIGH-INS, not of seven days - on a record
+with one weigh-in a week those seven points span six weeks. `mean_kg_span_days`
+and `mean_kg_points` say so, and a client rendering the field name alone would
+be describing a window the record never used.
+
+**There is no cross-metric adherence percentage, and there should not be.** The
+deleted tile collapsed every metric and every week into one number with
+refusals dropped from the denominator, so a record ninety per cent unjudgeable
+could display one hundred per cent adherence. `verdicts` carries a `reason`
+column and refuses to write a declined row without one, precisely so a consumer
+cannot flatten "the record holds nothing to judge" into "not counted". A single
+percentage flattens it by construction. Show the judged rows and the refused
+ones side by side; the count you would have hidden is the honest headline.
+
 ## Contract history
 
 | Contract | Version | Change |
