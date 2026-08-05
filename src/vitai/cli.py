@@ -17,6 +17,7 @@ from pathlib import Path
 from . import __version__
 from .api import Vitai, init, schema
 from .jsonl import DataError
+from .schema import KEYS
 
 
 def _root(args: argparse.Namespace) -> Path:
@@ -234,6 +235,70 @@ def cmd_append(args: argparse.Namespace) -> None:
             print(json.dumps(row))
     except (ValueError, KeyError, DataError) as e:
         sys.exit(str(e).strip("'"))
+
+
+def cmd_dataset(args: argparse.Namespace) -> None:
+    """A harness over `Vitai.dataset()`. One dataset's live rows (#258).
+
+    The language-agnostic half of the answer. An engine-side consumer calls
+    the method; anything else shells out to this rather than reading the
+    JSONL and finishing the correction rule itself, which is the path that
+    deleted a row and its correction together.
+
+    The default is a SUMMARY and `--json` is the rows, following every other
+    read command here. It is deliberately not a rendering of the rows: there
+    are nineteen dataset shapes and inventing a line format for each would
+    put a lossy view where the record should be. What it reports instead is
+    what a consumer checking its own reimplementation needs - how many rows
+    survive, over what span, and what was quarantined on the way.
+    """
+    v = Vitai(_root(args))
+    rows = v.dataset(args.name)
+    if args.json:
+        for row in rows:
+            print(json.dumps(row, sort_keys=True))
+        # ON STDERR, so the JSONL stream stays parseable, and on this path as
+        # well as the prose one. The consumer #258 is about is a script, and
+        # warning only the human reader would have left the quarantine signal
+        # exactly where it was never seen.
+        if errors := v.load_report()["quarantined"]:
+            print(f"NOTE: {len(errors)} unparseable line(s) quarantined "
+                  f"somewhere in this record - `vitai validate` names them",
+                  file=sys.stderr)
+        return
+    # Both of these come through doors an agent has too. Reaching into
+    # `jsonl.load_report` and `schema.META_KEYS` directly was quicker and it
+    # put two facts in the CLI that MCP could not ask for, which is the
+    # #158 acceptance criterion failing in the direction nobody checks.
+    errors = v.load_report()["quarantined"]
+    declared = set(schema()["fields"][args.name])
+    if not rows:
+        print(f"{args.name}: no live rows")
+    else:
+        dates = sorted(str(r["date"]) for r in rows if r.get("date"))
+        span = f", {dates[0]} to {dates[-1]}" if dates else ""
+        print(f"{args.name}: {len(rows)} live row(s){span}")
+        # The UNION across rows, counted against the DECLARED shape rather
+        # than presented as one. A field one row carries is not a field every
+        # row carries, and the engine's own list is the answer to "what may
+        # this dataset hold" - reading it off the data would report this
+        # record's habits as the schema (#257 publishes the real one).
+        carried = {k for r in rows for k in r if r[k] is not None}
+        print(f"carrying a value on at least one row "
+              f"({len(carried & declared)} of {len(declared)} declared "
+              f"fields): {', '.join(sorted(carried & declared))}")
+    if errors:
+        # Quarantined lines are DROPPED, not raised, so a read proceeds from
+        # the good rows. Saying nothing here would let a partial answer read
+        # as a complete one. Record-wide rather than per dataset, and worded
+        # that way: the loader returns one flat list. Each entry does begin
+        # with its file name, so this COULD be split per dataset - but only
+        # by parsing a message format nothing contracts, which is a coupling
+        # that breaks silently the day the wording changes.
+        print(f"NOTE: {len(errors)} unparseable line(s) quarantined somewhere "
+              f"in this record - `vitai validate` names them")
+    print("--json for the rows, with supersedes already applied; "
+          "`vitai schema --json` for the declared shape and types")
 
 
 def cmd_events(args: argparse.Namespace) -> None:
@@ -1113,6 +1178,8 @@ def main(argv: list[str] | None = None) -> None:
         ("goals", cmd_goals, "active goals: progress, dates, contributions, flagged edits"),
         ("append", cmd_append,
          "append JSONL rows from stdin, stamping recorded_at and _gen"),
+        ("dataset", cmd_dataset,
+         "one dataset's live rows, with supersedes already applied (#258)"),
         ("events", cmd_events,
          "dated fixtures the plan is built backwards from (races, scans, dates)"),
         ("resolve", cmd_resolve, "which source won each contested field, and why"),
@@ -1227,6 +1294,14 @@ def main(argv: list[str] | None = None) -> None:
                            help="only this date")
             p.add_argument("--json", action="store_true",
                            help="emit meal rows as JSONL instead of prose")
+        if name == "dataset":
+            # The choices come from the engine, so an unknown name is refused
+            # by argparse with the real list rather than by a KeyError after
+            # a root has already been resolved.
+            p.add_argument("name", choices=sorted(KEYS),
+                           help="which dataset to read")
+            p.add_argument("--json", action="store_true",
+                           help="emit the live rows as JSONL")
         if name == "events":
             p.add_argument("--json", action="store_true",
                            help="emit event rows as JSONL instead of prose")
