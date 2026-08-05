@@ -1078,7 +1078,15 @@ def cmd_schema(args: argparse.Namespace) -> None:
     print(f"contract {shape['contract']}  (the read model a consumer gates on)")
     print("generations:")
     for name in sorted(shape["generations"]):
-        print(f"  {name:<14} {shape['generations'][name]}")
+        gen = shape["generations"][name]
+        n = len(shape["fields"].get(name, {}))
+        print(f"  {name:<14} {gen}  ({n} fields)")
+    # The field TABLE is hundreds of rows and belongs in `--json`, which is
+    # what a consumer building a projection reads. Printing the count here so
+    # the human surface says the data exists rather than hiding it (#257).
+    total = sum(len(v) for v in shape["fields"].values())
+    print(f"fields   {total} across {len(shape['fields'])} datasets"
+          f"  (types, affinity and container in --json)")
 
 
 def main(argv: list[str] | None = None) -> None:

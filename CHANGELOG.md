@@ -3,6 +3,37 @@
 All notable changes to vitai. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+No contract change: this adds accessors over what the engine already knew and
+changes no table, column or line shape.
+
+### Added
+
+- **`api.field_types()`, and a `fields` key on `api.schema()`** (#257). What
+  each field of each dataset may hold (`types`), how it is projected
+  (`affinity`), and whether it is a list needing JSON decoding (`container`).
+  `KEYS` was public and the types were not, so a consumer building a queryable
+  projection could check its column names against the engine and had to guess
+  or copy everything else. One copied, and the copy went several increments
+  stale. Carried on `schema()` rather than behind a fourth accessor, so `vitai
+  schema --json` and the MCP `schema` tool reach it without either being
+  taught anything.
+- **`db.column_affinity()` and `db.LIST_COLS`**, the two facts that accessor
+  needed and that lived in private names.
+
+### Fixed
+
+- **`__version__` was 0.4.0 on a 0.5.0 engine.** The release bumped
+  `pyproject.toml` and left the package constant behind, so `vitai --version`,
+  `schema()["engine"]` and the MCP server's reported version all named the
+  previous release. Its only job is to be accurate about which engine is
+  running. A test now holds the two in step.
+- **The two public contract tables were checked for coverage and not for
+  agreement**, which is the gap #184 recorded while it was live: the README
+  said `0.4.0` for contracts 16 to 19 while the wiki still said `unreleased`.
+  Both tables had the rows, so the existing check could not see it.
+
 ## [0.5.0] - 2026-08-04
 
 Contract 19 to 27. The increment where the engine learned to say how much it
