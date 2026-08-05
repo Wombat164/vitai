@@ -18,6 +18,7 @@ from . import __version__
 from .api import Vitai, init, schema
 from .jsonl import DataError
 from .schema import KEYS
+from .db import DERIVED_TABLES
 
 
 def _root(args: argparse.Namespace) -> Path:
@@ -235,6 +236,45 @@ def cmd_append(args: argparse.Namespace) -> None:
             print(json.dumps(row))
     except (ValueError, KeyError, DataError) as e:
         sys.exit(str(e).strip("'"))
+
+
+def cmd_derived(args: argparse.Namespace) -> None:
+    """A harness over `Vitai.derived()`. One derived table's rows (#267).
+
+    The same shape as `dataset`, deliberately: #267 asked for a public read
+    path for `best_efforts` and said it should follow the convention already
+    being established rather than invent a second one.
+
+    Keyed by the name the CONTRACT gives the table, because that is the name a
+    consumer has. Several of these were reachable only under another - and
+    `best_efforts` under none at all, which left a private attribute, a direct
+    query against the table this contract exists to insulate consumers from,
+    or re-parsing the tracks.
+    """
+    v = Vitai(_root(args))
+    rows = v.derived(args.table)
+    if args.json:
+        for row in rows:
+            print(json.dumps(row, sort_keys=True))
+        return
+    if not rows:
+        # An empty derived table is a real answer: nothing in this record
+        # produced one. Distinct from a table that does not exist, which the
+        # name check above already refused.
+        print(f"{args.table}: no rows - nothing in this record produces any")
+        return
+    print(f"{args.table}: {len(rows)} row(s)")
+    # From the ROWS, and with no "N of M" denominator. The declared column
+    # inventory lives in `DERIVED_TABLES`, which is engine-side: printing a
+    # count against it would have been a fact the CLI could state and an
+    # agent could not ask for, which is the #158 asymmetry this command
+    # exists to close. The names below are a property of these rows and say
+    # so. `vitai schema --json` publishes the declared shape for datasets.
+    columns = sorted({c for r in rows for c in r if r[c] is not None})
+    print(f"columns carrying a value on at least one row: "
+          f"{', '.join(columns)}")
+    print("--json for the rows; these are BUILD OUTPUT, rebuilt from the "
+          "record every time, never a place to write")
 
 
 def cmd_dataset(args: argparse.Namespace) -> None:
@@ -1180,6 +1220,8 @@ def main(argv: list[str] | None = None) -> None:
          "append JSONL rows from stdin, stamping recorded_at and _gen"),
         ("dataset", cmd_dataset,
          "one dataset's live rows, with supersedes already applied (#258)"),
+        ("derived", cmd_derived,
+         "one DERIVED table's rows, by the name the contract gives it (#267)"),
         ("events", cmd_events,
          "dated fixtures the plan is built backwards from (races, scans, dates)"),
         ("resolve", cmd_resolve, "which source won each contested field, and why"),
@@ -1294,6 +1336,14 @@ def main(argv: list[str] | None = None) -> None:
                            help="only this date")
             p.add_argument("--json", action="store_true",
                            help="emit meal rows as JSONL instead of prose")
+        if name == "derived":
+            # From the engine's own table list, so a table added to the read
+            # model is reachable here the same day rather than whenever
+            # somebody remembers to widen a literal.
+            p.add_argument("table", choices=sorted(DERIVED_TABLES),
+                           help="which derived table to read")
+            p.add_argument("--json", action="store_true",
+                           help="emit the rows as JSONL")
         if name == "dataset":
             # The choices come from the engine, so an unknown name is refused
             # by argparse with the real list rather than by a KeyError after

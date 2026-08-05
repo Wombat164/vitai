@@ -32,6 +32,7 @@ import sys
 from pathlib import Path
 
 from .api import Vitai, schema
+from .db import DERIVED_TABLES
 from .schema import KEYS
 
 PROTOCOL = "2024-11-05"
@@ -93,6 +94,19 @@ TOOLS: dict[str, dict] = {
             # surface that has to guess.
             "name": {"type": "string", "enum": sorted(KEYS),
                      "description": "which dataset, e.g. weight or sessions"},
+        },
+        "required": ["name"],
+    },
+    # The read model's tables, by the name the contract gives them (#267).
+    # `best_efforts` had no public path at all, so an agent's only routes were
+    # a private attribute or a direct query against a table the contract
+    # exists to insulate it from - and #257 was the same failure three weeks
+    # earlier, where the consumer took the second and kept a stale copy.
+    "derived": {
+        "method": "derived",
+        "properties": {
+            "name": {"type": "string", "enum": sorted(DERIVED_TABLES),
+                     "description": "which derived table, e.g. best_efforts"},
         },
         "required": ["name"],
     },
