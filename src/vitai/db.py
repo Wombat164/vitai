@@ -342,7 +342,27 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     Both are required wherever there is a value, enforced where the rows
 #     are built, so a new metric cannot ship unlabelled.
 #
-CONTRACT_VERSION = "29"
+# 30: `goal_progress` gains `observed` - the LATEST value of a level metric,
+#     where `counted` is a sum of contributions. "Down to 78 kg" was scored as
+#     an accumulation, so it counted nothing and reported nothing at all: no
+#     count, no percentage, no breach, and a polarity reading "more is better"
+#     for a goal whose title says down. `counted` was not broken; it was
+#     correctly declining a question it was not built for, and nothing else
+#     answered it. Which of the two columns carries the number is how a
+#     consumer tells a level goal from a flow goal.
+#
+#     SCORED ONLY WHERE THE DIRECTION IS DECLARED. Polarity defaults to
+#     `floor`, and scoring an undeclared level against that default does not
+#     fix the defect - it upgrades a null to an inversion, measured at a goal
+#     6.1 kg OVER its loss target reporting `achieved` at 109%. An undeclared
+#     level still reports nothing and `validate` says what to write.
+#
+#     `weight` only. `measurements` also holds levels and is deliberately out:
+#     it is entity-attribute-value, so a goal would be scored against the
+#     latest reading of ANY kind - a body-fat percentage answering a waist
+#     ceiling. `daily.rhr` is a level in a flow dataset and is out for the
+#     same reason it always was.
+CONTRACT_VERSION = "30"
 
 _TEXT_COLS = {"statistic",            # a slug, and REAL affinity would
                                       # have made `column_affinity` lie about it
@@ -451,7 +471,13 @@ PROGRESS_KEYS = ["slug", "title", "metric", "policy", "status", "period",
                  # it knew. `status` above stays, carrying the same value as
                  # `lifecycle_status`, so a consumer reading the old name is
                  # not broken by the split.
-                 "lifecycle_status", "achievement_status"]
+                 "lifecycle_status", "achievement_status",
+                 # Appended (#273), for the same reason as the two blocks
+                 # above. A LEVEL goal is scored on its latest observation
+                 # rather than on a sum, so it carries `observed` where a flow
+                 # goal carries `counted`, and which side holds the number is
+                 # how a consumer tells the two shapes apart.
+                 "observed"]
 
 # Increment 2: the adjudication trail. Primary dataset tables hold CANONICAL
 # rows; these say where those rows came from and what was overruled.

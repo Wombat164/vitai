@@ -171,7 +171,13 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # above it moves no data line: nothing here writes a verdict or declares a
 # statistic, and the only change in a persona is the contract stamp in its
 # `persona.toml`. Verified by regenerating and diffing rather than asserted.
-AUTHORED_AGAINST_CONTRACT = "29"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #273, which adds `observed` to `goal_progress`. A DERIVED
+# column and the first one here that will actually MOVE a number rather than
+# only appear: a persona holding a weight goal now scores it against the
+# latest weigh-in where it previously scored nothing. That is a change to
+# what the read model says, not to any data line - no builder writes a goal
+# polarity or an observation - and the diff is checked rather than asserted.
+AUTHORED_AGAINST_CONTRACT = "30"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,

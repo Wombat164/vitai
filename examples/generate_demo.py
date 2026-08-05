@@ -232,6 +232,18 @@ def _build(target: Path) -> None:
         else:
             row["hip_pain"] = pain
         daily.append(row)
+        # ONE WEEK WITH NO SESSIONS AT ALL (#274). Contract 28 emits a row for
+        # every week in range including the ones holding nothing, and its own
+        # note says a week of zeros means the record holds nothing for it,
+        # never that the athlete did nothing. A demo that trains every single
+        # week cannot show that row, so the first consumer to meet a gap meets
+        # it in production.
+        #
+        # The days themselves stay: this is a week off training, not a week
+        # the record forgot, and the two look identical in a fixture that
+        # drops both. The distinction is the point.
+        if _quiet_week(d):
+            continue
         if dow in (1, 3):                                   # Tue/Thu runs
             hard = rng.random() < 0.3
             km = round(max(3.0, rng.gauss(6.5 if not hard else 5.0, 1.0)), 2)
@@ -510,6 +522,22 @@ def _build(target: Path) -> None:
                  "coverage": "manual", "pain": None, "pain_site": None,
                  "pain_side": None}
     daily.append(app_claim)
+
+    # THE LAST DAY BREACHES THE CAP, deliberately (#274). A daily ceiling is
+    # scored on the day the viewpoint lands on, so a fixture whose final day
+    # happens to be a quiet one exercises `room_left` and never `breach:
+    # over` - and the over-side is the whole reason contract 24 exists. Every
+    # shipped ceiling being respected teaches a consumer as little as no
+    # ceiling at all.
+    #
+    # Written as an EDIT to the generated day rather than a second row: this
+    # is the same athlete on the same day, not a second witness, and inventing
+    # a source would have made it a resolution example instead of a ceiling
+    # one.
+    for row in daily:
+        if row["date"] == END.isoformat() and row.get("source") != "app":
+            row["kcal_in"] = 2870
+            row["note"] = "long ride and a birthday dinner on the same day"
     daily.sort(key=lambda r: (r["date"], r.get("source") or ""))
     sessions.sort(key=lambda s: (s["date"], s["type"], s.get("source") or ""))
 
@@ -772,6 +800,26 @@ def _goal2(date: str, slug: str, title: str, metric, target, policy: str,
     return rec
 
 
+# A week off training. Chosen mid-block rather than at either end so it is a
+# GAP with sessions on both sides, which is the shape a consumer has to render
+# - a run of zero weeks at the edge could be explained away as the record
+# starting or stopping.
+#
+# Deliberately NOT the travel week, which the record already declares as a
+# context regime a fortnight later and which has its own missing weigh-ins.
+# Two explanations for one gap would have made the fixture teach that an empty
+# week always comes with a declared reason, and the whole point of contract
+# 28's row is that a week of zeros says only what the record holds.
+QUIET_WEEK = "2030-05-20"
+
+
+def _quiet_week(day: str) -> bool:
+    """Is this date inside the demo's one session-free week?"""
+    from vitai.weeks import week_key
+
+    return week_key(day) == QUIET_WEEK
+
+
 def _stamp(rows: list[dict], hour: int) -> list[dict]:
     """One strictly increasing `recorded_at` per row, in file order.
 
@@ -980,13 +1028,46 @@ def _policy(start: date) -> tuple[list[dict], list[dict], list[dict]]:
                deadline="2030-10-01", deadline_kind="soft", set_by="athlete",
                motivator="The hill on the way home stops being an event",
                rationale="slow enough that the running keeps improving"),
+        # THE DIRECTION, DECLARED (#273). A level goal with no polarity is
+        # scored as a floor, so "down to 78" read as though more kilograms
+        # were progress - and the demo shipped it that way, which meant no
+        # consumer could learn from this fixture that a level goal exists.
+        #
+        # The EARLIER line above deliberately keeps its polarity unset. That
+        # is the shape a goal written before contract 24 actually has, it is
+        # what `vitai validate` advises on, and a record where every line was
+        # already correct would demonstrate neither the hazard nor the advice.
         _goal2((start + timedelta(days=70)).isoformat(), "weight",
                "Down to 78 kg, unhurried", "kg", 78, "monotonic",
+               polarity="ceiling",
                period="none", on_period_end=None,
                deadline="2031-02-01", deadline_kind="soft", set_by="athlete",
-               reason="the race block matters more than the scale this year",
+               reason="the race block matters more than the scale this year, "
+                      "and saying which way is down so the engine can score it",
                motivator="The hill on the way home stops being an event",
                rationale="slow enough that the running keeps improving"),
+        # A CEILING THAT IS BREACHED, which is contract 24's motivating case
+        # and which no shipped fixture could show. 1100 kcal a day against a
+        # 1200 cap once reported 641.7% and minted four milestones for
+        # breaching it; a consumer reading a demo of nothing but floors
+        # reproduces that in its own client, which is what happened.
+        #
+        # `daily` and not a period that accumulates: a cap is a per-day limit,
+        # and scoring one over a week is the same defect facing the other way.
+        # 2600 rather than a round 2500: the record holds two days above it,
+        # so the fixture exercises `breach: over` rather than only the
+        # comfortable side of a cap. A demo whose every ceiling is respected
+        # teaches a consumer as little as one with no ceiling at all.
+        #
+        # Well clear of the intake floor, which a target may not be set
+        # beneath (G58) - a cap that refused at declaration would demonstrate
+        # the refusal and not the ceiling.
+        _goal2((start + timedelta(days=28)).isoformat(), "intake-cap",
+               "Stay under 2600 kcal on a normal day", "kcal_in", 2600,
+               "monotonic", polarity="ceiling", period="daily",
+               dataset="daily", on_period_end=None, set_by="athlete",
+               motivator="The big days were undoing the ordinary ones",
+               rationale="a ceiling for a normal day, not for a race week"),
         # ATTESTED: no metric, no target, and there never will be one. The
         # engine holds it, surfaces it and asks about it, and takes the
         # athlete's word as the only evidence there will ever be (G83).

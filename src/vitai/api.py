@@ -982,8 +982,16 @@ class Vitai:
         """Per-goal standing as of `today`: counted progress, %, dates."""
         d = self.datasets()
         on = (today or self.on).isoformat()
+        # CANONICAL for the level read, raw for everything else. This method
+        # computes over raw claims and the read model's table computes over
+        # resolved rows, which is a divergence that predates this change and
+        # is not its to settle - but a LEVEL goal reads one row and reports
+        # it, so on the raw path it would score a claim the precedence ladder
+        # explicitly demotes. A memory-logged figure beating the scale it
+        # contradicts is the #140 finding arriving through a new door.
         return goal_progress(d["goals"], d["thresholds"], d["daily"],
-                             d["sessions"], on, events=d["events"])
+                             d["sessions"], on, events=d["events"],
+                             weight=self.canonical("weight"))
 
     def events(self, on: date | str | None = None) -> list[dict]:
         """Dated real-world fixtures known on a date, soonest first (G86).
@@ -1159,7 +1167,8 @@ class Vitai:
                                      events=d["events"]),
             "goal_progress": goal_progress(d["goals"], d["thresholds"],
                                            d["daily"], d["sessions"], on,
-                                           events=d["events"]),
+                                           events=d["events"],
+                                           weight=d["weight"]),
             "claims": resolved["claims"],
             "provenance": resolved["provenance"],
             "resolution": resolved["explanations"],
