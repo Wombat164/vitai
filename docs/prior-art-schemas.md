@@ -515,6 +515,136 @@ So #220 is a genuine extension rather than a re-derivation, and the parts to
 borrow are narrow and specific: keep the rollup separate from the local value,
 allow more than one status verb at once, and separate the two axes from day one.
 
+## Routes, splits, addresses and positional accuracy
+
+For #23 (named algorithms plus egress masking), #84 (place inventory), #118
+(the route retrospective) and #247/#254 (best efforts).
+
+### GeoJSON is the only format here worth adopting, and only for geometry
+
+RFC 7946, IETF Proposed Standard, universally implemented. Its own repository
+(`geojson/draft-geojson`) last moved in 2016, which is what a finished RFC
+looks like rather than abandonment.
+
+The limitation is deliberate and it matters: **GeoJSON carries geometry and
+nothing else.** A position is longitude, latitude and an optional third
+element, and the RFC discourages putting anything more in it. No time, no
+speed, no accuracy, no heart rate. Everyone who stores a track in GeoJSON
+invents their own `properties`, which is exactly why no two GeoJSON tracks
+interoperate.
+
+**Verdict: adopt for geometry egress, where a masked or simplified path has to
+leave the engine. Never as the track model.**
+
+### Routing engine responses are products, not standards
+
+OSRM (7,944 stars), Valhalla (6,041) and GraphHopper (6,612) are all healthy
+and all define their own response shapes: legs, steps, maneuvers, annotations.
+The commercial directions APIs add licence terms that frequently forbid storing
+the results at all.
+
+The deeper objection is a category error waiting to happen. **A routing route
+and our route are different objects.** Theirs is a prescription for getting
+somewhere that has never been travelled. Ours, in #118, is the *identity of a
+path travelled repeatedly*, whose whole purpose is comparison against previous
+occasions. Adopting a directions schema imports turn-by-turn concepts we will
+never use and says nothing about the one thing we need.
+
+**Verdict: do not adopt any of them.**
+
+### The actual hard problem has no schema at all
+
+"Is this run the same route as that run" is trajectory similarity and map
+matching, and the prior art is algorithms rather than formats: discrete Frechet
+distance, Hausdorff distance, dynamic time warping, longest common
+subsequence. Valhalla and OSRM both ship map-matching services, which is prior
+art for the *technique* and not for the storage.
+
+#23 already says to replace hand-rolled geometry with named algorithms, and
+that instinct is right: **the deliverable is a named algorithm with a stated
+tolerance, not a schema.** #254's `basis` field, distinguishing a window
+measured against the device's own cumulative distance from one against the
+engine's haversine sum, is the same instinct already shipped.
+
+### Laps and splits are two things, and the difference is warrant
+
+The real prior art is FIT lap messages and the TCX `Lap` element, both vendor
+defined and both widely produced.
+
+The distinction worth preserving: a **lap** is segmentation *declared* by the
+athlete or the device, at the moment, by pressing a button. A **split** is
+segmentation *computed* afterwards by whoever is reading. Strava's metric and
+standard splits are the second; a lap is the first.
+
+They are the same shape and different claims, and #220's warrant axis
+(`declared` versus `derived`) is exactly the distinction. **Do not merge them
+into one table.** A lap is evidence about what the athlete was doing; a split
+is an artefact of the reader's chosen interval.
+
+A loop, similarly, has no standard and needs none: a closed path is start and
+end within some distance of each other, and that distance is a **choice**, so
+it is post-coordinated rather than fixed.
+
+### Addresses and place names are a privacy decision before a schema decision
+
+This is the part to be most careful about, and it is the one where reaching for
+a schema first would be a mistake.
+
+The maintained options are real:
+
+| source | standing |
+|---|---|
+| **Overture Maps** `addresses` and `places` themes | 205 stars on the schema repo, pushed 2026-08-05; foundation-backed, open data. Best current option |
+| **OpenAddresses** | 3,227 stars, pushed 2026-08-04 |
+| **Who's On First** gazetteer | 496 stars, last push 2024-03-06; semi-dormant |
+| ISO 19112 (gazetteers), ISO 19160 (addressing) | the formal standards, and paywalled documents rather than schemas |
+| schema.org `PostalAddress` | alive, thin |
+
+But **a street name is a precise location**, and adopting a rich address schema
+increases what this record holds about where the athlete lives, sleeps and runs
+before anything has decided what may leave. #205 already settled the rule that
+governs this: sensitive fields are two-tier, stored precise, coarsened at
+*write*, with egress gated on explicit per-use permission. #23 already flags
+egress masking on route analysis.
+
+And #84 already has the ordering right: **derive a place inventory from the
+record's own tracks before naming anything.** An address schema inverts that,
+because it starts from the naming.
+
+**Verdict: no address schema until #205's coarsening is implemented. Then
+Overture as the vocabulary, and only for names the athlete chose to attach.**
+
+### Positional accuracy, and a correction to this document
+
+Earlier this survey said no standard states what kind of interval an interval
+is. **That is too strong, and the counterexample is worth having**, because it
+is the one place a mainstream specification gets this right.
+
+The W3C Geolocation API (Candidate Recommendation, 2026-03-26) defines:
+
+> `accuracy`: "a non-negative double that represents the accuracy value
+> indicating the **95% confidence level** in meters"
+
+and `altitudeAccuracy` identically. So a positional accuracy figure on the web
+platform is a stated confidence level in stated units, not a bare number.
+
+Two lessons, pulling opposite ways, and both belong in #262:
+
+1. **Stating the level inline is precedent, and we should do it.** It is
+   proof the idea is implementable and familiar rather than exotic.
+2. **Baking 95% into the field definition is pre-coordination**, and it is the
+   trap this engine refuses everywhere else. A field defined as "the 95%
+   figure" cannot express any other level, and a source reporting a one-sigma
+   figure has nowhere honest to put it. So #262's `interval_level` should be
+   **declared per row**, with absent meaning unstated, rather than fixed by
+   the schema.
+
+One more thing from the same specification, arriving from outside and matching
+this engine's doctrine exactly: `speed` and `heading` are null when
+unavailable, and **`heading` is additionally null when the device is
+stationary**. That is a refusal rather than a fake zero, on precisely the
+grounds that a set with `failure: null` is never a maximum.
+
 ## Summary
 
 | Area | Target | Standing |
@@ -539,6 +669,12 @@ allow more than one status verb at once, and separate the two axes from day one.
 | Household, pets | FHIR `Device`, `Group`; `Patient` is **not** the animal model | grounding only |
 | Mass that drifts | **nothing adoptable** | ours, patterned on #171 |
 | Building topology | W3C BOT (dormant since 2021), Brick | not targets |
+| Track geometry egress | **GeoJSON** RFC 7946 | adopt, geometry only |
+| Route identity, map matching | named algorithms, no schema exists | #23's framing is right |
+| Laps versus splits | FIT lap, TCX Lap | keep separate; the axis is warrant |
+| Addresses, place names | **Overture Maps**, gated behind #205 | not until coarsening ships |
+| Positional accuracy | **W3C Geolocation API** | adopt stating the level; do not fix it at 95% |
+| Directions and routing APIs | OSRM, Valhalla, GraphHopper, vendors | not targets, different object |
 | Clinical record model | openEHR, HL7 PA IG | not targets |
 
 ## What this changes
