@@ -339,6 +339,182 @@ That distinction has to be ours, in our namespace, and #171 (instrument
 capability, standard uncertainty with its own provenance, condition-scoped and
 effective-dated) is the issue that already half-owns it.
 
+## Places and containment
+
+For #84 (derive a place inventory) and the containment half of #220.
+
+### FHIR `Location` is the best-matured thing in this entire survey
+
+**Maturity level 5**, higher than any other resource checked here (`Goal` and
+`RiskAssessment` are both 2). Its elements:
+
+| element | card | what it gives us |
+|---|---|---|
+| `partOf` | 0..1 | recursive nesting, arbitrary depth |
+| `mode` | 0..1 | **`instance` or `kind`** |
+| `form` | 0..1 | building, room, vehicle, and so on |
+| `status` | 0..1 | active, suspended, inactive |
+| `operationalStatus` | 0..1 | a **second, separate** state axis |
+| `characteristic` | 0..* | descriptive attributes |
+| `position` | 0..1 | WGS84 |
+
+Two findings.
+
+**`mode: instance | kind` is the distinction #84 needs and does not have.** "A
+gym" and "the gym I go to on Tuesdays" are different objects, and a place
+inventory derived from tracks produces instances while a plan that says "needs
+a gym" is talking about a kind. One field, already standardised, and without it
+the two get conflated the moment a prescription meets a place.
+
+**`status` and `operationalStatus` are two axes on one resource**, which is
+exactly the split #235 made for goals when it separated lifecycle from
+achievement. HL7 arrived at the same separation independently for places. That
+is now the third independent instance of the same pattern in FHIR, and it is a
+strong argument that #220's insistence on separating axes is right rather than
+fastidious.
+
+### NetBox: the best-adopted practical nesting model
+
+21,255 stars, pushed 2026-08-05. Nautobot, its fork, at 1,571 and equally
+current. Its hierarchy is Region, Site Group, Site, Location (itself recursive),
+Rack, Device.
+
+The lesson worth stealing is not the depth, it is that NetBox maintains a
+**geographic tree and a grouping tree separately**, because "where a thing
+physically is" and "how things are grouped for management" are different
+questions that look like one until they diverge. #220 already separates
+`contains` from `depends_on` for the same class of reason.
+
+### The one that looks authoritative and is not
+
+**W3C Building Topology Ontology**: 65 stars, last push **2021-08-10**. A
+community group draft that never became a Recommendation and has not moved in
+five years. It is the single most citable-sounding name in this area and the
+deadest thing in this survey. Recorded here so nobody rediscovers it and
+assumes the W3C prefix means maintained.
+
+**Brick Schema** (391 stars, pushed 2026-07-25) is the live alternative, but it
+is building-automation shaped: sensors, HVAC, equipment. Real, maintained, and
+aimed somewhere else.
+
+**schema.org `Place` / `containedInPlace`** is alive and semantically thin.
+Fine as a rendering vocabulary, useless as a model.
+
+## Objects, loads and the household
+
+For #215 (object registry), #216 (loads registry), #217 (household context)
+and #218.
+
+### EPCIS 2.0 is the closest structural match, and almost nobody looks at it
+
+A ratified GS1 standard for supply-chain event capture. Note that
+`github.com/gs1/EPCIS` is only a draft-sharing repository (29 stars, 2024-03-15)
+and is not the standard; the standard is maintained by GS1 itself.
+
+What it has that we need:
+
+- **`AggregationEvent` with a parent and children.** Containment as an event
+  rather than a static property, so a thing being loaded into another thing has
+  a time and can end. #216's towed and carried things are exactly this, and a
+  static `contains` field cannot express "loaded at 9, unloaded at 11".
+- **`disposition`** is a state of an object, carried on the event.
+- **`bizLocation` versus `readPoint`**: where the thing now is, versus where it
+  was observed. That is the same distinction as our origin-versus-path, applied
+  to place, and it is a distinction #84 will need the moment a track observes a
+  thing somewhere it does not live.
+
+**Verdict: study the aggregation-plus-disposition pattern before designing
+#215 and #216. Do not adopt EPCIS itself; it is a supply chain standard and
+the impedance is high.**
+
+### FHIR for the household, with one caution
+
+`Device` gives identity, owner and status. `Group` gives membership. Both
+usable as grounding.
+
+The caution concerns pets. `Patient` is **Normative** from R4 and carries no
+species, breed or animal-specific elements at all; animals are accommodated by
+the general resource and by extension. So the most mature health data standard
+there is, having gone normative, does **not** model an animal as a variant of a
+person. Anyone reaching for "a pet is a person with a species field" is
+choosing a shape HL7 does not use.
+
+For our purposes the boundary in #220 already settles most of it: a state about
+a person or an animal may qualify a statement about the athlete and may never
+be the subject of one. A pet in the household registry needs a slug, a mass if
+it is ever carried, and nothing else.
+
+### Mass that drifts has no prior art
+
+#216's core case, a carried thing whose mass changes over time and whose figure
+goes stale, is not modelled anywhere found. Asset management standards (the ISO
+55000 family) are documents rather than schemas and treat mass as static.
+Effective-dated mass with a staleness rule is ours to design, and #171's
+effective-dated instrument capability is the nearest internal pattern.
+
+## State
+
+For #220, which is the issue this section exists to serve.
+
+### Redfish already solved "composing through containment"
+
+DMTF Redfish is maintained and adopted: `Redfish-Publications` updated
+2026-05-18, `Redfish-Tools` 2026-07-10, `python-redfish-library` 2026-07-24,
+plus a healthy vendor ecosystem (Dell's Redfish scripting at 731 stars, `gofish`
+at 315).
+
+Its `Status` object carries three fields:
+
+```
+State | Health | HealthRollup
+```
+
+**`HealthRollup` is the worst health of anything contained beneath this
+element.** That is #220's phrase "composing through containment", already
+specified, already implemented by every server vendor, and already carrying the
+lesson that a rolled-up value must be a *separate field* from the local one.
+
+That last point is the one worth taking. #220 proposes that a room's condition
+reaches its contents. If the resolved value overwrites the local value, you can
+no longer tell a broken treadmill from a working treadmill in a broken room,
+and the two need different actions. Redfish keeps both. So should we.
+
+Its ancestor, DMTF CIM, made `OperationalStatus` a multi-valued array for a
+related reason: a thing can be degraded *and* predicted-to-fail at once, and one
+enum forces a false choice. #220's "a state may carry more than one verb"
+(`blocks`, `discourages`, `qualifies`) is the same insight.
+
+### The two-axis pattern, three times independently
+
+| resource | axis one | axis two |
+|---|---|---|
+| FHIR `Goal` | `lifecycleStatus` | `achievementStatus` |
+| FHIR `Location` | `status` | `operationalStatus` |
+| Redfish `Status` | `State` | `Health` |
+
+Three standards bodies, three domains, same separation: **where the thing is in
+its lifecycle** is not **how the thing is doing**. #235 found it for goals by
+argument. It is worth recording that the argument has independent support,
+because it means the pattern generalises to states and #220 should build it in
+from the start rather than rediscovering it a fourth time.
+
+### What none of them have
+
+Every model above states a state. None of them carries:
+
+- a **warrant** (`declared`, `observed`, `derived`), because in those domains a
+  state is always sensed by the system that reports it. Ours is frequently
+  asserted by the athlete, and #220 is right that the distinction is load
+  bearing.
+- **`corroborated_by` as distinct from `derived_from`**, which #220 draws and
+  which no surveyed standard does.
+- **graded restriction**. Redfish health is a small enum; there is no "usable
+  but unwise", which is most of what a real state says here.
+
+So #220 is a genuine extension rather than a re-derivation, and the parts to
+borrow are narrow and specific: keep the rollup separate from the local value,
+allow more than one status verb at once, and separate the two axes from day one.
+
 ## Summary
 
 | Area | Target | Standing |
@@ -356,6 +532,13 @@ effective-dated) is the issue that already half-owns it.
 | Weight, body composition, HR, BP | Open mHealth as reference | vitai namespace |
 | Nutrition | nothing adoptable | vitai namespace |
 | Prediction intervals, uncertainty | **nothing adoptable** | vitai namespace, grounded in the GUM |
+| Place nesting and kind-versus-instance | **FHIR `Location`** (maturity 5) | adopt the shape; feeds #84, #220 |
+| Grouping distinct from geography | **NetBox** | borrow the two-tree separation |
+| Containment as a timed event | **GS1 EPCIS 2.0** `AggregationEvent` | study before #215, #216 |
+| Object state rolled up through containment | **DMTF Redfish** `Status` | borrow rollup-beside-local |
+| Household, pets | FHIR `Device`, `Group`; `Patient` is **not** the animal model | grounding only |
+| Mass that drifts | **nothing adoptable** | ours, patterned on #171 |
+| Building topology | W3C BOT (dormant since 2021), Brick | not targets |
 | Clinical record model | openEHR, HL7 PA IG | not targets |
 
 ## What this changes
@@ -369,3 +552,10 @@ effective-dated) is the issue that already half-owns it.
   recording and changes no behaviour.
 - **The prediction question has a shape to build to** and, for the interval
   semantics, a confirmed absence of prior art rather than an unsearched one.
+  Recorded as #262.
+- **#84 gains `mode: instance | kind`**, which it needs and does not have.
+- **#220 gains three specific borrowings** (rollup beside local, multiple
+  status verbs, two axes from the start) and confirmation that its warrant
+  axis and its `corroborated_by` distinction are genuinely novel.
+- **#215 and #216 gain EPCIS aggregation** as the pattern for containment
+  that starts and ends, and confirmation that drifting mass has no prior art.
