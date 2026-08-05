@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
+from .weeks import week_key
 from .provenance import is_modelled
 
 CONFIRMED, REFUTED, NOT_IN_RECORD = "CONFIRMED", "REFUTED", "NOT-IN-RECORD"
@@ -50,8 +51,10 @@ def _as_date(value: str | date | None) -> date | None:
 
 
 def _week_key(d: str | date) -> str:
-    dt = _as_date(d)
-    return (dt - timedelta(days=dt.weekday())).isoformat() if dt else ""
+    # `weeks.week_key` is the definition; the empty string for an unparseable
+    # date is this module's own contract and stays here rather than moving
+    # into the shared one, where it would be a second meaning of absence.
+    return week_key(d) or ""
 
 
 def _close(a: float, b: float, tolerance: float) -> bool:

@@ -160,7 +160,13 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # combined tree is 27. Neither change moves a persona data line - one adds
 # scale columns no builder declares, the other a derived table no persona
 # ships - and both re-pin notes above stand as the review that established it.
-AUTHORED_AGAINST_CONTRACT = "27"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #208, which adds the `session_weeks` table. Also DERIVED, and
+# computed from `sessions` rows the personas already ship - so unlike the two
+# above it will produce rows for most of them. It still moves no data line:
+# nothing here writes a session, reads a week or declares a field, and the
+# only thing in a persona that changes is the contract stamp in its
+# `persona.toml`. Verified by regenerating and diffing rather than asserted.
+AUTHORED_AGAINST_CONTRACT = "28"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     "achievements": 4,
     "artifacts": 3,

@@ -41,6 +41,7 @@ from .safety import (
 )
 from .schema import CURRENT_GENERATION, KEYS
 from .verdicts import compute_verdicts
+from .weeks import session_weeks
 
 
 class Vitai:
@@ -949,6 +950,26 @@ class Vitai:
         return plan_churn(d["goals"], d["thresholds"], self.verdicts(today=today),
                           events=d["events"])
 
+    def session_weeks(self, on: date | str | None = None) -> list[dict]:
+        """How far and how often, per week, per the engine's type vocabulary.
+
+        The chart every client draws and none of them should compute. One row
+        per (week, type), plus a row per week with no sessions so a gap reads
+        as a gap rather than as time compressing - `sessions` is 0 there.
+
+        Counts what was LOGGED. A week of zeros says the record holds nothing
+        for it, which is not the same fact as a week nothing happened in, and
+        the engine cannot tell those apart without coverage. `distance_km` and
+        `duration_s` sum only the rows carrying one and are null where none
+        did, so a count of 3 beside a distance drawn from 1 is what a partly
+        logged week honestly looks like.
+
+        Same rows as the read model's `session_weeks` table.
+        """
+        d = self.canonical()
+        when = on if on is not None else self.on
+        return session_weeks(d["sessions"], when)
+
     def _best_efforts(self, sessions: list[dict]) -> list[dict]:
         """The fastest 1k, 5k, 10k, half and full of every stored track (#247).
 
@@ -1016,6 +1037,7 @@ class Vitai:
                                     medical=d["medical"])
         on = (today or self.on).isoformat()
         return {
+            "session_weeks": session_weeks(d["sessions"], on),
             "best_efforts": self._best_efforts(d["sessions"]),
             "verdicts": verdicts,
             "contributions": contributions,
