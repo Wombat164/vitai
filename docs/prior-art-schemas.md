@@ -932,6 +932,9 @@ the "three bodies independently" claim, the `end_status` downgrade, the
 UCUM scoping, and four missed schema families.
 
 Two of those corrections had already propagated into issue comments before
-review, on #261 and #220, and both comments have been corrected in place.
+review, on #261 and #220. Both are corrected by a follow-up comment rather than
+edited, because correcting by append is what this record does everywhere else
+and an edited comment hides that the wrong version was acted on.
+
 That is the argument for the staleness caveat at the top: this document was
 wrong in public for about an hour, and it will be wrong again.
