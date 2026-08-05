@@ -177,6 +177,15 @@ decision, never a refactor.
 - **Clinical knowledge enters as the user's declaration.** `expects` tokens,
   restriction specs, provider types: all record what was stated to vitai,
   and the engine's use of them is confined to class (b).
+- **Adopting a shape from a clinical standard names its exclusions.** When a
+  structure is borrowed from FHIR, IEEE 1752 or any other clinical standard,
+  the adopting document states which of its elements are excluded on this
+  boundary and why. Citing a standard is not the risk; adopting it wholesale
+  without saying which parts do not come along is. Worked example: FHIR
+  `RiskAssessment` supplies `method`, `basis` and `occurrence` for a modelled
+  number, and its `qualitativeRisk` and condition-valued `prediction.outcome`
+  are unadoptable here, being a graded risk claim about a body. (Added
+  2026-08-05, #264.)
 
 ## Worked rewrite
 

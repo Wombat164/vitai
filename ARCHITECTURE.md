@@ -52,6 +52,12 @@ Principles, in priority order:
    the audit trail.
 4. **Derive, never store, anything computable.** Pace, rolling averages,
    weekly totals: computed on build, absent from data.
+   The rule is about the GROUND-TRUTH record. Materialising a derived value
+   into the rebuilt read model is derivation with a cache, not storage: the
+   `best_efforts` table is persisted in `derived/` and rebuilt from zero on
+   every build, and that is compliant. A value obtainable only by a network
+   lookup, an athlete statement or a one-time observation is not computable at
+   all, and enters the record as a claim. (Scoped 2026-08-05, #264.)
 5. **Conservation - the golden rule.** The record describes ONE body: a
    calorie is eaten once and burned once, a step is taken once, a workout
    happened once - no matter how many apps witnessed it. Observations are
