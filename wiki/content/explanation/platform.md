@@ -26,6 +26,20 @@ currency from, and unforgeable in the sense that it only moves when the
 engine's arithmetic over the record moves. Each row now carries the `goal`
 it serves, so an economy can mint per goal rather than per metric.
 
+`session_weeks` (contract 28) is the ordinary one: sessions, distance and
+duration per week, per the engine's own session-type vocabulary, with a row
+for every week in range including the ones holding nothing. It exists because
+every consumer was computing it and one of them proved why that ends badly -
+it mapped the engine's types onto two buckets of its own, so `strength`,
+`walk` and `row` matched neither and 17 of 43 sessions vanished with their
+distance, under a chart that looked entirely plausible.
+
+Two rules come with it. **Do not re-bucket the types**: the vocabulary is the
+engine's, and `type_source` exists because a label a vendor's classifier
+assigned and one the athlete asserted are different facts. And **a week of
+zeros means the record holds no sessions for it**, never that the athlete did
+nothing - those are different facts, and telling them apart needs coverage.
+
 `milestones` is the second mintable signal, and it is deliberately harder to
 earn: it counts only progress that stayed inside a goal's contribution
 policy, so a host cannot be gamed by an athlete who blows through a ramp
@@ -63,6 +77,7 @@ which is what a UI needs to answer "why did this run not move my bar".
 | 25 | 0.5.0 | goal status splits into two axes: `goals` gains `lifecycle_status` and retires `status`; `goal_progress` gains `lifecycle_status` and `achievement_status`. Old lines keep validating and map forward - `paused` to `on_hold`, `abandoned` to `cancelled`, `achieved` splits into lifecycle `completed` plus achievement `achieved`. `status` keeps its column on `goal_progress` with the same value, so a consumer reading the old name is unaffected |
 | 26 | 0.5.0 | a declared scale beside each subjective number: `rpe_scale` on sessions and sets, `mood_scale` and `pain_scale` on daily. Absent means unstated and a consumer must not invent a denominator; where a scale is declared the value is validated against its range |
 | 27 | 0.5.0 | `best_efforts`: the fastest 1k, 5k, 10k, half and full of every stored track, one row per (track, distance). Read `basis` before quoting a time - `device` is measured against the watch's own distance, `derived` against the engine's haversine sum. `seconds` is elapsed, so a stop inside the window counts |
+| 28 | unreleased | `session_weeks`: sessions, distance and duration per week per session type, with a row for every week in range including the ones holding nothing. Do not re-bucket the types - the vocabulary is the engine's, and a consumer that mapped them onto its own dropped 17 of 43 sessions with their distance. A week of zeros means the record holds no sessions for it, never that the athlete did nothing. `distance_km` and `duration_s` sum only the rows carrying one and are null where none did |
 
 `db.py` carries the same history beside `CONTRACT_VERSION`, at more length
 and with the reasoning. This table is the summary; that comment is the

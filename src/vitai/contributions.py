@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from .weeks import week_of
 from .clocks import order_key
 from .policy import (_event_index, days_between, deadline_of,
                      lifecycle_of, state)
@@ -95,8 +96,11 @@ def scope_of(goal: dict) -> tuple[str | None, str]:
 
 
 def _week_key(d: str) -> str:
-    dt = datetime.fromisoformat(d).date()
-    return (dt - timedelta(days=dt.weekday())).isoformat()
+    # ONE definition of a week, in `weeks` (#208). It was four copies of the
+    # arithmetic and TWO contracts: this one raises on a value that is not a
+    # date, `query`'s returns "". `week_of` is the raising half, so nothing
+    # about this caller changes.
+    return week_of(d)
 
 
 def _period_key(period: str | None, d: str) -> str:

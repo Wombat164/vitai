@@ -12,6 +12,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from statistics import mean
 
+from .weeks import week_of
 from .clocks import timing_caveat, weigh_in_timing
 from .config import Config, phase_rate_for
 from .vocab import session_classes
@@ -99,8 +100,11 @@ def _avg_on_or_before(roll: dict[str, float | None], iso: str, target_day: date)
 
 
 def _week_key(d: str) -> str:
-    dt = datetime.fromisoformat(d).date()
-    return (dt - timedelta(days=dt.weekday())).isoformat()
+    # ONE definition of a week, in `weeks` (#208). It was four copies of the
+    # arithmetic and TWO contracts: this one raises on a value that is not a
+    # date, `query`'s returns "". `week_of` is the raising half, so nothing
+    # about this caller changes.
+    return week_of(d)
 
 
 def build_report(cfg: Config, weight: list[dict], daily: list[dict],

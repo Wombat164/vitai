@@ -13,6 +13,7 @@ import sqlite3
 from pathlib import Path
 
 from .schema import KEYS
+from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 
 # Bump when a table/column changes shape; consumers check meta.contract.
 # 2: increment 1 - goals/thresholds/achievements datasets, the contributions,
@@ -315,7 +316,19 @@ from .schema import KEYS
 #     #253 claimed 26 as well and merged first, so this is 27. The
 #     contract follows MERGE order, which is exactly why both sides
 #     said so in their own comment rather than assuming.
-CONTRACT_VERSION = "27"
+# 28: `session_weeks` - how far and how often, per week, per the engine's own
+#     session-type vocabulary, with a row for every week in range including
+#     the ones holding nothing. Not one of 32 tables said how far the athlete
+#     ran this week, so every consumer computed it; one mapped the engine's
+#     types onto two buckets of its own and 17 of 43 sessions vanished with
+#     their distance, under a chart that looked entirely plausible. Empty
+#     weeks are rows because dropping them makes a deload, an injury and a
+#     dead connector all read as time briefly running faster.
+#
+#     Claims 28 on the assumption nothing else bumps first. The contract
+#     follows MERGE order, so if another table lands ahead of this one it
+#     becomes 29 - said here rather than assumed.
+CONTRACT_VERSION = "28"
 
 _TEXT_COLS = {"derived_from", "derived_op",  # both TEXT: `derived_op = "7"`
               # under REAL affinity silently becomes 7.0, which is the defect
@@ -451,7 +464,13 @@ PROVENANCE_KEYS = ["date", "dataset", "origin", "independent_sources",
 BEST_EFFORT_KEYS = ["track", "date", "distance_m", "seconds", "start", "end",
                     "basis"]
 
+# Owned by `weeks`, which computes them, rather than restated here: the two
+# going out of step is the failure this whole table exists to stop happening
+# one layer up.
+SESSION_WEEK_KEYS = _SESSION_WEEK_KEYS
+
 DERIVED_TABLES: dict[str, list[str]] = {
+    "session_weeks": SESSION_WEEK_KEYS,
     "best_efforts": BEST_EFFORT_KEYS,
     "provenance": PROVENANCE_KEYS,
     "verdicts": VERDICT_KEYS,
