@@ -543,6 +543,7 @@ def _build(target: Path) -> None:
 
     goals, thresholds, achievements = _policy(start)
     events = _events(start)
+    plans = _plans(start, sessions)
     context, measurements = _situational(start, END)
     medical = _medical(start, END)
     checks = _checks(END)
@@ -636,7 +637,7 @@ def _build(target: Path) -> None:
                        ("measurements", measurements), ("medical", medical),
                        ("checks", checks), ("events", events),
                        ("sets", sets), ("meals", meals),
-                       ("journal", journal)):
+                       ("journal", journal), ("plans", plans)):
         (target / "data" / f"{name}.jsonl").write_text(
             _jsonl(rows), encoding="utf-8", newline="\n")
 
@@ -910,6 +911,73 @@ def _event(date: str, slug: str, title: str, kind: str, event_date: str,
            "reason": None, "note": None, "outcome": None}
     rec.update(kw)
     return rec
+
+
+def _plan(date_made: str, slug: str, for_date: str, activity: str,
+          tier: str, **kw) -> dict:
+    """A plans.jsonl line with every key present (null for unknown)."""
+    rec = {"date": date_made, "slug": slug, "for_date": for_date,
+           "for_phase": None, "activity": activity, "setting": None,
+           "tier": tier, "serves": None, "set_by": "athlete",
+           "requires": None, "outcome": "unresolved", "reason": None,
+           "session_ref": None, "note": None, "supersedes": None,
+           "device": None}
+    rec.update(kw)
+    return rec
+
+
+def _plans(start: date, sessions: list[dict]) -> list[dict]:
+    """What days were MEANT to be, including the ones that were not (#221).
+
+    Every outcome the vocabulary has, because a fixture holding one value of a
+    closed enum proves nothing about the distinction the field exists to draw
+    - and this vocabulary's whole purpose is that a skipped plan, an
+    unactivated one and an unanswered one are different facts.
+
+    Nothing here is scored. `reason` is COM-B and is a classification; the
+    demo carries the values so a consumer can see them, not so anything can
+    total them.
+    """
+    d = (start + timedelta(days=50)).isoformat()
+    ran = sorted(s["date"] for s in sessions if s.get("type") == "run")
+    done = ran[-1] if ran else (start + timedelta(days=55)).isoformat()
+    return _stamp([
+        # COMPLETED, and the session cites nothing - the plan cites the
+        # session, which is the direction that survives the day not happening.
+        _plan(d, "tue-easy-run", done, "run", "programme",
+              serves="running", for_phase="evening",
+              outcome="completed", session_ref=done,
+              note="the ordinary case, and the one the old field could hold"),
+        # SKIPPED, with the reason on the axis a coach can act on: the gym was
+        # shut, which is opportunity rather than motivation, and collapsing
+        # the two is what the two-value vocabulary did.
+        _plan(d, "thu-strength", (start + timedelta(days=52)).isoformat(),
+              "strength", "programme", serves="running", for_phase="evening",
+              outcome="skipped", reason="opportunity_physical",
+              note="gym shut for maintenance"),
+        # DID NOT ACTIVATE. The precondition never held, so there was nothing
+        # to skip - and without the value a cautious athlete who writes a
+        # condition down is punished for the forecast.
+        _plan(d, "sat-long-run-outdoors",
+              (start + timedelta(days=54)).isoformat(), "run", "committed",
+              for_phase="morning", setting="outdoor",
+              requires="dry-forecast", outcome="did_not_activate",
+              note="if it is dry; it was not"),
+        # PROVISIONAL and unanswered. Recording an idea has to be free or the
+        # athlete stops recording ideas - and silence is not a lapse, so the
+        # outcome stays unresolved and carries no reason at all.
+        _plan(d, "maybe-a-swim", (start + timedelta(days=56)).isoformat(),
+              "swim", "provisional", for_phase="evening",
+              note="an idea, and skipping it costs nothing"),
+        # A DELIBERATE REST, which the model already holds can be the
+        # achievement rather than the failure. `motivation_reflective` is the
+        # COM-B subtype for it, and the two-value axis called it `chosen`
+        # alongside "could not face it".
+        _plan(d, "sun-rest", (start + timedelta(days=55)).isoformat(),
+              "run", "programme", serves="running", for_phase="morning",
+              outcome="skipped", reason="motivation_reflective",
+              note="legs still heavy from the long run - took the rest"),
+    ], hour=21)
 
 
 def _events(start: date) -> list[dict]:

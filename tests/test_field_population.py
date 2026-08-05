@@ -169,6 +169,26 @@ UNREAD = (
     "sets.rpe_scale",
     "daily.alcohol",
     "daily.coverage",
+    # --- the plans dataset (#221), three fields and two different reasons ---
+    #
+    # `requires` and `setting` are BLOCKED, not deferred. Both are answered by
+    # asking the state model whether something held on a day - did the
+    # condition obtain, was the outdoor session rained off, was the room in
+    # the roof 28 degrees - and that model is #220 and does not exist. The
+    # engine holds them and refuses to guess. What it does do already is
+    # refuse `did_not_activate` on a plan that names no condition, so the
+    # value cannot become a kinder word for skipped.
+    #
+    # `serves` is deferred rather than blocked. It is what makes a plan's TIER
+    # discriminable, and validation refuses a `programme` plan that names
+    # nothing - but validation is explicitly not a consumer here. What would
+    # read it is adherence per tier, and #221 is emphatic that any such figure
+    # must state how many plans were unresolved or it repeats the defect that
+    # let a mostly-unjudgeable record display near-perfect adherence. Half of
+    # that here would be the flattening number rather than the honest one.
+    "plans.serves",
+    "plans.requires",
+    "plans.setting",
     "daily.feel",
     "daily.pain_side",
     "goals.accountability",

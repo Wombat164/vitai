@@ -381,7 +381,37 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     BOTH OPTIONAL. Absent means nobody has said, never "did not happen",
 #     and a consumer rendering an unanswered outcome as a miss accuses an
 #     athlete of skipping a race the record knows nothing about.
-CONTRACT_VERSION = "31"
+# 32: the `plans` dataset - what a day was MEANT to be (#221).
+#
+#     The state work can explain why training did not happen and there was
+#     nothing to attach the explanation to: an absence is not an object, and
+#     no state can point at a gap in a session list.
+#
+#     NOT ROWS IN `sessions`, which means THIS HAPPENED and which every count,
+#     weekly total and load figure depends on - a skipped row there sums to
+#     zero and counts as one, corrupting all of them silently. So a plan is
+#     its own row and a session cites it. `sessions.planned` is RETIRED and
+#     stays legal forever: it is null on every row of every record because a
+#     session that did not happen has none, so the only case it served is the
+#     one it structurally could not represent.
+#
+#     Identity is a SLUG, because a plan is resolved later and the identity
+#     has to be stable while `outcome` moves. Two 5 km runs planned on one day
+#     are identical on every other field.
+#
+#     THREE THINGS A CONSUMER MUST NOT DO. `unresolved` is the default and
+#     means nobody has answered - never a missed session, and any adherence
+#     figure over plans must state how many were unresolved or it repeats the
+#     defect that let a mostly-unjudgeable record display near-perfect
+#     adherence. `reason` is COM-B (Michie et al 2011), a CLASSIFICATION and
+#     never a score - nothing totals, ranks or trends it. And `tier` is not
+#     authorship: `set_by` carries that, and a coach-set plan and a self-set
+#     plan can both be binding.
+#     CLAIMS 32, and #282 claims it too - both said so rather than assuming.
+#     Whichever merges first keeps it and the other becomes 33; the contract
+#     follows MERGE order, which is why the collision is stated here instead
+#     of being discovered in a conflict.
+CONTRACT_VERSION = "32"
 
 _TEXT_COLS = {"statistic",            # a slug, and REAL affinity would
                                       # have made `column_affinity` lie about it
