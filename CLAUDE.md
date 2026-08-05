@@ -9,9 +9,19 @@ template ships in `src/vitai/templates/`).
 - **This repo is PUBLIC. No personal data, ever.** No real names, real
   measurements, real locations, real device IDs - not in code, comments,
   tests, fixtures, examples, or commit messages. Test data is synthetic.
-- **The engine stays deterministic and stdlib-only.** No dependencies, no
-  wall-clock nondeterminism in outputs (report generation takes an injectable
-  `today`). Same input, same output.
+- **The engine stays deterministic and stdlib-only.** No wall-clock
+  nondeterminism in outputs (report generation takes an injectable `today`).
+  Same input, same output.
+
+  *Stdlib-only is a RUNTIME limit: nothing under `src/vitai/` may import a
+  third-party package, and the shipped `dependencies` list stays empty.
+  Development and test dependencies are a different question with a different
+  answer - CLAUDE.md itself mandates pytest, and ruff runs in CI. One
+  consequence, stated because it has been read the other way: **a conformance
+  claim against an external schema requires a real validator in the test
+  suite.** Declaring conformance to a JSON Schema with nothing able to check it
+  is conformance by assertion, which is the defect #263 names. Enforced by
+  `scripts/dependency_gate.py`.*
 - **The BUILD is network-free.** Nothing is fetched while a build runs: same
   input, same output. Network exists only in capture-side tools, is gated by
   the permission model (default deny, per use, recorded), never runs during a
@@ -49,5 +59,11 @@ template ships in `src/vitai/templates/`).
 - Weekly maintenance for the athlete must stay under ~3 minutes; every
   feature that adds recurring athlete effort is presumed wrong.
 - Derive, never store, anything computable (pace, averages, totals).
+  *Scoped 2026-08-05 (#264): never store in the GROUND-TRUTH record, or ask the
+  athlete to store, anything computable from the record. Materialising it into
+  the rebuilt derived tier is derivation, not storage - `best_efforts` is
+  compliant for that reason. A value obtainable only by a network lookup, an
+  athlete statement or a one-time observation is not computable, and enters as
+  a claim.*
 - No server, no daemon, no app until the plain-text record has proven
   durable - and any future app reads this schema rather than inventing one.
