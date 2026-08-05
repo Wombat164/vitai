@@ -469,8 +469,34 @@ DERIVED_TABLES: dict[str, list[str]] = {
 }
 
 
+# Columns whose value is a LIST, JSON-encoded into a TEXT column by `_scalar`.
+#
+# Declared rather than inferred, because a consumer cannot tell one from a
+# scalar by looking: both arrive as TEXT, and reading a JSON array as a string
+# is the failure mode that drops the whole field rather than raising. #257's
+# consumer hit the scalar half of exactly this.
+#
+# Every member must also be in `_TEXT_COLS` - a JSON array under REAL affinity
+# is mangled - and `test_every_list_column_is_text` asserts it. The set is
+# checked against the fixtures in both directions, so it cannot quietly
+# describe a field that stopped being a list or miss one that became one.
+LIST_COLS = frozenset({"derived_from", "basis_claims"})
+
+
 def _cols(keys: list[str]) -> str:
     return ", ".join(f"{k} TEXT" if k in _TEXT_COLS else f"{k} REAL" for k in keys)
+
+
+def column_affinity(field: str) -> str:
+    """The SQLite affinity this engine gives `field`: `TEXT` or `REAL`.
+
+    Public because a consumer building its own projection needs it and had no
+    way to get it. `_TEXT_COLS` is a private set that has grown by roughly one
+    entry per contract, so a consumer's own copy is stale the moment it is
+    written - which is #257's whole complaint, and the reason the answer must
+    come from here rather than be reproduced there.
+    """
+    return "TEXT" if field in _TEXT_COLS else "REAL"
 
 
 def build_db(derived: Path, datasets: dict[str, list[dict]],

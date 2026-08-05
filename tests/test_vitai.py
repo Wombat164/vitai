@@ -713,6 +713,52 @@ def test_both_public_contract_tables_cover_every_contract():
         assert not missing, f"{path} is missing contracts {sorted(missing)}"
 
 
+def _table_versions(path: str) -> dict[int, str]:
+    """contract number -> the release version the table says shipped it."""
+    import re
+    from pathlib import Path
+    text = (Path(__file__).resolve().parents[1] / path).read_text(
+        encoding="utf-8")
+    return {int(n): v.strip()
+            for n, v in re.findall(r"^\| (\d+) \| ([^|]+) \|", text, re.M)}
+
+
+def test_both_tables_agree_on_which_release_shipped_each_contract():
+    """Coverage was checked and AGREEMENT was not, so the two tables could say
+    different things about the same contract with nothing failing.
+
+    They did. #184 recorded it while it was live: the README said `0.4.0` for
+    contracts 16 to 19 and the wiki still said `unreleased`, because the wiki
+    was missed in main's release commit. An integrator reading one table
+    learned the shape was shipped and reading the other learned it was not.
+
+    The existing coverage test could not see it - both tables HAD the rows.
+    This checks the column that carried the disagreement, which is the half a
+    derivation was missing.
+    """
+    readme = _table_versions("README.md")
+    wiki = _table_versions("wiki/content/explanation/platform.md")
+    shared = set(readme) & set(wiki)
+    assert shared, "the two contract tables share no rows to compare"
+    disagree = {n: (readme[n], wiki[n]) for n in sorted(shared)
+                if readme[n] != wiki[n]}
+    assert not disagree, (
+        f"the README and the wiki disagree about which release shipped these "
+        f"contracts (README, wiki): {disagree}"
+    )
+
+
+def test_no_contract_is_documented_as_shipping_after_the_current_release():
+    """A row naming a release that does not exist yet tells an integrator to
+    wait for something already in their hands."""
+    from vitai import __version__
+    readme = _table_versions("README.md")
+    ahead = {n: v for n, v in readme.items()
+             if v[0].isdigit() and tuple(int(p) for p in v.split(".")) >
+             tuple(int(p) for p in __version__.split("."))}
+    assert not ahead, f"contracts documented against an unreleased version: {ahead}"
+
+
 def test_neither_table_invents_a_contract():
     """A row for a contract the engine never shipped is worse than a missing
     one: it tells an integrator to handle a shape that does not exist."""

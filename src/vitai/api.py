@@ -1937,6 +1937,67 @@ def init(path: str | Path) -> Path:
     return target
 
 
+def _type_names(types: tuple[type, ...] | None) -> list[str] | None:
+    """Python types -> JSON-transportable names. `None` means unconstrained.
+
+    Names rather than the classes themselves, because the consumers that need
+    this most are not in Python. A connector written in another language has
+    the identical problem and cannot import anything, which #257 flags.
+    """
+    if types is None:
+        return None
+    if types == (int,):
+        return ["integer"]
+    if set(types) == {int, float}:
+        return ["number"]
+    return sorted({t.__name__ for t in types})
+
+
+def field_types(dataset: str | None = None) -> dict:
+    """What each field of each dataset may hold, and how it is projected.
+
+    Per field: `types` (the primitives legal when the value is not null, or
+    `null` where the engine constrains nothing), `affinity` (the SQLite column
+    type this engine gives it), and `container` (true where the value is a
+    list, JSON-encoded into a TEXT column).
+
+    #257. `KEYS` was already public and is the documented way to check that a
+    writer is not inventing columns. The TYPES were not: they sat in
+    `schema._TYPES`, and the affinity in `db._TEXT_COLS`, both private. So a
+    consumer building a queryable projection - close to the first thing any
+    consumer wants - could check its column NAMES against the engine and had
+    to guess or copy everything else.
+
+    One did copy, and the copy went several increments stale: `coverage`,
+    `mood`, `feel`, `pain` and five macro fields were in the record and reached
+    no query, while nothing reported a problem because from the engine's side
+    nothing was wrong. **Half a derivation is not a derivation**, and the half
+    that is missing is the half that goes stale silently.
+
+    `container` is the third field rather than something inferable, because a
+    list and a string are both TEXT on arrival and a consumer that reads a JSON
+    array as a scalar drops the field rather than failing.
+    """
+    from .db import LIST_COLS, column_affinity
+    from .schema import _TYPES
+
+    names = [dataset] if dataset is not None else list(KEYS)
+    if dataset is not None and dataset not in KEYS:
+        raise KeyError(f"unknown dataset {dataset!r}; known: {sorted(KEYS)}")
+
+    out: dict[str, dict] = {}
+    for name in names:
+        out[name] = {
+            field: {
+                "types": _type_names(_TYPES.get(field)),
+                "affinity": column_affinity(field),
+                "container": field in LIST_COLS,
+            }
+            for field in KEYS[name]
+        }
+    return out
+
+
 def schema() -> dict:
     """The SHAPE this engine emits: contract version and dataset generations.
 
@@ -1966,4 +2027,9 @@ def schema() -> dict:
         "engine": __version__,
         "contract": CONTRACT_VERSION,
         "generations": dict(CURRENT_GENERATION),
+        # #257. Carried HERE rather than behind a fourth accessor so that CLI
+        # and MCP reach it without either being taught anything: `vitai schema
+        # --json` serialises this dict, and the MCP `schema` tool returns it.
+        # A separate surface would have been a new place for parity to fail.
+        "fields": field_types(),
     }
