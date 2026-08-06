@@ -133,3 +133,38 @@ def test_a_refusal_is_still_visible_beside_the_judged_rows():
     assert refused, "the demo must carry refusals or this proves nothing"
     assert all(r["reason"] for r in refused), (
         "a refusal without a reason is what makes flattening possible")
+
+
+def test_the_status_line_states_the_direction_and_not_the_rate():
+    """The second prose surface, promised in #283 and left until #281 merged.
+
+    `verdicts` says `answers: direction` on `weight_rate` and the rollup
+    stopped printing the magnitude. This line went on printing it, which left
+    the engine honouring its own contract on one prose surface and not the
+    other - and a contract honoured in one place is a convention, not a rule.
+    """
+    import subprocess
+    import sys
+    import re
+
+    out = subprocess.run(
+        [sys.executable, "-m", "vitai.cli", "status", "--root", str(DEMO)],
+        capture_output=True, text=True, check=True)
+    line = out.stdout.splitlines()[0]
+
+    assert re.search(r"(losing|gaining|holding)", line), line
+    assert "kg/week" not in line, line
+
+
+def test_the_status_line_keeps_the_mean_it_can_stand_behind():
+    """Contract 32 calls the weight mean a `magnitude`. Dropping every number
+    from this line would be the token doing the opposite of its job."""
+    import subprocess
+    import sys
+
+    out = subprocess.run(
+        [sys.executable, "-m", "vitai.cli", "status", "--root", str(DEMO)],
+        capture_output=True, text=True, check=True)
+    line = out.stdout.splitlines()[0]
+
+    assert "avg" in line and "weigh-ins" in line

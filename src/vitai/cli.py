@@ -1210,8 +1210,14 @@ def cmd_status(args: argparse.Namespace) -> None:
     st = Vitai(_root(args)).status()
     line = st["line"]
     if st["rate_kg_per_week"] is not None:
-        trend = (f"{st['direction']} {abs(st['rate_kg_per_week']):.2f} kg/week"
-                 if st["rate_kg_per_week"] else "holding steady")
+        # THE WORD, NOT THE FIGURE (#185, contract 32). `verdicts` says
+        # `answers: direction` on `weight_rate`, the rollup stopped printing
+        # the magnitude in #283, and this line went on printing it - which
+        # left the engine honouring its own contract on one prose surface and
+        # not the other. The mean above keeps its number: contract 32 calls
+        # that a magnitude, and the span beside it is what makes it readable.
+        trend = (st["direction"] if st["rate_kg_per_week"]
+                 else "holding steady")
         # THE SPAN THE MEAN ACTUALLY COVERS, not the one its field is named
         # after (#209). Printing "7d avg" over six weeks of weigh-ins is the
         # mislabel this issue catches a client making, and the CLI was making
