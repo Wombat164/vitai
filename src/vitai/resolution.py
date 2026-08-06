@@ -754,9 +754,23 @@ def resolve(datasets: dict[str, list[dict]],
     # free text and non-executable, so the engine cannot produce a corrected
     # number and will not invent one.
     tripwires += derivation_cycles(datasets)
+    # The ledger is computed once and read twice, and EMISSION ENTRIES ARE
+    # KEPT OUT of what `stale_derivations` receives. They were left in at
+    # first, on the reasoning that nothing derives from an emission so the
+    # widening could only ever be inert. It is not inert: emission ids come
+    # from the row grammar and carry an ORDINAL, `_lineage_to_claim_id` strips
+    # a trailing ordinal before it compares, and the two together made a
+    # lineage naming the second emission of a day match the first one's
+    # ledger id. That is a false stale finding about a row nobody restated,
+    # and it reports an emission as restated, which this ledger's own rule
+    # says never happens.
+    ledger = retractions(datasets)
     tripwires += stale_derivations(
-        datasets, {str(r.get("claim_id")) for r in (retractions(datasets) or [])
-                   if r.get("claim_id")})
+        datasets, {str(r["claim_id"]) for r in ledger
+                   if r.get("claim_id") and r.get("kind") != "emission"})
+    # And the same relation one rung up: not a value that moved, but something
+    # the engine SAID on the strength of one (#134).
+    tripwires += unsupported_assertions(ledger)
     # ADVISORY, and last: a constant run is a question about how a number was
     # acquired, never a fault in the arithmetic above it. AFTER apply_regimes
     # deliberately: a declared regime has already emptied its interval, so the
@@ -808,14 +822,88 @@ def _ref_to_claim_id(dataset: str, ref: str) -> str | None:
     return f"{dataset}:{when}:{source or UNKNOWN_SOURCE}"
 
 
-def _dependencies(rec: dict) -> list[str]:
-    """The claim ids an inference declares it rests on."""
-    raw = rec.get("depends_on")
+# THE JUSTIFICATION LINK, AND EVERY SPELLING OF IT (#134).
+#
+# The complaint #134 files is that the link "applies to one dataset only".
+# That is not what the record holds. Three fields already say "the claims
+# this rests on", under three names, and they had two read paths between
+# them:
+#
+#   `inferences.depends_on`   cascaded here, and only here.
+#   `derived_from`            on six lineage datasets, cascaded multi-hop by
+#                             `stale_derivations` over every dataset that
+#                             carries it - the generalisation already exists
+#                             for values.
+#   `emissions.basis_claims`  validated on write, stored in the read model,
+#                             and read by NOTHING. The dataset's own comment
+#                             says `basis_retracted` is "the next rung".
+#
+# So a fourth spelling is not what was missing. What was missing is the
+# cascade over the third, which is the one that matters most: an assertion
+# DELIVERED to a person is the only one of the three that somebody acted on.
+#
+# This map names the field each cascade reads. It is NOT a dispatch table the
+# cascade walks: the two entries produce different ledger shapes and rest on
+# different sets, so they stay two explicit loops rather than one generic one
+# pretending they are the same operation.
+#
+# The control that goes with it lives in `test_justification.py`, and its
+# limit is worth knowing: it proves each dataset named here is really read, by
+# building a record and checking an entry appears, and it catches a KNOWN link
+# name arriving on a dataset with no reader. It cannot catch a field with a
+# name nobody has thought of yet.
+JUSTIFICATION_LINK = {"inferences": "depends_on", "emissions": "basis_claims"}
+
+
+def _dependencies(rec: dict, field: str) -> list[str]:
+    """The claim ids a row declares it rests on.
+
+    Tolerant of the two shapes the format admits: a JSON list, which is what
+    the engine writes, and a whitespace or comma separated string, which is
+    what a hand-edited line tends to carry.
+
+    No default for `field`: a default here would be a spelling this function
+    prefers, and the point of #134 is that it has no favourite among them.
+    """
+    raw = rec.get(field)
     if not raw:
         return []
     if isinstance(raw, list):
         return [str(x).strip() for x in raw if str(x).strip()]
     return [part.strip() for part in str(raw).replace(",", " ").split() if part.strip()]
+
+
+def _undermined_by(deps: list[str], undermined: set[str]) -> list[str]:
+    """Which of a row's declared bases have come down.
+
+    THE ORDINAL IS DROPPED FIRST, and this is the whole of the finding. The
+    engine publishes TWO spellings of one claim: `claim_id` appends an ordinal
+    on `sessions`, because an athlete can log two runs from one source on one
+    day, while `_ref_to_claim_id` - which is what builds the retracted set out
+    of a `supersedes` reference - cannot know the ordinal and never emits one.
+    So a consumer doing the obvious right thing, copying an id out of the
+    engine's own `claims` table into `basis_claims`, wrote a justification
+    that could never fall. It failed silently: no warning on write, no finding
+    on read, and a shipped demo that dodged it by hand-writing the spelling no
+    surface actually emits.
+
+    `_lineage_to_claim_id` made this same reduction for `derived_from` and
+    named the cost: dropping the ordinal means a basis naming the SECOND
+    reading of a day is judged by whether that date and source were restated
+    at all. That is a deliberate over-report on a dataset where the retracted
+    set has no ordinal to compare against, and it is the right way round - the
+    alternative is the silent miss above.
+    """
+    out = set()
+    for dep in deps:
+        if dep in undermined:
+            out.add(dep)
+            continue
+        parts = dep.split(":")
+        if len(parts) >= 4 and parts[-1].isdigit() and (
+                ":".join(parts[:-1]) in undermined):
+            out.add(dep)
+    return sorted(out)
 
 
 def retractions(datasets: dict[str, list[dict]]) -> list[dict]:
@@ -828,7 +916,24 @@ def retractions(datasets: dict[str, list[dict]]) -> list[dict]:
     child). This is the labeled-assumption-set + cascade-invalidate rule from
     JTMS (Doyle 1979), and deliberately nothing more: no full ATMS, no
     LLM-assigned confidence. Confidence is a property of tier and source.
+
+    THE CASCADE RUNS TWICE, and the second hop is the point of #134. An
+    inference that falls is a belief nobody necessarily saw. An EMISSION is
+    something the engine told a person, on a named surface, under a named
+    contract - the one artifact here that somebody may have acted on. It
+    cascades off retracted claims AND off fallen inferences, because an
+    assertion delivered on the strength of an inference that has since come
+    down is in exactly the position this ledger exists to report.
+
+    AN EMISSION IS NEVER RETRACTED BY THIS, and the wording is load-bearing.
+    It is an event: the engine did say that, on that day, to that surface,
+    and no later correction can make it not have happened - which is why
+    `emissions` never retires. What the ledger records is that what it rested
+    on was restated. The reader decides what that means, and #148 owns the
+    harder question of whether the statement would still be made today.
     """
+    from .identity import refs
+
     ledger: list[dict] = []
     retracted: set[str] = set()
     for dataset in RESOLVED_DATASETS:
@@ -846,19 +951,91 @@ def retractions(datasets: dict[str, list[dict]]) -> list[dict]:
             })
 
     # Cascade: an inference standing on a retracted claim falls with it.
+    fallen_inferences: set[str] = set()
+    link = JUSTIFICATION_LINK["inferences"]
     for rec in datasets.get("inferences") or []:
-        fallen = sorted(set(_dependencies(rec)) & retracted)
-        for dep in fallen:
+        for dep in _undermined_by(_dependencies(rec, link), retracted):
+            cid = f"inference:{rec.get('date')}:{rec.get('model')}"
+            fallen_inferences.add(cid)
             ledger.append({
                 "date": rec.get("date"), "kind": "inference",
-                "claim_id": f"inference:{rec.get('date')}:{rec.get('model')}",
+                "claim_id": cid,
                 "retracted_by": dep,
                 "reason": (f"rests on {dep}, which was retracted: "
                            f"{str(rec.get('statement') or '')[:80]}"),
                 "cascaded_from": dep,
             })
-    ledger.sort(key=lambda r: (r["date"] or "", r["kind"], r["claim_id"]))
+
+    # Second hop: an assertion the engine DELIVERED, resting on something that
+    # has come down. Identified by `refs`, the engine's own row grammar,
+    # because two assertions on one day are two events and an identity built
+    # from `date` alone could not name which of them fell.
+    emissions = list(datasets.get("emissions") or [])
+    undermined = retracted | fallen_inferences
+    link = JUSTIFICATION_LINK["emissions"]
+    for ref, rec in zip(refs("emissions", emissions), emissions):
+        for dep in _undermined_by(_dependencies(rec, link), undermined):
+            # WHICH WAY IT CAME DOWN, because the two are not the same event
+            # and one wording for both would be false half the time: a claim
+            # was RESTATED by a correction somebody wrote, an inference FELL
+            # because its own justification went. Neither is the emission
+            # being withdrawn.
+            went = ("has since fallen" if dep in fallen_inferences
+                    else "the record has since restated")
+            ledger.append({
+                "date": rec.get("date"), "kind": "emission", "claim_id": ref,
+                "retracted_by": dep,
+                "reason": (
+                    f"delivered on {rec.get('surface') or UNKNOWN_SOURCE} and "
+                    f"rests on {dep}, which {went}: "
+                    f"{str(rec.get('statement') or '')[:80]}"),
+                "cascaded_from": dep,
+            })
+    # `retracted_by` is in the sort key as a SECOND line of defence, and it is
+    # worth saying which line is first. Two entries about one row that lost two
+    # of its bases agree on date, kind and claim_id - the whole of the old key
+    # - so a stable sort leaves them in the order they were appended, and the
+    # only reason that order is deterministic is that `_undermined_by` sorts
+    # what it returns. Whichever of the two goes, the other still holds; both
+    # going is what "same input, same output" would cost.
+    ledger.sort(key=lambda r: (r["date"] or "", r["kind"], r["claim_id"],
+                               r["retracted_by"] or ""))
     return ledger
+
+
+def unsupported_assertions(ledger: list[dict]) -> list[dict]:
+    """Things the engine TOLD somebody, whose basis has since moved (#134).
+
+    The ledger already holds this once the cascade reaches emissions; this is
+    the door that shouts. It is a projection rather than a second computation
+    on purpose - two ways of deciding the same thing drift, and the one a
+    reader sees would eventually disagree with the one a client queries.
+
+    WHY THIS IS THE LOUD ONE. A stale derivation is a number in a file. An
+    unsupported assertion was read by a person who may have changed what they
+    did about it, and nothing else in the engine could tell them. That
+    asymmetry - the record moved on and the person did not - is the whole
+    complaint #134 files.
+
+    Severity is `review` and never `error`. The engine cannot know whether the
+    restatement changes what would be said now; asserting that it does would
+    be the confident wrong answer, and asserting that it does not would be
+    worse.
+    """
+    out = []
+    for entry in ledger:
+        if entry.get("kind") != "emission":
+            continue
+        out.append({
+            "date": entry.get("date"), "kind": "unsupported_assertion",
+            "severity": "review",
+            "detail": (
+                f"{entry['claim_id']} was {entry['reason']}. The assertion "
+                f"stands as an event - it was made - but a reader acting on "
+                f"it is acting on something the record no longer says the "
+                f"same way"),
+        })
+    return out
 
 
 def live_inferences(datasets: dict[str, list[dict]]) -> list[dict]:

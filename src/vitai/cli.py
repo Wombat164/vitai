@@ -446,12 +446,22 @@ def cmd_resolve(args: argparse.Namespace) -> None:
         trips = [t for t in trips if t["date"] == args.date]
         rets = [r for r in rets if r["date"] == args.date]
     if args.json:
+        # `stream` says WHICH OF THE THREE this line is, and `kind` is the
+        # row's own. They were one key, and the row won: a tripwire and a
+        # retraction both carry `kind`, so `{"kind": "retraction", **row}`
+        # relabelled itself out of existence and a consumer could not tell the
+        # three streams apart. Added beside rather than instead, because
+        # explanations carry no `kind` of their own and something may be
+        # reading the one case where the label did survive.
         for row in expl:
-            print(json.dumps({"kind": "resolution", **row}))
+            print(json.dumps({"kind": "resolution", **row,
+                              "stream": "resolution"}))
         for row in trips:
-            print(json.dumps({"kind": "conservation", **row}))
+            print(json.dumps({"kind": "conservation", **row,
+                              "stream": "tripwire"}))
         for row in rets:
-            print(json.dumps({"kind": "retraction", **row}))
+            print(json.dumps({"kind": "retraction", **row,
+                              "stream": "retraction"}))
         return
 
     if not expl:
