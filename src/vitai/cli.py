@@ -446,6 +446,35 @@ def cmd_resolve(args: argparse.Namespace) -> None:
             print(f"  {r['date']} {r['kind']} {r['claim_id']}{arrow}: {r['reason']}")
 
 
+def cmd_may(args: argparse.Namespace) -> None:
+    """A harness over `Vitai.may()`. May this be done today (#275)?
+
+    NON-ZERO ON ANYTHING BUT `allowed`. A shell that read exit 0 as permission
+    would turn "nobody has said" into a green light, which is the whole
+    failure this command exists to stop.
+
+    2 for blocked, matching `vitai safety`, and 3 for unknown - separate
+    because argparse also exits 2 on a usage error, so a script checking only
+    the code could not tell a refusal from a typo'd flag, and the two want
+    different handling.
+    """
+    v = Vitai(_root(args))
+    out = v.may(args.activity, args.on)
+    if args.json:
+        print(json.dumps(out, sort_keys=True))
+    elif out["verdict"] == "blocked":
+        print(f"{out['activity']}: BLOCKED - {out['reason']}")
+        print(f"  matched: {', '.join(out.get('matched', []))} "
+              f"(gate: {', '.join(str(g) for g in out['gates'])})")
+    elif out["verdict"] == "unknown":
+        print(f"{out['activity']}: NOBODY HAS SAID - {out['reason']}")
+    else:
+        print(f"{out['activity']}: allowed - {out['reason']}")
+        print(f"  falls under: {', '.join(out['classes'])}")
+    if out["verdict"] != "allowed":
+        sys.exit(2 if out["verdict"] == "blocked" else 3)
+
+
 def cmd_safety(args: argparse.Namespace) -> None:
     """The escalation surface. Exits 2 while anything urgent stands.
 
@@ -1253,6 +1282,9 @@ def main(argv: list[str] | None = None) -> None:
          "dated fixtures the plan is built backwards from (races, scans, dates)"),
         ("resolve", cmd_resolve, "which source won each contested field, and why"),
         ("safety", cmd_safety, "active escalations and gates (exits 2 if urgent)"),
+        ("may", cmd_may,
+         "may this activity be done today - blocked, allowed, or nobody has "
+         "said (exits 2 unless allowed)"),
         ("context", cmd_context, "the situational mode in force on a date"),
         ("check", cmd_check, "adjudicate a stated value against the record"),
         ("day", cmd_day, "everything the record holds for one date"),
@@ -1363,6 +1395,14 @@ def main(argv: list[str] | None = None) -> None:
                            help="only this date")
             p.add_argument("--json", action="store_true",
                            help="emit meal rows as JSONL instead of prose")
+        if name == "may":
+            p.add_argument("activity",
+                           help="a session type or activity class, e.g. walk")
+            p.add_argument("--on", metavar="YYYY-MM-DD",
+                           help="the day to ask about (default: the record's "
+                                "own horizon)")
+            p.add_argument("--json", action="store_true",
+                           help="emit the verdict as JSON")
         if name == "derived":
             # From the engine's own table list, so a table added to the read
             # model is reachable here the same day rather than whenever
