@@ -446,6 +446,55 @@ def cmd_resolve(args: argparse.Namespace) -> None:
             print(f"  {r['date']} {r['kind']} {r['claim_id']}{arrow}: {r['reason']}")
 
 
+def cmd_project(args: argparse.Namespace) -> None:
+    """A harness over `Vitai.project()`. If I do this, what then (#193)?
+
+    STATES AND DOES NOT ADVISE. The purpose sentence covers logging nutrition
+    and building training programmes, so a projected intake gets the record
+    and nothing further - what it would do to a target the athlete declared,
+    and no verdict on whether to. The athlete cannot be expected to feel that
+    difference; the boundary is the app's to hold.
+    """
+    v = Vitai(_root(args))
+    values = {}
+    for pair in args.values:
+        field, _, raw = pair.partition("=")
+        if not _:
+            sys.exit(f"expected field=number, got {pair!r}")
+        try:
+            values[field] = float(raw)
+        except ValueError:
+            sys.exit(f"{raw!r} is not a number - a projection is arithmetic "
+                     f"on this record's own quantities")
+    try:
+        rows = v.project(args.dataset, values, args.on)
+    except (KeyError, ValueError) as e:
+        sys.exit(str(e))
+    if args.json:
+        for row in rows:
+            print(json.dumps(row, sort_keys=True))
+        return
+    if not rows:
+        print("nothing declared that this would move - a projection needs a "
+              "goal with a daily period on the dataset being projected")
+        return
+    for row in rows:
+        head = (f"{row['slug']}: {row['now']:g} now, "
+                f"{row['projected']:g} if you do")
+        if row["polarity"] == "ceiling" and row["room_left"] is not None:
+            head += (f" - OVER the {row['target']:g} you declared by "
+                     f"{abs(row['room_left']):g}" if row["breach"]
+                     else f" - {row['room_left']:g} still under "
+                          f"the {row['target']:g} you declared")
+        elif row["room_left"] is not None:
+            head += (f" - {abs(row['room_left']):g} short of the "
+                     f"{row['target']:g} you declared" if row["breach"]
+                     else f" - past the {row['target']:g} you declared")
+        print(head)
+    print("A projection, not a record: nothing here has been written down, "
+          "and what to do about it is yours.")
+
+
 def cmd_may(args: argparse.Namespace) -> None:
     """A harness over `Vitai.may()`. May this be done today (#275)?
 
@@ -1295,6 +1344,9 @@ def main(argv: list[str] | None = None) -> None:
          "dated fixtures the plan is built backwards from (races, scans, dates)"),
         ("resolve", cmd_resolve, "which source won each contested field, and why"),
         ("safety", cmd_safety, "active escalations and gates (exits 2 if urgent)"),
+        ("project", cmd_project,
+         "if I do this, what then - a proposed quantity against a declared "
+         "target, stated and never written (#193)"),
         ("may", cmd_may,
          "may this activity be done today - blocked, allowed, or nobody has "
          "said (exits 2 unless allowed)"),
@@ -1408,6 +1460,13 @@ def main(argv: list[str] | None = None) -> None:
                            help="only this date")
             p.add_argument("--json", action="store_true",
                            help="emit meal rows as JSONL instead of prose")
+        if name == "project":
+            p.add_argument("dataset", help="the dataset the act belongs to")
+            p.add_argument("values", nargs="+", metavar="field=number",
+                           help="the proposed quantity, e.g. kcal_in=500")
+            p.add_argument("--on", metavar="YYYY-MM-DD",
+                           help="the day to project against")
+            p.add_argument("--json", action="store_true")
         if name == "may":
             p.add_argument("activity",
                            help="a session type or activity class, e.g. walk")

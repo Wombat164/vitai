@@ -26,7 +26,8 @@ from statistics import mean
 
 from . import __version__
 from .config import Config, load_config, policy_digest
-from .contributions import compute_contributions, goal_progress
+from .contributions import (_standing, compute_contributions,
+                            goal_progress)
 from .db import CONTRACT_VERSION, DERIVED_TABLES, build_db
 from .clocks import is_aware
 from .jsonl import EVENT_DATASETS, append, append_many, load
@@ -1035,6 +1036,91 @@ class Vitai:
         return goal_progress(d["goals"], d["thresholds"], d["daily"],
                              d["sessions"], on, events=d["events"],
                              weight=self.canonical("weight"))
+
+    def project(self, dataset: str, values: dict,
+                on: date | str | None = None) -> list[dict]:
+        """If I do this, what then? A proposed act, against declared goals.
+
+        "Can I open that bag of crisps" is not a status question. Everything
+        else here reports what IS; this reports what WOULD BE, which is the
+        register people actually use with a partner or a coach (#193).
+
+        NUTRITION ONLY, AND STATEMENT ONLY, and the boundary is the whole
+        design. The purpose sentence says this engine logs nutrition and
+        BUILDS TRAINING PROGRAMMES - two different entitlements in one breath.
+        So this says what a proposed intake would do to a target the athlete
+        declared, and never whether to. The training half is in scope for
+        advice and is not built here; an app that answered both in the same
+        voice would have quietly widened its own purpose.
+
+        A HYPOTHETICAL IS NOT A CLAIM. Nothing here writes: no append, no
+        resolution, no rollup, no emission. The append path already refuses
+        caller-supplied provenance; a projection needs the stronger property
+        of not being written at all, and `test_a_projection_leaves_the_record
+        _byte_identical` is what holds it.
+
+        Arithmetic on the athlete's own numbers, against his own declared
+        target. Nothing is imported and nothing is looked up: a projection
+        built from a food table would be a figure about somebody else.
+
+        Returns one row per affected goal, carrying `now`, `proposed` and
+        `projected`. `projection` is true on every one, because a number that
+        could be mistaken for something the record holds is the one thing this
+        must never produce.
+
+        NO `answers` TOKEN, deliberately. Contract 32's axis is keyed on
+        VERDICT METRICS - `intake_floor`, `weight_rate` - and a goal names a
+        record FIELD. Mapping one onto the other here would be inventing a
+        field-level vocabulary at the call site, which is the silent default
+        that field was closed-world to prevent. What can be said without
+        inventing anything: this is one logged quantity against a target the
+        athlete declared, which is the shape contract 32 calls a magnitude for
+        `intake_floor`.
+        """
+        if dataset not in KEYS:
+            raise KeyError(f"unknown dataset {dataset!r}; one of {sorted(KEYS)}")
+        if dataset != "daily":
+            raise ValueError(
+                f"projection is nutrition-only for now: {dataset!r} is not "
+                "`daily`. The purpose sentence permits programming TRAINING, "
+                "which is a wider entitlement and its own work (#193)")
+        unknown = sorted(set(values) - set(KEYS[dataset]))
+        if unknown:
+            raise KeyError(
+                f"{dataset} has no {unknown}. A projection is arithmetic on "
+                "this record's own fields; a quantity it has never seen is "
+                "one the athlete has to state before it can be projected")
+
+        when = _viewpoint(on) or self.on
+        rows = []
+        for goal in self.goals(when):
+            if goal.get("period") != "daily" or goal.get("dataset") != dataset:
+                continue
+            proposed = values.get(str(goal.get("metric")))
+            if not isinstance(proposed, (int, float)) or isinstance(
+                    proposed, bool):
+                continue
+            counted = goal.get("counted")
+            projected = (counted or 0) + float(proposed)
+            standing = _standing(
+                {"polarity": goal.get("polarity"),
+                 "target_hi": goal.get("target_hi")},
+                projected, goal.get("target"))
+            rows.append({
+                "projection": True,
+                "slug": goal.get("slug"),
+                "metric": goal.get("metric"),
+                "polarity": goal.get("polarity"),
+                "target": goal.get("target"),
+                "now": counted,
+                "proposed": float(proposed),
+                "projected": round(projected, 3),
+                "room_left": standing["room_left"],
+                "breach": standing["breach"],
+                "progress_pct": standing["progress_pct"],
+                "distance": standing["distance"],
+            })
+        return rows
 
     def plans(self, on: date | str | None = None) -> list[dict]:
         """What days were MEANT to be, resolved and unresolved (#221).
