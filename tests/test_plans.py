@@ -101,6 +101,24 @@ def test_an_unanswered_plan_carries_no_reason():
     assert any("has none yet" in p for p in problems)
 
 
+def test_an_ABSENT_outcome_is_unanswered_too():
+    """The rule covers TWO shapes and only one of them was pinned.
+
+    `outcome: unresolved` and `outcome: null` both mean nobody has answered,
+    and the code refuses a reason beside either. Only the first had a test, so
+    mutating the check from `in (None, "unresolved")` to `in ("unresolved",)`
+    left the whole suite green while a plan carrying a null outcome and an
+    explanation for it became legal.
+
+    The engine writes null for a key it does not know rather than omitting it,
+    so the null shape is the one a real row is likelier to carry.
+    """
+    problems = validate_record(
+        "plans", _plan(outcome=None, reason="motivation_automatic"))
+
+    assert any("has none yet" in p for p in problems)
+
+
 def test_the_reason_axis_can_tell_a_shut_gym_from_a_flat_mood():
     """COM-B, adopted because `gated | chosen` collapsed three axes into two
     and `chosen` swallowed both motivation subtypes plus half of capability -
