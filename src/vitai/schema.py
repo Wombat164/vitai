@@ -949,6 +949,46 @@ for _ds in ("weight", "daily", "sessions", "measurements", "sets", "meals"):
         KEY_GENERATION.setdefault(_ds, {})[_k] = CURRENT_GENERATION[_ds]
         KEYS[_ds].append(_k)
 
+# --- who computed it (#280) ---------------------------------------------------
+#
+# `derived_external` says the value was NOT computed by this engine and stops
+# there, which was enough when there was one consumer. #158 settled that there
+# are three consumption modes and that several clients will read one record on
+# the same terms - and any of them may derive. Two clients computing a pace
+# from `duration_s` and `distance_km` agree when both are right and differ when
+# one has a bug, and the record could not tell them apart.
+#
+# The engine already takes this seriously where it controls it: `inferences`
+# carries `model`, because WHICH model produced an inference is part of what
+# the inference is. The same argument reaches a client that derives.
+#
+# TWO FIELDS, NOT A SLUG. `client-0.1.0-a3f2` crams orthogonal facts into one
+# identifier a consumer then has to parse, which is the pre-coordination this
+# schema refuses everywhere else. `derived_by` is what did the computing;
+# `derived_build` is which build of it, and it is the half that makes a
+# derivation auditable - a figure from version 0.1 and the same figure from
+# 0.2 after the bug was fixed are different facts.
+#
+# NO INSTALL IDENTIFIER, and this is a decision rather than an omission. The
+# issue raises it and answers itself: a stable per-install id is useful to the
+# record and is also a tracking key. It answers no question a coach is asked,
+# `device` already says which machine wrote a line down, and admitting it would
+# need a rule about where it may travel - which is #205's two-tier work, not a
+# field added in passing. Refusing is the reversible direction.
+#
+# `by-hand` IS A REAL VALUE, and the corpus is why. The single
+# `derived_external` row in every fixture this repo ships is an athlete taking
+# a mean of two weigh-ins ON PAPER. A field that could only name software
+# would have had nothing to put there, and the absence would then have meant
+# both "a person did it" and "software did it and did not say".
+DERIVED_BY_HAND = "by-hand"
+
+for _ds in ("weight", "daily", "sessions", "measurements", "sets", "meals"):
+    CURRENT_GENERATION[_ds] += 1
+    for _k in ("derived_by", "derived_build"):
+        KEY_GENERATION.setdefault(_ds, {})[_k] = CURRENT_GENERATION[_ds]
+        KEYS[_ds].append(_k)
+
 # --- the rest of the macros, and the two sleep instants -----------------------
 # MACROS (#188). Energy and protein were the founding pair because they are what
 # a cut is steered by. Everything else the athlete actually logs - fat,
@@ -1253,6 +1293,48 @@ def _emission_problems(rec: dict) -> list[str]:
     return out
 
 
+def _computed_by_problems(dataset: str, rec: dict) -> list[str]:
+    """Who computed a value the engine did not (#280).
+
+    Required on a `derived_external` row from the generation the fields
+    arrived at, and not before: an older line never owed them, which is the
+    G25 property the generation table exists for.
+
+    `derived_build` is required beside a NAMED SOFTWARE and forbidden beside
+    `by-hand`. A build is what makes a derivation auditable, and a person with
+    a pen does not have one - inventing a version for them would be the field
+    asserting a fact about a notebook.
+    """
+    from .provenance import capture_of
+
+    if capture_of(rec) != "derived_external":
+        return []
+    if line_generation(rec) < key_generation(dataset, "derived_by"):
+        return []
+
+    by, build = rec.get("derived_by"), rec.get("derived_build")
+    out = []
+    if by is None:
+        return ["a 'derived_external' value was computed by something other "
+                "than this engine, and 'derived_by' has to say what: a slug "
+                f"naming the software, or {DERIVED_BY_HAND!r} where a person "
+                "did the arithmetic themselves. Without it a consumer cannot "
+                "tell one client's figure from another's, or from a bug fixed "
+                "two versions ago"]
+    if not SLUG_RE.match(str(by)):
+        out.append(f"'derived_by' is a lowercase-kebab slug, got {by!r}")
+    if by == DERIVED_BY_HAND and build is not None:
+        out.append(
+            f"{DERIVED_BY_HAND!r} means a person did the arithmetic, and a "
+            f"person has no build (got {build!r})")
+    elif by != DERIVED_BY_HAND and build is None:
+        out.append(
+            f"'derived_build' says WHICH build of {by!r} computed this, and "
+            "that is the half that makes the derivation auditable - the same "
+            "field computed before and after a fix are different facts")
+    return out
+
+
 def _lineage_problems(dataset: str, rec: dict) -> list[str]:
     """Checks on `derived_from` and `derived_op` (#170)."""
     # Through the alias layer, not against the raw string. `derived` and
@@ -1408,6 +1490,7 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
         problems += provenance_problems(rec)
         problems += capture_problems(rec)
         problems += value_kind_problems(rec, KEYS[dataset])
+        problems += _computed_by_problems(dataset, rec)
         if (ref := rec.get("artifact")) is not None and not is_reference(ref):
             problems.append(
                 f"'artifact' is a content address like "

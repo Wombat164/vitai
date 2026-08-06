@@ -521,6 +521,22 @@ def _build(target: Path) -> None:
                  "_gen": 2, "source": "app", "mood": None, "feel": None,
                  "coverage": "manual", "pain": None, "pain_site": None,
                  "pain_side": None}
+    # A DERIVATION BY SOFTWARE, beside the one on paper (#280). The calorie
+    # app worked its protein figure out from the items logged in it rather
+    # than reading it off a label, so the value is derived and the deriver is
+    # not this engine - and `derived_by` plus `derived_build` say which
+    # software and which build, which is what makes it auditable later.
+    #
+    # Both derived cases now appear: one computed by a person and one by a
+    # program. A fixture holding a single value of a closed vocabulary proves
+    # nothing about the distinction the field exists to draw (#204).
+    app_claim.update({
+        "capture": "derived_external", "read_by": "model",
+        "origin": "app", "origin_evidence": "computed in the calorie app",
+        "derived_from": [f"daily:{two_source_day}:app"],
+        "derived_op": "sum of the items logged in the app that day",
+        "derived_by": "a-calorie-app", "derived_build": "7.4.2",
+    })
     daily.append(app_claim)
 
     # THE LAST DAY BREACHES THE CAP, deliberately (#274). A daily ceiling is
@@ -622,6 +638,12 @@ def _build(target: Path) -> None:
         "derived_from": [f"weight:{d}:{weighed_days[d].get('source') or 'unstated'}"
                          for d in avg_inputs],
         "derived_op": "mean of the last two weigh-ins, done on paper",
+        # WHO computed it (#280), and the answer here is a person. This is the
+        # one derived_external row in every fixture this repo ships, and it is
+        # an athlete with a pen - which is why `by-hand` is a value rather
+        # than the field naming software only. `derived_build` stays null,
+        # because a notebook has no version.
+        "derived_by": "by-hand", "derived_build": None,
         "_gen": CURRENT_GENERATION["weight"]})
 
     # The provenance pair above appends out of order, and `recorded_at` is

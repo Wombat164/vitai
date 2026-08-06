@@ -68,13 +68,9 @@ UNWRITTEN = (
     "artifacts.sha256",
     "daily.artifact",
     "daily.carb_g",
-    "daily.derived_from",
-    "daily.derived_op",
     "daily.fat_g",
     "daily.fibre_g",
-    "daily.origin_evidence",
     "daily.path",
-    "daily.read_by",
     "daily.sleep_end",
     "daily.sleep_start",
     "daily.sodium_mg",
@@ -91,6 +87,21 @@ UNWRITTEN = (
     "goals.target_hi",
     "inferences.depends_on",
     "inferences.note",
+    # #280, and they sit beside the lineage fields they qualify: a dataset
+    # with no derived row in any fixture has nothing to say about who
+    # derived it either. Written where a derived row exists - `weight` by
+    # hand and `daily` by software - so both halves of the distinction are
+    # exercised somewhere.
+    "meals.derived_by",
+    "meals.derived_build",
+    "measurements.derived_by",
+    "measurements.derived_build",
+    "sessions.derived_by",
+    "sessions.derived_build",
+    "sets.derived_by",
+    "sets.derived_build",
+    # A person has no build, so the one by-hand row leaves this null.
+    "weight.derived_build",
     "meals.derived_from",
     "meals.derived_op",
     "meals.fibre_100g",
@@ -169,6 +180,14 @@ UNREAD = (
     "sets.rpe_scale",
     "daily.alcohol",
     "daily.coverage",
+    # #280. Interface fields, and the same shape as the declared scales above:
+    # written by the record and read by nothing INSIDE the engine, because
+    # their whole purpose is that a CLIENT can tell its own derivation from
+    # another client's, and from its own two versions ago. The engine has no
+    # question that needs them - it knows what IT computed.
+    "daily.derived_by",
+    "daily.derived_build",
+    "weight.derived_by",
     # --- the plans dataset (#221), three fields and two different reasons ---
     #
     # `requires` and `setting` are BLOCKED, not deferred. Both are answered by
