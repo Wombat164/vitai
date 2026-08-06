@@ -5,10 +5,44 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
-No contract change: this adds accessors over what the engine already knew and
-changes no table, column or line shape.
+Contract 35. `place_precise` arrives on `sessions` and `context`, and has no
+column: the coarse tier is the default egress form, and everything else here
+adds accessors over what the engine already knew.
 
 ### Added
+
+- **Two tiers, and the coarse one is what leaves** (#205, contract 35). The
+  record's stance was privacy by not storing the thing: `place` was
+  documented as coarse and never an address. That is blunt, and it discards
+  real utility, because "outdoors" cannot tell the park an athlete likes from
+  the one they avoid. `place_precise` is now storable on `sessions` and
+  `context`; `place` keeps its name and its coarse meaning.
+- **A precise value is refused unless a coarse one travels with it.**
+  Required rather than derived, and the difference is deliberate: reducing an
+  address to "home" needs a lookup the build forbids or a mapping only the
+  athlete holds, and a guessed coarse value would be wrong in the direction of
+  looking right. Same invariant, no pretending.
+- **The gate is at the boundary.** The coarse projection is applied once, at
+  the read door every surface goes through - twenty-five public methods, the
+  CLI's thirty-five print sites, MCP, the SQLite build and the inference
+  prompt all read from it - so the default projection structurally cannot
+  carry the precise tier. `Vitai.precise(dataset, release)` is the only other
+  path and requires a release naming what it is for, because permission per
+  use is not a standing flag.
+- **The read model has no column for it.** A null column would read as "nobody
+  wrote one" rather than "you are not being shown this", which is the same
+  reason the key is dropped and not nulled.
+- **`coarse_companion` on `field_types()`**, so a consumer building its own
+  projection learns which fields have no column and what is shown instead.
+
+### Fixed
+
+- **Validation problems no longer quote a precise value** (#205). The
+  diagnostic channel is an egress surface and it is the one nobody looks at:
+  roughly twenty-five messages quote the offending value, and those strings
+  travel out through `validate()`, the load report's warnings, the CLI and the
+  MCP validate tool. A column-shifted import that put an address into `date`
+  returned it verbatim.
 
 - **`api.field_types()`, and a `fields` key on `api.schema()`** (#257). What
   each field of each dataset may hold (`types`), how it is projected

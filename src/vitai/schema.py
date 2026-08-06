@@ -1121,6 +1121,106 @@ CURRENT_GENERATION["sessions"] += 1
 KEY_RETIREMENT.setdefault("sessions", {})["planned"] = \
     CURRENT_GENERATION["sessions"]
 
+# --- two tiers, and the coarse one is the default egress form (#205) ----------
+#
+# THE STANCE THAT CHANGES. The comment on `sessions` above says `place` is
+# "coarse, and deliberately coarse - 'home'/'work'/a travel slug, never an
+# address". That was privacy by not storing the thing: blunt, and it throws
+# away real utility, because "outdoors" cannot tell the park an athlete likes
+# from the one they avoid. `place` keeps that meaning and keeps its name.
+# `place_precise` is the tier beside it, as precise as the athlete wants, and
+# the sentence above is restated here rather than left contradicting the code.
+#
+# THE COARSE VALUE IS REQUIRED, NOT DERIVED, and the difference is worth being
+# straight about. #205 asks for the coarse tier to be computed at append so
+# that no read path can fail to produce one. For a numeric precise tier that
+# is arithmetic and the engine could do it. For an address it is not: reducing
+# "12 Some Street" to "home" needs either a lookup, which the build forbids,
+# or a mapping only the athlete holds. So the engine refuses a precise value
+# that arrives without its coarse companion, which buys the same invariant -
+# a coarse answer exists for every precise one - without the engine
+# pretending to a derivation it cannot perform. Guessed coarse values would be
+# worse than none: they would be wrong in the direction of looking right.
+#
+# WHAT THIS COSTS, recorded rather than discovered. Storing the precise value
+# creates a liability that not storing it did not. A precise value that leaks
+# cannot be un-leaked, and the record's old stance was safe precisely because
+# there was nothing to leak. This raises the claim from "we do not hold this"
+# to "we hold it and it does not escape", which is a much stronger claim and
+# has to actually hold - which is why the boundary and its controls are part
+# of the same change rather than a follow-up.
+#
+# SENSITIVE maps dataset -> {precise key: the coarse key it must travel with}.
+# Not a property of the dataset and not a property of the consumer: a field is
+# sensitive or it is not, and every consumer gets the coarse tier unless it
+# asked for the other one by name.
+SENSITIVE: dict[str, dict[str, str]] = {}
+for _ds in ("sessions", "context"):
+    CURRENT_GENERATION[_ds] += 1
+    KEYS[_ds] = KEYS[_ds] + ["place_precise"]
+    KEY_GENERATION.setdefault(_ds, {})["place_precise"] = CURRENT_GENERATION[_ds]
+    SENSITIVE[_ds] = {"place_precise": "place"}
+
+PRECISE_KEYS: frozenset[str] = frozenset(
+    k for pairs in SENSITIVE.values() for k in pairs)
+
+
+def precise_keys(dataset: str) -> tuple[str, ...]:
+    """The sensitive keys on a dataset, in KEYS order."""
+    return tuple(k for k in KEYS.get(dataset, ()) if k in SENSITIVE.get(dataset, {}))
+
+
+def coarse(dataset: str, rec: dict) -> dict:
+    """One row with its precise tier absent.
+
+    A NEW DICT EVERY TIME, never a mutation of the caller's. The engine's own
+    arithmetic reads the same objects a consumer does, so coarsening in place
+    would quietly change what the build computes over.
+
+    The key is DROPPED rather than nulled, and on KEY PRESENCE rather than on
+    the value being set. A null would be indistinguishable from an athlete who
+    never wrote one, which is the difference between "you are not being shown
+    this" and "there is nothing here" - and the engine writes null for a key it
+    does not know rather than omitting it, so the null shape is the one a real
+    row is likelier to carry.
+
+    ALWAYS A COPY, including when there is nothing to drop. Returning the
+    caller's own object for the untouched case was the obvious optimisation
+    and it made the guarantee false: the coarse and precise caches then held
+    THE SAME dicts for every row without a precise key, which is most of any
+    record, so a consumer that took the precise view and annotated its rows -
+    which is the consumer this path exists for - planted the value into the
+    default projection for every later reader of that instance. Structurally
+    cannot means structurally cannot.
+    """
+    drop = SENSITIVE.get(dataset)
+    if not drop:
+        return rec
+    return {k: v for k, v in rec.items() if k not in drop}
+
+
+def _sensitive_problems(dataset: str, rec: dict) -> list[str]:
+    """A precise value with no coarse answer beside it (#205)."""
+    out = []
+    for precise, plain in SENSITIVE.get(dataset, {}).items():
+        # NO GENERATION GUARD, and its absence is the decision. The obvious
+        # shape here is the G25 skip every other new key gets - an older line
+        # never owed it - and that skip is exactly wrong for this rule. It
+        # fires only when the precise field HAS A VALUE, and a line carrying a
+        # value was written by something that knew the field existed. The
+        # guard would have let a line stamped with an old `_gen` carry an
+        # address with no coarse answer beside it and pass, which is the one
+        # row this rule exists to refuse. G25 still holds: a line without the
+        # field is not touched here at all.
+        if str(rec.get(precise) or "").strip() and not str(
+                rec.get(plain) or "").strip():
+            out.append(
+                f"'{precise}' is the precise tier and needs '{plain}' beside "
+                f"it. Everything that leaves this record sees the coarse "
+                f"value, so a precise one with no coarse answer is a row that "
+                f"cannot be shown to anybody at all")
+    return out
+
 
 def key_generation(dataset: str, key: str) -> int:
     """Generation a key was introduced in (1 = founding)."""
@@ -1581,7 +1681,58 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
             if isinstance(c, bool) or not isinstance(c, _NUMERIC) or not 0 <= c <= 1:
                 problems.append(f"'confidence' is 0-1 or null, got {c!r}")
     problems += _validate_policy(dataset, rec)
-    return problems
+    problems += _sensitive_problems(dataset, rec)
+    return _redacted(dataset, rec, problems)
+
+
+REDACTED = "[precise]"
+
+
+def _redacted(dataset: str, rec: dict, problems: list[str]) -> list[str]:
+    """Problem strings with any precise value taken back out (#205).
+
+    THE DIAGNOSTIC CHANNEL IS AN EGRESS SURFACE and it is the one nobody
+    looks at. This module quotes the offending value in roughly twenty-five
+    messages - `got {v!r}` - and those strings travel out through `validate()`
+    and `load_report()["warnings"]` to every consumer, a log line and a
+    rendered report. A gate on the read path that left the error path quoting
+    the value would be a gate with a hole in the shape of a mistake.
+
+    Done ONCE HERE, at the exit, rather than in twenty-five message sites,
+    because a message added tomorrow would not know to redact and this does.
+
+    UNSCOPED, AND THE FIRST VERSION WAS NOT. It only rewrote problems that
+    named the field, on the reasoning that every message quoting a value also
+    names the field it came from. That is false in the form the check needed:
+    `bad date {v!r}`, `bad start_time {st!r}` and `bad measured_at {v!r}` name
+    no field in quotes at all. So a column-shifted import - the ordinary way a
+    flattened export goes wrong - that put an address into `date` while
+    `place_precise` also held it produced `bad date '12 Example Street'`
+    verbatim, out through `validate()`, `load_report()` warnings, the CLI and
+    the MCP validate tool, with the value sitting in `rec` unredacted.
+
+    So it now redacts the value wherever it appears. The cost is that a short
+    precise value could blank an unrelated substring and make a message less
+    helpful. That trade is not close: a confusing diagnostic is repaired by
+    reading the row, and a leaked address cannot be un-leaked.
+    """
+    pairs = SENSITIVE.get(dataset)
+    if not pairs or not problems:
+        return problems
+    forms = []
+    for key in pairs:
+        value = rec.get(key)
+        if value is None or not str(value).strip():
+            continue
+        forms += [f for f in (repr(value), str(value)) if f]
+    if not forms:
+        return problems
+    out = []
+    for problem in problems:
+        for form in forms:
+            problem = problem.replace(form, REDACTED)
+        out.append(problem)
+    return out
 
 
 # The intake floor a declared target may not be set beneath. Imported from

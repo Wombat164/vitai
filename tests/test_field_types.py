@@ -35,12 +35,19 @@ def test_every_dataset_and_field_is_covered():
         assert set(fields) == set(KEYS[dataset]), dataset
 
 
-def test_each_entry_answers_all_three_questions():
+def test_each_entry_answers_all_four_questions():
+    """`coarse_companion` joined the three at #205: a field with one has no
+    column in the read model and is absent from every default projection, so
+    an accessor a consumer builds its projection from has to say which fields
+    those are rather than describing them like any other column."""
     for dataset, fields in field_types().items():
         for name, spec in fields.items():
-            assert set(spec) == {"types", "affinity", "container"}, f"{dataset}.{name}"
+            assert set(spec) == {"types", "affinity", "container",
+                                 "coarse_companion"}, f"{dataset}.{name}"
             assert spec["affinity"] in {"TEXT", "REAL"}
             assert isinstance(spec["container"], bool)
+            assert spec["coarse_companion"] is None or (
+                spec["coarse_companion"] in KEYS[dataset]), f"{dataset}.{name}"
 
 
 def test_an_unconstrained_field_says_so_rather_than_guessing():

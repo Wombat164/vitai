@@ -86,8 +86,16 @@ be interrogated for costs more than it returns:
   worth the one question - it changes what a coach does.
 - `sessions`: `start_time` (with its UTC offset - this is what lets one run
   logged on two platforms be recognized as one run), `elevation_m`,
-  `setting`, `route`, `place`, `with`, `context`, `planned`, `weather`.
-  Use `place`/`route` rather than the retired free-text `location`.
+  `setting`, `route`, `place`, `with`, `context`, `weather`. Use
+  `place`/`route` rather than the retired free-text `location`, and
+  `plans.jsonl` rather than the retired `planned`.
+- **Two tiers where a place is sensitive.** `place` stays coarse - "home",
+  "work", "gym", a travel slug - and is what every consumer sees. Write
+  `place_precise` beside it, on `sessions` or `context`, only when the athlete
+  wants the exact thing recorded, and NEVER without a `place`: a precise value
+  with no coarse answer is refused, because everything that leaves the record
+  shows the coarse one. Do not guess a coarse value from a precise one; ask,
+  or leave the precise tier unwritten.
 - `measurements.jsonl` for anchor reads that do not come off the scale: a
   tape measure, a DEXA or InBody scan.
 - `context.jsonl` when the athlete mentions circumstances that change what is
