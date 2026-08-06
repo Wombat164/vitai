@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from .api import Vitai, schema
@@ -94,6 +95,15 @@ TOOLS: dict[str, dict] = {
             # surface that has to guess.
             "name": {"type": "string", "enum": sorted(KEYS),
                      "description": "which dataset, e.g. weight or sessions"},
+            # THE SAME AXIS THE CLI GOT (#269), because a capability one
+            # surface can reach the other must. `as_of` and not `on`: this
+            # returns raw claims and judges nothing, so the valid-time
+            # viewpoint has no work to do here and the transaction-time cutoff
+            # is the only meaningful knob.
+            "as_of": {"type": "string",
+                      "description": "knowledge cutoff, ISO instant: what the "
+                                     "record KNEW then, ignoring everything "
+                                     "appended since"},
         },
         "required": ["name"],
     },
@@ -208,7 +218,12 @@ def call(root: Path, name: str, arguments: dict) -> object:
     # The VIEWPOINT goes to the constructor as well as the call, or a brief
     # answers as today inside a document labelled with another date.
     on = args.pop("on", None) if name in ("situation", "status") else None
-    engine = Vitai(root, on=on)
+    # A KNOWLEDGE CUTOFF IS A CONSTRUCTOR ARGUMENT, not a method one - it is
+    # threaded through every read the instance makes, which is what stops a
+    # reconstruction being half at one instant and half at another (#269).
+    cutoff = args.pop("as_of", None)
+    engine = Vitai(root, on=on,
+                   as_of=datetime.fromisoformat(cutoff) if cutoff else None)
     return getattr(engine, spec["method"])(**args)
 
 

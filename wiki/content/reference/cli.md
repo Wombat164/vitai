@@ -212,7 +212,7 @@ CLI and the MCP server expose the same operations with the same vocabulary.
 ## Reading the record
 
 ```
-vitai dataset [--root ROOT] [--json] <name>
+vitai dataset [--root ROOT] [--json] [--as-of INSTANT] <name>
 ```
 
 One dataset's live rows, with `supersedes` already applied - `--json` for the
@@ -227,6 +227,17 @@ names. A consumer that re-derived it in nine obvious lines dropped every row
 sharing a reference's key AND dropped each correction along with its target,
 so its copy of the record got shorter every time somebody fixed a typo, and
 one correction at a time it looked like nothing (#258).
+
+`--as-of` is a KNOWLEDGE CUTOFF: what the record knew at that instant,
+ignoring everything appended since. Not `--on`, which the sibling read commands
+use for a different axis - `on` is the valid-time viewpoint, as of what *day*
+something is judged, and this command judges nothing. Conflating the two is
+easy and the familiar spelling is the wrong one here. A bare date means UTC
+midnight; a naive instant is refused, because guessing a timezone makes the
+same command answer differently on two machines.
+
+One thing it does not yet do (#148): a threshold with no dated row still falls
+back to today's `vitai.toml`, so a reconstruction is not yet policy-complete.
 
 Same rows from `Vitai.dataset(name)` in the API and from the `dataset` MCP
 tool. Rows are raw claims; `vitai resolve` is where two sources disagreeing
