@@ -9,13 +9,13 @@ seed = 101
 span = ["2030-05-05", "2030-06-29"]
 
 [schema]
-contract = "34"
+contract = "35"
 
 [schema.generations]
 achievements = 4
 artifacts = 3
 checks = 3
-context = 3
+context = 4
 daily = 13
 emissions = 1
 events = 4
@@ -28,7 +28,7 @@ medical = 6
 plans = 1
 protocols = 1
 regimes = 1
-sessions = 13
+sessions = 14
 sets = 7
 thresholds = 3
 weight = 11

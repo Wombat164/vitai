@@ -40,7 +40,7 @@ from .safety import (
     DISCLAIMER, active_episodes, banner, escalations, gates_on, hold_gates,
     is_gated, may, urgent_now,
 )
-from .schema import CURRENT_GENERATION, KEYS
+from .schema import CURRENT_GENERATION, KEYS, coarse
 from .verdicts import compute_verdicts
 from .weeks import session_weeks
 
@@ -133,6 +133,10 @@ class Vitai:
         self._clock = None if self._on_given is not None else date.today()
         # Per-instance read cache. See `_forget`.
         self._loaded: dict[str, list[dict]] = {}
+        # The same rows with their precise tier intact (#205). Two caches
+        # rather than one projection per read: the coarsening runs once at
+        # load, so no read path can skip it and none pays for it twice.
+        self._precise: dict[str, list[dict]] = {}
         self._resolved: dict | None = None
         if as_of is not None and not is_aware(as_of):
             # A naive cutoff compares against aware stamps by guessing a zone,
@@ -182,8 +186,15 @@ class Vitai:
                 f"contract and the surface. Appending directly would let a "
                 f"caller name either")
         self._forget()
-        return append(self.root / "data", name, record,
-                      device=self.config.device)
+        # COARSENED ON THE WAY BACK OUT (#205). The caller supplied the value,
+        # so this withholds nothing it does not already have - which is the
+        # argument for leaving it, and it is not enough. An echo is printed by
+        # `vitai append` and returned by the MCP `claim` tool, so a harness
+        # that logs every tool result logs the address without anything ever
+        # naming a release. The write path is not a reason to be a second
+        # egress surface.
+        return coarse(name, append(self.root / "data", name, record,
+                                   device=self.config.device))
 
     def append_many(self, name: str, records: list[dict]) -> list[dict]:
         """Append many rows in one pass - what a bulk import should call.
@@ -204,8 +215,8 @@ class Vitai:
                 f"contract and the surface. Appending directly would let a "
                 f"caller name either")
         self._forget()
-        return append_many(self.root / "data", name, records,
-                           device=self.config.device)
+        return [coarse(name, r) for r in append_many(
+            self.root / "data", name, records, device=self.config.device)]
 
     @property
     def artifacts(self):
@@ -433,12 +444,62 @@ class Vitai:
         reconstruction reads
         the record as it stood at that instant rather than as it stands now.
         """
+        return self._rows(name)
+
+    def _rows(self, name: str, precise: bool = False) -> list[dict]:
+        """THE ONE PLACE THE PRECISE TIER IS DECIDED (#205).
+
+        The gate belongs at the boundary rather than at the call site, because
+        a gate implemented per-caller is correct in the callers somebody
+        remembered. Counted before writing this: twenty-five public methods
+        hand a caller the same dict that came off the JSONL line, the CLI adds
+        thirty-five print sites over them and MCP one, and both the SQLite
+        build and the LLM prompt take their rows from `datasets()`. Every one
+        of those reads through here.
+
+        So the DEFAULT PROJECTION STRUCTURALLY CANNOT CARRY the precise tier:
+        it is dropped once, at load, and every surface downstream inherits it
+        without being taught anything. The precise rows are kept beside it and
+        reachable only by naming a release, which is `precise()`.
+
+        The engine's own arithmetic reads this door too, and that is fine
+        rather than lucky: nothing computes on a precise tier, and a field the
+        maths needed would be a field this classification should not hold. If
+        one ever is, it wants an internal reader here and a reason written
+        down, not a quiet exception.
+        """
         if name not in KEYS:
             raise KeyError(f"unknown dataset {name!r}; one of {sorted(KEYS)}")
-        if name not in self._loaded:
-            self._loaded[name] = load(self.root / "data", name,
-                                      as_of=self.as_of)
-        return self._loaded[name]
+        if name not in self._precise:
+            self._precise[name] = load(self.root / "data", name,
+                                       as_of=self.as_of)
+            self._loaded[name] = [coarse(name, r) for r in self._precise[name]]
+        return self._precise[name] if precise else self._loaded[name]
+
+    def precise(self, name: str, release: str) -> list[dict]:
+        """One dataset WITH its precise tier, for a named release.
+
+        The other path, and the only one. `release` says what this release is
+        for, and it is required because #205's third commitment is that
+        permission is per-use rather than a standing flag: a setting toggled
+        once and never revisited is a checkbox, not consent. A caller that
+        cannot say what it is about to do with an address has not decided to
+        do it.
+
+        WHAT THIS DOES NOT YET DO, said plainly rather than implied by
+        silence: it does not ask anybody, and it does not record the release.
+        The asking is a permission layer this does not build, and the record
+        of what left belongs with the dataset that already records what left
+        rather than in a second log of its own. Until both exist, `release` is
+        a string the caller must compose and a reviewer can grep for - which
+        is weaker than a control and stronger than an unnamed accessor.
+        """
+        if not str(release or "").strip():
+            raise ValueError(
+                "precise() needs a release naming what this is for. The "
+                "precise tier is the one thing here that cannot be un-leaked, "
+                "so the call that reaches for it says why")
+        return self._rows(name, precise=True)
 
     def datasets(self) -> dict[str, list[dict]]:
         """Every dataset's live rows, keyed by name. `dataset()` for one.
@@ -475,6 +536,7 @@ class Vitai:
         than leaving the next reader to discover it.
         """
         self._loaded.clear()
+        self._precise.clear()
         self._resolved = None
         # The horizon moves when a row is appended, so the viewpoint a caller
         # did not name has to be found again.
@@ -2338,7 +2400,7 @@ def field_types(dataset: str | None = None) -> dict:
     array as a scalar drops the field rather than failing.
     """
     from .db import LIST_COLS, column_affinity
-    from .schema import _TYPES
+    from .schema import SENSITIVE, _TYPES
 
     names = [dataset] if dataset is not None else list(KEYS)
     if dataset is not None and dataset not in KEYS:
@@ -2346,11 +2408,20 @@ def field_types(dataset: str | None = None) -> dict:
 
     out: dict[str, dict] = {}
     for name in names:
+        pairs = SENSITIVE.get(name, {})
         out[name] = {
             field: {
                 "types": _type_names(_TYPES.get(field)),
                 "affinity": column_affinity(field),
                 "container": field in LIST_COLS,
+                # #205, and it is the one entry here a consumer must not read
+                # past. A field with a coarse companion HAS NO COLUMN in the
+                # read model and is absent from the default projection, so an
+                # accessor published so consumers stop guessing would be
+                # advertising a column that does not exist. `coarse_companion`
+                # names the field that does, and null means this field is not
+                # sensitive rather than that it is sensitive with no partner.
+                "coarse_companion": pairs.get(field),
             }
             for field in KEYS[name]
         }
