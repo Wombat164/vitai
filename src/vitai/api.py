@@ -1036,6 +1036,54 @@ class Vitai:
                              d["sessions"], on, events=d["events"],
                              weight=self.canonical("weight"))
 
+    def plans(self, on: date | str | None = None) -> list[dict]:
+        """What days were MEANT to be, resolved and unresolved (#221).
+
+        Ordered by the day the plan is FOR rather than the day it was made,
+        because that is the axis a reader is asking about, with the phase
+        breaking a tie so two plans for one day keep the order they were
+        intended in.
+
+        SILENCE IS NOT A LAPSE. An `unresolved` plan is one nobody has
+        answered about, and this never fills one in. A consumer counting
+        adherence over these rows must state how many were unresolved or it
+        repeats the defect that let a mostly-unjudgeable record display
+        near-perfect adherence.
+
+        `overdue` is the one thing computed here: the plan's day has passed
+        and it is still unanswered. That is a fact about the RECORD - a
+        question outstanding - and not a fact about the athlete, which is why
+        it is not called missed.
+        """
+        when = _viewpoint(on) or self.on
+        rows = []
+        for plan in self.dataset("plans"):
+            for_date = str(plan.get("for_date") or "")
+            rows.append(dict(plan, overdue=bool(
+                for_date and for_date < when.isoformat()
+                and plan.get("outcome") in (None, "unresolved"))))
+        phases = {"morning": 0, "afternoon": 1, "evening": 2}
+        return sorted(rows, key=lambda r: (
+            str(r.get("for_date") or ""),
+            phases.get(str(r.get("for_phase") or ""), 9),
+            str(r.get("slug") or "")))
+
+    def plan_for(self, session: dict) -> dict | None:
+        """The plan a session fulfilled, or None where it cites no plan.
+
+        The SESSION cites the plan and not the other way round - the direction
+        FHIR arrived at in R5 when it replaced `activity.detail` with
+        `plannedActivityReference` and `performedActivity`. Here the citation
+        lives on the plan as `session_ref`, so this walks it backwards.
+        """
+        ref = str(session.get("date") or "")
+        if not ref:
+            return None
+        for plan in self.dataset("plans"):
+            if str(plan.get("session_ref") or "") == ref:
+                return plan
+        return None
+
     def events(self, on: date | str | None = None) -> list[dict]:
         """Dated real-world fixtures known on a date, soonest first (G86).
 

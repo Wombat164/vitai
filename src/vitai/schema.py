@@ -804,10 +804,106 @@ KEYS["emissions"] = [
     "date", "kind", "metric", "week", "statement", "basis_claims",
     "policy_asof", "contract", "surface", "recorded_at", "device",
 ]
-for _ds in ("protocols", "regimes", "emissions"):
+KEYS["plans"] = [
+    # WHAT A DAY WAS MEANT TO BE (#221). The state work can explain why
+    # training did not happen and there was nothing to attach the explanation
+    # to: an absence is not an object, and no state can point at a gap.
+    #
+    # NOT A SESSION, and this is the whole reason for a dataset. `sessions`
+    # means THIS HAPPENED, and every count, weekly total and load figure
+    # depends on it - a skipped row there sums to zero and counts as one,
+    # corrupting every one of them silently. So a plan is its own row and a
+    # session cites the plan it fulfilled.
+    #
+    # This retires `sessions.planned`, which is null on every row of every
+    # record and every persona corpus - 1692 and 2698 respectively. That reads
+    # as neglect and is not: the field lives on a session row, a session that
+    # did not happen has none, and the only case it exists to serve is the one
+    # case it structurally cannot represent.
+    #
+    # IDENTITY IS A SLUG, like `goals`, `events`, `protocols` and `medical`. A
+    # plan is RESOLVED LATER - created unresolved, becoming completed or
+    # skipped afterwards, which in an append-only record is a second row about
+    # the same plan - so the identity has to be stable while `outcome` moves,
+    # and a composite of attributes cannot be: the attribute that changes is
+    # the one being recorded. Two 5 km runs planned on one day, morning and
+    # evening, are identical on every other field.
+    # NO `target`. The issue's shape lists one, for "duration, distance,
+    # load" - three quantities that a single field can only hold as prose,
+    # and `target` already means a NUMBER on `goals`, so the name would carry
+    # two types across two datasets. What a plan prescribes is #226's
+    # question, which is about a template rather than a row; `activity` says
+    # what was intended and that is what this dataset needs to attach a state
+    # to. Adding a shape later is additive.
+    "date", "slug", "for_date", "for_phase", "activity", "setting",
+    "tier", "serves", "set_by", "requires", "outcome", "reason",
+    "session_ref", "note", "supersedes", "recorded_at", "device",
+]
+for _ds in ("protocols", "regimes", "emissions", "plans"):
     CURRENT_GENERATION[_ds] = 1
 
 IDENTITY_KEY["protocols"] = "slug"
+IDENTITY_KEY["plans"] = "slug"
+
+# WHAT MAKES RECORDING AN INTENTION SAFE (#221). If every plan counts equally,
+# writing down "maybe a run tonight" and not running damages an adherence
+# figure - so the athlete stops writing them down and the record loses the
+# material that would have explained his week. A design that penalises honesty
+# trains dishonesty, which is the failure the regime work already names.
+#
+# Discriminated by WHAT THE PLAN SERVES rather than by how committed it felt:
+# feeling is not recoverable later and a link to a goal is.
+#
+# NOT AUTHORSHIP. `set_by` carries that, on the same row, with the vocabulary
+# `goals`, `events` and `thresholds` already use - a coach-set plan and a
+# self-set plan can both be binding. FHIR's `CarePlan.intent`
+# (proposal|plan|order) was proposed for this axis and is declined for that
+# reason: it is an authorisation hierarchy, which is the thing `set_by`
+# already says.
+PLAN_TIERS = {"programme", "committed", "provisional"}
+
+# HOW A PLAN RESOLVED. Largely FHIR's `CarePlan.activity.detail.status`, with
+# one value that is genuinely ours.
+#
+# `did_not_activate` - the precondition never held. "I would run if it were
+# not raining; it rained." That is not skipped: the plan never became live, so
+# there was nothing to skip, and without the value a cautious athlete who
+# writes down a condition is punished for the forecast.
+#
+# `abandoned` produces BOTH a session row for what was done and a plan
+# resolved as abandoned. They are not exclusive.
+#
+# `unresolved` is the default AND THE ENGINE MUST NEVER FILL IT IN. Silence is
+# not a lapse: an athlete who has not answered has said nothing, and a record
+# that reads that as a missed session is inventing a fact about him.
+PLAN_OUTCOMES = {"completed", "skipped", "abandoned", "substituted",
+                 "did_not_activate", "unresolved"}
+
+# WHY, orthogonal to how. From COM-B (Michie, van Stralen & West 2011,
+# Implement Sci 6:42), which classifies behaviour barriers on three axes with
+# two subtypes each - adopted because a two-value `gated | chosen` collapses
+# them, and `chosen` swallowed both motivation subtypes plus half of
+# capability, which have opposite coaching consequences.
+#
+# A CLASSIFICATION, NEVER A SCORE. COM-B is not a measurement instrument and
+# nothing here totals it, ranks it or trends it.
+#
+# Two values are not COM-B's. `displaced` is the case neither gated nor
+# chosen: no decision was taken and the window closed while the athlete was
+# doing something else. `declined` is G82 - not telling you is a permanent,
+# legitimate answer, and an axis without it forces a reason out of someone who
+# has said they will not give one.
+PLAN_REASONS = {
+    "capability_physical",        # pain, exhaustion, injury
+    "capability_psychological",   # did not know how to adapt the session
+    "opportunity_physical",       # gym shut, no kit, no time
+    "opportunity_social",         # partner unavailable, childcare
+    "motivation_reflective",      # a deliberate taper - the achievement case
+    "motivation_automatic",       # could not face it
+    "displaced",                  # the window was consumed, no decision taken
+    "declined",                   # not telling you (G82, permanent)
+    "unresolved",                 # nothing said; never engine-filled
+}
 
 
 # --- protocol: the conditions a measurement was taken under (#171) -----------
@@ -966,6 +1062,24 @@ KEYS["goals"].append("lifecycle_status")
 # forever. An old line carrying it validates unchanged and reads forward
 # through the one canonicaliser in `policy`.
 KEY_RETIREMENT.setdefault("goals", {})["status"] = CURRENT_GENERATION["goals"]
+
+# --- a plan is not a session (#221) ------------------------------------------
+#
+# `sessions.planned` is RETIRED, and stays legal forever like every retired
+# key. It is null on 1692 of 1692 rows in a live record and on 0 of 2698
+# persona session rows across nine people and three years, which reads as
+# neglect and is not: the field lives on a session row, a session that did not
+# happen has none, and the only case it exists to serve is the one case it
+# structurally cannot represent. Every non-null value it will ever hold
+# describes a plan that was followed.
+#
+# `session_ref` on a plan is the direction that works - the plan is the object
+# and the session cites it, which is where FHIR arrived independently when R5
+# replaced `activity.detail` with `plannedActivityReference` and
+# `performedActivity`.
+CURRENT_GENERATION["sessions"] += 1
+KEY_RETIREMENT.setdefault("sessions", {})["planned"] = \
+    CURRENT_GENERATION["sessions"]
 
 
 def key_generation(dataset: str, key: str) -> int:
@@ -1285,6 +1399,8 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
                 f"{rec['protocol']!r}. The slug does not have to be DEFINED "
                 "yet - an undefined one is legal and validate only advises - "
                 "but it has to be a slug")
+    if dataset == "plans":
+        problems += _validate_plan(rec)
     if dataset == "daily" and (a := rec.get("alcohol")) is not None:
         if not isinstance(a, bool):
             problems.append(f"'alcohol' should be true/false/null, got {a!r}")
@@ -1721,6 +1837,61 @@ def side_advisories(rows: list[tuple[int, dict]]) -> list[str]:
             f"which. A gate naming only the site restricts the limb that is "
             f"fine as well; set 'body_side' to left, right or bilateral")
     return out
+
+
+def _validate_plan(rec: dict) -> list[str]:
+    """A plan row, and the three rules that keep it from lying (#221)."""
+    problems = []
+    if not SLUG_RE.match(str(rec.get("slug") or "")):
+        problems.append(
+            "'slug' is a plan's IDENTITY and is required: a plan is resolved "
+            "later, so a second row about the same plan needs something "
+            "stable to name it by, and every other field can repeat")
+    problems += _enum(rec, "tier", PLAN_TIERS)
+    problems += _enum(rec, "outcome", PLAN_OUTCOMES, optional=True)
+    problems += _enum(rec, "reason", PLAN_REASONS, optional=True)
+    problems += _enum(rec, "set_by", AUTHORS, optional=True)
+    if (when := rec.get("for_date")) is None or _bad_date(str(when)):
+        problems.append(
+            f"'for_date' is the day the plan is FOR, ISO-8601, got {when!r}. "
+            "It is distinct from 'date', the day the plan was made: a plan "
+            "made a week ahead and one made that morning are different "
+            "commitments")
+
+    # A PROGRAMME PLAN SERVES SOMETHING, which is what makes the tier
+    # discriminable later. Tier is decided by what a plan serves rather than
+    # by how committed it felt, because feeling is not recoverable and a link
+    # is - so a programme plan naming nothing has thrown away the only
+    # evidence for its own tier.
+    if rec.get("tier") == "programme" and not rec.get("serves"):
+        problems.append(
+            "a 'programme' plan serves a declared goal or instrument and must "
+            "name it in 'serves' - the tier is decided by what the plan "
+            "serves, so one that names nothing cannot be told from a "
+            "'committed' plan later")
+
+    # `did_not_activate` MEANS A CONDITION NEVER HELD, so there has to be a
+    # condition. Without one the value says a plan failed to become live with
+    # nothing that could have made it live, which is `skipped` wearing a
+    # kinder word - and the whole point of the value is that a cautious
+    # athlete who writes a condition down is not punished for the forecast.
+    if rec.get("outcome") == "did_not_activate" and not rec.get("requires"):
+        problems.append(
+            "'did_not_activate' says the plan's precondition never held, so "
+            "'requires' has to name one. A plan with no condition that never "
+            "activated is a skipped plan")
+
+    # SILENCE IS NOT A LAPSE. An unresolved plan has not been answered, and a
+    # reason beside it would be the engine or the writer supplying an
+    # explanation for something nobody has yet said happened.
+    if rec.get("outcome") in (None, "unresolved") and rec.get("reason") not in (
+            None, "unresolved"):
+        problems.append(
+            f"'reason' explains an OUTCOME and this plan has none yet (got "
+            f"reason {rec.get('reason')!r}). An unresolved plan is one nobody "
+            "has answered about, and a record that explains a non-event has "
+            "invented it")
+    return problems
 
 
 def _validate_event_outcome(rec: dict) -> list[str]:

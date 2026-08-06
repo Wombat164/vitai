@@ -194,8 +194,22 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # said - and never "did not happen".
 # Re-pinned for #185/#189, which adds `answers` to `verdicts`. A DERIVED
 # column on a derived table: no persona line changes, only the contract stamp.
-AUTHORED_AGAINST_CONTRACT = "32"  # vitai.db.CONTRACT_VERSION is a string
+#
+# Re-pinned for #221, which adds the `plans` dataset and retires
+# `sessions.planned`. Two moves in one, and both are additive to a persona:
+# the new dataset is EMPTY for all ten (no builder writes a plan, and
+# inventing one would be inventing a day's intention for a person nobody
+# re-examined), and the retirement makes `planned` stop being expected rather
+# than stop being legal - it is null on all persona session rows anyway, which
+# is the finding that motivated the whole dataset.
+#
+# The retirement DOES restamp every session row: 2245 of them move from
+# generation 11 to 12. Checked rather than asserted - no value changes, and no
+# key is added or removed on any of them.
+AUTHORED_AGAINST_CONTRACT = "33"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
+    # #221: a new dataset, empty for every persona.
+    "plans": 1,
     "achievements": 4,
     "artifacts": 3,
     "checks": 3,
@@ -209,7 +223,7 @@ AUTHORED_AGAINST_GENERATIONS = {
     "meals": 5,
     "measurements": 9,
     "medical": 6,
-    "sessions": 11,
+    "sessions": 12,
     "sets": 6,
     "protocols": 1,
     "regimes": 1,
