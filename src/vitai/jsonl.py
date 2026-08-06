@@ -133,7 +133,17 @@ def append_many(data_dir: Path, name: str, records: list[dict],
             raise ValueError(
                 "recorded_at is machine-set and must not be supplied - it is "
                 "the one clock in the record that cannot be authored. Remove "
-                "it and let append stamp it.")
+                "it and let append stamp it.\n"
+                "\n"
+                "If you are trying to make a row sort AFTER one already held, "
+                "you do not need to: this path stamps every write later than "
+                "everything in its own file. If the row you are correcting "
+                "was stamped ahead of this machine by another writer, the "
+                "append is refused with that as the reason rather than "
+                "landing and retiring nothing (#210). What you may author is "
+                "VALID time - `date`, and `measured_at` or `start_time` where "
+                "the dataset has them - which says when the thing happened "
+                "rather than when the record learnt it.")
         if unknown := sorted(set(rec) - set(KEYS[name]) - {"supersedes", "_gen"}):
             raise ValueError(
                 f"unknown key(s) for {name}"
@@ -160,6 +170,30 @@ def append_many(data_dir: Path, name: str, records: list[dict],
                    if len(records) > 1 else "")
                 + ": " + "; ".join(problems))
         rows.append(row)
+
+    # A CORRECTION THAT WOULD RETIRE NOTHING IS REFUSED HERE, before it is
+    # written (#210).
+    #
+    # The failure this closes is silent in all three of its recorded
+    # instances: the correction lands, `retire` walks past it, both rows stay
+    # live, and `validate` reports an ADVISORY - so the write reports success
+    # and the old value is what every reader sees. It is reachable through
+    # this path, not only through hand-written lines: a row another writer
+    # stamped ahead of this machine's clock is a target a correction written
+    # now sorts BEFORE, and nothing said so.
+    #
+    # The direction of the harm is always the same. A correction that does
+    # nothing leaves the value it was meant to replace in place, and a caller
+    # cannot tell that from success.
+    #
+    # ASKED OF `retire` RATHER THAN RE-DERIVED, which is that function's own
+    # recorded lesson: working the ordering rules out a second time got three
+    # cases wrong, and asking is exact.
+    if rows:
+        problems = _corrections_that_would_not_apply(data_dir, name, rows)
+        if problems:
+            raise DataError(
+                f"refusing to append to {name}: " + "; ".join(problems))
 
     if rows:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -357,6 +391,117 @@ def load_report(data_dir: Path, name: str,
 # whole day's assertions - the record forgetting what it told someone, which is
 # the exact failure this dataset exists to prevent.
 EVENT_DATASETS = frozenset({"emissions"})
+
+
+def _targets_retired(dataset: str, rows: list[dict]) -> set[str]:
+    """The references whose actual TARGET went, not merely whose ref was spent.
+
+    `retire` reports a reference as applied when it retires ANY row, including
+    an earlier dead correction naming the same key - so a repair that clears a
+    failed correction and leaves the real value standing counts as applied,
+    which turns a loud wrong state into a quiet one. What matters is whether a
+    row that is NOT itself a correction of that reference disappeared.
+
+    ONE retire for the whole batch. Asking per reference meant two retires
+    each over the full dataset, which took 57 seconds for a thousand
+    corrections over twenty thousand rows - and a bulk re-import is exactly
+    the shape #210 describes, so a check that makes the ordinary case
+    unusable is not a check anybody keeps.
+    """
+    gone = {id(r) for r in rows} - {id(r) for r in retire(dataset, rows)}
+    out = set()
+    for row in rows:
+        if id(row) in gone and not row.get("supersedes"):
+            out.add(line_key(dataset, row))
+    return out
+
+
+def _corrections_that_would_not_apply(data_dir: Path, name: str,
+                                      pending: list[dict]) -> list[str]:
+    """Which of these corrections would land and retire nothing (#210).
+
+    Checked against the MERGED order rather than this device's file, because
+    that is the order `retire` walks and the whole hazard is a row another
+    writer stamped ahead of this one.
+
+    THE WHOLE BATCH AT ONCE. Checking each row against the held rows alone
+    answers a question the write never asks: a correction whose target is
+    created by a sibling row in the same batch was skipped entirely, so a
+    bulk import emitting a correction before its target landed the exact dud
+    this refuses - and a batch that WOULD have worked could be refused for a
+    conflict its siblings resolve.
+
+    ONLY WHERE THE TARGET EXISTS. A reference matching no row at all is a
+    different situation and stays allowed: a record that syncs writer by
+    writer legitimately holds a correction whose target has not arrived, and
+    refusing that would make offline-first writing impossible. It repairs
+    itself when the target lands.
+
+    AND ONLY WHERE CORRECTION IS POSSIBLE AT ALL. An event dataset is never
+    retired - a later row cannot make an earlier one not have been said - so a
+    reference there is not defeated by ordering, it is meaningless. Refusing
+    it with an ordering explanation would send a writer to fix a clock over a
+    row that no clock can help.
+    """
+    from .devices import merge
+
+    existing, _ = _read_streams(data_dir, name)
+    held = [r for _, r in existing]
+    # HELD AND PENDING BOTH. A correction whose target arrives in the SAME
+    # batch was invisible when this looked at held rows alone, so a bulk
+    # import emitting a correction before its target landed the exact dud
+    # this refuses - and reported success. Whether the sibling actually
+    # retires it is then decided by the merged order like everything else,
+    # so a batch written target-first still applies and is accepted.
+    def _target_exists(ref: str) -> bool:
+        """Is there a row for this reference that is not a correction of it?
+
+        A correction usually SHARES ITS TARGET'S KEY - same date, same source
+        - so asking whether any row has that key answers yes for the
+        correction itself, and a reference whose target has not synced looked
+        present. That turned the offline-first case into a refusal.
+        """
+        return any(line_key(name, r) == ref
+                   and str(r.get("supersedes") or "") != ref
+                   for r in held + pending)
+
+    refs = {str(r["supersedes"]) for r in pending if r.get("supersedes")}
+    refs = {ref for ref in refs if _target_exists(ref)}
+    if not refs:
+        return []
+
+    if name in EVENT_DATASETS:
+        return [f"{name} is an event dataset and is never retired: a later "
+                f"row cannot make an earlier one not have been said, so "
+                f"{sorted(refs)} would retire nothing here whatever it is "
+                f"stamped. Append the correction as its own row without "
+                f"'supersedes'"]
+
+    # ONE merge and one retire per reference, over held plus every pending
+    # row - which is the state the write actually produces.
+    by_device: dict[str, list[dict]] = {}
+    for row in pending:
+        by_device.setdefault(str(row.get("device") or ""), []).append(row)
+    would_be = merge([("", held)] + sorted(by_device.items()), name)
+
+    retired = _targets_retired(name, would_be)
+    out = []
+    for ref in sorted(refs):
+        if ref in retired:
+            continue
+        blocking = max((str(r.get("recorded_at") or "") for r in held
+                        if line_key(name, r) == ref), default="")
+        stamps = ", ".join(sorted(str(r.get("recorded_at")) for r in pending
+                                  if str(r.get("supersedes") or "") == ref))
+        out.append(
+            f"a correction naming {ref!r} would retire nothing. The row it "
+            f"names is stamped {blocking} and this write is stamped {stamps}, "
+            f"so the correction sorts before its target and `retire` walks "
+            f"past it. It would land, report success, and leave the value it "
+            f"was meant to replace in place - which is what makes this "
+            f"failure invisible. Nothing appended from this machine can "
+            f"correct that row until its clock passes that stamp")
+    return out
 
 
 def retire(dataset: str, rows: list[dict], applied: set | None = None

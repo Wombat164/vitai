@@ -2489,9 +2489,21 @@ def supersedes_problems(dataset: str, rows: list[tuple[int, dict]]) -> list[str]
     return problems
 
 
+def corrections_awaiting_their_target(dataset: str,
+                                      rows: list[tuple[int, dict]]) -> list[str]:
+    """ADVISORY: a correction whose target is not in this record yet."""
+    return _dud_corrections(dataset, rows)[1]
+
+
 def corrections_that_did_not_apply(dataset: str,
                                    rows: list[tuple[int, dict]]) -> list[str]:
-    """ADVISORY: a correction that is in the file and did nothing.
+    """PROBLEM: a correction whose target is here and survived anyway."""
+    return _dud_corrections(dataset, rows)[0]
+
+
+def _dud_corrections(dataset: str, rows: list[tuple[int, dict]]
+                     ) -> tuple[list[str], list[str]]:
+    """(defeated, awaiting) - two causes with opposite remedies.
 
     `retire` walks BACKWARDS so a line can only be superseded by a LATER one,
     which is what stops a same-day correction sharing its target's key from
@@ -2522,7 +2534,7 @@ def corrections_that_did_not_apply(dataset: str,
     nothing said so.
     """
     from .devices import merge
-    from .jsonl import retire
+    from .jsonl import line_key, retire
     # IN MERGED ORDER, which is the whole point. `validate` hands these over
     # in FILE order, one device file after another, and in file order the
     # correction sits below its target and applies perfectly. The defect is
@@ -2534,7 +2546,8 @@ def corrections_that_did_not_apply(dataset: str,
     applied: set[str] = set()
     retire(dataset, lines, applied=applied)
 
-    out = []
+    out: list[str] = []
+    advisory: list[str] = []
     seen: set[str] = set()
     for r in lines:
         if not (ref := r.get("supersedes")):
@@ -2548,15 +2561,37 @@ def corrections_that_did_not_apply(dataset: str,
         if ref in applied or ref in seen:
             continue
         seen.add(ref)
-        out.append(
-            f"{dataset}: a correction of {ref!r} did "
-            f"NOT apply - it retired nothing, so the value it was meant to "
-            f"replace is what every reader sees. Either it sorted before the "
-            f"line it corrects, which happens when a correction carries no "
-            f"recorded_at and its target does, or the reference names no line "
-            f"at all. Append the correction again with `vitai append` and the "
-            f"engine will stamp it late enough to take effect")
-    return out
+        # TWO CAUSES WITH OPPOSITE REMEDIES, split because escalating them
+        # together made an ordinary mid-sync record fail `validate` (#210).
+        #
+        # A reference naming NO line is the offline-first case: another
+        # writer's file has not arrived, there is nothing to append, and the
+        # record repairs itself when it does. Telling someone to append the
+        # correction again is wrong advice for it, and refusing the build is
+        # worse.
+        #
+        # A reference whose target IS here and survived anyway is the defeat:
+        # the value the correction was meant to replace is what every reader
+        # sees, and no amount of waiting changes it.
+        if ref in {line_key(dataset, other) for other in lines
+                   if not other.get("supersedes")}:
+            out.append(
+                f"{dataset}: a correction of {ref!r} did NOT apply - the line "
+                f"it names is still in the record, so the value it was meant "
+                f"to replace is what every reader sees. It sorted before its "
+                f"target, which happens when a correction carries no "
+                f"recorded_at and its target does, or when another writer "
+                f"stamped the target ahead of the machine that wrote the "
+                f"correction. Appending it again only helps if this machine's "
+                f"clock has since passed that stamp")
+        else:
+            advisory.append(
+                f"{dataset}: a correction of {ref!r} names no line in this "
+                f"record. That is the ordinary state of a record part way "
+                f"through a sync - the writer holding the target has not "
+                f"arrived - and it applies itself when that file lands. "
+                f"Nothing to do unless it stays after every writer is in")
+    return out, advisory
 
 
 def recorded_at_problems(dataset: str, rows: list[tuple[int, dict]]) -> list[str]:
