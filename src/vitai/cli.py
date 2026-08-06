@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from . import __version__
@@ -295,6 +295,35 @@ def cmd_derived(args: argparse.Namespace) -> None:
           "record every time, never a place to write")
 
 
+def _as_of(written: str | None) -> datetime | None:
+    """The knowledge cutoff, parsed and refused where it cannot be trusted.
+
+    AWARE ONLY, which the constructor already insists on and the reason is
+    worth repeating at the edge: a naive cutoff compares against aware stamps
+    by guessing a zone, and the guess is the local one, so the same command
+    returns a different record on two machines. A bare date is accepted and
+    read as the start of that day in UTC, because "what did the record know on
+    the 3rd" is the question a person actually asks and refusing it over a
+    missing timezone would be pedantry at the wrong moment.
+    """
+    if not written:
+        return None
+    text = written.strip()
+    if len(text) == 10:
+        text += "T00:00:00+00:00"
+    try:
+        stamp = datetime.fromisoformat(text)
+    except ValueError:
+        sys.exit(f"--as-of takes an ISO instant, got {written!r}. A date "
+                 "(2030-06-01) is read as the start of that day in UTC")
+    if stamp.tzinfo is None:
+        sys.exit(f"--as-of {written!r} names no timezone, and a naive cutoff "
+                 "compares against aware stamps by guessing one - which makes "
+                 "the same command answer differently on two machines. Add an "
+                 "offset, or pass a bare date to mean UTC midnight")
+    return stamp
+
+
 def cmd_dataset(args: argparse.Namespace) -> None:
     """A harness over `Vitai.dataset()`. One dataset's live rows (#258).
 
@@ -310,7 +339,7 @@ def cmd_dataset(args: argparse.Namespace) -> None:
     what a consumer checking its own reimplementation needs - how many rows
     survive, over what span, and what was quarantined on the way.
     """
-    v = Vitai(_root(args))
+    v = Vitai(_root(args), as_of=_as_of(getattr(args, "as_of", None)))
     rows = v.dataset(args.name)
     if args.json:
         for row in rows:
@@ -1491,6 +1520,19 @@ def main(argv: list[str] | None = None) -> None:
                            help="which dataset to read")
             p.add_argument("--json", action="store_true",
                            help="emit the live rows as JSONL")
+            # `--as-of` and NOT `--on`, which the sibling read commands use.
+            # They are different axes and the familiar spelling is the wrong
+            # one here: `on` is the valid-time viewpoint, as of what DAY a
+            # thing is judged, and this command judges nothing. `as_of` is the
+            # transaction-time cutoff - what the record KNEW then - which is
+            # the only one a raw-claims read has any use for (#269).
+            p.add_argument("--as-of", metavar="INSTANT", dest="as_of",
+                           help="knowledge cutoff: what the record KNEW at "
+                                "that instant, ignoring everything appended "
+                                "since. A bare date means UTC midnight. NOTE "
+                                "(#148): thresholds with no dated row still "
+                                "fall back to today's vitai.toml, so a "
+                                "reconstruction is not yet policy-complete")
         if name == "events":
             p.add_argument("--json", action="store_true",
                            help="emit event rows as JSONL instead of prose")
