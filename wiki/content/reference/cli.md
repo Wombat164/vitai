@@ -124,6 +124,37 @@ Anything urgent dated today also prints at `vitai build` time, on stderr,
 before any coaching output exists to bury it. That is the fast path: the
 weekly cadence is right for coaching and wrong for danger.
 
+## vitai project
+
+If I do this, what then. A proposed quantity against a target you declared.
+
+```
+vitai project <dataset> <field=number> [...] [--root ROOT] [--on YYYY-MM-DD] [--json]
+```
+
+    vitai project daily kcal_in=500
+    -> intake-cap: 2870 now, 3370 if you do - OVER the 2600 you declared by 770
+
+**Nutrition only, and it states rather than advises.** The purpose sentence
+says this engine logs nutrition and *builds training programmes* - two
+different entitlements in one breath. So a projected intake gets the record and
+nothing further: what it would do to a target you declared, and no verdict on
+whether to. Projecting a session is refused rather than answered in the same
+voice, because an app that answered both would have widened its own purpose
+quietly.
+
+**A hypothetical is not a claim.** Nothing here is written: no append, no
+resolution, no rollup. Every row is marked `projection`, and a test compares
+every byte of the record before and after.
+
+**Arithmetic on your own numbers.** Nothing is imported and nothing looked up -
+a projection built from a food table would be a figure about somebody else, so
+a quantity this record has never seen is refused rather than estimated. It
+projects against `daily`-period goals only: a weekly target has no answer to
+"if I eat this now".
+
+Same rows from `Vitai.project(dataset, values, on)` and the `project` MCP tool.
+
 ## vitai may
 
 May this activity be done today. **Exits 2 unless the answer is `allowed`.**

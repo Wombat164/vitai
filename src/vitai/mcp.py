@@ -124,6 +124,22 @@ TOOLS: dict[str, dict] = {
         },
         "required": ["activity"],
     },
+    # "If I do this, what then" - and the reason an agent needs it from here
+    # rather than computing it: a projection an agent did itself is a number
+    # it invented, and this one is arithmetic on the athlete's own logged
+    # quantities against his own declared target (#193).
+    "project": {
+        "method": "project",
+        "properties": {
+            "dataset": {"type": "string", "enum": ["daily"],
+                        "description": "nutrition only; training is not this"},
+            "values": {"type": "object",
+                       "description": "the proposed quantities, by field"},
+            "on": {"type": "string",
+                   "description": "valid-time viewpoint, ISO date"},
+        },
+        "required": ["dataset", "values"],
+    },
     "safety": {
         "method": "safety",
         "properties": {"on": {"type": "string"}},
