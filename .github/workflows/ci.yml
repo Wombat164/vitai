@@ -17,7 +17,12 @@ jobs:
         with:
           python-version: "3.13"
       - run: pip install ruff
-      - run: ruff check src tests
+      # EVERYTHING, not `src tests`. The narrower scope let a line sit over the
+      # limit in `examples/` while CI reported the repo clean, so the lint said
+      # something true about two directories and was read as a fact about the
+      # repo. Widening cost exactly one line to fix, which is the argument for
+      # doing it now rather than after the untended directories have grown.
+      - run: ruff check .
       - name: Personal-content gate (blocking)
         run: python scripts/personal_gate.py
       - name: Medical-boundary gate (blocking)

@@ -253,7 +253,8 @@ def _build(target: Path) -> None:
                    "duration_s": int(km * rng.gauss(390, 25)),
                    "avg_hr": int(rng.gauss(166 if hard else 147, 5)),
                    "max_hr": None, "cadence": int(rng.gauss(168, 4)),
-                   "kcal": int(km * 61), "rpe": 7 if hard else 4, "rpe_scale": "borg-cr10", "note": None}
+                   "kcal": int(km * 61), "rpe": 7 if hard else 4,
+                   "rpe_scale": "borg-cr10", "note": None}
             if gen2:
                 run.update({"_gen": 2, "source": "watch",
                             "start_time": f"{d}T18:10:00+02:00",
