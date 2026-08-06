@@ -206,7 +206,12 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # The retirement DOES restamp every session row: 2245 of them move from
 # generation 11 to 12. Checked rather than asserted - no value changes, and no
 # key is added or removed on any of them.
-AUTHORED_AGAINST_CONTRACT = "33"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #280, which adds `derived_by` and `derived_build` to the six
+# datasets carrying a lineage. Additive and required only on a
+# `derived_external` row from this generation on - no persona writes one, so
+# every persona line gains two explicit nulls and a generation stamp, and no
+# value moves.
+AUTHORED_AGAINST_CONTRACT = "34"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     # #221: a new dataset, empty for every persona.
     "plans": 1,
@@ -214,21 +219,21 @@ AUTHORED_AGAINST_GENERATIONS = {
     "artifacts": 3,
     "checks": 3,
     "context": 3,
-    "daily": 12,
+    "daily": 13,
     "emissions": 1,
     "events": 4,
     "goals": 6,
     "inferences": 4,
     "journal": 3,
-    "meals": 5,
-    "measurements": 9,
+    "meals": 6,
+    "measurements": 10,
     "medical": 6,
-    "sessions": 12,
-    "sets": 6,
+    "sessions": 13,
+    "sets": 7,
     "protocols": 1,
     "regimes": 1,
     "thresholds": 3,
-    "weight": 10,
+    "weight": 11,
 }
 
 

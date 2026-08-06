@@ -445,7 +445,31 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     Whichever merges first keeps it and the other becomes 33; the contract
 #     follows MERGE order, which is why the collision is stated here instead
 #     of being discovered in a conflict.
-CONTRACT_VERSION = "33"
+# 34: `derived_by` and `derived_build` on every dataset that carries a
+#     lineage - WHO computed a value the engine did not (#280).
+#
+#     `derived_external` said "not this engine" and stopped, which was enough
+#     with one consumer. #158 settled that several clients read one record on
+#     the same terms, and any of them may derive: two clients computing a pace
+#     from duration and distance agree when both are right and differ when one
+#     has a bug, and nothing could tell them apart - nor a figure from version
+#     0.1 from the same field after 0.2 fixed it.
+#
+#     TWO FIELDS RATHER THAN A SLUG, because `client-0.1.0-a3f2` crams
+#     orthogonal facts into an identifier a consumer has to parse. Required
+#     together on a `derived_external` row from this generation on; an older
+#     line never owed them.
+#
+#     `by-hand` is a real value: the single `derived_external` row in every
+#     fixture this repo ships is an athlete taking a mean ON PAPER, so a field
+#     naming only software would have had nothing to put there. It takes no
+#     `derived_build`, because a notebook has no version.
+#
+#     NO INSTALL IDENTIFIER, deliberately. A stable per-install id is a
+#     tracking key, `device` already says which machine wrote a line down, and
+#     admitting one needs a rule about where it may travel - which is #205's
+#     work rather than a field added in passing.
+CONTRACT_VERSION = "34"
 
 _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity would
                                       # have made `column_affinity` lie about it

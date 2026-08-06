@@ -313,9 +313,12 @@ def test_a_second_reading_deriving_from_the_first_is_not_a_cycle():
 def test_a_derived_capture_alias_is_resolved_not_string_matched():
     """`athlete-derived` resolves to `derived_external` through the registry.
     A raw string comparison would reject a correctly-captured row."""
+    # `derived_by` because the alias resolves to `derived_external`, which
+    # requires it from contract 34 - and requiring it THROUGH the alias is
+    # part of what this test is checking.
     assert validate_record("weight", a_weight(
         derived_from=["weight:2030-04-24:scale"],
-        capture="athlete-derived")) == []
+        capture="athlete-derived", derived_by="by-hand")) == []
 
 
 def test_staleness_cascades_to_what_stands_on_it():
