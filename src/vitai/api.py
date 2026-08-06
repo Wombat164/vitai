@@ -1943,6 +1943,18 @@ class Vitai:
             "rate_kg_per_week": None,
             "direction": None,
             "mean_kg_7d": None,
+            # WHAT THAT MEAN IS ACTUALLY OVER (#209). `mean_kg_7d` is the mean
+            # of the last seven WEIGH-INS, not of seven days, and on a record
+            # with a weekly weigh-in those seven points span six weeks - so a
+            # client rendering it as "7d avg" describes a window the record
+            # never used. The issue records that exact mistake in a client and
+            # the engine was making it too, in the field's own name.
+            #
+            # The value does not change: a consumer already reading it keeps
+            # the number it had. What arrives beside it is the span, so the
+            # label can be right.
+            "mean_kg_span_days": None,
+            "mean_kg_points": None,
             "tripwires": None,
             "disclaimer": DISCLAIMER,
         }
@@ -1955,6 +1967,10 @@ class Vitai:
                 rate = (mean(prev) - mean(vals)) / days * 7
                 out["rate_kg_per_week"] = rate
                 out["mean_kg_7d"] = mean(vals)
+                out["mean_kg_points"] = len(vals)
+                out["mean_kg_span_days"] = (
+                    datetime.fromisoformat(pts[-1][0])
+                    - datetime.fromisoformat(pts[-7][0])).days
                 # G69, the same rule the rollup uses: a bare signed rate reads
                 # backwards to anyone who has not memorised that positive
                 # means losing. The WORD is the engine's, not the caller's.

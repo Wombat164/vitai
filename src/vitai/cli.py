@@ -1212,7 +1212,14 @@ def cmd_status(args: argparse.Namespace) -> None:
     if st["rate_kg_per_week"] is not None:
         trend = (f"{st['direction']} {abs(st['rate_kg_per_week']):.2f} kg/week"
                  if st["rate_kg_per_week"] else "holding steady")
-        line += f" - 7d avg {st['mean_kg_7d']:.1f}, {trend}"
+        # THE SPAN THE MEAN ACTUALLY COVERS, not the one its field is named
+        # after (#209). Printing "7d avg" over six weeks of weigh-ins is the
+        # mislabel this issue catches a client making, and the CLI was making
+        # it from the engine's own field name.
+        span = st.get("mean_kg_span_days")
+        label = f"{span}d avg" if span else "avg"
+        line += (f" - {label} {st['mean_kg_7d']:.1f} "
+                 f"({st.get('mean_kg_points')} weigh-ins), {trend}")
     if st["tripwires"] is not None:
         line += f" - tripwires: {st['tripwires'] or 'none'}"
     print(line)
