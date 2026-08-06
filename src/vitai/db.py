@@ -381,9 +381,43 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     BOTH OPTIONAL. Absent means nobody has said, never "did not happen",
 #     and a consumer rendering an unanswered outcome as a miss accuses an
 #     athlete of skipping a race the record knows nothing about.
-CONTRACT_VERSION = "31"
+# 32: `verdicts` gains `answers` - what the engine will VOUCH for on this
+#     row, beside the `reason` it will not (#185/#189).
+#
+#     An athlete asks "have I had enough protein today". Protein against a
+#     target is one logged quantity against a stated goal; energy balance is a
+#     DIFFERENCE OF TWO INEXACT AGGREGATES, and subtracting those amplifies
+#     the relative error rather than averaging it - "400 kcal left" can carry
+#     uncertainty larger than the figure. The engine returned both with the
+#     same confidence and only one deserved it.
+#
+#     `magnitude` means the engine vouches for the number as something to act
+#     on. `direction` means it vouches only for ahead, behind or on track, and
+#     a consumer must not present the figure as the thing being judged.
+#
+#     PRESENT ON EVERY JUDGED ROW AND ABSENT ON EVERY REFUSAL, which is
+#     `reason`'s totality in the other direction. A refusal often keeps its
+#     number - `not_supported` fires when weigh-in drift accounts for the
+#     whole rate, so not even the sign is supported - and vouching for a
+#     direction there would contradict the refusal beside it.
+#
+#     Four metrics are direction-only. `energy_availability` for the
+#     arithmetic above. `weight_rate` because this project's pre-registered
+#     run measured a median `u_rate / half-band` of 1.74 and found more than
+#     half of scored weeks admit no verdict word at all - which does not
+#     support `direction` either, and whose own remedy is the refusal
+#     predicate #171 owns. `easy_hr` because the per-field table adopted at
+#     that same gate says avg_hr is usable at rest and not at intensity.
+#     `pain_gate` because it is an ordinal whose declared scale (contract 26)
+#     does not reach this row, so the number has no denominator here.
+#
+#     ONE KNOWN TENSION, recorded rather than papered over: `weekly.md` still
+#     prints the rate as a figure. That artifact is the engine's own prose and
+#     #37 owns its wording; this column governs what a CONSUMER of the
+#     verdicts table may present as judged.
+CONTRACT_VERSION = "32"
 
-_TEXT_COLS = {"statistic",            # a slug, and REAL affinity would
+_TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity would
                                       # have made `column_affinity` lie about it
               # Both word-valued (#145, #139), and `pain_side` was already
               # here while its own mirror was not - so `column_affinity`, the
@@ -468,11 +502,13 @@ _TEXT_COLS = {"statistic",            # a slug, and REAL affinity would
               # numbers, just not comparable ones.
               "equipment", "angle_class"}
 
-# `reason` is APPENDED, so a consumer reading by name is unaffected and one
-# reading positionally sees the new column last (#177). It is null on every
-# judged row and never null on a refusal.
+# APPENDED, so a consumer reading by name is unaffected and one reading
+# positionally keeps every column it knew. `reason` (#177) is null on every
+# judged row and never null on a refusal; `answers` (#185) is the exact
+# inverse, and the two together mean a row always says either what it vouches
+# for or why it will not.
 VERDICT_KEYS = ["week", "metric", "value", "target", "verdict", "goal",
-                "reason", "due", "statistic", "window_days"]
+                "reason", "due", "statistic", "window_days", "answers"]
 
 # Derived tables (rebuilt every build, like everything else in derived/).
 CONTRIBUTION_KEYS = ["date", "goal", "metric", "dataset", "period", "value",
