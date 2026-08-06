@@ -656,16 +656,38 @@ def test_the_advisory_clears_when_the_record_is_repaired():
     assert _adv(repaired) == []
 
 
-def test_it_never_fails_a_build(tmp_path, capsys):
-    """The lines are on disk, they are not malformed, and the record still
-    builds. What was wrong is that a correction could do nothing silently."""
+def test_it_never_fails_a_build_and_now_fails_validate(tmp_path, capsys):
+    """The two halves went in opposite directions, deliberately (#210).
+
+    BUILD still succeeds. The lines are on disk and are not malformed, and
+    G26 says a read proceeds from the good rows rather than aborting - a
+    record that cannot be built is a record nobody can look at to find out
+    what is wrong with it.
+
+    VALIDATE now REFUSES, where it used to advise. A correction that landed
+    and retired nothing leaves the value it was meant to replace in place and
+    reported success on the way in, and that silence is what made all three
+    recorded instances invisible. An advisory is a thing somebody has to
+    notice; this is now a thing that stops them.
+
+    It is repairable, which is what makes refusing fair rather than merely
+    strict: appending the correction again clears the one that sorted too
+    early, and the message says so.
+    """
     from vitai.cli import main
     root = repo(tmp_path)
     write(root, [weight(kg=8.04, recorded_at="2030-05-01T07:00:00+02:00"),
                  weight(kg=80.4, supersedes="2030-05-01/scale")])
+
     capsys.readouterr()
-    assert main(["validate", "--root", str(root)]) in (0, None)
+    assert main(["build", "--root", str(root)]) in (0, None)
+
+    capsys.readouterr()
+    with pytest.raises(SystemExit) as raised:
+        main(["validate", "--root", str(root)])
     out = capsys.readouterr().out
+
+    assert raised.value.code != 0
     assert "did NOT apply" in out
     # One prefix, and no filename or line number: `validate` hands this the
     # merged stream across every device file, so a line number belongs to

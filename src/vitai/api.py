@@ -1775,7 +1775,8 @@ class Vitai:
         """
         from .devices import stream_paths
         from .jsonl import read_lines
-        from .schema import (corrections_that_did_not_apply,
+        from .schema import (corrections_awaiting_their_target,
+                             corrections_that_did_not_apply,
                              impossible_claim_problems, recorded_at_problems,
                              period_advisories, polarity_advisories,
                              side_advisories,
@@ -1851,7 +1852,25 @@ class Vitai:
             # build over, and a record whose only fault is a shape the engine
             # already handles has no legal path to green (#38).
             advisories += supersedes_problems(name, rows)
-            advisories += corrections_that_did_not_apply(name, rows)
+            # A PROBLEM, NOT AN ADVISORY (#210). A correction that landed and
+            # retired nothing leaves the value it was meant to replace in
+            # place, and the write reported success - so silence here is the
+            # thing that made all three recorded instances invisible. The
+            # append path refuses new ones; this is how the ones already in a
+            # record stop being a note somebody has to notice.
+            #
+            # It is repairable, which is what makes refusing fair: appending
+            # the correction again clears the one that sorted too early,
+            # because a reference retires earlier corrections naming it as
+            # well as its target.
+            # TWO CAUSES, TWO CATEGORIES (#210). A correction whose target is
+            # here and survived anyway leaves the wrong value in place and no
+            # waiting fixes it - a problem. A correction whose target has not
+            # synced yet is the ordinary mid-sync state and applies itself
+            # when the other writer's file lands - an advisory. Escalating
+            # both together made an ordinary offline-first record fail.
+            problems += corrections_that_did_not_apply(name, rows)
+            advisories += corrections_awaiting_their_target(name, rows)
             advisories += timestamp_advisories(name, rows)
             if name == "goals":
                 advisories += polarity_advisories(rows)
