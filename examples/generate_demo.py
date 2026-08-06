@@ -54,7 +54,9 @@ import tempfile
 from datetime import date, timedelta
 from pathlib import Path
 
+from vitai.db import CONTRACT_VERSION
 from vitai.schema import CURRENT_GENERATION, KEYS
+from vitai.weeks import week_of
 
 HERE = Path(__file__).resolve().parent
 DEMO = HERE / "demo"
@@ -484,7 +486,17 @@ def _build(target: Path) -> None:
             "elevation_m": None, "setting": "outdoor", "route": None,
             "place": None, "with": None, "context": "solo", "planned": None,
             "weather": None,
-            "recorded_at": f"{pair_day}T20:{10 + n:02d}:00+02:00",
+            # The correction is written TWO DAYS LATER, and the date matters
+            # rather than being decoration: an assertion delivered on the
+            # strength of these rides is emitted the morning after them, and
+            # the ledger entry it produces says the record has SINCE restated
+            # what it rested on. Written the same evening, that would have
+            # been an assertion delivered on an already-corrected basis - a
+            # different and rarer case, and not the one the fixture claims to
+            # show.
+            "recorded_at": (f"{pair_day}T20:{10 + n:02d}:00+02:00" if not sup
+                            else f"{(END - timedelta(days=14)).isoformat()}"
+                                 f"T20:12:00+02:00"),
             "track": None, "activity_id": None, "activity_source": None,
             "origin": "watch", "path": None, "origin_evidence": None,
             "capture": "connector", "read_by": None, "supersedes": sup})
@@ -652,6 +664,33 @@ def _build(target: Path) -> None:
     weight.sort(key=lambda r: (r["date"], r.get("recorded_at") or "",
                                r.get("source") or ""))
 
+    # WHAT THE ENGINE TOLD SOMEBODY (#134). Two assertions, because one
+    # proves nothing about the distinction: the first rests on the day the
+    # record later corrects, the second on a weigh-in nothing has touched. So
+    # a cascade that flagged everything fails here rather than looking right.
+    #
+    # The first quotes the claim id the engine ITSELF publishes, ordinal and
+    # all, which is what a consumer copying out of the `claims` table gets. A
+    # fixture written the other way passed while the realistic input silently
+    # never fell.
+    emit_day = (END - timedelta(days=15)).isoformat()
+    emissions = [
+        {"date": emit_day, "kind": "verdict", "metric": "session_load",
+         "week": week_of(emit_day), "statement": "two rides, both easy",
+         "basis_claims": [f"sessions:{pair_day}:watch:0"],
+         "policy_asof": emit_day, "contract": CONTRACT_VERSION,
+         "surface": "demo-coach", "recorded_at": f"{emit_day}T09:04:00+02:00",
+         "device": "demo", "_gen": CURRENT_GENERATION["emissions"]},
+        {"date": END.isoformat(), "kind": "verdict", "metric": "weight_rate",
+         "week": week_of(END),
+         "statement": "losing, and the line is readable",
+         "basis_claims": [f"weight:{END.isoformat()}:scale"],
+         "policy_asof": END.isoformat(), "contract": CONTRACT_VERSION,
+         "surface": "demo-coach",
+         "recorded_at": f"{END.isoformat()}T21:40:00+02:00",
+         "device": "demo", "_gen": CURRENT_GENERATION["emissions"]},
+    ]
+
     for name, rows in (("weight", weight), ("daily", daily),
                        ("sessions", sessions), ("inferences", inferences),
                        ("goals", goals), ("thresholds", thresholds),
@@ -659,7 +698,8 @@ def _build(target: Path) -> None:
                        ("measurements", measurements), ("medical", medical),
                        ("checks", checks), ("events", events),
                        ("sets", sets), ("meals", meals),
-                       ("journal", journal), ("plans", plans)):
+                       ("journal", journal), ("plans", plans),
+                       ("emissions", emissions)):
         (target / "data" / f"{name}.jsonl").write_text(
             _jsonl(rows), encoding="utf-8", newline="\n")
 

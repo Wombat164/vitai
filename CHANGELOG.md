@@ -10,6 +10,41 @@ changes no table, column or line shape.
 
 ### Added
 
+- **The retraction ledger reaches `emissions`** (#134). An assertion the
+  engine surfaced to a person, whose `basis_claims` name a claim the record
+  has since restated - or an inference that has since fallen - now produces a
+  ledger entry of kind `emission` and a `review` tripwire. The issue asked to
+  extend the justification link beyond `inferences`; the record already had
+  three spellings of that link (`inferences.depends_on`, `derived_from` on six
+  lineage datasets, and `emissions.basis_claims`) and two read paths between
+  them, so this wires up the third rather than adding a fourth field.
+  `emissions` is the one artifact here a person was handed, and it was the one
+  with no reader.
+- **An assertion is never retracted by this, and the entry says so.** The
+  engine did say that, on that day, to that surface; what moved is what it
+  rested on. Whether the same thing would be said today is `still_holds`,
+  which needs the policy in force at the assertion's date (#148).
+- **`JUSTIFICATION_LINK`**, naming the field each cascade reads, with a
+  control that proves each named dataset is really read by building a record
+  and checking an entry appears.
+- **`stream` on `vitai resolve --json`**, saying which of the three streams a
+  line came from.
+- **A shipped example.** `examples/demo/data/emissions.jsonl` carries one
+  assertion resting on the demo's one correction and one resting on a claim
+  nothing has touched, so the distinction is exercised rather than asserted.
+
+### Fixed
+
+- **A justification quoting the engine's own published claim id could never
+  fall** (#134). `claim_id` appends an ordinal on `sessions`; the retracted
+  set is built from a `supersedes` reference, which cannot know one. A
+  consumer copying an id out of the `claims` table wrote a dependency that
+  silently never cascaded. Both spellings are now accepted.
+- **`vitai resolve --json` could not say which stream a line came from.** Each
+  line was labelled `{"kind": <stream>, **row}`, and tripwires and retractions
+  carry a `kind` of their own, so the label was overwritten. `kind` is left
+  exactly where it was and `stream` is added beside it.
+
 - **`api.field_types()`, and a `fields` key on `api.schema()`** (#257). What
   each field of each dataset may hold (`types`), how it is projected
   (`affinity`), and whether it is a list needing JSON decoding (`container`).
