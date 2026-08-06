@@ -124,6 +124,39 @@ Anything urgent dated today also prints at `vitai build` time, on stderr,
 before any coaching output exists to bury it. That is the fast path: the
 weekly cadence is right for coaching and wrong for danger.
 
+## vitai may
+
+May this activity be done today. **Exits 2 unless the answer is `allowed`.**
+
+```
+vitai may <activity> [--root ROOT] [--on YYYY-MM-DD] [--json]
+```
+
+A gate says `restricts: impact`, and "am I allowed to run", "is walking
+gated" and "can I bike instead" used to get the same paragraph. The mapping to
+resolve that was never missing - `semantics/session_types.toml` declares that
+a run falls under `impact` and a walk does not - but there was no way to ask.
+
+**Three answers, and the third is the point.** `blocked` carries the gate's own
+sentence and the classes that matched; `allowed` says no gate in force covers
+it; `unknown` refuses, and a consumer must not read it as permitted. That is
+why the exit code is non-zero for both of the last two: a shell reading exit 0
+as permission would turn "nobody has said" into a green light for something
+nobody assessed. `blocked` exits 2, `unknown` exits 3.
+
+**`unknown` has two causes.** Nobody has classified the activity, or a gate in
+force restricts particular MOVEMENTS rather than an activity - "no loaded hip
+hinging" bars some strength work and permits the rest, so "may I do strength"
+has no answer at this granularity and the per-exercise check is where that one
+is answered. Both refuse, and the reason says which it is.
+
+A client must not resolve `restricts` into activities itself. Deciding that
+walking is low-impact is a claim about a body, which the medical boundary bars
+a client from making and which this engine does not make either - it reads
+what the registry declares.
+
+Same answer from `Vitai.may(activity, on)` and the `may` MCP tool.
+
 ## vitai context
 
 The situational mode in force on a date - what was going on around the

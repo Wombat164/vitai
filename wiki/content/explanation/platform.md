@@ -46,6 +46,33 @@ policy, so a host cannot be gamed by an athlete who blows through a ramp
 guard. `contributions` explains any single event's effect on any single goal,
 which is what a UI needs to answer "why did this run not move my bar".
 
+## Headline figures: what a client may put in large type
+
+A conformance client deleted four stat tiles because each was a derivation the
+engine does not emit. Three of those answers are worth stating, because every
+client will otherwise invent its own.
+
+**The rate was already there.** `verdicts` emits `weight_rate` judged against
+the phase target, and `Vitai.status()` carries the same figure as one number
+with a `direction` word. The client displayed neither and computed its own over
+a different window. That is a discoverability failure rather than a missing
+feature: reach for what the engine emits before deriving a second one.
+
+**The weight average says what it is over.** `status()` carries `mean_kg_7d`,
+and it is the mean of the last seven WEIGH-INS, not of seven days - on a record
+with one weigh-in a week those seven points span six weeks. `mean_kg_span_days`
+and `mean_kg_points` say so, and a client rendering the field name alone would
+be describing a window the record never used.
+
+**There is no cross-metric adherence percentage, and there should not be.** The
+deleted tile collapsed every metric and every week into one number with
+refusals dropped from the denominator, so a record ninety per cent unjudgeable
+could display one hundred per cent adherence. `verdicts` carries a `reason`
+column and refuses to write a declined row without one, precisely so a consumer
+cannot flatten "the record holds nothing to judge" into "not counted". A single
+percentage flattens it by construction. Show the judged rows and the refused
+ones side by side; the count you would have hidden is the honest headline.
+
 ## Contract history
 
 | Contract | Version | Change |
@@ -81,7 +108,8 @@ which is what a UI needs to answer "why did this run not move my bar".
 | 29 | unreleased | `verdicts` gains `statistic` (what KIND of number `value` is, from `semantics/statistics.toml`) and `window_days` (over what population). One column carried a maximum, a between-window change, a composite index and six averages: `steps` at 9752 for a week is the DAILY AVERAGE, and read as a weekly total it describes a week five thousand steps a day short of the one that happened. `pain_gate` is a MAXIMUM, because a gate is about the worst day. The safety floors are means over FOURTEEN days on a row keyed by one week, which is what `window_days` exists to say. Terms are IEEE 1752.1's `descriptive-statistic` verbatim where they reach, checked against the published enum; a between-window comparison and a composite index have no term there and carry `vitai`-namespaced ones. Present wherever there is a value and absent on a refusal, which has no number to describe |
 | 30 | unreleased | `goal_progress` gains `observed`, the latest value of a LEVEL metric where `counted` is a sum of contributions. A goal to reach a level is not a goal to accumulate: scored as the latter it reported no count, no percentage and no breach at all. A level goal carries `observed` and null `counted`, a flow goal the reverse, and that is how a consumer tells the two shapes apart. Scored only where the direction is DECLARED, since the `floor` default would otherwise read a goal to lose weight as one to gain it. Only `weight`: `measurements` is entity-attribute-value and levels in `daily`, such as resting heart rate, are not covered |
 | 31 | unreleased | `medical` gains `body_side` and `events` gains `outcome`. A side is what stops a gate over-restricting - gating "the knee" bans a movement the athlete performs perfectly well on the other leg - and the gate reason now names it. `outcome` is a second axis beside `status`: what the fixture IS versus what became of it. Both optional, and absent means nobody has said rather than "did not happen" |
-| 32 | unreleased | the `plans` dataset, with `sessions.planned` retired. A plan is not a session: `sessions` means this happened, so a skipped row there would corrupt every count silently. Identity is a slug, because a plan is resolved later. `unresolved` means nobody has answered and never a missed session; `reason` is COM-B and is a classification rather than a score; `tier` is not authorship |
+| 32 | unreleased | `verdicts` gains `answers`: `magnitude` where the engine will vouch for the number, `direction` where it will vouch only for ahead/behind/on-track. A client cannot derive this without reimplementing the per-field policy. `energy_availability`, `weight_rate`, `easy_hr` and `pain_gate` are direction-only - the first is a difference of two inexact aggregates, the second because the pre-registered run measured a median `u_rate / half-band` of 1.74 and found more than half of scored weeks admit no verdict word at all, `easy_hr` because avg_hr is policy-usable at rest and not at intensity, and `pain_gate` because its declared scale does not reach this row. Present on judged rows, absent on refusals |
+| 33 | unreleased | the `plans` dataset, with `sessions.planned` retired. A plan is not a session: `sessions` means this happened, so a skipped row there would corrupt every count silently. Identity is a slug, because a plan is resolved later. `unresolved` means nobody has answered and never a missed session; `reason` is COM-B and is a classification rather than a score; `tier` is not authorship |
 
 `db.py` carries the same history beside `CONTRACT_VERSION`, at more length
 and with the reasoning. This table is the summary; that comment is the

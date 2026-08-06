@@ -577,6 +577,99 @@ def hold_gates(escalation_rows: list[dict], on: str | date) -> list[dict]:
     return out
 
 
+BLOCKED, ALLOWED, UNKNOWN = "blocked", "allowed", "unknown"
+
+
+def may(gates: list[dict], activity: str) -> dict:
+    """May this activity be done today, with the third answer said out loud.
+
+    "Am I allowed to run", "is walking gated", "can I bike instead" all got
+    the same paragraph, because `restricts: impact` was the only thing the
+    gate said and nothing resolved it per activity (#275). The mapping does
+    exist - `semantics/session_types.toml` declares that a run falls under
+    `impact` and a walk does not - and `is_gated` has read it correctly all
+    along. What was missing is a surface that asks it and a THIRD ANSWER.
+
+    `is_gated` returns a bool, so an activity nobody has classified comes back
+    False: not gated, which reads as permitted. That is how a gated athlete
+    gets a green light for something nobody assessed, and it is the failure
+    #229 already named - reading unannotated as free is what strands someone
+    at a park with a programme written for a rack.
+
+    UNKNOWN HAS TWO CAUSES and both must refuse. Nobody has classified the
+    activity, or a gate in force restricts MOVEMENTS rather than an activity
+    class - `restriction: pattern=hinge region=hip load=loaded` bars some
+    strength work and permits the rest, so "may I do strength" has no answer
+    at this granularity. `gate_check` answers that one, per exercise.
+
+    Matching goes through `session_classes` HERE rather than the registry
+    directly, so this inherits what `is_gated` already does: a gate naming an
+    activity outright still bites, an activity class is a legal question, and
+    `restricts: all` stops everything. Reading the registry alone made a
+    stop-everything hold answer `unknown` - the record saying it could not
+    tell, while every gate in it said no.
+
+    Returns the verdict, the gates that decided it and their own text, so a
+    client can show why without inventing the reasoning or paraphrasing.
+    """
+    from .vocab import (resolve_session_type,
+                        session_classes as declared_classes)
+
+    # The registry's own answer decides whether an UNMATCHED activity is
+    # allowed or unknown; the fallback set is what gates are matched against.
+    catalogued = bool(declared_classes(activity))
+    known = session_classes(activity)
+    resolved = resolve_session_type(activity) or activity
+
+    hits, unresolvable = [], []
+    for gate in gates:
+        # A gate whose precondition passed today is reported and does not
+        # block. Every other state does, including check_not_done: silence is
+        # not a pass. `is_gated`'s rule, inherited rather than restated.
+        if gate.get("status") == "cleared":
+            continue
+        blocked = set(str(gate.get("restricts") or "").split())
+        matched = ["all"] if "all" in blocked else sorted(blocked & known)
+        if matched:
+            hits.append((gate, matched))
+        elif not blocked and gate.get("restriction"):
+            unresolvable.append(gate)
+
+    if hits:
+        return {
+            "activity": resolved,
+            "verdict": BLOCKED,
+            "classes": sorted(known),
+            "gates": [g.get("slug") for g, _ in hits],
+            # The gate's OWN sentence, relayed rather than rewritten - a
+            # consumer renders gate text verbatim and may not paraphrase.
+            "reason": "; ".join(str(g.get("reason")) for g, _ in hits),
+            "matched": sorted({c for _, cs in hits for c in cs}),
+        }
+    if not catalogued:
+        return {
+            "activity": activity, "verdict": UNKNOWN, "classes": [],
+            "gates": [], "matched": [],
+            "reason": f"nobody has said what {activity!r} loads, so this "
+                      "record cannot say whether a gate covers it. Ask about "
+                      "an activity this engine's session-type registry knows, "
+                      "or record the session under one that fits",
+        }
+    if unresolvable:
+        return {
+            "activity": resolved, "verdict": UNKNOWN,
+            "classes": sorted(known),
+            "gates": [g.get("slug") for g in unresolvable], "matched": [],
+            "reason": "; ".join(str(g.get("reason")) for g in unresolvable)
+                      + " - this gate restricts particular MOVEMENTS rather "
+                        "than an activity, so whether it covers this depends "
+                        "on the exercise. Ask per movement",
+        }
+    return {"activity": resolved, "verdict": ALLOWED,
+            "classes": sorted(known), "gates": [], "matched": [],
+            "reason": "no gate in force covers this activity"}
+
+
 def is_gated(gates: list[dict], activity: str) -> bool:
     """Is this activity class or session type blocked by any gate?
 

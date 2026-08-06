@@ -164,9 +164,22 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                 # the sign is a detail rather than the message.
                 direction = ("losing" if rate > 0 else
                              "gaining" if rate < 0 else "holding")
-                magnitude = f"{abs(rate):.2f} kg/week"
-                phrase = (f"{direction} {magnitude}" if rate
-                          else "holding steady")
+                # THE WORD, AND NOT THE FIGURE (#185, contract 32). This line
+                # printed "losing 0.45 kg/week", and the engine has measured
+                # that it cannot stand behind that number: the pre-registered
+                # run put the median `u_rate / half-band` at 1.74 and found
+                # more than half of scored weeks admit no verdict word at all.
+                #
+                # `verdicts` says so in a column - `answers: direction` on
+                # this metric - and the rollup went on printing two decimal
+                # places anyway. A contract the engine's own most-read
+                # artifact does not honour is a contract nobody has to.
+                #
+                # The direction, the target and the verdict all stay. What
+                # goes is the one part the measurement cannot support, and
+                # G69's reason for putting the direction in words in the first
+                # place was that the sign is a detail rather than the message.
+                phrase = direction if rate else "holding steady"
                 window = [w for w in weight
                           if w.get("kg") is not None
                           and anchor0 and anchor0.isoformat() <= w["date"]
@@ -193,8 +206,8 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                                else "ON TARGET" if abs(rate - target) <= 0.25
                                else "FAST - raise intake" if rate > target
                                else "SLOW - check logging")
-                    L += ["", f"**Rate:** {phrase}{span} (target: losing "
-                              f"{target:.2f} kg/week) - **{verdict}**",
+                    L += ["", f"**Rate:** {phrase}{span}, against a target of "
+                              f"losing {target:.2f} kg/week - **{verdict}**",
                           "", "> Judge on this line, never a single morning."]
                 else:
                     L += ["", f"**Rate:** {phrase}{span} "

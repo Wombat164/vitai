@@ -192,6 +192,9 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # #139 moves `events` the same way, for the same reason: a fixture gains an
 # explicit `outcome: null`, which is the ordinary state of one - nobody has
 # said - and never "did not happen".
+# Re-pinned for #185/#189, which adds `answers` to `verdicts`. A DERIVED
+# column on a derived table: no persona line changes, only the contract stamp.
+#
 # Re-pinned for #221, which adds the `plans` dataset and retires
 # `sessions.planned`. Two moves in one, and both are additive to a persona:
 # the new dataset is EMPTY for all ten (no builder writes a plan, and
@@ -203,7 +206,7 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # The retirement DOES restamp every session row: 2245 of them move from
 # generation 11 to 12. Checked rather than asserted - no value changes, and no
 # key is added or removed on any of them.
-AUTHORED_AGAINST_CONTRACT = "32"  # vitai.db.CONTRACT_VERSION is a string
+AUTHORED_AGAINST_CONTRACT = "33"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     # #221: a new dataset, empty for every persona.
     "plans": 1,

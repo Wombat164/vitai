@@ -446,6 +446,35 @@ def cmd_resolve(args: argparse.Namespace) -> None:
             print(f"  {r['date']} {r['kind']} {r['claim_id']}{arrow}: {r['reason']}")
 
 
+def cmd_may(args: argparse.Namespace) -> None:
+    """A harness over `Vitai.may()`. May this be done today (#275)?
+
+    NON-ZERO ON ANYTHING BUT `allowed`. A shell that read exit 0 as permission
+    would turn "nobody has said" into a green light, which is the whole
+    failure this command exists to stop.
+
+    2 for blocked, matching `vitai safety`, and 3 for unknown - separate
+    because argparse also exits 2 on a usage error, so a script checking only
+    the code could not tell a refusal from a typo'd flag, and the two want
+    different handling.
+    """
+    v = Vitai(_root(args))
+    out = v.may(args.activity, args.on)
+    if args.json:
+        print(json.dumps(out, sort_keys=True))
+    elif out["verdict"] == "blocked":
+        print(f"{out['activity']}: BLOCKED - {out['reason']}")
+        print(f"  matched: {', '.join(out.get('matched', []))} "
+              f"(gate: {', '.join(str(g) for g in out['gates'])})")
+    elif out["verdict"] == "unknown":
+        print(f"{out['activity']}: NOBODY HAS SAID - {out['reason']}")
+    else:
+        print(f"{out['activity']}: allowed - {out['reason']}")
+        print(f"  falls under: {', '.join(out['classes'])}")
+    if out["verdict"] != "allowed":
+        sys.exit(2 if out["verdict"] == "blocked" else 3)
+
+
 def cmd_safety(args: argparse.Namespace) -> None:
     """The escalation surface. Exits 2 while anything urgent stands.
 
@@ -1183,7 +1212,14 @@ def cmd_status(args: argparse.Namespace) -> None:
     if st["rate_kg_per_week"] is not None:
         trend = (f"{st['direction']} {abs(st['rate_kg_per_week']):.2f} kg/week"
                  if st["rate_kg_per_week"] else "holding steady")
-        line += f" - 7d avg {st['mean_kg_7d']:.1f}, {trend}"
+        # THE SPAN THE MEAN ACTUALLY COVERS, not the one its field is named
+        # after (#209). Printing "7d avg" over six weeks of weigh-ins is the
+        # mislabel this issue catches a client making, and the CLI was making
+        # it from the engine's own field name.
+        span = st.get("mean_kg_span_days")
+        label = f"{span}d avg" if span else "avg"
+        line += (f" - {label} {st['mean_kg_7d']:.1f} "
+                 f"({st.get('mean_kg_points')} weigh-ins), {trend}")
     if st["tripwires"] is not None:
         line += f" - tripwires: {st['tripwires'] or 'none'}"
     print(line)
@@ -1253,6 +1289,9 @@ def main(argv: list[str] | None = None) -> None:
          "dated fixtures the plan is built backwards from (races, scans, dates)"),
         ("resolve", cmd_resolve, "which source won each contested field, and why"),
         ("safety", cmd_safety, "active escalations and gates (exits 2 if urgent)"),
+        ("may", cmd_may,
+         "may this activity be done today - blocked, allowed, or nobody has "
+         "said (exits 2 unless allowed)"),
         ("context", cmd_context, "the situational mode in force on a date"),
         ("check", cmd_check, "adjudicate a stated value against the record"),
         ("day", cmd_day, "everything the record holds for one date"),
@@ -1363,6 +1402,14 @@ def main(argv: list[str] | None = None) -> None:
                            help="only this date")
             p.add_argument("--json", action="store_true",
                            help="emit meal rows as JSONL instead of prose")
+        if name == "may":
+            p.add_argument("activity",
+                           help="a session type or activity class, e.g. walk")
+            p.add_argument("--on", metavar="YYYY-MM-DD",
+                           help="the day to ask about (default: the record's "
+                                "own horizon)")
+            p.add_argument("--json", action="store_true",
+                           help="emit the verdict as JSON")
         if name == "derived":
             # From the engine's own table list, so a table added to the read
             # model is reachable here the same day rather than whenever

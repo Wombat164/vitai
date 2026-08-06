@@ -37,7 +37,7 @@ from .report import build_report
 from .resolution import live_inferences, resolve, retractions
 from .safety import (
     DISCLAIMER, active_episodes, banner, escalations, gates_on, hold_gates,
-    is_gated, urgent_now,
+    is_gated, may, urgent_now,
 )
 from .schema import CURRENT_GENERATION, KEYS
 from .verdicts import compute_verdicts
@@ -885,8 +885,33 @@ class Vitai:
         return [g for g in self.gates(on) if g.get("status") == "check_not_done"]
 
     def gated(self, activity: str, on: date | str | None = None) -> bool:
-        """Is this activity class or session type blocked on a date?"""
+        """Is this activity class or session type blocked on a date?
+
+        A BOOL, so an activity nobody has classified comes back False - not
+        gated, which reads as permitted. `may()` is the answer that can say
+        "nobody has said", and a safety question should be asked there.
+        """
         return is_gated(self.gates(on), activity)
+
+    def may(self, activity: str, on: date | str | None = None) -> dict:
+        """May this be done today: blocked, allowed, or nobody has said.
+
+        The question a gated athlete actually has. "Am I allowed to run", "is
+        walking gated" and "can I bike instead" got the same paragraph,
+        because `restricts: impact` was all the gate said and nothing resolved
+        it per activity (#275).
+
+        The mapping was never missing: `semantics/session_types.toml` declares
+        that a run is `impact` and a walk is not, and the resolver has read it
+        correctly all along. What was missing was a way to ask, and a third
+        answer for an activity the registry does not know - which `gated()`
+        returns as False, and which a consumer must refuse on rather than read
+        as allowed.
+
+        Carries the gates that decided it and their own text, so a client can
+        show why without inventing the reasoning or paraphrasing a gate.
+        """
+        return may(self.gates(on), activity)
 
     def safety(self, on: date | str | None = None) -> list[dict]:
         """Every escalation the record justifies, most urgent first."""
@@ -1966,6 +1991,18 @@ class Vitai:
             "rate_kg_per_week": None,
             "direction": None,
             "mean_kg_7d": None,
+            # WHAT THAT MEAN IS ACTUALLY OVER (#209). `mean_kg_7d` is the mean
+            # of the last seven WEIGH-INS, not of seven days, and on a record
+            # with a weekly weigh-in those seven points span six weeks - so a
+            # client rendering it as "7d avg" describes a window the record
+            # never used. The issue records that exact mistake in a client and
+            # the engine was making it too, in the field's own name.
+            #
+            # The value does not change: a consumer already reading it keeps
+            # the number it had. What arrives beside it is the span, so the
+            # label can be right.
+            "mean_kg_span_days": None,
+            "mean_kg_points": None,
             "tripwires": None,
             "disclaimer": DISCLAIMER,
         }
@@ -1978,6 +2015,10 @@ class Vitai:
                 rate = (mean(prev) - mean(vals)) / days * 7
                 out["rate_kg_per_week"] = rate
                 out["mean_kg_7d"] = mean(vals)
+                out["mean_kg_points"] = len(vals)
+                out["mean_kg_span_days"] = (
+                    datetime.fromisoformat(pts[-1][0])
+                    - datetime.fromisoformat(pts[-7][0])).days
                 # G69, the same rule the rollup uses: a bare signed rate reads
                 # backwards to anyone who has not memorised that positive
                 # means losing. The WORD is the engine's, not the caller's.

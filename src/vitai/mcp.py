@@ -110,6 +110,20 @@ TOOLS: dict[str, dict] = {
         },
         "required": ["name"],
     },
+    # The question a gated athlete asks, and the one an agent was most likely
+    # to answer by guessing: resolving `restricts: impact` into activities
+    # without the registry is a claim about a body that neither the engine
+    # nor a client may make (#275).
+    "may": {
+        "method": "may",
+        "properties": {
+            "activity": {"type": "string",
+                         "description": "a session type or activity class"},
+            "on": {"type": "string",
+                   "description": "valid-time viewpoint, ISO date"},
+        },
+        "required": ["activity"],
+    },
     "safety": {
         "method": "safety",
         "properties": {"on": {"type": "string"}},
