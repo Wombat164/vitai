@@ -78,6 +78,39 @@ adds accessors over what the engine already knew.
 
 ### Fixed
 
+- **A generation is appended, never inserted** (#295). A dataset's schema
+  generation is how many bump blocks appear above a point in `schema.py`, and
+  `_gen` is stamped into a line at append time and never rewritten. #287 added
+  its block above four that already existed, so fifteen numbers moved - fourteen
+  key generations and one retirement - and a number already sitting in records
+  started denoting a LATER schema state than the one it was stamped under. G25's
+  exemption then read old lines as owing keys that did not exist when they were
+  written: on a real record, 280 problems across 140 lines, none of them about
+  the contents.
+- **It was silent and retroactive, and the remedy was unavailable.** Nothing
+  broke when the change merged; the record was correct, the engine was correct,
+  and the two disagreed only once a reader compared them. `_gen` cannot be
+  rewritten, and appending corrections would restate hundreds of rows to absorb
+  a numbering choice that was not the record's mistake. So the fix is in the
+  engine and repairs records already written rather than only the next one.
+- **The number moved; the column order did not.** `KEYS` order is the read
+  model's column order, so the keys stay exactly where they were and only the
+  generation assignment moved to its place in merge order. No table, column or
+  line shape changes, so the contract is unchanged.
+- **`tests/test_generation_numbering.py` pins the whole table** - generations,
+  retirements, current generations, and the founding key set that has no
+  registration - so the next insertion fails at the point of insertion with the
+  moved numbers named, rather than surfacing weeks later as a report about
+  somebody's record. Corpus tests could not do this: #287's fixtures were
+  regenerated in the same change, so they agreed with the broken numbering and
+  stayed green.
+- **A missing key is reported as an old line, not as a writer to correct**
+  (#296). `append` rebuilds every row from `KEYS`, so a caller cannot omit a key
+  and no line the engine wrote can trip this - which made "use null for unknown,
+  never omit" advice about something the writer could not have done differently,
+  on every one of the 280 rows. The message now states the line's generation and
+  the key's, and names the three things that produce it.
+
 - **A justification quoting the engine's own published claim id could never
   fall** (#134). `claim_id` appends an ordinal on `sessions`; the retracted
   set is built from a `supersedes` reference, which cannot know one. A
