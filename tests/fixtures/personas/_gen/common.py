@@ -231,7 +231,7 @@ AUTHORED_AGAINST_GENERATIONS = {
     "sessions": 15,
     "sets": 7,
     "protocols": 1,
-    "regimes": 1,
+    "regimes": 2,
     "thresholds": 3,
     "weight": 12,
 }

@@ -559,6 +559,38 @@ def test_two_machines_offline_together_collide_and_it_is_reported():
     assert any("no correction can name one of them" in p for p in problems)
 
 
+def test_no_dataset_registers_the_position_at_its_founding_generation():
+    """G25 REACHES EVERY DATASET, INCLUDING THE ONES NOTHING HAS WRITTEN YET.
+
+    The first cut skipped the bump for a dataset still at generation 1,
+    reasoning that nothing has written one so `seq` could be founding there.
+    That is an assertion about somebody else's record. `regimes` is written by
+    no fixture in this repo and may be written in one nobody here can see, and
+    registering `seq` at generation 1 makes the exemption
+    `line_generation < key_generation` false for every line that could exist -
+    so each is held to a key that postdates it. #295's failure mode, committed
+    while fixing its neighbour.
+    """
+    from vitai.schema import KEY_GENERATION, SEQUENCED
+
+    for dataset in SEQUENCED:
+        assert KEY_GENERATION[dataset]["seq"] > 1, dataset
+
+
+def test_a_line_of_a_never_written_dataset_still_validates():
+    """The same thing said as behaviour rather than as a number. `regimes` is
+    the one dataset here with no rows in any fixture, which is exactly why it
+    was the one that got this wrong."""
+    row = {k: None for k in KEYS["regimes"]}
+    row.update({"date": "2030-05-01", "kind": "unanchored", "dataset": "weight",
+                "field": "kg", "from_date": "2030-05-01",
+                "to_date": "2030-05-02", "text": "a regime",
+                "source": "athlete", "_gen": 1})
+    row.pop("seq", None)
+
+    assert validate_record("regimes", row) == []
+
+
 def test_an_older_line_never_owed_a_position():
     """G25, and the acceptance criterion the issue itself corrected: "existing
     rows gain an ordinal" cannot be met by backfill, because assigning

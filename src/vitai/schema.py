@@ -1320,12 +1320,21 @@ def _sensitive_problems(dataset: str, rec: dict) -> list[str]:
 SEQUENCED = tuple(d for d in KEYS
                   if d not in IDENTITY_KEY and d != "emissions")
 for _ds in SEQUENCED:
-    # A DATASET STILL AT GENERATION ONE HAS NO LINES IN THE WILD, so `seq` is a
-    # founding key there rather than an addition to it - and bumping would
-    # break the rule that such a dataset owes every key from the start, by
-    # inventing a history it does not have.
-    if CURRENT_GENERATION[_ds] > 1:
-        CURRENT_GENERATION[_ds] += 1
+    # EVERY DATASET BUMPS, INCLUDING THE ONES STILL AT GENERATION ONE. The
+    # first cut skipped those, reasoning that a dataset nothing has written
+    # yet has no lines in the wild, so `seq` could be founding there.
+    #
+    # That is an assertion about somebody else's record, and it is not this
+    # engine's to make. `regimes` is written by no fixture here and may be
+    # written in a record I cannot see - and registering `seq` at generation 1
+    # makes G25's exemption, `line_generation < key_generation`, false for
+    # every line that could exist, so each one is held to a key that postdates
+    # it. That is #295's failure mode exactly, committed while fixing #295's
+    # neighbour.
+    #
+    # Bumping is free and the direction is the safe one: a key registered
+    # above the founding generation can only ever EXEMPT more lines.
+    CURRENT_GENERATION[_ds] += 1
     KEYS[_ds] = KEYS[_ds] + ["seq"]
     KEY_GENERATION.setdefault(_ds, {})["seq"] = CURRENT_GENERATION[_ds]
 

@@ -158,7 +158,7 @@ PINNED = {
         "restriction": 3,
     },
     "regimes": {
-        "seq": 1,
+        "seq": 2,
     },
     "sessions": {
         "activity_id": 4,
@@ -334,7 +334,7 @@ PINNED_CURRENT = {
     "medical": 6,
     "plans": 1,
     "protocols": 1,
-    "regimes": 1,
+    "regimes": 2,
     "sessions": 15,
     "sets": 7,
     "thresholds": 3,
