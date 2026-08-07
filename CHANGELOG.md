@@ -11,6 +11,20 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **What the scale cannot see: fat and fat-free mass, derived** (#46, G36).
+  `schema.py` stated the intent - `kg` and `body_fat_pct` are the observed
+  atoms and the decomposition is derived, never stored - and nothing was ever
+  built. A weight goal is a proxy: two cuts ending at the same weight can be
+  opposite outcomes, and a weight-only view says one went down and one went up
+  and stops there.
+- **Mostly a refusal, and the band comes from the record.** A change is
+  resolvable only where the two readings' fat-mass intervals do not overlap,
+  computed from `kg_lo`/`kg_hi` and `body_fat_lo`/`body_fat_hi` - which had no
+  consumer at all until now. A published repeatability figure for consumer
+  bioimpedance would be this engine asserting an accuracy claim about hardware
+  it has never seen, so there is no constant anywhere in it. A reading with no
+  declared band gets a third answer rather than a cautious no.
+
 - **A restriction that restricts nothing is reported** (#75). A `medical` row
   whose own `kind` is `restriction`, or which names the `precondition` that
   would clear one, while `restricts` is empty. On a live record two such rows

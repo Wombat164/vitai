@@ -666,6 +666,31 @@ def _build(target: Path) -> None:
         "derived_by": "by-hand", "derived_build": None,
         "_gen": CURRENT_GENERATION["weight"]})
 
+    # TWO CLINIC SCANS, WHICH IS WHERE COMPOSITION ACTUALLY COMES FROM (#46).
+    # The home scale reports mass only, and that is the shape of most records -
+    # so a decomposition needs a source that measures both, and the DEXA the
+    # athlete already has in `measurements` is it.
+    #
+    # Both carry BANDS, because the bands are what decide whether a change is
+    # real: `kg_lo`/`body_fat_lo` are the interval the reading covers, and a
+    # change whose intervals overlap is one the instrument cannot resolve. A
+    # fixture carrying the point estimates alone would exercise the arithmetic
+    # and none of the refusal.
+    for _day, _kg, _pct in ((start + timedelta(days=42), 78.9, 22.4),
+                            (END - timedelta(days=3), 75.8, 19.6)):
+        weight.append({
+            **{k: None for k in KEYS["weight"]},
+            "date": _day.isoformat(), "kg": _kg, "source": "dexa",
+            "body_fat_pct": _pct,
+            "kg_lo": round(_kg - 0.1, 1), "kg_hi": round(_kg + 0.1, 1),
+            "body_fat_lo": round(_pct - 0.6, 1),
+            "body_fat_hi": round(_pct + 0.6, 1),
+            "origin": "dexa", "path": None, "origin_evidence": "clinic scan",
+            "capture": "connector", "read_by": None,
+            "measured_at": "10:15",
+            "recorded_at": f"{_day.isoformat()}T11:00:00+02:00",
+            "_gen": CURRENT_GENERATION["weight"]})
+
     # The provenance pair above appends out of order, and `recorded_at` is
     # derived from the date, so file order must follow date order or the
     # monotonicity check fires on the demo's own output.

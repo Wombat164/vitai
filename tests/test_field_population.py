@@ -28,7 +28,9 @@ only the third:
     becomes the whole day's claim.
   - `thresholds` and `meals` have NO PRODUCER. Nothing generates them; they
     wait for a surface that was never built.
-  - `weight.kg_lo`/`kg_hi` have NO CONSUMER. The producer exists and works.
+  - `weight.kg_lo`/`kg_hi` had NO CONSUMER. The producer existed and worked,
+    and #46 gave them one: they are the interval that decides whether a change
+    in body composition is one the instrument could see.
 
 WHY THESE ARE REGISTERS AND NOT A RED BUILD. Failing on all 104 at once would
 be a check with no legal path to green, which is the #38 mistake and the
@@ -141,11 +143,6 @@ UNWRITTEN = (
     "sets.tempo",
     "thresholds.note",
     "weight.artifact",
-    "weight.body_fat_hi",
-    "weight.body_fat_lo",
-    "weight.body_fat_pct",
-    "weight.kg_hi",
-    "weight.kg_lo",
     "weight.modelled",
 )
 

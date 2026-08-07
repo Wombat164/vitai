@@ -14,6 +14,7 @@ from statistics import mean
 
 from .weeks import week_of
 from .clocks import timing_caveat, weigh_in_timing
+from .composition import decompose, endpoints
 from .config import Config, phase_rate_for
 from .vocab import session_classes
 
@@ -251,6 +252,28 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
             # as a current average (#68).
             L.append("- nothing logged in the last 14 days")
         L.append(f"- {len(step_days)} days logged in total")
+
+    # WHAT THE SCALE CANNOT SEE (#46, G36). Derived here and never stored, and
+    # mostly a refusal: both figures are arithmetic on a bioimpedance estimate,
+    # and the band that decides whether a change is real comes from the row's
+    # own `kg_lo`/`body_fat_lo` rather than from a published repeatability
+    # figure about somebody else's hardware.
+    pair = endpoints(weight)
+    if pair and (split := decompose(*pair)):
+        L += ["", "## Composition", ""]
+        L.append(f"- {split['from']} to {split['to']}: "
+                 f"{split['kg_change']:+.1f} kg overall")
+        if split["resolvable"]:
+            L += [f"- fat {split['fat_change']:+.1f} kg, everything else "
+                  f"{split['fat_free_change']:+.1f} kg",
+                  f"- {split['fat_share']:.0f}% of the change was fat"]
+        elif split["resolvable"] is False:
+            L.append("- NOT RESOLVABLE - the two readings' fat-mass ranges "
+                     "overlap, so the record cannot say which way fat moved")
+        else:
+            L.append("- fat and fat-free are not separable: these readings "
+                     "carry no range, so nothing here can say whether a "
+                     "change this size is real")
 
     L += ["", "## Training by week", ""]
     # A WEEK OF CYCLING IS NOT A WEEK OF NOTHING (#76). The columns counted
