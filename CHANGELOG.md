@@ -11,6 +11,18 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **`avg_power` on `sessions`** (#91, contract 37). The one field on a cycling
+  row that is a measurement rather than an estimate - `kcal` is modelled from
+  heart rate and mass, `distance_km` from wheel size or GPS, and power is read
+  from a strain gauge. The engine had nowhere to put watts, so any FIT ingest
+  had to discard it. Named `avg_power` rather than the issue's `power`,
+  because a bare `power` is ambiguous between average, maximum and normalised.
+- **A track format the engine cannot read says so.** `read_track` dispatched
+  on `.tcx` or else GPX, so a `.fit` file went to the XML parser and came back
+  as `ParseError: not well-formed (invalid token): line 1, column 0` - true of
+  the bytes and useless to the reader. The refusal names the format, says the
+  file is not malformed, and says what converting to GPX costs.
+
 - **`seq` and `supersedes_seq`: naming one row of several that share a key**
   (#239, contract 36). `line_key` falls back to `<date>/<source>`, so two runs
   on one day from one watch share a name - 71 per cent of sessions and 93 per
