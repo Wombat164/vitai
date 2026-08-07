@@ -11,6 +11,16 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **A restriction that restricts nothing is reported** (#75). A `medical` row
+  whose own `kind` is `restriction`, or which names the `precondition` that
+  would clear one, while `restricts` is empty. On a live record two such rows
+  carried the words "RESTRICTION NOT ENFORCEABLE" in the note - they were
+  right, and for three days the record stated a restriction no gate could act
+  on while the athlete trained inside it. The note announced its own
+  unenforceability, in English, and that announcement was itself unreadable.
+  Mechanical rather than a prose scan, and reported per slug head so a later
+  row that names the restriction clears it.
+
 - **`seq` and `supersedes_seq`: naming one row of several that share a key**
   (#239, contract 36). `line_key` falls back to `<date>/<source>`, so two runs
   on one day from one watch share a name - 71 per cent of sessions and 93 per
