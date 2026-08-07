@@ -196,7 +196,8 @@ PINNED = {
     },
     "sessions": {
         "date": "temporal", "type": "reference", "distance_km":
-        "measurement", "duration_s": "measurement", "avg_hr": "measurement",
+        "measurement", "duration_s": "measurement", "avg_hr": "measurement", "avg_power":
+        "measurement",
         "max_hr": "measurement", "cadence": "measurement", "kcal":
         "measurement", "location": "whereabouts", "rpe": "measurement",
         "note": "narrative", "source": "provenance", "start_time":

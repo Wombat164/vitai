@@ -28,7 +28,7 @@ CONFIRMED, REFUTED, NOT_IN_RECORD = "CONFIRMED", "REFUTED", "NOT-IN-RECORD"
 # Where a metric can be found. A metric on `sessions` is per-activity and can
 # legitimately be scoped by type; one on `daily` is already a daily total.
 SESSION_METRICS = {"distance_km", "duration_s", "kcal", "avg_hr", "max_hr",
-                   "elevation_m", "cadence", "rpe"}
+                   "elevation_m", "cadence", "avg_power", "rpe"}
 DAILY_METRICS = {"steps", "distance_km", "active_min", "kcal_out", "kcal_in",
                  "protein_g", "sleep_h", "rhr", "mood", "pain"}
 

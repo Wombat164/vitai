@@ -531,7 +531,22 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     key nothing can name apart, distinct from one that is merely ambiguous,
 #     and it cannot be repaired by backfill - assigning positions to lines
 #     already written means rewriting them.
-CONTRACT_VERSION = "36"
+# 37: `avg_power` on `sessions` (#91) - the one field on a cycling row that is
+#     a MEASUREMENT rather than an estimate. `kcal` is modelled from heart rate
+#     and mass, `distance_km` from wheel size or GPS; power is read from a
+#     strain gauge.
+#
+#     The engine had nowhere to put watts, so any FIT ingest had to discard it.
+#     `avg_power` rather than `power`, which is what the issue asks for: a bare
+#     `power` is ambiguous between average, maximum and NORMALISED power, and
+#     normalised is the figure cyclists quote - so half its readers would take
+#     it for one and half for the other.
+#
+#     NO `max_power` and no normalised power. Max is a spike a consumer can
+#     take from the track; normalised power is a weighted derivation with a
+#     rolling window, which is a figure this engine would be COMPUTING rather
+#     than recording.
+CONTRACT_VERSION = "37"
 
 _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity would
               # `place_precise` (#205) has NO column and is absent from every
