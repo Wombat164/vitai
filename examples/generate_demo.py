@@ -55,7 +55,8 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from vitai.db import CONTRACT_VERSION
-from vitai.schema import CURRENT_GENERATION, KEYS
+from vitai.jsonl import line_key
+from vitai.schema import CURRENT_GENERATION, KEYS, SEQUENCED
 from vitai.weeks import week_of
 
 HERE = Path(__file__).resolve().parent
@@ -702,6 +703,18 @@ def _build(target: Path) -> None:
                        ("sets", sets), ("meals", meals),
                        ("journal", journal), ("plans", plans),
                        ("emissions", emissions)):
+        # `seq` the way `append` stamps it (#239). This file writes rows
+        # directly rather than through the append path, so without this the
+        # shipped example would be the one record in the world whose rows
+        # cannot be named exactly.
+        if name in SEQUENCED:
+            counts: dict[str, int] = {}
+            stamped = []
+            for row in rows:
+                key = line_key(name, row)
+                stamped.append({**row, "seq": counts.get(key, 0)})
+                counts[key] = stamped[-1]["seq"] + 1
+            rows = stamped
         (target / "data" / f"{name}.jsonl").write_text(
             _jsonl(rows), encoding="utf-8", newline="\n")
 

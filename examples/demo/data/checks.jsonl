@@ -1,3 +1,3 @@
-{"date": "2030-06-27", "slug": "hop-test", "result": "pass", "value": 5, "source": "athlete", "note": "5 hops, no pain"}
-{"date": "2030-06-28", "slug": "hop-test", "result": "fail", "value": 2, "source": "athlete", "note": "sore by the third hop - walked instead"}
-{"date": "2030-06-29", "slug": "hop-test", "result": "pass", "value": 5, "source": "athlete", "note": null}
+{"date": "2030-06-27", "slug": "hop-test", "result": "pass", "value": 5, "source": "athlete", "note": "5 hops, no pain", "seq": 0}
+{"date": "2030-06-28", "slug": "hop-test", "result": "fail", "value": 2, "source": "athlete", "note": "sore by the third hop - walked instead", "seq": 0}
+{"date": "2030-06-29", "slug": "hop-test", "result": "pass", "value": 5, "source": "athlete", "note": null, "seq": 0}

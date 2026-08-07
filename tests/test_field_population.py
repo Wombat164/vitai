@@ -66,6 +66,9 @@ UNWRITTEN = (
     "artifacts.reason",
     "artifacts.removed",
     "artifacts.sha256",
+    # #239, and it sits with its siblings for the same reason: a dataset
+    # with no rows in any fixture has no positions to number either.
+    "artifacts.seq",
     "daily.artifact",
     "daily.carb_g",
     "daily.fat_g",
@@ -119,6 +122,7 @@ UNWRITTEN = (
     "regimes.source",
     "regimes.text",
     "regimes.to_date",
+    "regimes.seq",
     "sessions.artifact",
     "sessions.derived_from",
     "sessions.derived_op",
