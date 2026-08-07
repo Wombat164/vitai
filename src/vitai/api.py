@@ -42,6 +42,7 @@ from .safety import (
 )
 from .schema import CURRENT_GENERATION, KEYS, coarse
 from .verdicts import compute_verdicts
+from .questions import open_questions
 from .weeks import session_weeks
 
 
@@ -982,6 +983,33 @@ class Vitai:
         instead of assuming either outcome.
         """
         return [g for g in self.gates(on) if g.get("status") == "check_not_done"]
+
+    def questions(self, on: date | str | None = None) -> list[dict]:
+        """What the record does not know about what is coming (#224).
+
+        The floor of the asking channel and deliberately nothing above it: a
+        deterministic derivation, computable with no model configured, no
+        network, no permission layer and no budget.
+
+        DERIVE FEW, DO NOT GENERATE MANY AND SUPPRESS. Every question here
+        hangs off a plan that is still ahead, so a record with nothing planned
+        produces nothing to ask - by construction, rather than by a filter
+        that could be relaxed or left switched off. The engine's urge to ask
+        peaks exactly where asking is least welcome, and that property has to
+        hold with the budget layer unbuilt.
+
+        IT DOES NOT ASK ANYBODY. There is no surface here that speaks and
+        `nudge_ok` is not read; a decline needs somewhere of its own to live
+        and lands with whatever asks. `questions.py` carries the whole
+        argument, including why the wording is not the engine's to write.
+        """
+        when = on or self.on
+        if isinstance(when, str):
+            when = date.fromisoformat(when)
+        # `gates` is passed as a FUNCTION, because a clearance has to be
+        # judged on the day the thing is planned for rather than on the
+        # day somebody asked (#224).
+        return open_questions(self.plans(when), self.gates, when)
 
     def gated(self, activity: str, on: date | str | None = None) -> bool:
         """Is this activity class or session type blocked on a date?

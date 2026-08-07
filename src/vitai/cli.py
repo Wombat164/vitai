@@ -523,6 +523,34 @@ def cmd_corrections(args: argparse.Namespace) -> None:
             print(f"    note: {row['note']}")
 
 
+def cmd_questions(args: argparse.Namespace) -> None:
+    """A harness over `Vitai.questions()`. What the record does not know (#224).
+
+    IT PRINTS A SET, NOT A PROMPT. Every field is a slug, a date or a closed
+    vocabulary, and nothing here is phrased as a question to a person - "no
+    question may imply a duty" lives in phrasing, so the wording belongs to
+    whatever asks. This command says what is open; it does not open a
+    conversation.
+    """
+    rows = Vitai(_root(args)).questions(args.on)
+    if args.json:
+        for row in rows:
+            print(json.dumps(row))
+        return
+    if not rows:
+        # Worded to avoid ending a wrapped line on a bare quoted `planned`:
+        # the field-population register measures "read" by looking for the
+        # quoted key name in a consumer, and `sessions.planned` is retired -
+        # so an accident of line wrapping claimed a reader it does not have.
+        print("nothing open - the record holds what it needs for everything "
+              "still ahead")
+        return
+    for row in rows:
+        print(f"{row['for_date']} {row['about']}: {row['kind']} "
+              f"{row['subject']} (settled by {row['settled_by']}, bears on "
+              f"{row['bears_on']})")
+
+
 def cmd_project(args: argparse.Namespace) -> None:
     """A harness over `Vitai.project()`. If I do this, what then (#193)?
 
@@ -1420,6 +1448,9 @@ def main(argv: list[str] | None = None) -> None:
         ("events", cmd_events,
          "dated fixtures the plan is built backwards from (races, scans, dates)"),
         ("resolve", cmd_resolve, "which source won each contested field, and why"),
+        ("questions", cmd_questions,
+         "what the record does not know about what is planned - derived, "
+         "never asked (#224)"),
         ("corrections", cmd_corrections,
          "what each correction did: which fields moved, which way, and how "
          "long the record held the old value (#143)"),
@@ -1540,6 +1571,12 @@ def main(argv: list[str] | None = None) -> None:
                            help="only this date")
             p.add_argument("--json", action="store_true",
                            help="emit meal rows as JSONL instead of prose")
+        if name == "questions":
+            p.add_argument("--on", metavar="YYYY-MM-DD",
+                           help="the day to ask about (default: the record's "
+                                "own horizon)")
+            p.add_argument("--json", action="store_true",
+                           help="emit the open questions as JSONL")
         if name == "corrections":
             p.add_argument("dataset", nargs="?", choices=sorted(KEYS),
                            help="one dataset, or every dataset if omitted")
