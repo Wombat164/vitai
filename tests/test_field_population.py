@@ -211,7 +211,6 @@ UNREAD = (
     # let a mostly-unjudgeable record display near-perfect adherence. Half of
     # that here would be the flattening number rather than the honest one.
     "plans.serves",
-    "plans.requires",
     "plans.setting",
     "daily.feel",
     "daily.pain_side",

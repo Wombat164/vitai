@@ -11,6 +11,26 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **`vitai questions`, and `Vitai.questions()` beside it** (#224, the floor).
+  The engine holding a question the record cannot settle, which is the one
+  direction nothing here ran in. A deterministic derivation, computable with
+  no model configured, no network, no permission layer and no budget.
+- **Derive few; do not generate many and suppress.** Every question hangs off
+  a plan that is still ahead, so a record with nothing planned produces
+  nothing BY CONSTRUCTION rather than by a filter that could be relaxed or
+  left switched off. The engine's urge to ask peaks exactly where asking is
+  least welcome, and that property has to hold with the budget layer unbuilt.
+- **Two kinds.** A `precondition` is a plan naming a condition nothing
+  settles; a `clearance` is a planned activity gated on a check nobody has
+  done. A gate that is simply blocked is not a question - nothing the athlete
+  can say changes it.
+- **It does not ask anybody.** No surface here speaks, `nudge_ok` is not read,
+  nothing is written, and there is no table in the read model. The wording of
+  a question belongs to whatever asks, because "no question may imply a duty"
+  lives entirely in phrasing.
+- **`plans.requires` has a reader.** It was written by the demo and consumed
+  by nothing, and leaves the field-population backlog.
+
 - **`vitai corrections`, and `Vitai.corrections()` beside it** (#143). A
   `supersedes` was accepted, applied and never characterised: `retractions`
   says a claim came down, `dataset` returns the survivor, and the row that
