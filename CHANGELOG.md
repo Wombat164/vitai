@@ -33,6 +33,21 @@ adds accessors over what the engine already knew.
   nothing can tell them apart it says so, because telling somebody holding a
   five-year-old file to add a vendor identity is advice they cannot take for
   the rows in front of them.
+- **A sensitivity class per field, published** (#299). `field_types()` now
+  carries `sensitivity` beside the type information, so a client gating egress
+  derives its policy instead of hand-maintaining a copy of this schema that is
+  wrong the day a field is added here.
+- **Per `(dataset, field)`, because a per-name map cannot be right.** `reason`
+  is on five datasets: on four it is prose about why a policy changed, and on
+  `plans` it is the COM-B axis - a claim about why somebody did not train. One
+  name, two disclosures.
+- **No default, ever.** An unclassified field raises rather than taking a
+  class. The failure this removes is a fallback standing in for a decision
+  nobody made, and a default here would move that failure one layer in and
+  make it the engine's. The whole table is pinned, so adding a field forces
+  the decision at the point it is added - the same shape as #297's generation
+  pin.
+
 - **`vitai questions`, and `Vitai.questions()` beside it** (#224, the floor).
   The engine holding a question the record cannot settle, which is the one
   direction nothing here ran in. A deterministic derivation, computable with
@@ -141,6 +156,22 @@ adds accessors over what the engine already knew.
 - **The easy-cap flag says whose cap it is.** `vitai.toml` has no history, so
   `OVER +2` against a run from years earlier asserts a comparison nobody made.
   Stated once per section rather than implied on every row.
+- **The weight rate was measured over one span and divided by another**
+  (#142). `status()` compares the mean of the last seven weigh-ins against the
+  mean of the seven before them, and divided by the days between the
+  eighth-from-last and the last. Where weigh-ins are dense those are near
+  enough the same window; where they are not they are unrelated. On flat
+  clusters either side of a fourteen-month silence it reported losing 3.43
+  kg/week - a rate nobody could have lost, from a record in which no observed
+  reading ever changed. Two block means are separated by the distance between
+  their centres, which is what it divides by now.
+- **`rate_span_days` and `rate_unobserved_days`**, beside the figure. The rate
+  had no span published at all, so a figure reaching over 221 days on a real
+  corpus was rendered against `mean_kg_span_days` saying 114 - a label added
+  (#209) so consumers would stop mislabelling the MEAN's window. Facts rather
+  than a verdict: whether a span containing a hole makes the figure unusable
+  is the refusal predicate the uncertainty work owns, not a threshold picked
+  here.
 
 - **A generation is appended, never inserted** (#295). A dataset's schema
   generation is how many bump blocks appear above a point in `schema.py`, and

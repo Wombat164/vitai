@@ -2234,14 +2234,30 @@ class Vitai:
             # label can be right.
             "mean_kg_span_days": None,
             "mean_kg_points": None,
+            "rate_span_days": None,
+            "rate_unobserved_days": None,
             "tripwires": None,
             "disclaimer": DISCLAIMER,
         }
         if len(pts) >= 8:
-            vals = [v for _, v in pts[-7:]]
-            prev = [v for _, v in pts[-14:-7]] or vals
-            days = (datetime.fromisoformat(pts[-1][0])
-                    - datetime.fromisoformat(pts[-8][0])).days
+            recent, earlier = pts[-7:], pts[-14:-7] or pts[-7:]
+            vals = [v for _, v in recent]
+            prev = [v for _, v in earlier]
+            # THE DENOMINATOR HAS TO MEASURE THE SAME THING THE NUMERATOR DOES
+            # (#142). It divided by the days between the eighth-from-last
+            # weigh-in and the last, while the numerator compares the mean of
+            # the last seven against the mean of the seven before them - two
+            # different spans. Where weigh-ins are dense they are near enough
+            # the same; where they are not they are unrelated, and on a real
+            # corpus the comparison reached over 221 days while the divisor
+            # counted 116.
+            #
+            # Two block means are separated by the distance between their
+            # CENTRES, which is what this now divides by. On flat clusters
+            # either side of a fourteen-month silence the old arithmetic
+            # reported losing 3.43 kg/week - a rate nobody could have lost,
+            # from a record in which no observed reading ever changed.
+            days = _days_between_centres(earlier, recent)
             if days:
                 rate = (mean(prev) - mean(vals)) / days * 7
                 out["rate_kg_per_week"] = rate
@@ -2250,6 +2266,23 @@ class Vitai:
                 out["mean_kg_span_days"] = (
                     datetime.fromisoformat(pts[-1][0])
                     - datetime.fromisoformat(pts[-7][0])).days
+                # WHAT THE RATE ITSELF REACHES OVER, and the largest stretch
+                # inside it that nobody observed. `mean_kg_span_days` was
+                # added (#209) so a consumer could stop mislabelling the
+                # MEAN's window, and the rate then had no span published at
+                # all - so a figure reaching over 221 days was rendered
+                # against a label saying 114.
+                #
+                # FACTS, NOT A VERDICT. Whether a rate over a span containing a
+                # hole should be reported at all is a refusal predicate this
+                # project has already decided belongs to the uncertainty work
+                # rather than to a threshold picked here. What the engine can
+                # say without inventing anything is how far the figure reaches
+                # and how much of that reach it never saw.
+                out["rate_span_days"] = (
+                    datetime.fromisoformat(recent[-1][0])
+                    - datetime.fromisoformat(earlier[0][0])).days
+                out["rate_unobserved_days"] = _widest_gap(earlier + recent)
                 # G69, the same rule the rollup uses: a bare signed rate reads
                 # backwards to anyone who has not memorised that positive
                 # means losing. The WORD is the engine's, not the caller's.
@@ -2438,6 +2471,34 @@ def _type_names(types: tuple[type, ...] | None) -> list[str] | None:
     return sorted({t.__name__ for t in types})
 
 
+def _days_between_centres(earlier: list, recent: list) -> int:
+    """Days between the mean dates of two blocks of weigh-ins (#142).
+
+    Two block means are separated by the distance between their centres. The
+    engine divided by the distance between two single points instead - the
+    eighth-from-last weigh-in and the last - which is a different span from
+    the one the numerator compares, and diverges exactly where the weigh-ins
+    are sparse.
+    """
+    def centre(block: list) -> float:
+        return mean(datetime.fromisoformat(when).timestamp()
+                    for when, _ in block)
+
+    return round((centre(recent) - centre(earlier)) / 86400)
+
+
+def _widest_gap(points: list) -> int:
+    """The longest stretch between consecutive weigh-ins in a block.
+
+    A FACT RATHER THAN A VERDICT. It says how much of the span the figure
+    reaches over was never observed; it does not say whether that makes the
+    figure unusable, which is a refusal predicate the uncertainty work owns.
+    """
+    days = sorted(datetime.fromisoformat(when) for when, _ in points)
+    return max((int((b - a).total_seconds() // 86400)
+                for a, b in zip(days, days[1:])), default=0)
+
+
 def field_types(dataset: str | None = None) -> dict:
     """What each field of each dataset may hold, and how it is projected.
 
@@ -2464,7 +2525,7 @@ def field_types(dataset: str | None = None) -> dict:
     array as a scalar drops the field rather than failing.
     """
     from .db import LIST_COLS, column_affinity
-    from .schema import SENSITIVE, _TYPES
+    from .schema import SENSITIVE, _TYPES, sensitivity
 
     names = [dataset] if dataset is not None else list(KEYS)
     if dataset is not None and dataset not in KEYS:
@@ -2486,6 +2547,16 @@ def field_types(dataset: str | None = None) -> dict:
                 # names the field that does, and null means this field is not
                 # sensitive rather than that it is sensitive with no partner.
                 "coarse_companion": pairs.get(field),
+                # WHAT KIND OF DISCLOSURE THIS FIELD IS (#299). A client
+                # gating egress was keeping a hand-written map of these and
+                # could not keep it right: the copy is wrong the day a field
+                # is added here, and its fallback gave an unknown field the
+                # most permissive class - so a new field shipped to everybody
+                # and the release log filed it as harmless.
+                #
+                # Published rather than internal for the reason the rest of
+                # this accessor is: it exists because consumers were guessing.
+                "sensitivity": sensitivity(name, field),
             }
             for field in KEYS[name]
         }
