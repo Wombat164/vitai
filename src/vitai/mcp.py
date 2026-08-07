@@ -61,6 +61,13 @@ TOOLS: dict[str, dict] = {
         "method": "validate",
         "properties": {},
     },
+    "questions": {
+        "method": "questions",
+        "properties": {
+            "on": {"type": "string",
+                   "description": "valid-time viewpoint, ISO date"},
+        },
+    },
     "corrections": {
         "method": "corrections",
         "properties": {

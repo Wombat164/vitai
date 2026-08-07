@@ -1027,6 +1027,16 @@ def _plans(start: date, sessions: list[dict]) -> list[dict]:
               for_phase="morning", setting="outdoor",
               requires="dry-forecast", outcome="did_not_activate",
               note="if it is dry; it was not"),
+        # AHEAD OF THE HORIZON, AND WITH A CONDITION NOTHING SETTLES (#224).
+        # The record holds a plan that has not happened, needing something it
+        # does not know - which is the one shape a question is derived from.
+        # Dated past the last day of this record on purpose: a question is
+        # about what is coming, so a fixture that only holds the past would
+        # exercise the empty case and call it covered.
+        _plan(d, "sat-trail-if-dry", (END + timedelta(days=2)).isoformat(),
+              "run", "committed", serves="running", for_phase="morning",
+              setting="outdoor", requires="dry-forecast",
+              note="the trail is unrunnable wet"),
         # PROVISIONAL and unanswered. Recording an idea has to be free or the
         # athlete stops recording ideas - and silence is not a lapse, so the
         # outcome stays unresolved and carries no reason at all.
