@@ -205,6 +205,49 @@ def test_coarsening_never_mutates_the_row_it_was_given():
     assert row["place_precise"] == LEAK
 
 
+def test_coarsening_copies_a_dataset_that_has_no_sensitive_field_either():
+    """THE BRANCH NEARLY EVERY ROW TAKES, and it was the one not covered.
+
+    `coarse()` documents "ALWAYS A COPY, including when there is nothing to
+    drop", and returned the caller's own object whenever the DATASET had no
+    sensitive field. Eighteen of the twenty are in that branch, so the
+    guarantee held for `sessions` and `context` and was false everywhere else.
+
+    The test above passes either way: it only ever asked about `sessions`. A
+    test scoped to the datasets somebody was thinking about has the same defect
+    as a gate scoped that way, which is the defect this feature exists to
+    abolish.
+    """
+    row = {"date": "2030-05-01", "kg": 80.0}
+
+    assert "weight" not in SENSITIVE, "this test needs a dataset with no tier"
+    assert coarse("weight", row) is not row
+
+
+def test_the_two_views_never_hand_back_the_same_row_objects():
+    """The consequence, rather than the mechanism.
+
+    `precise()` takes any dataset name, so both views of `weight` existed and
+    shared all 64 of the demo's rows. A consumer that took the precise view and
+    annotated its rows - the consumer this path is built for - wrote into what
+    every later reader of the default projection saw, on the same instance.
+    """
+    v = Vitai(DEMO)
+
+    for name in ("sessions", "weight"):
+        default = v.dataset(name)
+        exact = v.precise(name, release="test: view identity")
+        shared = [a for a, b in zip(default, exact) if a is b]
+
+        assert default, name
+        assert not shared, f"{name}: {len(shared)} row objects shared"
+
+    rows = v.precise("weight", release="test: annotate the precise view")
+    rows[0]["_written_by_a_consumer"] = True
+
+    assert "_written_by_a_consumer" not in v.dataset("weight")[0]
+
+
 # --- the boundary -------------------------------------------------------------
 
 def _public_calls(v: Vitai):

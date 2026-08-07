@@ -1195,7 +1195,20 @@ def coarse(dataset: str, rec: dict) -> dict:
     """
     drop = SENSITIVE.get(dataset)
     if not drop:
-        return rec
+        # A COPY HERE TOO, and this branch is why the guarantee above was only
+        # three quarters true. Eighteen of the twenty datasets have no
+        # sensitive field at all, so this is the branch nearly every row takes,
+        # and it returned the caller's own object - reinstating for `weight`
+        # and `daily` exactly the sharing the comment above says structurally
+        # cannot happen. `precise()` takes any dataset name, so both views of
+        # `weight` handed back the same dicts and a consumer annotating one
+        # wrote into the other.
+        #
+        # Nothing sensitive escaped, because a dataset in this branch has no
+        # precise tier to escape. What was false was the guarantee, and a
+        # guarantee that holds on the datasets somebody was thinking about is
+        # the per-caller gate this whole feature exists to replace.
+        return dict(rec)
     return {k: v for k, v in rec.items() if k not in drop}
 
 
