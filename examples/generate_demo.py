@@ -479,6 +479,11 @@ def _build(target: Path) -> None:
             (31.6, 4510, "08:47:00", None),
             (33.1, 4510, "09:02:00", f"{pair_day}/watch"))):
         sessions.append({
+            # AVERAGE POWER on the rides and nowhere else (#91), which is the
+            # honest shape: a strain gauge is on a bike, so a run row leaving
+            # it null is a run rather than a gap. The one field on a cycling
+            # row that is measured rather than estimated.
+            "avg_power": 168 + n * 4,
             "date": pair_day, "type": "cycle", "distance_km": km,
             "duration_s": secs, "avg_hr": None, "max_hr": None,
             "cadence": None, "kcal": None, "location": None, "rpe": None,

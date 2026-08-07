@@ -41,6 +41,8 @@ Algorithms and their sources:
 
 from __future__ import annotations
 
+import pathlib
+
 import math
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -787,11 +789,36 @@ def _number(el) -> float | None:
         return None
 
 
+# Formats a watch writes that this engine cannot read yet. Named rather than
+# left to fall through, because falling through is what produced the bug below.
+UNREAD_FORMATS = {".fit": "FIT"}
+
+
 def read_track(path) -> list[Fix]:
     """Read a track by extension - .tcx keeps the device's distance, .gpx has
-    none to keep."""
-    return (read_tcx(path) if str(path).lower().endswith(".tcx")
-            else read_gpx(path))
+    none to keep.
+
+    A FORMAT THIS CANNOT READ SAYS SO (#91). The dispatch was `.tcx` or else
+    GPX, so a `.fit` file - the format a watch produces NATIVELY, and the only
+    one carrying cadence and power - was handed to the XML parser and came
+    back as `ParseError: not well-formed (invalid token): line 1, column 0`.
+    True of the bytes and useless to the reader: the file is fine, and the
+    engine cannot read it.
+
+    Refusing by NAME rather than by parse failure also means a format added to
+    the list is refused identically whether or not its bytes happen to look
+    like XML.
+    """
+    suffix = pathlib.Path(str(path)).suffix.lower()
+    if (fmt := UNREAD_FORMATS.get(suffix)):
+        raise ValueError(
+            f"{path} is a {fmt} file and this engine has no reader for it. "
+            f"The file is not malformed - {fmt} is the format most watches "
+            f"write natively, and it is the only one of the three that "
+            f"carries cadence and power. Convert it to TCX or GPX to read the "
+            f"track, and note that the conversion drops what only {fmt} "
+            f"carries (#91)")
+    return (read_tcx(path) if suffix == ".tcx" else read_gpx(path))
 
 
 def device_distance_m(points: list[Fix]) -> float | None:

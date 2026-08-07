@@ -1399,7 +1399,8 @@ for _cls, _names in {
         planned load_type load_unit set_type failure angle_class side
         rpe_scale mood_scale pain_scale activity
         seq supersedes_seq""",
-    "measurement": """steps distance_km active_min kcal_out kcal_in protein_g
+    "measurement": """avg_power steps distance_km active_min kcal_out kcal_in
+        protein_g
         sleep_h rhr kg body_fat_pct kg_lo kg_hi body_fat_lo body_fat_hi avg_hr
         max_hr cadence kcal elevation_m rpe duration_s rest_s rir load
         reps_attempted reps_completed value target target_hi guard_pct
@@ -1450,6 +1451,33 @@ def sensitivity(dataset: str, field: str) -> str:
         f"different here than it does elsewhere (#299)")
 
 
+# --- the measurement rather than the estimate (#91) ----------------------------
+#
+# `sessions` carries `cadence` and had nowhere to put watts, so any FIT ingest
+# had to discard the one channel that is a MEASUREMENT rather than a vendor
+# estimate. Everything else on a cycling row is modelled somewhere: `kcal` is
+# an estimate from heart rate and mass, `distance_km` from wheel size or GPS.
+# Power is read from a strain gauge.
+#
+# `avg_power` RATHER THAN `power`, which is what the issue asks for, and the
+# deviation is small enough to state and reverse. A bare `power` is ambiguous
+# between average, maximum and NORMALISED power, and normalised is the number
+# cyclists actually quote - so half its readers would take it for one and half
+# for the other, which is the pre-coordination this schema refuses elsewhere.
+# `cadence` is bare and means the average, and it is the odd one out rather
+# than the precedent to follow.
+#
+# NO `max_power` and no normalised power. Max is a spike a consumer can take
+# from the track where one exists, and normalised power is a WEIGHTED
+# derivation with a published algorithm and a rolling window - a figure this
+# engine would be computing rather than recording, which is a different kind
+# of field and wants deciding rather than adding in passing.
+CURRENT_GENERATION["sessions"] += 1
+KEYS["sessions"] = KEYS["sessions"] + ["avg_power"]
+KEY_GENERATION.setdefault("sessions", {})["avg_power"] = \
+    CURRENT_GENERATION["sessions"]
+
+
 def key_generation(dataset: str, key: str) -> int:
     """Generation a key was introduced in (1 = founding)."""
     return KEY_GENERATION.get(dataset, {}).get(key, 1)
@@ -1472,7 +1500,8 @@ _TYPES: dict[str, tuple[type, ...]] = {
     "kg": _NUMERIC, "steps": (int,), "distance_km": _NUMERIC, "active_min": (int,),
     "kcal_out": (int,), "kcal_in": (int,), "protein_g": _NUMERIC, "sleep_h": _NUMERIC,
     "rhr": (int,), "hip_pain": (int,), "duration_s": (int,), "avg_hr": (int,),
-    "max_hr": (int,), "cadence": (int,), "kcal": _NUMERIC,
+    "max_hr": (int,), "cadence": (int,), "avg_power": (int,),
+    "kcal": _NUMERIC,
     "rpe": _NUMERIC,
     "confidence": _NUMERIC,
     # #96. Without these a quoted number - the ordinary hand-edit typo -
