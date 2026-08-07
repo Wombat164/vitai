@@ -156,6 +156,31 @@ adds accessors over what the engine already knew.
 
 ### Fixed
 
+- **A gate that could not say where it hurt** (#126, G89 part two). `hip_pain`
+  is retired in favour of `pain` + `pain_site`, and `canonical_daily` is meant
+  to be the one place an old line is read forward. Eight readers re-implemented
+  that map inline, and the copies were not equivalent: they carried the score
+  and dropped the site. A legacy record's gate said `pain 4 at unspecified
+  site` while the rollup prose two lines below it said `at hip` - one row, one
+  day, two answers, and the vaguer one was on the safety surface.
+- **A red flag that turned on a word choice.** Found reviewing the above.
+  `pain_site` validates against a registry that accepts aliases, and both
+  red-flag loops compared the raw string to slug-keyed `RED_FLAG_SITES`. A line
+  saying `ribs` - clean, validated, an alias of `chest` - produced no cardiac
+  escalation, while the same pain spelled `chest` produced an EMERGENCY. Both
+  loops now resolve through the registry.
+- One unreadable legacy row was counted as two in the rollup's date tally, and
+  a painful row with no site was reported `at hip` - the retired field's joint,
+  named for a record that never named it.
+
+### Changed
+
+- A pain gate's slug is now the registry slug rather than the spelling
+  written: an existing record writing `IT band` sees `pain:knee` where it saw
+  `pain:IT band`. No gate appears or disappears - firing turns on the score -
+  but a consumer keyed on the slug sees a changed identity, and the gate and
+  the prose now agree.
+
 - **The rollup leads with what is blocking** (#76). Measured on a live record,
   83 per cent of the document was one table and everything actionable sat in
   its last thirteen lines. Gates, then safety, then tripwires now come before
