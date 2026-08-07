@@ -983,10 +983,15 @@ for _ds in ("weight", "daily", "sessions", "measurements", "sets", "meals"):
 # both "a person did it" and "software did it and did not say".
 DERIVED_BY_HAND = "by-hand"
 
-for _ds in ("weight", "daily", "sessions", "measurements", "sets", "meals"):
-    CURRENT_GENERATION[_ds] += 1
+# THE KEYS ARE ADDED HERE AND THEIR GENERATION IS ASSIGNED AT THE END (#295).
+# `KEYS` order is the read model's COLUMN order, so it stays exactly where it
+# was; the generation NUMBER is what had to move, because it is assigned by
+# file order and this block sits above two that already existed. See the note
+# at the end of this section.
+DERIVED_LINEAGE_DATASETS = ("weight", "daily", "sessions", "measurements",
+                            "sets", "meals")
+for _ds in DERIVED_LINEAGE_DATASETS:
     for _k in ("derived_by", "derived_build"):
-        KEY_GENERATION.setdefault(_ds, {})[_k] = CURRENT_GENERATION[_ds]
         KEYS[_ds].append(_k)
 
 # --- the rest of the macros, and the two sleep instants -----------------------
@@ -1120,6 +1125,58 @@ KEY_RETIREMENT.setdefault("goals", {})["status"] = CURRENT_GENERATION["goals"]
 CURRENT_GENERATION["sessions"] += 1
 KEY_RETIREMENT.setdefault("sessions", {})["planned"] = \
     CURRENT_GENERATION["sessions"]
+
+# --- a generation is APPENDED, never inserted (#295) --------------------------
+#
+# `derived_by` and `derived_build` (#280) belong to the narrative several
+# hundred lines above; their bump lives here, and the separation is the fix.
+#
+# A dataset's generation is how many bump blocks appear ABOVE a point in this
+# file, and `_gen` is stamped into a line at append time and never rewritten -
+# correctly, because it is a fact about what the schema was when the line was
+# written. Put a new block above an existing one and every generation below it
+# shifts up by one, so a number already sitting in a record starts denoting a
+# LATER schema state than the one it was stamped under. G25's exemption,
+# `line_generation(rec) < key_generation(...)`, then reads a line as owing a
+# key that did not exist when it was written.
+#
+# That is what happened, and the failure was SILENT AND RETROACTIVE: nothing
+# broke when the change merged, the record was correct, the engine was
+# correct, and the two disagreed only when a reader compared them. On a real
+# record it was 280 problems across 140 lines, none of them about the
+# contents. And the remedy was unavailable - `_gen` cannot be rewritten, and
+# appending corrections would restate hundreds of rows to absorb a numbering
+# choice that was not the record's mistake.
+#
+# So the NUMBER moved down to where it belongs in merge order, which restores
+# every one of the FIFTEEN numbers it moved - fourteen key generations and one
+# RETIREMENT, `sessions.planned`, which shifts by the same mechanism and is the
+# easiest of the fifteen to forget, because nothing about it looks like a key.
+# Only the number: the keys are still appended to `KEYS` where they were,
+# because that order is the read model's column order and moving it would be a
+# consumer-visible change made in passing while fixing something else.
+#
+# WHY THIS IS SAFE FOR RECORDS ALREADY WRITTEN, argued on the right half. It is
+# tempting to say that raising a generation only ever exempts more lines and
+# therefore nothing can break. Relative to the engine that is deployed most of
+# these numbers go DOWN, so that argument covers the wrong direction.
+#
+# The real one is an enumeration. Every `_gen` value reachable in the window
+# between the insertion and this repair was stamped by an engine whose `KEYS`
+# already contained these keys, so every line written in that window CARRIES
+# what it now owes. Lines older than the window are exempt again. There is no
+# reachable stamp left holding a line to a key it could not have had, and that
+# is checked rather than asserted - `test_generation_numbering.py` builds the
+# row shape each engine state could have produced and validates all of them.
+#
+# That file also pins the whole table, retirements included, so the next
+# insertion fails at the point of insertion with the moved numbers named,
+# rather than surfacing weeks later as a report about somebody's record.
+for _ds in DERIVED_LINEAGE_DATASETS:
+    CURRENT_GENERATION[_ds] += 1
+    for _k in ("derived_by", "derived_build"):
+        KEY_GENERATION.setdefault(_ds, {})[_k] = CURRENT_GENERATION[_ds]
+
 
 # --- two tiers, and the coarse one is the default egress form (#205) ----------
 #
@@ -1543,7 +1600,36 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
             continue
         retired = key_retirement(dataset, k)
         if retired is None or line_gen < retired:
-            problems.append(f"missing key '{k}' (use null for unknown, never omit)")
+            # AN OLD LINE IS REPORTED AS AN OLD LINE (#296). The message used
+            # to read "use null for unknown, never omit", which is advice
+            # addressed to whoever wrote the line - and `append` rebuilds every
+            # row from `KEYS` on the way in, so a caller CANNOT omit a key and
+            # a row the engine wrote can never trip this. The only lines that
+            # reach here are ones an older engine wrote, and telling their
+            # author to do something differently is telling them to have
+            # written the line at a different time.
+            #
+            # So it states both numbers and names the two causes. And it does
+            # NOT say the line predates the key: this branch only fires when
+            # the key's generation is at or below the line's, so the line
+            # appears to POSTDATE it. The first draft of this message said the
+            # opposite, which would have sent a reader looking for the wrong
+            # thing on every row - #295 was 280 of these.
+            problems.append(
+                f"missing key '{k}': this line carries generation {line_gen} "
+                f"and '{k}' is registered at generation "
+                f"{key_generation(dataset, k)}, so by the numbering the key "
+                f"existed when the line was written. THREE THINGS PRODUCE "
+                "THIS and they need different answers. A writer that is not "
+                "this engine omitted the key - `append` fills the shape from "
+                "KEYS, so no line it wrote can be missing one. Or the key's "
+                "generation has MOVED since the line was stamped, which "
+                "reinterprets a number already in the record and is an engine "
+                "defect rather than anything to fix here (#295). Or the key "
+                "was added to KEYS and never registered a generation at all, "
+                "in which case it defaults to 1 and every line in the record "
+                "is held to it - check that one first if this is firing on "
+                "all of them")
     for k in rec:
         if k not in keys and k not in META_KEYS:
             problems.append(f"unknown key '{k}'")
