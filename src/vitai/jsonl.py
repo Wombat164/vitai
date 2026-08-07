@@ -34,7 +34,8 @@ from pathlib import Path
 
 from .clocks import (CLOCK_SKEW_TOLERANCE, now_stamp, order_key,
                      stamp_instant)
-from .schema import CURRENT_GENERATION, IDENTITY_KEY, KEYS, validate_record
+from .schema import (CURRENT_GENERATION, IDENTITY_KEY, KEYS, META_KEYS,
+                     SEQUENCED, validate_record)
 
 
 class DataError(Exception):
@@ -117,6 +118,35 @@ def append_many(data_dir: Path, name: str, records: list[dict],
             "wrong rather than merely coarse. Fix the clock; appending now "
             "would bury the problem under stamps that look plausible.")
 
+    # EVERY stream, for the position alone, and counted ONCE. The clock above
+    # is read from this device's file by design (#105); a position among rows
+    # sharing a key is a fact about the whole record, and counting only this
+    # file would hand two devices the same number for the same key. Rescanning
+    # per row would be quadratic, which is the shape #210's own check was
+    # rewritten to remove.
+    #
+    # `max(count, highest + 1)` RATHER THAN A BARE COUNT. A count is right only
+    # when the rows arrive in order. Sync three devices out of order and a
+    # machine holding positions 3 and 4 but not 0 to 2 counts two rows and
+    # stamps 2, colliding with a row it can see the proof of - the record says
+    # five rows exist and the count says otherwise. Taking the higher of the
+    # two uses what is already on screen.
+    seq_next: dict[str, int] = {}
+    if name in SEQUENCED:
+        counts: dict[str, int] = {}
+        highest: dict[str, int] = {}
+        for _, held_row in _read_streams(data_dir, name)[0]:
+            key = line_key(name, held_row)
+            counts[key] = counts.get(key, 0) + 1
+            if (seen := position_of(held_row)) is not None:
+                highest[key] = max(highest.get(key, -1), seen)
+        # Both halves computed over the whole record before either is used, so
+        # the answer does not depend on the order the rows were visited in.
+        # Folding them together per row gave a number that was never wrong but
+        # was not the stated formula either - it skipped past a gap twice.
+        seq_next = {key: max(count, highest.get(key, -1) + 1)
+                    for key, count in counts.items()}
+
     rows: list[dict] = []
     for n, rec in enumerate(records, 1):
         if "device" in rec:
@@ -129,6 +159,13 @@ def append_many(data_dir: Path, name: str, records: list[dict],
                 "device is machine-set and must not be supplied - it names "
                 "the machine doing the writing, which the writer knows and "
                 "the caller cannot assert. Set [device] slug in vitai.toml")
+        if "seq" in rec:
+            raise ValueError(
+                "seq is machine-set and must not be supplied - it is this "
+                "row's position among the rows already sharing its key, and a "
+                "writer that could choose its own position could name a row "
+                "that was never there. Append the row and read the seq back "
+                "off what comes out (#239).")
         if "recorded_at" in rec:
             raise ValueError(
                 "recorded_at is machine-set and must not be supplied - it is "
@@ -144,13 +181,13 @@ def append_many(data_dir: Path, name: str, records: list[dict],
                 "VALID time - `date`, and `measured_at` or `start_time` where "
                 "the dataset has them - which says when the thing happened "
                 "rather than when the record learnt it.")
-        if unknown := sorted(set(rec) - set(KEYS[name]) - {"supersedes", "_gen"}):
+        if unknown := sorted(set(rec) - set(KEYS[name]) - META_KEYS):
             raise ValueError(
                 f"unknown key(s) for {name}"
                 + (f" (row {n})" if len(records) > 1 else "")
                 + f": {', '.join(unknown)}")
         row = {k: rec.get(k) for k in KEYS[name]}
-        for meta in ("supersedes", "_gen"):
+        for meta in sorted(META_KEYS):
             if meta in rec:
                 row[meta] = rec[meta]
         row["_gen"] = row.get("_gen") or CURRENT_GENERATION[name]
@@ -163,6 +200,14 @@ def append_many(data_dir: Path, name: str, records: list[dict],
             # phone and a laptop look like two instruments (#35).
             row["device"] = device
         high_water = stamp_instant(stamp)
+        # After `date` and `source` are on the row, because those are what the
+        # key is made of, and counting the pending rows too so a bulk import of
+        # ten sessions on one day numbers them 0..9 rather than handing every
+        # one of them the same position.
+        if name in SEQUENCED:
+            key = line_key(name, row)
+            row["seq"] = seq_next.get(key, 0)
+            seq_next[key] = row["seq"] + 1
         if problems := validate_record(name, row):
             raise DataError(
                 f"refusing to append an invalid {name} line"
@@ -393,7 +438,14 @@ def load_report(data_dir: Path, name: str,
 EVENT_DATASETS = frozenset({"emissions"})
 
 
-def _targets_retired(dataset: str, rows: list[dict]) -> set[str]:
+def _spell(ref: tuple[str, int | None]) -> str:
+    """A (key, position) reference as a person would write it in a message."""
+    key, pos = ref
+    return repr(key) if pos is None else f"{key!r} position {pos}"
+
+
+def _targets_retired(dataset: str,
+                     rows: list[dict]) -> set[tuple[str, int | None]]:
     """The references whose actual TARGET went, not merely whose ref was spent.
 
     `retire` reports a reference as applied when it retires ANY row, including
@@ -409,10 +461,22 @@ def _targets_retired(dataset: str, rows: list[dict]) -> set[str]:
     unusable is not a check anybody keeps.
     """
     gone = {id(r) for r in rows} - {id(r) for r in retire(dataset, rows)}
-    out = set()
+    out: set[tuple[str, int | None]] = set()
     for row in rows:
-        if id(row) in gone and not row.get("supersedes"):
-            out.add(line_key(dataset, row))
+        if id(row) not in gone:
+            continue
+        if not row.get("supersedes"):
+            out.add((line_key(dataset, row), None))
+        # AND UNDER ITS POSITION, where it has one, WITHOUT the `supersedes`
+        # guard above (#239). That guard exists because a bare reference cannot
+        # tell "the target went" from "an earlier dead correction of the same
+        # key went", and counting the second as applied turns a loud wrong
+        # state quiet. A NARROWED reference names one row, so its
+        # disappearance is unambiguous - and keeping the guard would mean a
+        # correction aimed at a row that itself corrects a DIFFERENT key looked
+        # unspent, refusing a write that was about to apply.
+        if (pos := position_of(row)) is not None:
+            out.add((line_key(dataset, row), pos))
     return out
 
 
@@ -461,11 +525,13 @@ def _corrections_that_would_not_apply(data_dir: Path, name: str,
         correction itself, and a reference whose target has not synced looked
         present. That turned the offline-first case into a refusal.
         """
-        return any(line_key(name, r) == ref
-                   and str(r.get("supersedes") or "") != ref
+        key, pos = ref
+        return any(line_key(name, r) == key
+                   and (pos is None or position_of(r) == pos)
+                   and target_of(r) != ref
                    for r in held + pending)
 
-    refs = {str(r["supersedes"]) for r in pending if r.get("supersedes")}
+    refs = {t for r in pending if (t := target_of(r)) is not None}
     refs = {ref for ref in refs if _target_exists(ref)}
     if not refs:
         return []
@@ -473,7 +539,8 @@ def _corrections_that_would_not_apply(data_dir: Path, name: str,
     if name in EVENT_DATASETS:
         return [f"{name} is an event dataset and is never retired: a later "
                 f"row cannot make an earlier one not have been said, so "
-                f"{sorted(refs)} would retire nothing here whatever it is "
+                f"{sorted(_spell(r) for r in refs)} would retire nothing "
+                f"here whatever it is "
                 f"stamped. Append the correction as its own row without "
                 f"'supersedes'"]
 
@@ -486,15 +553,20 @@ def _corrections_that_would_not_apply(data_dir: Path, name: str,
 
     retired = _targets_retired(name, would_be)
     out = []
-    for ref in sorted(refs):
+    # `None` and an int are not comparable, so a batch mixing a bare and a
+    # narrowed correction of one key raised a TypeError here - on the HAPPY
+    # path, because this sort runs before the applied filter below.
+    for ref in sorted(refs, key=lambda t: (t[0], t[1] is not None, t[1] or 0)):
         if ref in retired:
             continue
+        key, pos = ref
         blocking = max((str(r.get("recorded_at") or "") for r in held
-                        if line_key(name, r) == ref), default="")
+                        if line_key(name, r) == key
+                        and (pos is None or position_of(r) == pos)), default="")
         stamps = ", ".join(sorted(str(r.get("recorded_at")) for r in pending
-                                  if str(r.get("supersedes") or "") == ref))
+                                  if target_of(r) == ref))
         out.append(
-            f"a correction naming {ref!r} would retire nothing. The row it "
+            f"a correction naming {_spell(ref)} would retire nothing. The row it "
             f"names is stamped {blocking} and this write is stamped {stamps}, "
             f"so the correction sorts before its target and `retire` walks "
             f"past it. It would land, report success, and leave the value it "
@@ -502,6 +574,42 @@ def _corrections_that_would_not_apply(data_dir: Path, name: str,
             f"failure invisible. Nothing appended from this machine can "
             f"correct that row until its clock passes that stamp")
     return out
+
+
+def position_of(rec: dict) -> int | None:
+    """This row's stored position, or None where it has none (#239)."""
+    seq = rec.get("seq")
+    return seq if isinstance(seq, int) and not isinstance(seq, bool) else None
+
+
+def target_of(rec: dict) -> tuple[str, int | None] | None:
+    """What a row's `supersedes` names: a key, and optionally a position.
+
+    TWO FIELDS AND NEVER A PARSED SUFFIX. The obvious shape is to spell the
+    position into the reference as `K#n` and ask the reader to take it apart.
+    That crams two orthogonal facts into one identifier - which is what #280
+    already refused for `derived_by` - and here it fails outright, because
+    nothing stops a bare key containing the separator: `activity_id` is
+    validated as an opaque string, `source` is not content-checked at all, and
+    a `meals` identity is free text. `2030-05-01/watch#2` is a legal bare key
+    AND a legal narrowed one, and syntax cannot tell them apart.
+
+    Disambiguating by lookup - is this string some row's bare key? - is worse
+    again, because it makes THE MEANING OF A STORED REFERENCE DEPEND ON WHAT
+    ELSE IS IN VIEW. Measured against the engine before this change: a
+    reference whose target had not synced yet was read as a position and
+    retired an unrelated row, and a reference that had already applied flipped
+    back to bare when a row with a matching source arrived, resurrecting what
+    it had retired. In an append-only record a written reference has to mean
+    one thing forever, and a field does what a parsed string cannot.
+    """
+    ref = rec.get("supersedes")
+    if not str(ref or "").strip():
+        return None
+    narrow = rec.get("supersedes_seq")
+    return (str(ref),
+            narrow if isinstance(narrow, int) and not isinstance(narrow, bool)
+            else None)
 
 
 def retire(dataset: str, rows: list[dict], applied: set | None = None
@@ -558,20 +666,45 @@ def retire(dataset: str, rows: list[dict], applied: set | None = None
     # own scheme. Naming an earlier row exactly needs an ordinal STORED on the
     # row, the way `sets` carries `set_index`, which is a schema change and
     # only reaches rows written after it.
+    #
+    # A POSITION NARROWS A REFERENCE (#239). A correction carrying
+    # `supersedes_seq` retires the row of that key whose stored `seq` matches,
+    # and only that row - so a chain of five rows sharing a key can be repaired
+    # from the middle, which no bare reference could reach. It does not consume
+    # the "one other row keyed K" budget, because it is not asking for
+    # whichever row is most recent; it is asking for that one.
+    #
+    # `supersedes` itself is untouched in every record and every reading, and
+    # that is a property of the SHAPE rather than of care taken here: nothing
+    # is parsed, so nothing can be parsed wrongly.
     records: list[dict] = []
     one: dict[str, int] = {}
-    chained: set[str] = set()
-    spent: set[str] = set()
+    want: dict[tuple[str, int], int] = {}
+    chained: set[tuple[str, int | None]] = set()
+    spent: set[tuple[str, int | None]] = set()
     for r in reversed(rows):
         base = line_key(dataset, r)
-        ref = str(r["supersedes"]) if r.get("supersedes") else None
-        superseded_correction = ref is not None and ref in chained
+        seat = (base, pos) if (pos := position_of(r)) is not None else None
+        target = target_of(r)
+        ref = target[0] if target else None
+        # THE WHOLE TARGET, NOT THE KEY (#239). "Two corrections naming one
+        # reference are the same intent expressed twice" is true of two BARE
+        # references, and false the moment a position is on one of them: a
+        # correction of position 1 and a correction of position 2 are two
+        # different intents that happen to share a key. Keying this on the
+        # string dropped the earlier of them and brought its target's value
+        # back, silently, with `validate` reporting nothing - which is the
+        # data loss through the correction path that this whole issue is about.
+        superseded_correction = target is not None and target in chained
         consumed = None
         if superseded_correction:
-            dropped, consumed = True, ref
+            dropped, consumed = True, target
+        elif seat is not None and want.get(seat, 0) > 0:
+            want[seat] -= 1
+            dropped, consumed = True, (base, pos)
         elif ref != base and one.get(base, 0) > 0:
             one[base] -= 1
-            dropped, consumed = True, base
+            dropped, consumed = True, (base, None)
         else:
             dropped = False
         # A correction retired as a duplicate of a later one does not also
@@ -579,9 +712,12 @@ def retire(dataset: str, rows: list[dict], applied: set | None = None
         # several keys comes down whole.
         if dropped and consumed is not None:
             spent.add(consumed)
-        if ref is not None and not superseded_correction:
-            chained.add(ref)
-            one[ref] = one.get(ref, 0) + 1
+        if target is not None and not superseded_correction:
+            chained.add(target)
+            if target[1] is not None:
+                want[target] = want.get(target, 0) + 1
+            else:
+                one[ref] = one.get(ref, 0) + 1
         if not dropped:
             records.append(r)
     records.reverse()

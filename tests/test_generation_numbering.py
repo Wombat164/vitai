@@ -43,19 +43,23 @@ PINNED = {
         "device": 4,
         "occurred_date": 2,
         "recorded_at": 3,
+        "seq": 5,
     },
     "artifacts": {
         "device": 3,
         "recorded_at": 2,
+        "seq": 4,
     },
     "checks": {
         "device": 3,
         "recorded_at": 2,
+        "seq": 4,
     },
     "context": {
         "device": 3,
         "place_precise": 4,
         "recorded_at": 2,
+        "seq": 5,
     },
     "daily": {
         "artifact": 7,
@@ -82,6 +86,7 @@ PINNED = {
         "path": 4,
         "read_by": 5,
         "recorded_at": 3,
+        "seq": 14,
         "sleep_end": 11,
         "sleep_start": 11,
         "sodium_mg": 10,
@@ -108,10 +113,12 @@ PINNED = {
         "depends_on": 2,
         "device": 4,
         "recorded_at": 3,
+        "seq": 5,
     },
     "journal": {
         "device": 3,
         "recorded_at": 2,
+        "seq": 4,
     },
     "meals": {
         "derived_build": 6,
@@ -139,6 +146,7 @@ PINNED = {
         "protocol": 8,
         "read_by": 4,
         "recorded_at": 2,
+        "seq": 11,
     },
     "medical": {
         "body_side": 6,
@@ -148,6 +156,9 @@ PINNED = {
         "precondition": 2,
         "recorded_at": 4,
         "restriction": 3,
+    },
+    "regimes": {
+        "seq": 2,
     },
     "sessions": {
         "activity_id": 4,
@@ -172,6 +183,7 @@ PINNED = {
         "recorded_at": 3,
         "route": 2,
         "rpe_scale": 11,
+        "seq": 15,
         "setting": 2,
         "source": 2,
         "start_time": 2,
@@ -221,6 +233,7 @@ PINNED = {
         "protocol": 9,
         "read_by": 5,
         "recorded_at": 3,
+        "seq": 12,
     },
 }
 
@@ -291,8 +304,9 @@ PINNED_FOUNDING = {
         "block", "capture", "date", "duration_s", "exercise", "failure",
         "load", "load_type", "load_unit", "machine", "note", "origin",
         "origin_evidence", "path", "read_by", "reps_attempted",
-        "reps_completed", "rest_s", "rir", "round", "rpe", "session_start",
-        "set_index", "set_type", "side", "source", "tempo"
+        "reps_completed", "rest_s", "rir", "round", "rpe",
+        "session_start", "set_index", "set_type", "side", "source",
+        "tempo"
     ],
     "thresholds": ["change_kind", "date", "key", "note", "reason", "set_by", "value"],
     "weight": ["date", "kg", "note", "source"],
@@ -305,26 +319,26 @@ PINNED_RETIREMENT = {
 }
 
 PINNED_CURRENT = {
-    "achievements": 4,
-    "artifacts": 3,
-    "checks": 3,
-    "context": 4,
-    "daily": 13,
+    "achievements": 5,
+    "artifacts": 4,
+    "checks": 4,
+    "context": 5,
+    "daily": 14,
     "emissions": 1,
     "events": 4,
     "goals": 6,
-    "inferences": 4,
-    "journal": 3,
+    "inferences": 5,
+    "journal": 4,
     "meals": 6,
-    "measurements": 10,
+    "measurements": 11,
     "medical": 6,
     "plans": 1,
     "protocols": 1,
-    "regimes": 1,
-    "sessions": 14,
+    "regimes": 2,
+    "sessions": 15,
     "sets": 7,
     "thresholds": 3,
-    "weight": 11,
+    "weight": 12,
 }
 
 
