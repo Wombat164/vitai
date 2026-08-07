@@ -485,6 +485,44 @@ def cmd_resolve(args: argparse.Namespace) -> None:
             print(f"  {r['date']} {r['kind']} {r['claim_id']}{arrow}: {r['reason']}")
 
 
+def cmd_corrections(args: argparse.Namespace) -> None:
+    """A harness over `Vitai.corrections()`. What each correction did (#143).
+
+    STATES AND DOES NOT CHARACTERISE THE PERSON, and this is the one surface
+    in the feature where the engine composes words at all - so it is the one
+    that had to be got right and the one that was got wrong first.
+
+    THE COUNT IS PRINTED THE SAME WAY WHATEVER IT IS. The first version wrote
+    `[down, 3 in a row down]` above a run of one and `[down]` below it: a
+    threshold, with emphasis on the far side of it, which is exactly where a
+    number becomes a verdict. The docstring at the time claimed there was no
+    threshold. Now every move prints `run N`, N is 1 when it is 1, and the
+    only thing that changes across a sequence is the digit.
+    """
+    rows = Vitai(_root(args)).corrections(args.dataset)
+    if args.json:
+        for row in rows:
+            print(json.dumps(row))
+        return
+    if not rows:
+        print("no corrections in this record - nothing has been superseded")
+        return
+    for row in rows:
+        held = ("unknown" if row["lag_days"] is None
+                else f"{row['lag_days']:g} day(s)")
+        print(f"{row['date']} {row['dataset']} {row['row']} "
+              f"corrects {row['corrects']} ({row['target_date']}), "
+              f"held {held}")
+        for move in row["moved"]:
+            print(f"    {move['field']}: {move['was']!r} -> {move['now']!r} "
+                  f"[{move['direction']}, run {move['same_direction_run']}]")
+        # Only where it did not already appear as a field that moved: the
+        # note is usually part of the correction, and printing it twice reads
+        # as two facts.
+        if row["note"] and not any(m["field"] == "note" for m in row["moved"]):
+            print(f"    note: {row['note']}")
+
+
 def cmd_project(args: argparse.Namespace) -> None:
     """A harness over `Vitai.project()`. If I do this, what then (#193)?
 
@@ -1382,6 +1420,9 @@ def main(argv: list[str] | None = None) -> None:
         ("events", cmd_events,
          "dated fixtures the plan is built backwards from (races, scans, dates)"),
         ("resolve", cmd_resolve, "which source won each contested field, and why"),
+        ("corrections", cmd_corrections,
+         "what each correction did: which fields moved, which way, and how "
+         "long the record held the old value (#143)"),
         ("safety", cmd_safety, "active escalations and gates (exits 2 if urgent)"),
         ("project", cmd_project,
          "if I do this, what then - a proposed quantity against a declared "
@@ -1499,6 +1540,10 @@ def main(argv: list[str] | None = None) -> None:
                            help="only this date")
             p.add_argument("--json", action="store_true",
                            help="emit meal rows as JSONL instead of prose")
+        if name == "corrections":
+            p.add_argument("dataset", nargs="?", choices=sorted(KEYS),
+                           help="one dataset, or every dataset if omitted")
+            p.add_argument("--json", action="store_true")
         if name == "project":
             p.add_argument("dataset", help="the dataset the act belongs to")
             p.add_argument("values", nargs="+", metavar="field=number",

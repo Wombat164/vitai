@@ -11,6 +11,24 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **`vitai corrections`, and `Vitai.corrections()` beside it** (#143). A
+  `supersedes` was accepted, applied and never characterised: `retractions`
+  says a claim came down, `dataset` returns the survivor, and the row that
+  lost sits in the file with both values, both timestamps and the context they
+  landed in. This reports the pair - which fields moved, which way, how long
+  the record held the value it later withdrew, and how many consecutive
+  corrections to that field moved the same way.
+- **It is asked and never raised**, deliberately. Not a tripwire, not in the
+  build's findings, no column in the read model, and no message, severity or
+  verdict word anywhere in what it returns. A run of same-direction
+  corrections is a fact about a file; the engine bringing it up unprompted
+  would be an accusation about a person whatever words it chose.
+- **And it cannot tell an honest correction from a flattering one.** The
+  persona corpus pairs the two on purpose and they are structurally identical.
+  A test asserts the output is the same for both, because a detector that
+  appeared to separate them would be claiming a discrimination it does not
+  have.
+
 - **The retraction ledger reaches `emissions`** (#134). An assertion the
   engine surfaced to a person, whose `basis_claims` name a claim the record
   has since restated - or an inference that has since fallen - now produces a

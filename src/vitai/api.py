@@ -767,6 +767,42 @@ class Vitai:
         """What stopped being true, and what fell with it (JTMS cascade)."""
         return retractions(self.datasets())
 
+    def corrections(self, dataset: str | None = None) -> list[dict]:
+        """What each correction in this record actually did (#143).
+
+        `retractions` says a claim came down and what brought it down.
+        `dataset` returns the survivor. Neither says WHICH FIELDS MOVED, WHICH
+        WAY, or HOW LONG the record held the value it later withdrew - and the
+        row that lost is sitting in the file with all three in it.
+
+        ASKED, NEVER RAISED, and that is the design rather than an oversight.
+        This does not enter the build's findings and emits no message, no
+        severity and no verdict word: a run of same-direction corrections is a
+        fact about a file, and the engine bringing it up unprompted would be
+        an accusation about a person whatever words it chose. `corrections.py`
+        carries the whole argument, including why the count cannot tell an
+        honest back-fill from a flattering one and does not pretend to.
+
+        Reads the RAW lines, because the row a correction retired is exactly
+        the row `dataset()` removes - so this is the one surface here that
+        deliberately does not go through the read door, and the reason is that
+        the door drops the half it exists to show.
+        """
+        from .corrections import characterise
+
+        names = [dataset] if dataset is not None else list(KEYS)
+        if dataset is not None and dataset not in KEYS:
+            raise KeyError(f"unknown dataset {dataset!r}; one of {sorted(KEYS)}")
+        out: list[dict] = []
+        for name in names:
+            out += characterise(self.root / "data", name)
+        # Grouped by dataset, and WITHIN a dataset left in the order
+        # `characterise` produced: transaction order, which is the order the
+        # runs were counted in. Sorting the lot by `date` looked tidier and
+        # put a back-dated correction above the one it followed, so a reader
+        # saw `run 2` printed above `run 1`.
+        return out
+
     def route(self, gpx_path, barometric: bool = False):
         """Deterministic tier-1 geometry for one GPS or TCX track (G40).
 

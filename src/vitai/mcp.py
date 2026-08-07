@@ -61,6 +61,13 @@ TOOLS: dict[str, dict] = {
         "method": "validate",
         "properties": {},
     },
+    "corrections": {
+        "method": "corrections",
+        "properties": {
+            "dataset": {"type": "string",
+                        "description": "one dataset, or every one if omitted"},
+        },
+    },
     "status": {
         "method": "status",
         "properties": {"on": {"type": "string"}},
