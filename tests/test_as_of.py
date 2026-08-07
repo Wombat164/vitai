@@ -445,12 +445,24 @@ def test_a_protocol_slug_is_a_slug_and_need_not_be_defined_yet():
     assert validate_record("weight", dict(row, protocol="Not A Slug"))
 
 
-def test_the_new_datasets_start_at_generation_one():
+def test_the_new_datasets_founding_keys_are_all_at_generation_one():
     """A dataset that has never existed has no lines in the wild, so every key
-    of it is founding. Letting the retro-bump loops reach it would have
-    stamped `regimes` at generation 3 with keys claiming to be later additions
-    to a history it does not have."""
-    from vitai.schema import CURRENT_GENERATION, key_generation
+    it was FOUNDED with is at generation 1. Letting the retro-bump loops reach
+    it would have stamped `regimes` at generation 3 with keys claiming to be
+    later additions to a history it does not have.
+
+    THE FOUNDING KEYS, NOT THE CURRENT GENERATION. This asserted
+    `CURRENT_GENERATION[name] == 1` until `regimes` gained `seq`, which is when
+    it became clear that was pinning a SNAPSHOT rather than an invariant - it
+    said such a dataset may never gain a key, which no schema can promise, and
+    it pushed the addition into registering at generation 1 where G25's
+    exemption cannot reach it. Its sibling in `test_clocks.py` learned the
+    same lesson when `sessions` moved for #43.
+    """
+    from vitai.schema import KEY_GENERATION, KEYS, key_generation
     for name in ("protocols", "regimes"):
-        assert CURRENT_GENERATION[name] == 1, name
+        founding = set(KEYS[name]) - set(KEY_GENERATION.get(name, {}))
+        assert founding, name
+        for key in founding:
+            assert key_generation(name, key) == 1, f"{name}.{key}"
         assert key_generation(name, "recorded_at") == 1, name

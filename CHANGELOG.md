@@ -11,6 +11,28 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **`seq` and `supersedes_seq`: naming one row of several that share a key**
+  (#239, contract 36). `line_key` falls back to `<date>/<source>`, so two runs
+  on one day from one watch share a name - 71 per cent of sessions and 93 per
+  cent of journal rows on a live record. Contract 33 fixed what a reference
+  RETIRES; what stayed broken was naming an EARLIER row, so five rows of one
+  key written as a chain could not be repaired by appending at all.
+- **Two fields, never a parsed reference.** `supersedes` is untouched - same
+  spelling, same meaning, and every reference already written keeps doing
+  exactly what it did - and the position travels in `supersedes_seq`. Verified
+  by a 10000-case differential against the previous engine over survivors and
+  the applied set: zero divergence.
+- **Stored, not computed.** Read-time positions renumber when a device syncs a
+  row stamped earlier, so a reference written last week names a different row;
+  the reproduction is kept as a test. `seq` is machine-set for the reason
+  `recorded_at` is, and is the higher of the count of visible rows sharing the
+  key and one past the highest position among them, so a machine that can SEE
+  positions 3 and 4 does not stamp 2.
+- **`validate` says which of the two ambiguities it found.** Where the matched
+  rows carry distinct positions it names the `supersedes_seq` to write; where
+  nothing can tell them apart it says so, because telling somebody holding a
+  five-year-old file to add a vendor identity is advice they cannot take for
+  the rows in front of them.
 - **`vitai questions`, and `Vitai.questions()` beside it** (#224, the floor).
   The engine holding a question the record cannot settle, which is the one
   direction nothing here ran in. A deterministic derivation, computable with

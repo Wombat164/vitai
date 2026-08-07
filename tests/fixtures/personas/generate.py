@@ -84,7 +84,9 @@ def _files_for(slug: str, end: date) -> dict[str, str]:
     )
     files["persona.toml"] = common.persona_toml(
         slug, mod.PERSONA_VERSION, mod.SEED, (dates[0], dates[-1]))
-    return files
+    # `seq` last, so every write and every drift check sees the same rows the
+    # engine's append path would have stamped (#239).
+    return {rel: common.stamp_seq_text(rel, text) for rel, text in files.items()}
 
 
 def _write(slug: str, target: Path, end: date) -> None:

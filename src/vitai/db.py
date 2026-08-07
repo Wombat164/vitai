@@ -490,7 +490,48 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     What it costs, recorded rather than discovered: a precise value that
 #     leaks cannot be un-leaked. The claim moves from "we do not hold this" to
 #     "we hold it and it does not escape", which is stronger and has to hold.
-CONTRACT_VERSION = "35"
+# 36: `seq` on every dataset whose key can collide (#239) - this row's stored
+#     position among the rows already sharing its bare key - and
+#     `supersedes_seq` beside `supersedes`, which narrows a reference to one
+#     of them.
+#
+#     `line_key` falls back to `<date>/<source>`, so two runs on one day from
+#     one watch shared a name: 71 per cent of sessions and 93 per cent of
+#     journal rows on a live record. Contract 33 fixed what a reference
+#     RETIRES - one reference takes one other row, the most recent. What
+#     stayed broken was naming an EARLIER one, and five rows of one key
+#     written as a chain could not be repaired by appending at all, because a
+#     second append naming the same key retires the FIRST APPEND rather than
+#     the next row down.
+#
+#     TWO FIELDS, NEVER A PARSED REFERENCE, and this is the load-bearing part
+#     for a consumer. `supersedes` is untouched: same spelling, same meaning,
+#     every reference already written keeps doing exactly what it did. The
+#     position travels in its own field. Spelling it into the reference as
+#     `K#n` was tried and abandoned - nothing stops a bare key containing the
+#     separator, since `activity_id` is an opaque string and `source` is not
+#     content-checked, and disambiguating by lookup made the MEANING OF A
+#     STORED REFERENCE DEPEND ON WHAT ELSE WAS IN VIEW: a reference whose
+#     target had not synced was read as a position and retired an unrelated
+#     row, and one that had already applied flipped back when a matching
+#     source arrived.
+#
+#     STORED, NOT COMPUTED. Read-time ordinals renumber when a device syncs a
+#     row stamped earlier, so a reference written last week names a different
+#     row. The reproduction is kept as a test.
+#
+#     MACHINE-SET. A caller may not supply `seq`, for the reason it may not
+#     supply `recorded_at`: a writer that could choose its own position could
+#     name a row that was never there. It is the higher of the count of
+#     visible rows sharing the key and one past the highest position among
+#     them, so a machine that can SEE positions 3 and 4 does not stamp 2.
+#
+#     WHAT IT DOES NOT FIX. Two machines offline at the same time cannot see
+#     each other and will stamp the same number. `validate` reports that as a
+#     key nothing can name apart, distinct from one that is merely ambiguous,
+#     and it cannot be repaired by backfill - assigning positions to lines
+#     already written means rewriting them.
+CONTRACT_VERSION = "36"
 
 _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity would
               # `place_precise` (#205) has NO column and is absent from every

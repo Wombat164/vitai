@@ -1,3 +1,3 @@
-{"date": "2030-04-08", "mode": "normal", "facilities": "scale gym routes", "place": "home", "source": "onboard", "note": "baseline setup"}
-{"date": "2030-05-27", "mode": "travel", "facilities": "routes", "place": "away", "source": "athlete", "note": "work trip - no scale, no gym, hotel treadmill only"}
-{"date": "2030-06-03", "mode": "normal", "facilities": "scale gym routes", "place": "home", "source": "athlete", "note": "home again", "recorded_at": null, "device": null, "place_precise": "14 Example Street, Anytown", "_gen": 4}
+{"date": "2030-04-08", "mode": "normal", "facilities": "scale gym routes", "place": "home", "source": "onboard", "note": "baseline setup", "seq": 0}
+{"date": "2030-05-27", "mode": "travel", "facilities": "routes", "place": "away", "source": "athlete", "note": "work trip - no scale, no gym, hotel treadmill only", "seq": 0}
+{"date": "2030-06-03", "mode": "normal", "facilities": "scale gym routes", "place": "home", "source": "athlete", "note": "home again", "recorded_at": null, "device": null, "place_precise": "14 Example Street, Anytown", "seq": 0, "_gen": 5}

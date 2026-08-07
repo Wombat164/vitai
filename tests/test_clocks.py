@@ -17,7 +17,8 @@ from vitai.clocks import (is_stamp, now_stamp, order_key, timing_caveat,
                           weigh_in_timing)
 from vitai.jsonl import DataError, append, heads, load
 from vitai.policy import state
-from vitai.schema import (CURRENT_GENERATION, KEYS, key_generation,
+from vitai.schema import (CURRENT_GENERATION, KEY_GENERATION, KEYS,
+                          key_generation,
                           recorded_at_problems, validate_record)
 
 
@@ -345,7 +346,14 @@ def test_recorded_at_never_lands_on_the_founding_generation():
     """
     for name in KEYS:
         gen = key_generation(name, "recorded_at")
-        if CURRENT_GENERATION[name] > 1:
+        # WHERE THE FIELD WAS RETRO-ADDED, which is exactly where a line can
+        # predate it. A dataset FOUNDED with `recorded_at` never registered it
+        # in the first place, so nothing of its can predate it and generation 1
+        # is right - and the two facts are told apart by the registry rather
+        # than by a list, because `CURRENT_GENERATION > 1` stopped meaning
+        # "this dataset had earlier lines" the moment a founded-with-it dataset
+        # gained any other key.
+        if "recorded_at" in KEY_GENERATION.get(name, {}):
             assert gen > 1, f"{name}: an existing line would be required to "\
                             "carry a field that postdates it"
         assert gen <= CURRENT_GENERATION[name], name
