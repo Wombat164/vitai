@@ -1338,6 +1338,117 @@ for _ds in SEQUENCED:
     KEYS[_ds] = KEYS[_ds] + ["seq"]
     KEY_GENERATION.setdefault(_ds, {})["seq"] = CURRENT_GENERATION[_ds]
 
+# --- a class per field, published (#299) ---------------------------------------
+#
+# A client that gates egress needs to know which fields are sensitive and how.
+# It cannot ask, so it keeps a copy of this schema, and the copy is wrong the
+# day a field is added here. Worse than wrong: the copy's fallback gives an
+# unknown field the MOST PERMISSIVE class, so a field added here ships to every
+# recipient the day it appears and the release log files it under the
+# permissive class, which makes the leak invisible to a careful reader.
+#
+# A PER-FIELD-NAME MAP CANNOT BE RIGHT, and that is not a quality problem with
+# the copy. `reason` appears on five datasets. On four it is free prose about
+# why a policy changed. On `plans` it is the COM-B axis - `motivation_automatic`,
+# `capability_physical`, `declined` - which is a claim about why somebody did
+# not train, and is arguably the most sensitive field in the record. One name,
+# two disclosures, and no map keyed on the name alone can say both.
+#
+# So the classification is per (dataset, field): a default by name, where a
+# name means one thing everywhere, and an override where it does not.
+#
+# THE CLASSES ARE THE ENGINE'S FIRST ANSWER, and they are a judgement rather
+# than a fact. What makes publishing them better than a consumer guessing is
+# not that they are certainly right: it is that they are wrong in ONE place,
+# reviewable, and cannot silently default.
+SENSITIVITY_CLASSES = frozenset({
+    "clinical",      # health state, injury, symptom, what it restricts
+    "behavioural",   # why somebody did or did not do a thing; mood, intake
+    "whereabouts",   # where the athlete is, was, or goes, and who with
+    "narrative",     # free text somebody wrote
+    "provenance",    # what observed a value, what relayed it, what wrote it
+    "reference",     # slugs, keys, closed vocabularies, links between rows
+    "measurement",   # the quantities
+    "temporal",      # when
+})
+
+_BY_NAME: dict[str, str] = {}
+for _cls, _names in {
+    "temporal": """date recorded_at measured_at start_time captured_at
+        occurred_date onset_date resolved_date event_date for_date from_date
+        to_date week session_start sleep_start sleep_end deadline policy_asof
+        for_phase""",
+    "clinical": """body_site body_side severity restricts restriction
+        precondition expects pain pain_site pain_side hip_pain
+        provider_type""",
+    "behavioural": """mood feel motivator rationale accountability alcohol
+        coverage""",
+    "whereabouts": """place place_precise location route track with facilities
+        setting weather context""",
+    "provenance": """source device origin path origin_evidence activity_id
+        activity_source read_by capture derived_by derived_build derived_from
+        derived_op modelled type_source model confidence evidence surface
+        machine equipment tracker food_table protocol""",
+    "narrative": """note text title statement about reason""",
+    "reference": """slug key dataset field session_ref anchored_by goal event
+        metric basis_claims depends_on supersedes contract sha256 media_type
+        artifact exercise item meal block round set_index type session_type
+        kind status outcome tier change_kind lifecycle_status polarity policy
+        period verification deadline_kind set_by serves requires on_miss
+        on_success on_period_end priority immovable removed result mode
+        planned load_type load_unit set_type failure angle_class side
+        rpe_scale mood_scale pain_scale activity
+        seq supersedes_seq""",
+    "measurement": """steps distance_km active_min kcal_out kcal_in protein_g
+        sleep_h rhr kg body_fat_pct kg_lo kg_hi body_fat_lo body_fat_hi avg_hr
+        max_hr cadence kcal elevation_m rpe duration_s rest_s rir load
+        reps_attempted reps_completed value target target_hi guard_pct
+        angle_deg lever_pos pad_pos seat_pos resistance_level tempo grams
+        grams_lo grams_hi kcal_100g protein_100g carb_100g fat_100g fibre_100g
+        sugar_100g sodium_mg_100g carb_g fat_g fibre_g sugar_g sodium_mg
+        bytes""",
+}.items():
+    for _name in _names.split():
+        _BY_NAME[_name] = _cls
+
+# WHERE ONE NAME MEANS TWO THINGS. Small on purpose: an override is a place the
+# name stopped carrying the meaning, and a long list of them would say the
+# names are wrong rather than that this dataset is unusual.
+SENSITIVITY_OVERRIDE: dict[str, dict[str, str]] = {
+    # The COM-B axis, and the case that proves a per-name map cannot work.
+    "plans": {"reason": "behavioural"},
+    # Free text ABOUT an injury is not the same disclosure as free text about
+    # a route, and neither is the closed vocabulary that says which injury.
+    "medical": {"title": "clinical", "note": "clinical", "kind": "clinical",
+                "status": "clinical"},
+}
+
+
+def sensitivity(dataset: str, field: str) -> str:
+    """The class this field belongs to. RAISES on one nobody has classified.
+
+    NO DEFAULT, and that is the whole point rather than a strictness. The
+    failure this exists to remove is a fallback standing in for a decision
+    nobody made: a consumer's map gave an unknown field its most permissive
+    class, so a field added here left the machine the day it appeared. A
+    default here would move that failure one layer in and make it the
+    engine's.
+
+    #297 pinned the founding key set for the same reason - an unregistered key
+    caught rather than defaulted - and `test_sensitivity.py` pins every pair,
+    so a field added tomorrow fails at the point it is added.
+    """
+    if field in SENSITIVITY_OVERRIDE.get(dataset, {}):
+        return SENSITIVITY_OVERRIDE[dataset][field]
+    if field in _BY_NAME:
+        return _BY_NAME[field]
+    raise KeyError(
+        f"{dataset}.{field} has no sensitivity class. A field with no class "
+        f"cannot be gated, and defaulting one is how an unknown field ships "
+        f"to everybody: classify it in `_BY_NAME`, or in "
+        f"`SENSITIVITY_OVERRIDE[{dataset!r}]` if the name means something "
+        f"different here than it does elsewhere (#299)")
+
 
 def key_generation(dataset: str, key: str) -> int:
     """Generation a key was introduced in (1 = founding)."""
