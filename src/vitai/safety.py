@@ -477,6 +477,7 @@ def gates_on(medical: list[dict], on: str | date,
     different things to the athlete: one is "your leg said no today", the
     other is "you have not asked it yet". Neither clears the gate.
     """
+    from .resolution import canonical_daily
     when = _as_date(on)
     if when is None:
         return []
@@ -524,12 +525,25 @@ def gates_on(medical: list[dict], on: str | date,
         out.append(gate)
 
     if pain_gate is not None:
-        for row in daily or []:
-            if _as_date(row.get("date")) != when:
+        for raw in daily or []:
+            if _as_date(raw.get("date")) != when:
                 continue
+            # THE ONE CANONICALISER, NOT A SECOND COPY OF HALF OF IT (#126,
+            # G89 part two). This read the retired `hip_pain` forward by hand
+            # and took the score only, so a legacy line produced a gate reading
+            # `pain 4 at unspecified site` while the rollup two lines below it
+            # said `at hip` - one row, one day, two answers, and the one on the
+            # safety surface was the vaguer.
+            #
+            # CANONICALISING IS NOT ADJUDICATING, which is what makes this safe
+            # to call here. `canonical_daily` is a pure function of the single
+            # row: it applies the schema's own forward map and normalises the
+            # site to its registry slug, and it consults no other row, no
+            # source ladder and no precedence. The property this surface
+            # protects - that an escalation cannot vanish because a ladder
+            # picked another source's null - is untouched.
+            row = canonical_daily(raw)
             score = row.get("pain")
-            if score is None:
-                score = row.get("hip_pain")
             if _numeric(score) and score > pain_gate:
                 site = row.get("pain_site") or "unspecified site"
                 out.append({
@@ -763,20 +777,40 @@ def _red_flag_sites(medical: list[dict], daily: list[dict],
     past as an ordinary sore spot to program around.
     """
     out = []
+    # THROUGH THE REGISTRY, NOT BY SPELLING (#126, found in review of it).
+    # `RED_FLAG_SITES` is keyed on canonical slugs and both loops compared a
+    # raw string to it, but validation deliberately accepts any alias the
+    # registry knows. So a line saying `pain_site: "ribs"` - clean, validated,
+    # and an alias of `chest` - produced NO cardiac escalation, while the same
+    # pain spelled `chest` produced an EMERGENCY. The most consequential
+    # escalation in the engine turned on which of two accepted words the
+    # athlete happened to write.
+    #
+    # `resolve` returns None for a site the registry does not know, and an
+    # unknown site is not a red flag, so the `or site` keeps the raw spelling
+    # for the message without letting it match.
     for rec in _still_open(medical, on):
-        site = rec.get("body_site")
+        site = _site_slug(rec.get("body_site"))
         if site in RED_FLAG_SITES and rec.get("date"):
             out.append(_escalation(
                 str(rec["date"]), EMERGENCY, RED_FLAG_SITES[site],
                 f"{rec.get('title')} recorded at {site}"))
     for row in daily:
-        site = row.get("pain_site")
+        site = _site_slug(row.get("pain_site"))
         score = row.get("pain")
         if site in RED_FLAG_SITES and _numeric(score) and score > 0 and row.get("date"):
             out.append(_escalation(
                 str(row["date"]), EMERGENCY, RED_FLAG_SITES[site],
                 f"pain {score} recorded at {site}"))
     return out
+
+
+def _site_slug(site: object) -> object:
+    """A body site as the registry spells it, or unchanged if it is unknown."""
+    from .anatomy import resolve
+    if not site:
+        return site
+    return resolve(str(site)) or site
 
 
 def _negated(text: str, index: int) -> bool:
@@ -976,18 +1010,22 @@ def _absolute_thresholds(daily: list[dict]) -> list[dict]:
     athlete whose baseline drifted upward over months never trips it, however
     high the number gets.
     """
+    from .resolution import canonical_daily
     out = []
-    for row in daily:
-        when = row.get("date")
+    for raw in daily:
+        when = raw.get("date")
         if not when:
             continue
+        # Raw rows, canonicalised one at a time - see `gates_on` for why that
+        # is not the same as reading adjudicated ones (#126).
+        row = canonical_daily(raw)
         rhr = row.get("rhr")
         if _numeric(rhr) and not RHR_ABSOLUTE_MIN <= rhr <= RHR_ABSOLUTE_MAX:
             out.append(_escalation(
                 str(when), EMERGENCY, "rhr_absolute",
                 f"resting heart rate {rhr} is outside "
                 f"{RHR_ABSOLUTE_MIN}-{RHR_ABSOLUTE_MAX}"))
-        score = row.get("pain") if row.get("pain") is not None else row.get("hip_pain")
+        score = row.get("pain")
         if _numeric(score) and score >= PAIN_ABSOLUTE:
             out.append(_escalation(
                 str(when), URGENT, "severe_pain",

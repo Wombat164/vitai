@@ -544,11 +544,11 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
                                  ON if avg >= aim else BEHIND, goal,
                                  statistic=AVERAGE))
         if eff.pain_gate is not None:
-            # `pain` after the gen-2 generalization; old lines arrive here
-            # already mapped from `hip_pain` by resolution.canonical_daily.
-            pains = [d.get("pain") if d.get("pain") is not None else d.get("hip_pain")
-                     for d in days
-                     if d.get("pain") is not None or d.get("hip_pain") is not None]
+            # `pain` after the gen-2 generalization. The comment here used to
+            # say old lines arrive already mapped by `canonical_daily` and the
+            # next line mapped them again anyway (#126); the comment was right,
+            # so the second map is gone rather than the first.
+            pains = [d["pain"] for d in days if d.get("pain") is not None]
             if pains:
                 worst = max(pains)
                 # CURRENT NAME FIRST. `_goal_for` matches `metric` exactly, so
