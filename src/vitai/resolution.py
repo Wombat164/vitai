@@ -771,6 +771,11 @@ def resolve(datasets: dict[str, list[dict]],
     # And the same relation one rung up: not a value that moved, but something
     # the engine SAID on the strength of one (#134).
     tripwires += unsupported_assertions(ledger)
+    # A restriction the engine cannot act on (#75). Not a correction problem
+    # like the two above - a row that is complete to a reader and inert to the
+    # machine, which is worse than a missing value because a missing value is
+    # at least legible as missing.
+    tripwires += unenforceable_restrictions(datasets)
     # ADVISORY, and last: a constant run is a question about how a number was
     # acquired, never a fault in the arithmetic above it. AFTER apply_regimes
     # deliberately: a declared regime has already emptied its interval, so the
@@ -1001,6 +1006,71 @@ def retractions(datasets: dict[str, list[dict]]) -> list[dict]:
     ledger.sort(key=lambda r: (r["date"] or "", r["kind"], r["claim_id"],
                                r["retracted_by"] or ""))
     return ledger
+
+
+def unenforceable_restrictions(datasets: dict) -> list[dict]:
+    """A row that says it restricts something and names nothing (#75).
+
+    Load-bearing facts keep arriving in prose the engine cannot read, and the
+    sharpest recorded instance is this one: two `medical` rows carried, in the
+    note, the words "RESTRICTION NOT ENFORCEABLE - no value in the restricts
+    vocabulary expresses this". They were right, `restricts` was null, and for
+    three days the record stated a restriction no gate could act on while the
+    athlete trained inside it. The note announced its own unenforceability, in
+    English, and that announcement was itself unreadable.
+
+    MECHANICAL, NOT A PROSE SCAN. Reading notes for restriction-shaped
+    sentences is a heuristic that would fire on the wrong rows and miss the
+    quiet ones. Two shapes state a restriction in a field the engine already
+    reads:
+
+      `kind: restriction` with nothing in `restricts` - a row whose own
+      declared kind says it is a restriction, naming nothing it restricts.
+
+      A `precondition` with nothing in `restricts` - a check to clear a
+      restriction that does not exist, so passing it clears nothing and
+      failing it blocks nothing. THAT SHAPE IS ALREADY REFUSED AT APPEND, and
+      a refusal where the cause is beats a finding in a later report - it is
+      kept here because `append` covers writes through this engine and nothing
+      else, and a row that arrived by sync or by hand is the one nothing has
+      checked.
+
+    The `kind: restriction` shape belongs in that same refusal, and this is
+    not where it would go if `schema.py` were free. It is worth having both
+    even then, for the reason #295 records: a rule forbidding something
+    repairs nothing already written, and a finding reaches the rows a refusal
+    never can.
+
+    HEADS ONLY, so it clears itself. `medical` is identity-keyed, and a later
+    row for the same slug that sets `restricts` is the repair; reporting the
+    superseded line forever would be a finding that can never reach zero,
+    which is the state #245 records people stop reading.
+    """
+    from .jsonl import heads
+
+    out = []
+    for slug, row in sorted(heads(datasets.get("medical") or [], "medical").items()):
+        if str(row.get("restricts") or "").strip():
+            continue
+        if str(row.get("kind") or "") == "restriction":
+            why = "its kind says it is a restriction"
+        elif str(row.get("precondition") or "").strip():
+            why = (f"it names {row['precondition']!r} as the check that would "
+                   "clear it")
+        else:
+            continue
+        out.append({
+            "date": row.get("date"), "kind": "unenforceable_restriction",
+            "severity": "review",
+            "detail": (
+                f"medical {slug!r} states a restriction and names nothing it "
+                f"restricts: {why}, and `restricts` is empty. No gate can act "
+                f"on it, so the record reads as restricted to a person and is "
+                f"inert to the engine. If the vocabulary has no value for it, "
+                f"that is a gap worth filing rather than working around in the "
+                f"note"),
+        })
+    return out
 
 
 def unsupported_assertions(ledger: list[dict]) -> list[dict]:
