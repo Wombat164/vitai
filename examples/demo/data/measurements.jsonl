@@ -1,4 +1,4 @@
-{"date": "2030-04-08", "kind": "waist_cm", "value": 92.0, "source": "tape", "note": "morning, unfasted"}
-{"date": "2030-05-20", "kind": "waist_cm", "value": 89.5, "source": "tape", "note": null}
-{"date": "2030-06-30", "kind": "waist_cm", "value": 88.0, "source": "tape", "note": null}
-{"date": "2030-05-20", "kind": "body_fat_pct", "value": 22.4, "source": "dexa", "note": "clinic scan"}
+{"date": "2030-04-08", "kind": "waist_cm", "value": 92.0, "source": "tape", "note": "morning, unfasted", "seq": 0}
+{"date": "2030-05-20", "kind": "waist_cm", "value": 89.5, "source": "tape", "note": null, "seq": 0}
+{"date": "2030-06-30", "kind": "waist_cm", "value": 88.0, "source": "tape", "note": null, "seq": 0}
+{"date": "2030-05-20", "kind": "body_fat_pct", "value": 22.4, "source": "dexa", "note": "clinic scan", "seq": 0}

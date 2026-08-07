@@ -43,7 +43,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from .identity import refs
-from .jsonl import _read_streams, line_key, retire
+from .jsonl import _read_streams, line_key, position_of, retire, target_of
 from .schema import IDENTITY_KEY, KEYS, META_KEYS
 
 # Not a quantity anybody corrected: stamped by the engine, or the reference
@@ -195,10 +195,16 @@ def _applied(dataset: str, rows: list[dict]) -> list[tuple[int, int]]:
 
     out = []
     for position, rec in enumerate(rows):
-        ref = str(rec.get("supersedes") or "")
-        if not ref:
+        if (aimed := target_of(rec)) is None:
             continue
+        ref, narrow = aimed
         candidates = by_key.get(ref, ())
+        if narrow is not None:
+            # A NARROWED CORRECTION NAMES ONE ROW (#239), so the pairing is a
+            # lookup rather than a walk backwards. Without this the surface
+            # whose whole job is "what a correction actually did" omitted every
+            # correction written the way `validate` advises.
+            candidates = [c for c in candidates if position_of(rows[c]) == narrow]
         cut = bisect_left(candidates, position)
         if not cut:
             continue                  # names nothing earlier; `validate` says so

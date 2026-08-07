@@ -1292,6 +1292,52 @@ def _sensitive_problems(dataset: str, rec: dict) -> list[str]:
     return out
 
 
+# --- naming one row of several that share a key (#239) ------------------------
+#
+# `line_key` falls back to `<date>/<source>`, so two runs on one day from one
+# watch share a name. Measured on a live record that was the ordinary case
+# rather than an edge: 71 per cent of sessions and 93 per cent of journal rows
+# shared a key with something.
+#
+# Contract 33 fixed what a reference RETIRES - one reference takes ONE other
+# row, the most recent, which is what a correction written straight afterwards
+# means. What stayed broken is naming an EARLIER one, and the cost is concrete:
+# five rows of one key written as a chain cannot be repaired by appending at
+# all. A reference retires the most recent; a second append naming the same key
+# retires the FIRST APPEND rather than the next row down; and editing in place
+# is what append-only forbids. Three of those five rows are unreachable by any
+# sequence of writes.
+#
+# READ-TIME ORDINALS WERE BUILT AND REJECTED, and `test_line_keys.py` keeps the
+# reproduction. Positions in the merged order renumber when a device syncs a
+# row stamped earlier, so a reference written last week names a different row
+# and something already retired comes back. What works is a position STORED on
+# the row, the way `sets` carries `set_index`.
+#
+# ONLY WHERE THE KEY CAN COLLIDE. The identity-keyed datasets already name a
+# row by a slug or a tuple, and `emissions` never retires at all, so a position
+# there would be a column that answers nothing.
+SEQUENCED = tuple(d for d in KEYS
+                  if d not in IDENTITY_KEY and d != "emissions")
+for _ds in SEQUENCED:
+    # EVERY DATASET BUMPS, INCLUDING THE ONES STILL AT GENERATION ONE. The
+    # first cut skipped those, reasoning that a dataset nothing has written
+    # yet has no lines in the wild, so `seq` could be founding there.
+    #
+    # That is an assertion about somebody else's record, and it is not this
+    # engine's to make. `regimes` is written by no fixture here and may be
+    # written in a record I cannot see - and registering `seq` at generation 1
+    # makes G25's exemption, `line_generation < key_generation`, false for
+    # every line that could exist, so each one is held to a key that postdates
+    # it. That is #295's failure mode exactly, committed while fixing #295's
+    # neighbour.
+    #
+    # Bumping is free and the direction is the safe one: a key registered
+    # above the founding generation can only ever EXEMPT more lines.
+    CURRENT_GENERATION[_ds] += 1
+    KEYS[_ds] = KEYS[_ds] + ["seq"]
+    KEY_GENERATION.setdefault(_ds, {})["seq"] = CURRENT_GENERATION[_ds]
+
 # --- a class per field, published (#299) ---------------------------------------
 #
 # A client that gates egress needs to know which fields are sensitive and how.
@@ -1351,7 +1397,8 @@ for _cls, _names in {
         period verification deadline_kind set_by serves requires on_miss
         on_success on_period_end priority immovable removed result mode
         planned load_type load_unit set_type failure angle_class side
-        rpe_scale mood_scale pain_scale activity""",
+        rpe_scale mood_scale pain_scale activity
+        seq supersedes_seq""",
     "measurement": """steps distance_km active_min kcal_out kcal_in protein_g
         sleep_h rhr kg body_fat_pct kg_lo kg_hi body_fat_lo body_fat_hi avg_hr
         max_hr cadence kcal elevation_m rpe duration_s rest_s rir load
@@ -1446,7 +1493,9 @@ _TYPES: dict[str, tuple[type, ...]] = {
 }
 
 # extra keys that are always legal (the supersedes mechanic + schema generation)
-META_KEYS = {"supersedes", "_gen"}
+# `supersedes_seq` NARROWS `supersedes` and is meta for the same reason: it
+# describes the correction rather than valuing the row (#239).
+META_KEYS = {"supersedes", "supersedes_seq", "_gen"}
 
 
 def _bad_date(v: object) -> bool:
@@ -1890,12 +1939,45 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
         if (c := rec.get("confidence")) is not None:
             if isinstance(c, bool) or not isinstance(c, _NUMERIC) or not 0 <= c <= 1:
                 problems.append(f"'confidence' is 0-1 or null, got {c!r}")
+    problems += _position_problems(dataset, rec)
     problems += _validate_policy(dataset, rec)
     problems += _sensitive_problems(dataset, rec)
     return _redacted(dataset, rec, problems)
 
 
 REDACTED = "[precise]"
+
+
+def _whole_count(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _position_problems(dataset: str, rec: dict) -> list[str]:
+    """Shapes for the two position fields (#239).
+
+    CHECKED HERE AS WELL AS REFUSED AT APPEND, and the pair is not redundant.
+    `append` refuses a caller-supplied `seq`, which covers writes through this
+    engine and nothing else - and the format invites hand editing and rows
+    arrive by sync. Unchecked, `"1"` and `1` are two spellings of one position
+    and a negative names a row that cannot exist.
+    """
+    out = []
+    if (position := rec.get("seq")) is not None and dataset in SEQUENCED:
+        if not _whole_count(position):
+            out.append(
+                f"'seq' is this row's position among the rows already sharing "
+                f"its key, so it is a whole number counting from zero, got "
+                f"{position!r}")
+    if (narrow := rec.get("supersedes_seq")) is not None:
+        if not _whole_count(narrow):
+            out.append(
+                f"'supersedes_seq' is the position of the row being corrected, "
+                f"so it is a whole number counting from zero, got {narrow!r}")
+        if not str(rec.get("supersedes") or "").strip():
+            out.append(
+                "'supersedes_seq' NARROWS 'supersedes' and cannot stand alone: "
+                "a position with no key names a position in nothing")
+    return out
 
 
 def _redacted(dataset: str, rec: dict, problems: list[str]) -> list[str]:
@@ -2819,35 +2901,94 @@ def supersedes_problems(dataset: str, rows: list[tuple[int, dict]]) -> list[str]
     engine cannot know which was meant, and the fix is a vendor identity on
     the rows - which only reaches rows written after an importer supplies it.
     """
-    from .jsonl import line_key
+    from .jsonl import line_key, position_of, target_of
     problems: list[str] = []
     by_key: dict[str, list[int]] = {}
+    seat: dict[int, int | None] = {}
     for n, r in rows:
         by_key.setdefault(line_key(dataset, r), []).append(n)
+        seat[n] = position_of(r)
     superseding = {n for n, r in rows if r.get("supersedes")}
+    problems += _unnameable(dataset, rows)
     for n, r in rows:
         if not (ref := r.get("supersedes")):
             continue
+        narrow = (target_of(r) or (None, None))[1]
         # Rows that are themselves corrections are excluded from the count. A
         # CHAIN (A superseded by B, B superseded by C) legitimately shares one
         # reference and retires all of it - that is documented behaviour, not
         # ambiguity. What this catches is two rows that were never the same
         # thing answering to one key, which is the case that loses data.
+        # A row that is itself a correction is excluded from a BARE reference's
+        # matches, because a chain legitimately shares one reference and that
+        # is documented behaviour rather than ambiguity. A NARROWED reference
+        # names one row, and that row is eligible whatever else it does -
+        # excluding it would report "matches no line" about a reference that
+        # retires exactly what it names.
         hit = [m for m in by_key.get(str(ref), [])
-               if m != n and m not in superseding]
+               if m != n and (narrow is not None or m not in superseding)]
+        if narrow is not None:
+            hit = [m for m in hit if seat[m] == narrow]
         if len(hit) > 1:
-            problems.append(
-                f"{dataset}.jsonl line {n}: 'supersedes' {ref!r} matches "
-                f"{len(hit)} lines ({', '.join(map(str, hit))}) - the most "
-                "recent is the one retired, and it may not be the one meant. "
-                "Give these rows a vendor identity (activity_id) so a "
-                "correction can say which one it corrects")
+            # AMBIGUOUS AND NAMEABLE, versus ambiguous and not, because the two
+            # need different sentences (#239). Where the matched rows carry
+            # distinct positions the author can name one, and the advice is the
+            # `supersedes_seq` to write. Where they do not - lines older than
+            # the field, or two machines that were offline together and stamped
+            # the same number - no reference reaches them, and telling somebody
+            # holding a five-year-old file to add a vendor identity is advice
+            # they cannot take for the rows in front of them.
+            seats = [seat[m] for m in hit]
+            if None not in seats and len(set(seats)) == len(seats):
+                problems.append(
+                    f"{dataset}.jsonl line {n}: 'supersedes' {ref!r} matches "
+                    f"{len(hit)} lines ({', '.join(map(str, hit))}) - the most "
+                    "recent is the one retired, and it may not be the one "
+                    "meant. Name the one you mean with 'supersedes_seq': "
+                    + ", ".join(str(x) for x in sorted(seats)))
+            else:
+                problems.append(
+                    f"{dataset}.jsonl line {n}: 'supersedes' {ref!r} matches "
+                    f"{len(hit)} lines ({', '.join(map(str, hit))}) and "
+                    "NOTHING CAN NAME THEM APART - the most recent is the one "
+                    "retired and no reference reaches the others. These lines "
+                    "predate 'seq' or were written by two machines that could "
+                    "not see each other. The value can be restated on a new "
+                    "line; the earlier ones cannot be corrected in place. Rows "
+                    "written from here on carry a position, and a vendor "
+                    "identity (activity_id) where the source supplies one, so "
+                    "this does not recur")
         elif not hit:
             problems.append(
                 f"{dataset}.jsonl line {n}: 'supersedes' {ref!r} matches no "
                 "line - nothing is being corrected, and the reference is "
                 "probably mistyped")
     return problems
+
+
+def _unnameable(dataset: str, rows: list[tuple[int, dict]]) -> list[str]:
+    """Rows that share a stored position, which is the one collision left.
+
+    `seq` is counted across every stream at append and takes the higher of the
+    count and the highest position already visible, so one machine never hands
+    out a number twice and neither does a machine that can SEE the rows. Two
+    that cannot see each other at all will, and this says so rather than
+    leaving a reference that silently retires whichever sorted last. Reported
+    once per key, because it is one fact about a pair.
+    """
+    from .jsonl import line_key, position_of
+
+    seen: dict[tuple[str, int], list[int]] = {}
+    for n, r in rows:
+        if (pos := position_of(r)) is not None:
+            seen.setdefault((line_key(dataset, r), pos), []).append(n)
+    return [
+        f"{dataset}.jsonl lines {', '.join(map(str, lines))}: all carry key "
+        f"{key!r} at position {pos}, so no correction can name one of them. "
+        "Two machines that could not see each other's rows stamped the same "
+        "position. Restate the value on a new line rather than correcting "
+        "these"
+        for (key, pos), lines in sorted(seen.items()) if len(lines) > 1]
 
 
 def corrections_awaiting_their_target(dataset: str,
@@ -2860,6 +3001,11 @@ def corrections_that_did_not_apply(dataset: str,
                                    rows: list[tuple[int, dict]]) -> list[str]:
     """PROBLEM: a correction whose target is here and survived anyway."""
     return _dud_corrections(dataset, rows)[0]
+
+
+def _name(ref: str, narrow: int | None) -> str:
+    """A reference as a person would write it in a message."""
+    return repr(ref) if narrow is None else f"{ref!r} position {narrow}"
 
 
 def _dud_corrections(dataset: str, rows: list[tuple[int, dict]]
@@ -2895,7 +3041,7 @@ def _dud_corrections(dataset: str, rows: list[tuple[int, dict]]
     nothing said so.
     """
     from .devices import merge
-    from .jsonl import line_key, retire
+    from .jsonl import line_key, position_of, retire, target_of
     # IN MERGED ORDER, which is the whole point. `validate` hands these over
     # in FILE order, one device file after another, and in file order the
     # correction sits below its target and applies perfectly. The defect is
@@ -2904,24 +3050,31 @@ def _dud_corrections(dataset: str, rows: list[tuple[int, dict]]
     # `merge` over a single unnamed stream is the same code path with one
     # actor, so a single-file record is ordered exactly as `load` orders it.
     lines = merge([("", [r for _, r in rows])], dataset)
-    applied: set[str] = set()
+    applied: set[tuple[str, int | None]] = set()
     retire(dataset, lines, applied=applied)
 
     out: list[str] = []
     advisory: list[str] = []
-    seen: set[str] = set()
+    seen: set[tuple[str, int | None]] = set()
     for r in lines:
-        if not (ref := r.get("supersedes")):
+        # THE WHOLE TARGET, KEY AND POSITION (#239). Matching on the key alone
+        # meant a defeated NARROWED correction went unreported whenever any
+        # other correction of the same key applied, and a narrowed reference
+        # naming a position nothing carries was diagnosed as an ordering
+        # defeat - "it sorted before its target, fix the clock" - while
+        # `supersedes_problems` said "matches no line, probably mistyped"
+        # about the same row. Two contradictory instructions for one line.
+        if (target := target_of(r)) is None:
             continue
-        ref = str(ref)
+        ref, narrow = target
         # ASKED OF `retire`, not inferred from what survived (#239). The old
         # check counted anything still alive under the reference as proof the
         # correction did nothing - which was sound while one reference retired
         # every match, and became a false alarm the moment it retired one. A
         # surviving sibling is now the ordinary, intended outcome.
-        if ref in applied or ref in seen:
+        if target in applied or target in seen:
             continue
-        seen.add(ref)
+        seen.add(target)
         # TWO CAUSES WITH OPPOSITE REMEDIES, split because escalating them
         # together made an ordinary mid-sync record fail `validate` (#210).
         #
@@ -2934,10 +3087,13 @@ def _dud_corrections(dataset: str, rows: list[tuple[int, dict]]
         # A reference whose target IS here and survived anyway is the defeat:
         # the value the correction was meant to replace is what every reader
         # sees, and no amount of waiting changes it.
-        if ref in {line_key(dataset, other) for other in lines
-                   if not other.get("supersedes")}:
+        here = [other for other in lines if not other.get("supersedes")
+                and line_key(dataset, other) == ref
+                and (narrow is None or position_of(other) == narrow)]
+        if here:
             out.append(
-                f"{dataset}: a correction of {ref!r} did NOT apply - the line "
+                f"{dataset}: a correction of {_name(ref, narrow)} did NOT "
+                f"apply - the line "
                 f"it names is still in the record, so the value it was meant "
                 f"to replace is what every reader sees. It sorted before its "
                 f"target, which happens when a correction carries no "
@@ -2947,7 +3103,8 @@ def _dud_corrections(dataset: str, rows: list[tuple[int, dict]]
                 f"clock has since passed that stamp")
         else:
             advisory.append(
-                f"{dataset}: a correction of {ref!r} names no line in this "
+                f"{dataset}: a correction of {_name(ref, narrow)} names no "
+                f"line in this "
                 f"record. That is the ordinary state of a record part way "
                 f"through a sync - the writer holding the target has not "
                 f"arrived - and it applies itself when that file lands. "

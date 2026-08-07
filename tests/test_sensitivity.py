@@ -40,25 +40,33 @@ PINNED = {
     "achievements": {
         "date": "temporal", "title": "narrative", "goal": "reference",
         "source": "provenance", "note": "narrative", "occurred_date":
-        "temporal", "recorded_at": "temporal", "device": "provenance"
+        "temporal", "recorded_at": "temporal", "device": "provenance",
+        "seq": "reference"
+
     },
     "artifacts": {
         "date": "temporal", "sha256": "reference", "media_type":
         "reference", "bytes": "measurement", "captured_at": "temporal",
         "origin": "provenance", "kind": "reference", "note": "narrative",
         "removed": "reference", "reason": "narrative", "recorded_at":
-        "temporal", "device": "provenance"
+        "temporal", "device": "provenance",
+        "seq": "reference"
+
     },
     "checks": {
         "date": "temporal", "slug": "reference", "result": "reference",
         "value": "measurement", "source": "provenance", "note": "narrative",
-        "recorded_at": "temporal", "device": "provenance"
+        "recorded_at": "temporal", "device": "provenance",
+        "seq": "reference"
+
     },
     "context": {
         "date": "temporal", "mode": "reference", "facilities":
         "whereabouts", "place": "whereabouts", "source": "provenance",
         "note": "narrative", "recorded_at": "temporal", "device":
-        "provenance", "place_precise": "whereabouts"
+        "provenance", "place_precise": "whereabouts",
+        "seq": "reference"
+
     },
     "daily": {
         "date": "temporal", "steps": "measurement", "distance_km":
@@ -77,7 +85,9 @@ PINNED = {
         "provenance", "fat_g": "measurement", "carb_g": "measurement",
         "fibre_g": "measurement", "sugar_g": "measurement", "sodium_mg":
         "measurement", "sleep_start": "temporal", "sleep_end": "temporal",
-        "mood_scale": "reference", "pain_scale": "reference"
+        "mood_scale": "reference", "pain_scale": "reference",
+        "seq": "reference"
+
     },
     "emissions": {
         "date": "temporal", "kind": "reference", "metric": "reference",
@@ -113,13 +123,17 @@ PINNED = {
         "date": "temporal", "kind": "reference", "statement": "narrative",
         "confidence": "provenance", "model": "provenance", "evidence":
         "provenance", "note": "narrative", "depends_on": "reference",
-        "recorded_at": "temporal", "device": "provenance"
+        "recorded_at": "temporal", "device": "provenance",
+        "seq": "reference"
+
     },
     "journal": {
         "date": "temporal", "kind": "reference", "text": "narrative",
         "about": "narrative", "source": "provenance", "confidence":
         "provenance", "status": "reference", "note": "narrative",
-        "recorded_at": "temporal", "device": "provenance"
+        "recorded_at": "temporal", "device": "provenance",
+        "seq": "reference"
+
     },
     "meals": {
         "date": "temporal", "meal": "reference", "item": "reference",
@@ -143,7 +157,9 @@ PINNED = {
         "provenance", "modelled": "provenance", "artifact": "reference",
         "device": "provenance", "protocol": "provenance", "derived_from":
         "provenance", "derived_op": "provenance", "derived_by":
-        "provenance", "derived_build": "provenance"
+        "provenance", "derived_build": "provenance",
+        "seq": "reference"
+
     },
     "medical": {
         "date": "temporal", "slug": "reference", "kind": "clinical",
@@ -174,7 +190,9 @@ PINNED = {
         "dataset": "reference", "field": "reference", "kind": "reference",
         "source": "provenance", "text": "narrative", "anchored_by":
         "reference", "note": "narrative", "recorded_at": "temporal",
-        "device": "provenance", "supersedes": "reference"
+        "device": "provenance", "supersedes": "reference",
+        "seq": "reference"
+
     },
     "sessions": {
         "date": "temporal", "type": "reference", "distance_km":
@@ -193,7 +211,9 @@ PINNED = {
         "artifact": "reference", "device": "provenance", "derived_from":
         "provenance", "derived_op": "provenance", "derived_by":
         "provenance", "derived_build": "provenance", "rpe_scale":
-        "reference", "place_precise": "whereabouts"
+        "reference", "place_precise": "whereabouts",
+        "seq": "reference"
+
     },
     "sets": {
         "date": "temporal", "session_start": "temporal", "exercise":
@@ -232,7 +252,9 @@ PINNED = {
         "artifact": "reference", "device": "provenance", "protocol":
         "provenance", "derived_from": "provenance", "derived_op":
         "provenance", "derived_by": "provenance", "derived_build":
-        "provenance"
+        "provenance",
+        "seq": "reference"
+
     },
 }
 

@@ -211,29 +211,29 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # `derived_external` row from this generation on - no persona writes one, so
 # every persona line gains two explicit nulls and a generation stamp, and no
 # value moves.
-AUTHORED_AGAINST_CONTRACT = "35"  # vitai.db.CONTRACT_VERSION is a string
+AUTHORED_AGAINST_CONTRACT = "36"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     # #221: a new dataset, empty for every persona.
     "plans": 1,
-    "achievements": 4,
-    "artifacts": 3,
-    "checks": 3,
-    "context": 4,
-    "daily": 13,
+    "achievements": 5,
+    "artifacts": 4,
+    "checks": 4,
+    "context": 5,
+    "daily": 14,
     "emissions": 1,
     "events": 4,
     "goals": 6,
-    "inferences": 4,
-    "journal": 3,
+    "inferences": 5,
+    "journal": 4,
     "meals": 6,
-    "measurements": 10,
+    "measurements": 11,
     "medical": 6,
-    "sessions": 14,
+    "sessions": 15,
     "sets": 7,
     "protocols": 1,
-    "regimes": 1,
+    "regimes": 2,
     "thresholds": 3,
-    "weight": 11,
+    "weight": 12,
 }
 
 
@@ -445,6 +445,45 @@ def write_text(path: Path, text: str) -> None:
     `\\r\\n` and corrupt the LF-pinned convention `vitai init` establishes."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8", newline="\n")
+
+
+def stamp_seq_text(rel: str, text: str) -> str:
+    """`seq` on every row of a dataset file, the way `append` stamps it (#239).
+
+    ON THE SERIALISED FORM, because every builder returns
+    `{"data/weight.jsonl": jsonl_text(sort_rows(rows))}` - text, not rows. A
+    helper wired into `write_jsonl` would be dead code no builder calls, and
+    the corpus would ship every row carrying `seq: null` at the generation that
+    INTRODUCED seq - a shape the append path can never produce, with the drift
+    gate passing because generator and fixtures were consistently wrong
+    together.
+
+    So it runs where the dataset name and the rows are both available and every
+    write and every drift check passes through: `generate.py`'s `_files_for`.
+    """
+    from vitai.jsonl import line_key
+    from vitai.schema import SEQUENCED
+
+    if not (rel.startswith("data/") and rel.endswith(".jsonl")):
+        return text
+    dataset = rel[len("data/"):-len(".jsonl")]
+    if dataset not in SEQUENCED:
+        return text
+    counts: dict[str, int] = {}
+    out = []
+    for line in text.splitlines():
+        # A comment line is legal in this format and `read_lines` skips it, so
+        # parsing every line unconditionally would kill the generator on the
+        # first one anybody writes.
+        if not line.strip() or line.lstrip().startswith("//"):
+            out.append(line)
+            continue
+        row = json.loads(line)
+        key = line_key(dataset, row)
+        row["seq"] = counts.get(key, 0)
+        counts[key] = row["seq"] + 1
+        out.append(json.dumps(row))
+    return "\n".join(out) + "\n"
 
 
 def write_jsonl(path: Path, rows: list[dict]) -> None:
