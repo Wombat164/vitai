@@ -2464,7 +2464,7 @@ def field_types(dataset: str | None = None) -> dict:
     array as a scalar drops the field rather than failing.
     """
     from .db import LIST_COLS, column_affinity
-    from .schema import SENSITIVE, _TYPES
+    from .schema import SENSITIVE, _TYPES, sensitivity
 
     names = [dataset] if dataset is not None else list(KEYS)
     if dataset is not None and dataset not in KEYS:
@@ -2486,6 +2486,16 @@ def field_types(dataset: str | None = None) -> dict:
                 # names the field that does, and null means this field is not
                 # sensitive rather than that it is sensitive with no partner.
                 "coarse_companion": pairs.get(field),
+                # WHAT KIND OF DISCLOSURE THIS FIELD IS (#299). A client
+                # gating egress was keeping a hand-written map of these and
+                # could not keep it right: the copy is wrong the day a field
+                # is added here, and its fallback gave an unknown field the
+                # most permissive class - so a new field shipped to everybody
+                # and the release log filed it as harmless.
+                #
+                # Published rather than internal for the reason the rest of
+                # this accessor is: it exists because consumers were guessing.
+                "sensitivity": sensitivity(name, field),
             }
             for field in KEYS[name]
         }

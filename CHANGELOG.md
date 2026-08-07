@@ -11,6 +11,21 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **A sensitivity class per field, published** (#299). `field_types()` now
+  carries `sensitivity` beside the type information, so a client gating egress
+  derives its policy instead of hand-maintaining a copy of this schema that is
+  wrong the day a field is added here.
+- **Per `(dataset, field)`, because a per-name map cannot be right.** `reason`
+  is on five datasets: on four it is prose about why a policy changed, and on
+  `plans` it is the COM-B axis - a claim about why somebody did not train. One
+  name, two disclosures.
+- **No default, ever.** An unclassified field raises rather than taking a
+  class. The failure this removes is a fallback standing in for a decision
+  nobody made, and a default here would move that failure one layer in and
+  make it the engine's. The whole table is pinned, so adding a field forces
+  the decision at the point it is added - the same shape as #297's generation
+  pin.
+
 - **`vitai questions`, and `Vitai.questions()` beside it** (#224, the floor).
   The engine holding a question the record cannot settle, which is the one
   direction nothing here ran in. A deterministic derivation, computable with
