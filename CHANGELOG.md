@@ -135,6 +135,27 @@ adds accessors over what the engine already knew.
 
 ### Fixed
 
+- **The rollup leads with what is blocking** (#76). Measured on a live record,
+  83 per cent of the document was one table and everything actionable sat in
+  its last thirteen lines. Gates, then safety, then tripwires now come before
+  any table, and "nothing gated" and "nothing firing" are stated rather than
+  left blank.
+- **Gates sit above tripwires, which their own comment already claimed.** It
+  said gates "outrank tripwires and sit above them in the reader's eye", and
+  the code emitted them afterwards - on the shipped demo, `## Gates` at line
+  56 and `## Tripwires` at 52.
+- **A week of cycling is no longer a week of nothing.** The training table
+  counted running and strength, and every other session still created its week
+  row - so a 20 km ride, a swim and a walk each rendered `| 0.0 | 0 | 0 | - |
+  - |`, identical to a week nobody trained. The table gained a column for
+  everything else, which is why the issue's ask to suppress all-zero rows is
+  not the fix it looks like: most of them were weeks somebody trained in a way
+  the table could not describe.
+- **The training table is bounded**, to `rollup_weeks` (default 12), and says
+  how many earlier weeks it did not show.
+- **The easy-cap flag says whose cap it is.** `vitai.toml` has no history, so
+  `OVER +2` against a run from years earlier asserts a comparison nobody made.
+  Stated once per section rather than implied on every row.
 - **The weight rate was measured over one span and divided by another**
   (#142). `status()` compares the mean of the last seven weigh-ins against the
   mean of the seven before them, and divided by the days between the

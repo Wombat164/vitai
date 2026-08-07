@@ -116,9 +116,15 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
     gates = gates or []
     escalations = escalations or []
     events = events or []
-    L = ["# Weekly rollup", "",
-         f"Generated {today.isoformat()} - derived, do not edit.",
-         "", "## Weight", ""]
+    # WHAT IS BLOCKING, THEN WHAT FIRED, THEN THE TABLES (#76). Measured on a
+    # live record, 83 per cent of this document was one table and everything
+    # actionable was in its last thirteen lines - below the fold by a factor of
+    # twenty, in a document a reader has been trained by bulk to skim. #40
+    # already reasons about this: an alert that fires every day is worse than
+    # none because it teaches the reader to skip. Here it is not repetition
+    # that trains the skip, it is volume, and the effect is the same.
+    head: list[str] = []
+    L = ["", "## Weight", ""]
 
     if weight:
         pts = sorted((w["date"], w["kg"]) for w in weight if w.get("kg") is not None)
@@ -247,7 +253,20 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
         L.append(f"- {len(step_days)} days logged in total")
 
     L += ["", "## Training by week", ""]
-    by_week: dict[str, dict] = defaultdict(lambda: {"km": 0.0, "runs": 0, "gym": 0, "hr": []})
+    # A WEEK OF CYCLING IS NOT A WEEK OF NOTHING (#76). The columns counted
+    # running and strength, and every other session still created its week
+    # through the defaultdict - so a 20 km ride, a swim and a walk each
+    # rendered `| 0.0 | 0 | 0 | - | - |`, identical to a week the athlete did
+    # not train at all.
+    #
+    # Which is why the issue's ask to suppress all-zero rows is not the fix it
+    # looks like: on the record it was measured against, most of those rows
+    # are weeks somebody trained in a way this table could not describe, and
+    # hiding them would delete the evidence rather than the noise. So the
+    # table gained a column for everything else, and a row of zeros now means
+    # what it says.
+    by_week: dict[str, dict] = defaultdict(
+        lambda: {"km": 0.0, "runs": 0, "gym": 0, "other": 0, "hr": []})
     for s in sessions:
         w = by_week[_week_key(s["date"])]
         if s.get("type") in ("run", "test"):
@@ -257,9 +276,17 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                 w["hr"].append(s["avg_hr"])
         elif "strength" in session_classes(s.get("type")):
             w["gym"] += 1
+        else:
+            w["other"] += 1
     if by_week:
-        L += ["| Week of | km | Runs | Gym | Avg HR | Easy-cap? |", "|---|---|---|---|---|---|"]
-        for wk in sorted(by_week):
+        # BOUNDED, because a weekly rollup is read weekly. The full series
+        # went back seven years on the record this was measured on, 267 rows
+        # of which the reader needed the last few.
+        shown = sorted(by_week)[-cfg.rollup_weeks:] if cfg.rollup_weeks else sorted(by_week)
+        hidden = len(by_week) - len(shown)
+        L += ["| Week of | km | Runs | Gym | Other | Avg HR | Easy-cap? |",
+              "|---|---|---|---|---|---|---|"]
+        for wk in shown:
             v = by_week[wk]
             hr = round(mean(v["hr"])) if v["hr"] else None
             if hr is None or cfg.easy_hr_cap is None:
@@ -267,11 +294,21 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
             else:
                 flag = "OK" if hr <= cfg.easy_hr_cap else f"OVER +{hr - cfg.easy_hr_cap}"
             L.append(f"| {wk} | {v['km']:.1f} | {v['runs']} | {v['gym']} | "
-                     f"{hr or '-'} | {flag} |")
+                     f"{v['other']} | {hr or '-'} | {flag} |")
+        if hidden:
+            L += ["", f"_{hidden} earlier week(s) not shown._"]
+        if cfg.easy_hr_cap is not None:
+            # THE CAP IS TODAY'S AND THE RECORD CANNOT DATE IT. It lives in
+            # `vitai.toml`, which has no history, so annotating a week with
+            # `OVER +2` asserts a comparison that was never made at the time -
+            # on the reported record, against a run from seven years earlier.
+            # Said once here rather than implied on every row.
+            L += ["", f"_Easy-cap compares against the cap configured today "
+                      f"({cfg.easy_hr_cap}), which the record cannot date._"]
     else:
         L.append("_No sessions._")
 
-    L += ["", "## Tripwires", ""]
+    head += ["", "## Tripwires", ""]
     alerts: list[str] = []
     if cfg.rhr_baseline is not None:
         rhrs = [(r["date"], r["rhr"]) for r in within_days(daily, today, 7, "rhr")]
@@ -326,25 +363,33 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
         alerts.append(f"{skipped} row(s) carry a date this report cannot read "
                       "or that falls after it - check the source's clock; they "
                       "were not counted above")
-    L += [f"- {a}" for a in alerts] or ["- Nothing firing."]
+    head += [f"- {a}" for a in alerts] or ["- Nothing firing."]
 
     # Gates outrank tripwires and sit above them in the reader's eye for a
     # reason: a tripwire is something to discuss, a gate is something that is
     # already decided. The coach may explain one; it may not talk one away.
-    L += ["", "## Gates", ""]
+    #
+    # THE COMMENT SAID THAT AND THE CODE DID THE OPPOSITE. Gates were emitted
+    # after tripwires, so on the shipped demo `## Gates` rendered at line 56
+    # and `## Tripwires` at 52. Built into `gate_lines` and spliced in above
+    # them now, which is what this paragraph has been claiming.
+    gate_lines = ["", "## Gates", ""]
     if gates:
         for g in gates:
-            L.append(f"- **{g['restricts']} blocked** - {g['reason']}")
-        L += ["", "> A gate clears when the record says the episode resolved, "
-                  "not by argument."]
+            gate_lines.append(f"- **{g['restricts']} blocked** - {g['reason']}")
+        gate_lines += ["", "> A gate clears when the record says the episode "
+                           "resolved, not by argument."]
     else:
-        L.append("- Nothing gated.")
+        gate_lines.append("- Nothing gated.")
 
+    safety_lines: list[str] = []
     if escalations:
-        L += ["", "## Safety", ""]
+        safety_lines += ["", "## Safety", ""]
         for e in escalations:
-            L.append(f"- **{e['level'].upper()}** {e['date']} - {e['detail']}")
-        L += ["", "> " + escalations[0]["action"]]
+            safety_lines.append(
+                f"- **{e['level'].upper()}** {e['date']} - {e['detail']}")
+        safety_lines += ["", "> " + escalations[0]["action"]]
+    head = safety_lines + gate_lines + head
 
     # G86: a fixture is what a plan is built backwards FROM, so it belongs in
     # the rollup as a countdown rather than buried in the goal list. Only what
@@ -363,4 +408,7 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
     L += ["", "## Coverage", "",
           f"- weight: {len(weight)} - daily: {len(daily)} - sessions: {len(sessions)}",
           "", "> Sparse and continuous beats rich and abandoned."]
-    return "\n".join(L) + "\n"
+    return "\n".join(
+        ["# Weekly rollup", "",
+         f"Generated {today.isoformat()} - derived, do not edit."]
+        + head + L) + "\n"
