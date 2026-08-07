@@ -205,6 +205,12 @@ MOVED = {
     "precedence": {"kg": ("scale",)},
     "suppressed_metrics": ("kg",),
     "nudge_ok": True,
+    # IN the digest even though it only changes how many rows a document
+    # prints, because this row's own rule is include-by-default: a field
+    # wrongly included says "incomparable" about two comparable things,
+    # and a field wrongly excluded says "comparable" about two that were
+    # not. Only the second is the failure it exists to prevent.
+    "rollup_weeks": 26,
     "check_tolerance": 0.05,
     "intake_buffer_pct": 10.0,
 }

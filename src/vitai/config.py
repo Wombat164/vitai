@@ -38,6 +38,10 @@ class Config:
     # G7: whether proactive nudges are welcome at all. Default False - a coach
     # that has to be invited to interrupt is the safer default.
     nudge_ok: bool = False
+    # How many weeks of the training table the rollup prints. A weekly
+    # document is read weekly, and the full series reached 267 rows on
+    # the record #76 was measured against. 0 means all of them.
+    rollup_weeks: int = 12
     # How close a stated value must be to the record before `vitai check`
     # calls it confirmed. A fraction, not a law: 2% is a starting point, and
     # an athlete who rounds every number in conversation wants it looser.
@@ -118,6 +122,7 @@ def load_config(root: Path) -> Config:
         precedence=precedence,
         suppressed_metrics=tuple(str(m) for m in prefs.get("suppressed_metrics", [])),
         nudge_ok=bool(prefs.get("nudge_ok", False)),
+        rollup_weeks=int(prefs.get("rollup_weeks", 12)),
         check_tolerance=float(prefs.get("check_tolerance", 0.02)),
         intake_buffer_pct=(None if prefs.get("intake_buffer_pct") is None
                            else float(prefs["intake_buffer_pct"])),

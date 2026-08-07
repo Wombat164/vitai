@@ -26,6 +26,7 @@
 # suppressed_metrics = []  # metrics to LEAVE ALONE: still recorded, never
 #                          # scored. Use this rather than deleting history
 #                          # when a number is not healthy to be judged on.
+# rollup_weeks = 12       # weeks of the training table the rollup prints (0 = all)
 # nudge_ok = false         # may the coach interrupt proactively at all?
 # intake_buffer_pct = 15   # margin on ESTIMATED meal intake (#96).
 #                          # Under-counting intake stalls a deficit while
