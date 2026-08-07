@@ -146,6 +146,19 @@ UNWRITTEN = (
 )
 
 UNREAD = (
+    # NOT A GAP, and this is the one entry here that records a decision
+    # rather than a backlog item (#205). The register measures "read" as the
+    # key's name appearing in a consumer, and by that measure the precise tier
+    # is unread by design: nothing in the engine computes on it, no rollup
+    # renders it, and the read model has no column for it. It exists to be
+    # RELEASED, deliberately, through `Vitai.precise()` - which takes the
+    # dataset name rather than the field name and so cannot name it here.
+    #
+    # A field the engine's arithmetic wanted would be a field this
+    # classification should not hold, so this staying on the list is the
+    # correct steady state rather than something to fix later.
+    "context.place_precise",
+    "sessions.place_precise",
     # Written by ines from row one, and read by nothing that groups a trend
     # by it. The reading she took on the gym scale after dinner is labelled
     # `fed-evening-clothed` and still enters the weekly mean beside her

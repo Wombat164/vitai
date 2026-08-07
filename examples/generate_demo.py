@@ -454,7 +454,8 @@ def _build(target: Path) -> None:
         "kcal": 148, "location": None, "rpe": 6, "rpe_scale": "borg-cr10", "note": None, "_gen": 6,
         "source": "gym-console", "start_time": f"{console_day}T19:40:00+02:00",
         "elevation_m": None, "setting": "indoor", "route": None,
-        "place": "gym", "with": None, "context": "solo", "planned": None,
+        "place": "gym", "place_precise": "Example Fitness, 3 Sample Road",
+        "with": None, "context": "solo", "planned": None,
         "weather": None, "recorded_at": f"{console_day}T21:05:00+02:00",
         "track": None, "activity_id": None, "activity_source": None,
         "origin": "gym-console", "path": None,
@@ -1633,9 +1634,18 @@ def _situational(start: date, end: date) -> tuple[list[dict], list[dict]]:
         {"date": (start + timedelta(days=49)).isoformat(), "mode": "travel",
          "facilities": "routes", "place": "away", "source": "athlete",
          "note": "work trip - no scale, no gym, hotel treadmill only"},
-        {"date": (start + timedelta(days=56)).isoformat(), "mode": "normal",
+        # THE TWO TIERS (#205). `place` keeps its coarse meaning and its
+        # name; `place_precise` is the tier beside it, as precise as the
+        # athlete wants. It is written at the current generation because an
+        # older line never owed it, and it is written HERE rather than only in
+        # a test because a field no shipped fixture carries is a field nothing
+        # proves is really absent from what leaves.
+        {**{_k: None for _k in KEYS["context"]},
+         "date": (start + timedelta(days=56)).isoformat(), "mode": "normal",
          "facilities": "scale gym routes", "place": "home",
-         "source": "athlete", "note": "home again"},
+         "place_precise": "14 Example Street, Anytown",
+         "source": "athlete", "note": "home again",
+         "_gen": CURRENT_GENERATION["context"]},
     ]
     measurements = [
         {"date": start.isoformat(), "kind": "waist_cm", "value": 92.0,

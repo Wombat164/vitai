@@ -12,7 +12,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-from .schema import KEYS
+from .schema import KEYS, PRECISE_KEYS
 from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 
 # Bump when a table/column changes shape; consumers check meta.contract.
@@ -469,9 +469,36 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     tracking key, `device` already says which machine wrote a line down, and
 #     admitting one needs a rule about where it may travel - which is #205's
 #     work rather than a field added in passing.
-CONTRACT_VERSION = "34"
+#
+# 35: `place_precise` on `sessions` and `context`, and NO COLUMN FOR IT (#205).
+#
+#     The record's old stance was privacy by not storing the thing: `place`
+#     was documented as coarse and never an address. That is blunt, and it
+#     discards real utility - "outdoors" cannot tell the park an athlete likes
+#     from the one they avoid. So the precise tier is now storable, `place`
+#     keeps its name and its coarse meaning, and a precise value is refused
+#     unless a coarse one travels with it.
+#
+#     THE READ MODEL IS INSIDE THE BOUNDARY. The coarse tier is the default
+#     egress form, dropped once at the read door, so every surface downstream
+#     inherits it - including this one. A column here would be null on every
+#     row, and a null reads as "nobody wrote one" rather than "you are not
+#     being shown this". So there is no column, and a consumer that needs the
+#     precise tier names a release through the API rather than reading it out
+#     of a file that was already written.
+#
+#     What it costs, recorded rather than discovered: a precise value that
+#     leaks cannot be un-leaked. The claim moves from "we do not hold this" to
+#     "we hold it and it does not escape", which is stronger and has to hold.
+CONTRACT_VERSION = "35"
 
 _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity would
+              # `place_precise` (#205) has NO column and is absent from every
+              # default projection, but `column_affinity` answers for any name
+              # it is asked about and told a consumer building its own
+              # projection that a street address was REAL. A field the engine
+              # will not project still has to be described honestly.
+              "place_precise",
                                       # have made `column_affinity` lie about it
               # Both word-valued (#145, #139), and `pain_side` was already
               # here while its own mirror was not - so `column_affinity`, the
@@ -696,7 +723,15 @@ def build_db(derived: Path, datasets: dict[str, list[dict]],
     con = sqlite3.connect(db)
     try:
         for table, keys in KEYS.items():
-            _table(con, table, keys, datasets.get(table) or [])
+            # The precise tier has NO COLUMN (#205). It would be null on every
+            # row anyway, because the rows reaching here came through the
+            # coarse projection - and a null column is worse than no column:
+            # it reads as "nobody wrote one" rather than "you are not being
+            # shown this", which is the same distinction `schema.coarse` drops
+            # the key for. A read model is a serialisation, so it is inside
+            # the boundary and not an exception to it.
+            _table(con, table, [k for k in keys if k not in PRECISE_KEYS],
+                   datasets.get(table) or [])
         for table, keys in DERIVED_TABLES.items():
             _table(con, table, keys, computed.get(table) or [])
         con.execute("CREATE TABLE meta(key TEXT, value TEXT)")
