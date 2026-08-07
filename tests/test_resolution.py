@@ -441,11 +441,26 @@ def test_single_source_resolution_is_byte_identical(tmp_path):
 
 
 def test_verdicts_unchanged_by_the_resolution_layer(tmp_path):
+    """ADJUDICATION changes no number, which is what this has always meant.
+
+    The raw side is canonicalised first (#126). This fixture is a LEGACY repo
+    - every daily line carries the retired `hip_pain` - so the two sides
+    differ by the schema's forward map whatever else is true, and the test
+    passed before only because `compute_verdicts` carried its own copy of that
+    map. It was asserting that two hand-written copies of one mapping agreed,
+    which stops being a question worth asking once there is one copy, and was
+    the thing keeping the second copy alive.
+
+    What the test is FOR is unchanged and is now the only thing it says: put
+    the same rows through the precedence ladder, the merge and the claim ids,
+    and every verdict comes out identical.
+    """
     root = tmp_path / "content"
     _single_source_repo(root)
     v = Vitai(root)
     raw = v.datasets()
-    direct = compute_verdicts(v.config, raw["weight"], raw["daily"],
+    direct = compute_verdicts(v.config, raw["weight"],
+                              [canonical_daily(r) for r in raw["daily"]],
                               raw["sessions"], goals=raw["goals"],
                               thresholds=raw["thresholds"])
     assert v.verdicts() == direct

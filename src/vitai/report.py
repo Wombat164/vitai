@@ -341,16 +341,23 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                 alerts.append(f"**Resting HR {recent:.0f}** - more than 5 over "
                               f"baseline {cfg.rhr_baseline}")
     if cfg.pain_gate is not None:
-        # Reads `pain` after the gen-2 generalization, falling back to the
-        # retired `hip_pain` so an older record still trips its own gate.
+        # `pain` only. These are CANONICAL rows, so a legacy `hip_pain` line
+        # arrives already mapped forward, and the fallback that used to sit
+        # here was a second copy of a map that had already run (#126).
         def _pain_of(d: dict):
-            return d.get("pain") if d.get("pain") is not None else d.get("hip_pain")
+            return d.get("pain")
 
         logged = [d for d in daily if _pain_of(d) is not None
                   and _as_day(d.get("date"))]
         painful = [d for d in logged
                    if today - timedelta(days=6) <= _as_day(d["date"]) <= today]
-        scored = [(_pain_of(d), d.get("pain_site") or "hip") for d in painful]
+        # NOT `or "hip"` (#126). A row with a score and no site is invalid
+        # and reported as such, but it still loads, and defaulting it to the
+        # retired field's joint made the prose name a body part the record
+        # never did - while the gate beside it said "unspecified site". The
+        # same disagreement this issue is about, from the other side.
+        scored = [(_pain_of(d), d.get("pain_site") or "unspecified site")
+                  for d in painful]
         if scored and max(p for p, _ in scored) > cfg.pain_gate:
             worst, site = max(scored, key=lambda s: s[0])
             alerts.append(f"**Pain {worst}/10 at {site}** - gate fired: "
@@ -365,7 +372,8 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
             if (score := _pain_of(last)) > cfg.pain_gate:
                 ago = (today - _as_day(last["date"])).days
                 alerts.append(
-                    f"Pain {score}/10 at {last.get('pain_site') or 'hip'} was "
+                    f"Pain {score}/10 at "
+                    f"{last.get('pain_site') or 'unspecified site'} was "
                     f"last logged {ago} days ago and nothing since - not a "
                     "current gate, but it was never recorded as resolved")
     if cfg.sleep_floor_h is not None:
@@ -381,7 +389,7 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
             verdict = "floor met" if met else f"below the {cfg.steps_floor:,} floor"
             alerts.append(f"Steps {avg:,.0f}/day avg - {verdict}")
     skipped = sum(unreadable_dates(daily, today, f)
-                  for f in ("rhr", "sleep_h", "steps", "pain", "hip_pain"))
+                  for f in ("rhr", "sleep_h", "steps", "pain"))
     if skipped:
         alerts.append(f"{skipped} row(s) carry a date this report cannot read "
                       "or that falls after it - check the source's clock; they "

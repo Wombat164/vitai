@@ -239,9 +239,20 @@ def test_report_tripwires_disabled_without_config():
 
 
 def _pain_day(date, score):
+    """A daily row in the shape the report layer actually receives (#126).
+
+    Wrote the retired `hip_pain` until this issue. Nothing here is about the
+    retirement - these four tests are about windows, staleness and clock skew -
+    but the helper predated the gen-2 generalisation and was never updated, so
+    it fed `build_report` a spelling no record can put in front of it: the two
+    callers both pass canonical rows, where the forward map has already run.
+    The coverage that looked like was worse than none, because it was the only
+    thing keeping the reader's duplicate copy of the map alive.
+    """
     return {"date": date, "steps": None, "distance_km": None,
             "active_min": None, "kcal_out": None, "kcal_in": None,
-            "protein_g": None, "sleep_h": None, "rhr": None, "hip_pain": score,
+            "protein_g": None, "sleep_h": None, "rhr": None,
+            "pain": score, "pain_site": "hip",
             "alcohol": None, "note": None}
 
 

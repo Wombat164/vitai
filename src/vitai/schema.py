@@ -47,10 +47,17 @@ KEYS: dict[str, list[str]] = {
                "recorded_at", "origin", "path", "origin_evidence",
                "capture", "read_by", "modelled", "artifact", "device"],
     # `hip_pain` is RETIRED at generation 2 in favour of `pain` + `pain_site`:
-    # the hip was this record's founding injury, but a record that can only
-    # describe one joint cannot describe a second one. Old lines keep it and
-    # keep validating; the engine reads them as pain at site "hip" (see
-    # `canonical_daily`). New lines write `pain`/`pain_site` instead.
+    # a field that names one joint can only ever describe that joint, and a
+    # second site has nowhere to go. Old lines keep it and keep validating;
+    # the engine reads them as pain at site "hip" (see `canonical_daily`), and
+    # that is the ONLY place that mapping is written (#126). New lines write
+    # `pain`/`pain_site` instead.
+    #
+    # WHAT THIS COMMENT USED TO SAY, recorded because the rule is easier to
+    # follow with an instance attached: it named the injury a specific
+    # person's, in a public repository, to explain a field. A schema comment
+    # says what a field is and why it is retired. Whose body prompted it is a
+    # fact about somebody, and it is not needed to read the code.
     # `pain_site` is a closed vocabulary (semantics/body_sites.toml) and
     # `pain_side` post-coordinates laterality rather than baking it into the
     # site name - the HL7 FHIR / openEHR pattern. See anatomy.py.
