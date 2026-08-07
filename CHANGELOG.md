@@ -98,6 +98,23 @@ adds accessors over what the engine already knew.
 
 ### Fixed
 
+- **The weight rate was measured over one span and divided by another**
+  (#142). `status()` compares the mean of the last seven weigh-ins against the
+  mean of the seven before them, and divided by the days between the
+  eighth-from-last and the last. Where weigh-ins are dense those are near
+  enough the same window; where they are not they are unrelated. On flat
+  clusters either side of a fourteen-month silence it reported losing 3.43
+  kg/week - a rate nobody could have lost, from a record in which no observed
+  reading ever changed. Two block means are separated by the distance between
+  their centres, which is what it divides by now.
+- **`rate_span_days` and `rate_unobserved_days`**, beside the figure. The rate
+  had no span published at all, so a figure reaching over 221 days on a real
+  corpus was rendered against `mean_kg_span_days` saying 114 - a label added
+  (#209) so consumers would stop mislabelling the MEAN's window. Facts rather
+  than a verdict: whether a span containing a hole makes the figure unusable
+  is the refusal predicate the uncertainty work owns, not a threshold picked
+  here.
+
 - **A generation is appended, never inserted** (#295). A dataset's schema
   generation is how many bump blocks appear above a point in `schema.py`, and
   `_gen` is stamped into a line at append time and never rewritten. #287 added
