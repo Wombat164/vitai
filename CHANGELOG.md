@@ -170,6 +170,23 @@ adds accessors over what the engine already knew.
 
 ### Fixed
 
+- **A gate nobody could read was a clear run.** `restricts` was matched by set
+  intersection on the RAW tokens, so anything the intersection could not hit
+  vanished - and `may()` fell through to `allowed`, with the reason "no gate in
+  force covers this activity", on a record whose own gate said `blocked`.
+- **And the worst case needed no mistake by anybody.** `restricts: gym` is a
+  RETIRED activity class: `ACTIVITY_CLASSES` unions the retired values in, so
+  the line validates clean, and no session type declares `gym`, so it matched
+  nothing. A severe active episode, correctly written against the vocabulary of
+  its day, silently stopped gating. Every token now resolves through the
+  registry first, so `gym` becomes `strength` and bites - which is the
+  retirement doctrine already written in `vocab.py`, applied by the reader that
+  was not doing it.
+- A token nothing resolves is still tried verbatim, so a gate naming an
+  activity outright keeps biting it, and is reported as unreadable only when it
+  misses - `may()` answers `unknown` naming the token, and `is_gated()` refuses
+  rather than permits. An unreadable gate raises no clearance question: the way
+  out is fixing the record, not doing a check.
 - **A documented mapping that did not exist** (#126 follow-up). The README's
   migration table and the wiki reference both said `sessions.location` is read
   forward as `place`/`route` the same way `hip_pain` is read as `pain`. Nothing
