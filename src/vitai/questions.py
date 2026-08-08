@@ -172,13 +172,27 @@ def gates_for(plan: dict, gates_on_day) -> list[str]:
     which reappeared tomorrow, and an episode with a `resolved_date` before
     the plan produced a question the record already answered.
     """
-    from .safety import is_gated
+    from .safety import is_gated, undecidable_scope
 
     activity = str(plan.get("activity") or "").strip()
     if not activity:
         return []
     for_day = _as_date(plan.get("for_date"))
     gates = gates_on_day(for_day) if for_day is not None else []
-    waiting = [g for g in gates if g.get("status") == "check_not_done"]
+    # AN UNDECIDABLE GATE IS NOT A QUESTION FOR THE ATHLETE. `is_gated` counts
+    # one as gating, which is the right answer for a bool on a safety surface -
+    # but a clearance question asserts that doing the check lifts this
+    # restriction, and nobody can know that when the scope does not parse. The
+    # athlete would do a hop test that settles nothing, and a passing check
+    # would then mark the gate `cleared`, at which point `may` skips it and
+    # answers `allowed` on a record still holding a broken token.
+    #
+    # UNDECIDABLE FOR THIS ACTIVITY, not unreadable in general, and the
+    # difference is a regression this already caused once. A gate reading
+    # `restricts: "impact zzz-typo"` blocks a run on `impact` perfectly well;
+    # testing the gate-only predicate silenced the hop-test question that was
+    # genuinely the way out, because of an unrelated second word.
+    waiting = [g for g in gates if g.get("status") == "check_not_done"
+               and not undecidable_scope(g, activity)]
     return sorted({str(g.get("slug")) for g in waiting
                    if is_gated([g], activity)})

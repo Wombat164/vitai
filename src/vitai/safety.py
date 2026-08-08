@@ -615,6 +615,138 @@ def hold_gates(escalation_rows: list[dict], on: str | date) -> list[dict]:
 BLOCKED, ALLOWED, UNKNOWN = "blocked", "allowed", "unknown"
 
 
+def restriction_scope(gate: dict) -> tuple[set[str], set[str]]:
+    """A gate's `restricts` as the matcher can use it: (resolved, unreadable).
+
+    READABLE MEANS THE MATCHER CAN MATCH IT, not that the validator accepts it,
+    and the first cut of this got that wrong in the direction that matters. The
+    two sets are not the same:
+
+      `impact`      legal and matchable                    -> resolves to itself
+      `gym`         legal - RETIRED, and `ACTIVITY_CLASSES`
+                    unions the retired values in - but NO
+                    session type declares it, so it matched
+                    nothing and the gate vanished          -> resolves to
+                                                              `strength`
+      `lower-body`  the validator rejects the spelling, the
+                    registry knows it                      -> resolves to
+                                                              `lower_body`
+      `nonsense`    nothing knows it                       -> unreadable
+
+    `gym` is the case worth stating plainly, because it is the one a valid
+    record hits. An episode reading `status: active, severity: severe,
+    restricts: gym` validates CLEAN, produces a gate reading `blocked`, and
+    `may("strength")` answered `allowed` with "no gate in force covers this
+    activity". A defect that needs a typo is a smaller thing than one that
+    needs nothing at all.
+
+    RESOLVING HERE IS THE RETIREMENT DOCTRINE, not a new leniency. `vocab.py`
+    says a retired value "stays legal forever and resolves forward to its
+    replacement", and this is the reader that was not doing it - the same G89
+    part-two shape as `hip_pain`: one forward map, applied where the value is
+    read, rather than a matcher quietly disagreeing with the registry.
+
+    THE SECOND SET IS A SUSPICION, NOT A VERDICT, and the first contains it.
+    A token nothing resolves is either a typo or a gate naming an activity
+    outright - `restricts: aqua-jogging`, which has always bitten aqua-jogging
+    and must keep doing so. The engine cannot tell those apart, so the token is
+    TRIED verbatim and only reported as unreadable when it fails to match.
+    That way a direct naming still gates what it names, and a typo still stops
+    the answer being `allowed`.
+
+    An empty `restricts` yields two empty sets. Absence is not a typo, and a
+    gate scoped to MOVEMENTS says so through `restriction`.
+    """
+    from .schema import _tokens
+    from .vocab import resolve
+
+    matchable: set[str] = set()
+    unresolved: set[str] = set()
+    # `_tokens` IS THE TOKENISER, not a second one that agrees today. It is
+    # what `validate_record` and `gates_on` both read `restricts` with, and it
+    # accepts commas and lists as well as spaces. A bare `.split()` here made
+    # `restricts: "run,impact"` - validator-clean - read as one unresolvable
+    # token, which is two readers disagreeing about one field: the G89 shape
+    # the previous change removed from `hip_pain`.
+    for token in _tokens(gate.get("restricts")):
+        slug = resolve("restrictions", "activity", token)
+        if slug:
+            matchable.add(slug)
+        else:
+            # A TOKEN NOTHING RESOLVES IS STILL TRIED VERBATIM, because a gate
+            # may name an ACTIVITY outright rather than a class - `restricts:
+            # aqua-jogging` bites aqua-jogging, and `session_classes` makes
+            # that work by treating an unrecognised activity as its own class.
+            # So it goes in both sets: matched if it names the activity being
+            # asked about, reported as unreadable if it does not.
+            matchable.add(token)
+            unresolved.add(token)
+    return matchable, unresolved
+
+
+def undecidable_scope(gate: dict, activity: str) -> set[str]:
+    """The tokens that leave this gate undecidable FOR THIS ACTIVITY.
+
+    Empty where the gate matched, and empty where every token resolved. This is
+    the question `may` asks; `unreadable_restriction` is a property of the gate
+    ALONE and answers a different one.
+
+    Confusing the two was a regression in the first cut of this change. A gate
+    reading `restricts: "impact zzz-typo"` MATCHES a run on `impact` and is
+    perfectly decidable, but it has an unresolved token, so a caller testing
+    the gate-only predicate treated it as unreadable - and the clearance
+    question for a hop test that was genuinely the way out went silent because
+    of an unrelated second word.
+    """
+    matchable, unresolved = restriction_scope(gate)
+    if not unresolved:
+        return set()
+    known = session_classes(activity)
+    if "all" in matchable or matchable & known:
+        return set()
+    return unresolved
+
+
+def unreadable_restriction(gate: dict) -> set[str]:
+    """The tokens in a gate's `restricts` that nothing in this engine knows.
+
+    A GATE NOBODY CAN READ IS NOT A CLEAR RUN, and until now it was. An
+    unmatchable token intersects nothing and disappears, leaving `may` to fall
+    through to its last branch and answer `allowed`, with the reason "no gate
+    in force covers this activity", about a record whose gate says `blocked`.
+
+    THE VALIDATOR CATCHING IT IS NOT ENOUGH, and for the retired-class case it
+    does not catch it at all. `validate` is a separate call a consumer may
+    never make, and no safety answer may rest on somebody having made it.
+    `vocab.py` names the harm this closes: "an activity class that no rule
+    understands is an unenforced gate, which is the exact harm the whole
+    restriction rework exists to remove."
+    """
+    return restriction_scope(gate)[1]
+
+
+def _illegible_reason(gate: dict, tokens: set[str]) -> str:
+    """The gate's own sentence, then why this engine cannot act on its scope."""
+    return (f"{gate.get('reason')} - this gate restricts "
+            + ", ".join(repr(t) for t in sorted(tokens))
+            + ", which no rule in this engine knows, so whether it covers this "
+              "activity cannot be decided. Run `vitai validate`: an unreadable "
+              "restriction is a typo in the record, and it is not treated as "
+              "permission")
+
+
+def _movement_reason(gate: dict) -> str:
+    """The other undecidable gate, and its opposite remedy.
+
+    Written once rather than in both branches. Two byte-identical copies of a
+    safety sentence had already drifted in how they were joined, which is how a
+    consumer ends up rendering one gate two ways.
+    """
+    return (f"{gate.get('reason')} - this gate restricts particular MOVEMENTS "
+            "rather than an activity, so whether it covers this depends on the "
+            "exercise. Ask per movement")
+
+
 def may(gates: list[dict], activity: str) -> dict:
     """May this activity be done today, with the third answer said out loud.
 
@@ -656,17 +788,23 @@ def may(gates: list[dict], activity: str) -> dict:
     known = session_classes(activity)
     resolved = resolve_session_type(activity) or activity
 
-    hits, unresolvable = [], []
+    hits, unresolvable, illegible = [], [], []
     for gate in gates:
         # A gate whose precondition passed today is reported and does not
         # block. Every other state does, including check_not_done: silence is
         # not a pass. `is_gated`'s rule, inherited rather than restated.
         if gate.get("status") == "cleared":
             continue
-        blocked = set(str(gate.get("restricts") or "").split())
+        blocked, unresolved = restriction_scope(gate)
         matched = ["all"] if "all" in blocked else sorted(blocked & known)
         if matched:
             hits.append((gate, matched))
+        elif unresolved:
+            # THE THIRD CAUSE OF UNKNOWN. A gate naming a class no rule knows
+            # used to intersect nothing and vanish, and the answer came back
+            # `allowed` - the one outcome that must never be reached by a gate
+            # failing to parse.
+            illegible.append((gate, unresolved))
         elif not blocked and gate.get("restriction"):
             unresolvable.append(gate)
 
@@ -680,6 +818,29 @@ def may(gates: list[dict], activity: str) -> dict:
             # consumer renders gate text verbatim and may not paraphrase.
             "reason": "; ".join(str(g.get("reason")) for g, _ in hits),
             "matched": sorted({c for _, cs in hits for c in cs}),
+        }
+    if illegible:
+        # AHEAD OF the uncatalogued-activity branch. Both are unknown, and this
+        # one is the more specific: the activity may be perfectly well known and
+        # the GATE still unreadable, and saying "nobody has said what 'run'
+        # loads" about a record that classifies runs would send the reader to
+        # fix the wrong end.
+        #
+        # ONE SENTENCE PER GATE, each attached to the gate that earned it. The
+        # first version pooled the tokens and appended a single singular clause
+        # over all of them, so two clinicians' sentences were comma-spliced and
+        # each gate was described as restricting the other's token - a sentence
+        # neither gate said, on a surface whose contract is that gate text is
+        # relayed verbatim.
+        return {
+            "activity": resolved, "verdict": UNKNOWN,
+            "classes": sorted(known),
+            "gates": [g.get("slug") for g, _ in illegible]
+                     + [g.get("slug") for g in unresolvable],
+            "matched": [],
+            "reason": "; ".join(
+                [_illegible_reason(g, toks) for g, toks in illegible]
+                + [_movement_reason(g) for g in unresolvable]),
         }
     if not catalogued:
         return {
@@ -695,10 +856,7 @@ def may(gates: list[dict], activity: str) -> dict:
             "activity": resolved, "verdict": UNKNOWN,
             "classes": sorted(known),
             "gates": [g.get("slug") for g in unresolvable], "matched": [],
-            "reason": "; ".join(str(g.get("reason")) for g in unresolvable)
-                      + " - this gate restricts particular MOVEMENTS rather "
-                        "than an activity, so whether it covers this depends "
-                        "on the exercise. Ask per movement",
+            "reason": "; ".join(_movement_reason(g) for g in unresolvable),
         }
     return {"activity": resolved, "verdict": ALLOWED,
             "classes": sorted(known), "gates": [], "matched": [],
@@ -718,8 +876,15 @@ def is_gated(gates: list[dict], activity: str) -> bool:
         # not a pass.
         if gate.get("status") == "cleared":
             continue
-        blocked = set(str(gate.get("restricts", "")).split())
+        blocked, illegible = restriction_scope(gate)
         if "all" in blocked or blocked & classes:
+            return True
+        # A gate this engine cannot read counts as gating. The alternative is
+        # answering False - not gated, which every caller reads as permitted -
+        # about a gate that says `blocked` and merely spells its scope wrong.
+        # A bool cannot carry `unknown`, so it takes the safe side; `may`
+        # returns the honest third answer for a caller that can use one.
+        if illegible:
             return True
     return False
 
