@@ -430,7 +430,18 @@ def test_single_source_resolution_is_byte_identical(tmp_path):
                     assert got.get(key) == want[key], f"{name}.{key} moved"
 
     assert v.resolution()["explanations"] == []
-    assert v.resolution()["tripwires"] == []
+    # NOTHING WAS ADJUDICATED, which is what this test is for, and that is
+    # still exactly true: no contest, no merge, no value moved.
+    #
+    # `unread_retired_value` is allowed through and is named rather than
+    # filtered out, because an unnamed exclusion is where a real conservation
+    # fault would hide. It reports on the record's own SHAPE - this is a legacy
+    # fixture and its session carries `location`, which is retired into two
+    # types nothing maps it onto - and the whole point of it is that a dropped
+    # value stops being silent. A repo that has one is entitled to hear so, and
+    # hearing so is not the adjudication layer moving a number.
+    fired = v.resolution()["tripwires"]
+    assert [t["kind"] for t in fired] == ["unread_retired_value"], fired
 
     db = v.build()
     first = db.read_bytes()

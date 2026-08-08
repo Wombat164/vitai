@@ -743,6 +743,7 @@ def resolve(datasets: dict[str, list[dict]],
         canonical.setdefault(name, list(datasets.get(name) or []))
 
     tripwires += _unattributed_losses(explanations)
+    tripwires += _unread_retired_values(datasets)
     tripwires += _conservation(canonical["daily"], canonical["sessions"])
     tripwires += [t for t in _contradictions(explanations)]
     # AFTER resolution, because a regime empties what resolution produced: the
@@ -1179,6 +1180,65 @@ def _unattributed_losses(explanations: list[dict]) -> list[dict]:
                     "enters"),
                 "severity": "review",
             }
+
+
+def _unread_retired_values(datasets: dict[str, list[dict]]) -> list[dict]:
+    """A line says something no successor field inherited.
+
+    Two kinds of retirement, and only one of them is quiet by right. Where a
+    forward map exists the old value reaches every reader as the new one, so an
+    old line keeps working and there is nothing to report. Where the retirement
+    is TERMINAL - a split into types the old value does not belong to - the
+    successors stay empty, and staying empty with no comment is the part that
+    is not defensible.
+
+    NOT "THE VALUE IS LOST", and the difference is worth being exact about
+    because this whole change is about a doc that overclaimed. The retired key
+    is still a projected column: a consumer querying the table gets the string.
+    What does not happen is anything built on the SUCCESSORS - grouping by
+    `place`, the coarse egress tier, `route` - because those are null. The
+    value is present and inert.
+
+    NOT A PROBLEM AND NOT A CORRECTION. The line is not wrong: a retired key
+    stays legal forever, and it was the right way to write it at the time. Nor
+    does the engine guess; the remedy comes from the register, per key, because
+    the two terminal retirements here need opposite advice.
+
+    ONE PER FIELD, NOT ONE PER LINE. A record predating a retirement carries
+    the old key across its whole history, and a tripwire per line would bury
+    every other tripwire under a fact that is true once. Counted in LINES
+    rather than rows, because these are raw claims: two devices logging one
+    session are two lines and will resolve to one row.
+    """
+    from .schema import KEY_RETIREMENT, forward_map_for, terminal_retirement
+
+    out = []
+    for dataset in sorted(KEY_RETIREMENT):
+        for key in sorted(KEY_RETIREMENT[dataset]):
+            if forward_map_for(dataset, key) is not None:
+                continue
+            carrying = [r for r in datasets.get(dataset) or []
+                        if r.get(key) is not None]
+            if not carrying:
+                continue
+            why, remedy = terminal_retirement(dataset, key)
+            # A dated line if there is one. A dataset can reach canonical
+            # without dates, and a value there must still be reported rather
+            # than filtered out by the field the report happens to sort on.
+            dates = sorted(str(r["date"]) for r in carrying if r.get("date"))
+            out.append({
+                "date": dates[-1] if dates else "",
+                "kind": "unread_retired_value",
+                "detail": (
+                    f"{len(carrying)} {dataset} line(s) carry `{key}`, retired "
+                    f"at generation {KEY_RETIREMENT[dataset][key]}: {why}. The "
+                    f"lines are valid and the column still holds what they "
+                    f"said, but no successor field inherited it, so nothing "
+                    f"derived from `{key}` reaches a report. To carry it "
+                    f"forward, {remedy}"),
+                "severity": "review",
+            })
+    return out
 
 
 def _lineage_to_claim_id(ref: str) -> str | None:

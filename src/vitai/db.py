@@ -546,7 +546,27 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     take from the track; normalised power is a weighted derivation with a
 #     rolling window, which is a figure this engine would be COMPUTING rather
 #     than recording.
-CONTRACT_VERSION = "37"
+# 38: An `unread_retired_value` tripwire, and the register behind it.
+#
+#     `KEY_RETIREMENT` recorded THAT a key was retired and nothing recorded
+#     whether anything reads it forward, so the README and the wiki both said
+#     `sessions.location` is read forward as `place`/`route` and no reader in
+#     the package names it. Nobody was lying: a rename that widened and a
+#     split into other types were assumed to be one kind of event.
+#
+#     `KEY_FORWARD` names the one CALLABLE that reads each mapped key forward,
+#     and a test reads that callable's source for the key - naming a table
+#     cannot be checked, and a register that certifies an absent reader is
+#     worse than no register. `TERMINAL_RETIREMENT` says why the rest are
+#     never read and what the athlete does instead, per key, because the two
+#     terminal retirements here need opposite advice.
+#
+#     The tripwire is `review` and fires once per field, not once per line: a
+#     record predating a retirement carries the old key across its whole
+#     history. It does not claim the value is lost - the column still holds
+#     it - only that no successor inherited it, so nothing built on the
+#     successors sees it.
+CONTRACT_VERSION = "38"
 
 _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity would
               # `place_precise` (#205) has NO column and is absent from every
