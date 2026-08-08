@@ -1067,12 +1067,23 @@ def test_a_null_body_site_does_not_make_every_stress_a_bone_stress():
 
 
 def test_a_real_bone_stress_injury_is_still_a_marker():
+    """SENSITIVITY IS PRESERVED, which is the assertion that matters here.
+
+    The loose branch that fired on the bare word `stress` beside any body site
+    was removed (#115); this proves the removal cost nothing, because the
+    phrase list already reads every medical title and note. Under-triage is
+    not an accepted cost, so this is the test that had to keep passing.
+
+    The marker's wording changed with it: it now reports what the record says
+    rather than asserting the athlete has a condition history.
+    """
     from vitai.safety import _corroborating_markers
     body = [weight(f"2030-05-{d:02d}", 75.0) for d in range(1, 15)]
     real = [medical("2030-05-02", slug="tib", kind="injury",
                     title="Tibial stress reaction", body_site="shin")]
-    assert "bone-stress injury history" in _corroborating_markers(
-        _fortnight(), body, real, date(2030, 5, 1), date(2030, 5, 14))
+    markers = _corroborating_markers(_fortnight(), body, real,
+                                     date(2030, 5, 1), date(2030, 5, 14))
+    assert "the record mentions a bone stress injury" in markers
 
 
 def test_the_balance_fallback_still_runs_without_a_composition_read():
@@ -1460,3 +1471,52 @@ def test_every_message_is_reachable():
         # emitted as a trigger, or looked up explicitly.
         uses = len(re.findall(rf"[\"']{re.escape(key)}[\"']", source))
         assert uses > 1 or key in quoted, f"{key!r} is defined and never used"
+
+
+def test_a_work_stress_note_with_a_body_site_is_not_a_bone_injury():
+    """#67's harm, one condition along, and it survived #67's fix.
+
+    That fix handled the case where `body_site` was null - `str(None)` is the
+    truthy string "None", so the site guard passed on every row that omitted
+    one. With a site PRESENT the bare word `stress` anywhere in a title still
+    fired, so a knee complaint titled "Work stress flare-up" was still read as
+    a bone injury and still held a healthy athlete's training.
+    """
+    from vitai.safety import _corroborating_markers
+    body = [weight(f"2030-05-{d:02d}", 75.0) for d in range(1, 15)]
+    work = [medical("2030-05-02", slug="work", kind="symptom",
+                    title="Work stress flare-up", body_site="knee")]
+    assert _corroborating_markers(_fortnight(), body, work,
+                                  date(2030, 5, 1), date(2030, 5, 14)) == []
+
+
+def test_the_marker_reports_the_record_rather_than_diagnosing():
+    """A screening marker a reader will see. The engine says what was written,
+    never what it means - "bone-stress injury history" asserted that the
+    athlete HAS one, inferred from a phrase in a note."""
+    from vitai.safety import _corroborating_markers
+    body = [weight(f"2030-05-{d:02d}", 75.0) for d in range(1, 15)]
+    real = [medical("2030-05-02", slug="tib", kind="injury",
+                    title="Tibial stress fracture", body_site="shin")]
+    markers = _corroborating_markers(_fortnight(), body, real,
+                                     date(2030, 5, 1), date(2030, 5, 14))
+    assert markers, "the phrase must still be found"
+    assert not any("history" in m for m in markers), markers
+    assert all(m.startswith("the record mentions")
+               for m in markers if "bone stress" in m), markers
+
+
+def test_every_bone_stress_phrase_is_still_found_wherever_it_is_written():
+    """The phrase list is now the only route, so it carries the whole load -
+    in a daily note and in a medical title alike."""
+    from vitai.safety import BONE_STRESS_PHRASES, _corroborating_markers
+    body = [weight(f"2030-05-{d:02d}", 75.0) for d in range(1, 15)]
+    for phrase in BONE_STRESS_PHRASES:
+        titled = [medical("2030-05-02", slug="x", kind="injury",
+                          title=f"Tibial {phrase}", body_site="shin")]
+        assert _corroborating_markers(_fortnight(), body, titled,
+                                      date(2030, 5, 1), date(2030, 5, 14)), phrase
+        days = _fortnight()
+        days[1]["note"] = f"diagnosed with a {phrase} today"
+        assert _corroborating_markers(days, body, [],
+                                      date(2030, 5, 1), date(2030, 5, 14)), phrase
