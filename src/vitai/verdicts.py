@@ -22,7 +22,7 @@ from datetime import date, datetime, timedelta
 from statistics import mean
 
 from .weeks import week_of
-from .clocks import weigh_in_timing
+from .clocks import protocol_seam, weigh_in_timing
 from .config import Config, overlay, phase_rate_for
 from .policy import state
 from .schema import EXTERNAL_METRIC
@@ -484,8 +484,17 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
         # did, and no, we cannot judge it", which is the honest pair. The same
         # shape as `_drops_rate_verdict` for a medical contraindication: the
         # engine already knows how to decline to score something.
-        timing = weigh_in_timing(by_week_rows.get(wk, [])
-                                 + by_week_rows.get(prev_wk, []))
+        window = by_week_rows.get(wk, []) + by_week_rows.get(prev_wk, [])
+        # A PROTOCOL CHANGE UNDER THE RATE (#174). Same refusal as the timing
+        # drift below and for the same reason: the two endpoints are not two
+        # readings of one measurand. Declined without a size, because saying
+        # how much a clothed evening weigh-in adds would be a per-protocol
+        # accuracy claim the engine has no basis for.
+        if protocol_seam(window)["seam"]:
+            rows.append(_row(wk, "weight_rate", rate, target, NODATA, goal,
+                             reason=NOT_SUPPORTED, statistic=PERIOD_CHANGE))
+            continue
+        timing = weigh_in_timing(window)
         if timing["known"] and not timing["unknown"] and (
                 timing["drift_kg"] >= abs(rate)):
             rows.append(_row(wk, "weight_rate", rate, target, NODATA, goal,

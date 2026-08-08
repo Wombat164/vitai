@@ -170,6 +170,21 @@ adds accessors over what the engine already knew.
 
 ### Fixed
 
+- **A rate across a protocol change is declined** (#174, proposal 4).
+  `fasted-post-void` and `fed-evening-clothed` differ by breakfast, a day's
+  fluid and a pair of shoes, so the two ends of such a rate measure different
+  things. The engine already refuses a rate whose weigh-in TIMES are spread
+  widely enough to account for it; this is the same refusal with a discrete
+  cause - `not_supported` in the verdicts, NOT COMPARABLE in the rollup, with
+  no direction word beside it and no size attached, because what a clothed
+  weigh-in adds is a per-protocol accuracy claim the engine has no basis for.
+- The rollup's rate window now reaches back over the trailing mean its earlier
+  anchor stands on. Scoped to the anchor alone, a protocol change the rate was
+  standing on went unseen and printed "FAST - raise intake" while the verdicts
+  refused the same week. The #37 timing check shares the bound and inherits it.
+- `weight.protocol` leaves the field-population backlog: written from row one,
+  validated, and until now read by nothing.
+
 - **`BONE_STRESS_PHRASES` widened to the published continuum** - stress
   reaction, stress response, stress injury, stress lesion, stress fx, stress
   fracture, bone stress. Sports medicine names the whole spectrum "bone stress

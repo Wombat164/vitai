@@ -160,11 +160,6 @@ UNREAD = (
     # correct steady state rather than something to fix later.
     "context.place_precise",
     "sessions.place_precise",
-    # Written by ines from row one, and read by nothing that groups a trend
-    # by it. The reading she took on the gym scale after dinner is labelled
-    # `fed-evening-clothed` and still enters the weekly mean beside her
-    # `fasted-post-void` ones, which is her expectation ines-E2.
-    "weight.protocol",
     # Written by ines, validated by `schema`, and rendered by nothing.
     # Validation is not a consumer: `kg_lo` is validated too, and the
     # issue names it as the example of mode two. A client that wants to
