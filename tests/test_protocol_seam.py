@@ -151,8 +151,8 @@ def test_the_rollup_says_the_protocol_changed_rather_than_the_times_varied():
     out = build_report(Config(phases=((70.0, 68.0, 0.15),)), rows, [], [],
                        today=TODAY)
     assert "NOT COMPARABLE" in out, out
-    assert "protocol changed" in out, out
-    assert "fasted-clothed then fasted-post-void" in out, out
+    assert "protocol changed over this window" in out, out
+    assert "fasted-post-void then fasted-clothed" in out, out
     assert "weigh-in times vary too much" not in out, out
 
 
@@ -175,53 +175,143 @@ def test_a_record_that_never_names_a_protocol_is_untouched(tmp_path):
     assert not any(r["reason"] == "not_supported" for r in rates), rates
 
 
-# --- and the reading is not discarded -----------------------------------------
+# --- what is NOT fixed here, pinned so it cannot be forgotten ----------------
 
-def test_two_protocols_on_one_day_are_two_quantities_not_a_contest(tmp_path):
-    """The defect underneath the seam. Bucketing `weight` by date alone put a
-    06:40 fasted weigh-in and an 18:05 fed one into one contest, and the ladder
-    discarded the second: `discarded: hand=65.8`. A validly recorded reading
-    disappearing because another reading shares its date is the one thing an
-    append-only record must not do."""
-    v = record(tmp_path, [weigh("2030-05-30", 64.14, "fasted-post-void"),
-                          weigh("2030-05-30", 65.8, "fed-evening-clothed",
-                                source="hand", at="18:05")])
-    kept = sorted((r["kg"], r["protocol"]) for r in v.canonical("weight"))
-    assert kept == [(64.14, "fasted-post-void"), (65.8, "fed-evening-clothed")]
-    assert not [e for e in v.resolution()["explanations"]
-                if e.get("field") == "kg"], "nothing was adjudicated away"
+def test_two_protocols_on_one_day_are_still_adjudicated_against_each_other():
+    """THE DEFECT UNDER THE SEAM, PINNED RATHER THAN FIXED, with the reason.
 
+    Resolution buckets `weight` by date alone, so ines' 06:40 fasted weigh-in
+    and her 18:05 fed one land in one contest and the ladder discards the
+    second - the engine's own explanation reads `discarded: hand=65.8`. A
+    reading that is not wrong and has no better replacement, gone because
+    another reading shares its date.
 
-def test_two_readings_under_ONE_protocol_still_compete(tmp_path):
-    """The rule is not "never merge two weigh-ins". Two claims about the SAME
-    measurand on one day are exactly what the ladder is for, and splitting
-    those would turn every duplicate import into two rows."""
-    v = record(tmp_path, [weigh("2030-05-30", 64.14, "fasted-post-void"),
-                          weigh("2030-05-30", 64.2, "fasted-post-void",
-                                source="hand")])
-    assert len(v.canonical("weight")) == 1
+    Splitting the bucket by `protocol` - the rule `measurements` already
+    applies by `kind`, one line up in the same function - was built and then
+    withdrawn, because it makes `weight` yield more canonical rows per date
+    than the rest of the engine is ready for. Two consequences are
+    safety-grade: `safety._loss_pct_per_week` picks its endpoints
+    protocol-blind, so a twice-daily record's RED-S loss rate collapses under
+    the threshold and the clinical hold silently stops firing; and
+    `composition.endpoints` would assert a resolvable fat change across a
+    twelve-hour seam and print it in the rollup.
 
-
-def test_rows_naming_no_protocol_group_together(tmp_path):
-    """`None` is one bucket, not one bucket each - so a record that has never
-    used the field adjudicates exactly as it did before."""
-    v = record(tmp_path, [weigh("2030-05-30", 64.14),
-                          weigh("2030-05-30", 64.2, source="hand")])
-    assert len(v.canonical("weight")) == 1
-
-
-def test_ines_e2_is_answered():
-    """The persona expectation this was filed against, checked against the
-    shipped corpus rather than a fixture written to pass.
-
-    ines-E2: "the reading is not an error and must not be dropped, and it is
-    also not comparable with the rest."
+    This asserts TODAY's behaviour so that changing it has to be deliberate.
+    It is not an endorsement of it.
     """
     v = Vitai(INES)
     day = [r for r in v.canonical("weight") if r["date"] == "2030-05-30"]
-    assert sorted(r["kg"] for r in day) == [64.14, 65.8], "not dropped"
-    assert {r["protocol"] for r in day} == {"fasted-post-void",
-                                            "fed-evening-clothed"}
-    crossing = [r for r in v.verdicts() if r.get("metric") == "weight_rate"
-                and r["week"] == "2030-05-27"]
-    assert crossing[0]["reason"] == "not_supported", "not comparable"
+    assert len(day) == 1, "still one row - see the docstring"
+    assert day[0]["protocol"] == "fasted-post-void"
+    discarded = [e for e in v.resolution()["explanations"]
+                 if e.get("date") == "2030-05-30" and e.get("field") == "kg"]
+    assert discarded and "65.8" in str(discarded[0]["discarded"]), discarded
+
+
+def test_ines_e2_is_not_answered_by_this_change():
+    """And the seam never fires for her, which is the honest consequence.
+
+    Her two protocols sit on ONE day, so the discard above removes the second
+    before any window can span it. ines-E2 needs the resolution split, and
+    that is why the split is worth doing rather than why it is safe to do
+    today. Recorded here so the expectation is not read as satisfied.
+    """
+    v = Vitai(INES)
+    rates = [r for r in v.verdicts() if r.get("metric") == "weight_rate"]
+    assert rates, "she has rates"
+    assert not any(r.get("reason") == "not_supported" for r in rates), \
+        "no seam is visible to her record while the fed reading is discarded"
+
+
+# --- the rules the review found uncontrolled ---------------------------------
+
+def test_the_protocols_are_named_in_the_order_they_were_used():
+    """The report joins these with "then". A sorted set made that assert a
+    chronology the record contradicts."""
+    rows = [weigh("2030-05-01", 70.0, "zz-morning"),
+            weigh("2030-05-08", 71.0, "aa-evening")]
+    assert protocol_seam(rows)["protocols"] == ["zz-morning", "aa-evening"]
+    assert protocol_seam(list(reversed(rows)))["protocols"] == \
+        ["zz-morning", "aa-evening"], "file order must not decide it"
+
+
+def test_a_seam_the_rate_stands_on_is_seen(tmp_path):
+    """`v0` is a trailing 7-day mean at `anchor0`, so it reaches up to six days
+    BEFORE it. Scoping the window to `anchor0..last` let a protocol change the
+    rate is standing on go unseen - it printed "FAST - raise intake", a deficit
+    instruction manufactured entirely by the change, while the verdicts refused
+    the same week. Two surfaces disagreeing about one record."""
+    rows = [weigh(f"2030-05-{d:02d}", 71.4, "fasted-clothed") for d in range(1, 5)]
+    rows += [weigh(f"2030-05-{d:02d}", 70.0, "fasted-post-void")
+             for d in range(5, 13)]
+    out = build_report(Config(phases=((70.0, 68.0, 0.15),)), rows, [], [],
+                       today=date(2030, 5, 12))
+    assert "NOT COMPARABLE" in out, out
+    assert "raise intake" not in out, out
+
+
+def test_the_two_surfaces_agree_about_one_record(tmp_path):
+    """The invariant behind the last one: wherever the rollup declines, the
+    verdicts decline, and the other way round."""
+    rows = [weigh(f"2030-05-{d:02d}", 71.4, "fasted-clothed") for d in range(1, 5)]
+    rows += [weigh(f"2030-05-{d:02d}", 70.0, "fasted-post-void")
+             for d in range(5, 13)]
+    v = record(tmp_path, rows, "[targets]\nphases = [[70.0, 68.0, 0.15]]\n")
+    rollup_declines = "NOT COMPARABLE" in v.rollup(today=date(2030, 5, 12))
+    latest = [r for r in v.verdicts(today=date(2030, 5, 12))
+              if r.get("metric") == "weight_rate"]
+    verdict_declines = any(r.get("reason") == "not_supported" for r in latest)
+    assert rollup_declines == verdict_declines, (rollup_declines, latest)
+
+
+def test_the_seam_is_reported_even_with_no_target_configured():
+    """A record with no phase still deserves to know its trend crossed a seam.
+    #37's timing caveat already prints unconditionally; this is the same class
+    of statement, and it used to vanish when `target` was None."""
+    rows = [weigh(f"2030-06-{d:02d}", 70.0, "fasted-post-void") for d in range(1, 6)]
+    rows += [weigh(f"2030-06-{d:02d}", 71.4, "fasted-clothed") for d in range(6, 10)]
+    out = build_report(Config(), rows, [], [], today=TODAY)
+    assert "NOT COMPARABLE" in out, out
+
+
+def test_no_direction_word_is_printed_beside_the_refusal():
+    """"gaining, and also NOT COMPARABLE" hands the reader the number's
+    meaning and then withdraws it. If the rate cannot be compared, the
+    direction is not a finding either."""
+    rows = [weigh(f"2030-06-{d:02d}", 70.0, "fasted-post-void") for d in range(1, 6)]
+    rows += [weigh(f"2030-06-{d:02d}", 71.4, "fasted-clothed") for d in range(6, 10)]
+    out = build_report(Config(phases=((70.0, 68.0, 0.15),)), rows, [], [],
+                       today=TODAY)
+    line = next(ln for ln in out.splitlines() if "**Rate:**" in ln)
+    assert "gaining" not in line and "losing" not in line, line
+    assert "against a target of" not in line, line
+
+
+def test_the_seam_is_reported_instead_of_the_timing_caveat_not_beside_it():
+    """Precedence, which had no control because the seam fixture deliberately
+    removed the drift confound. Here BOTH fire, and the seam must win: telling
+    somebody to weigh more consistently is advice about the wrong thing when
+    the procedure itself changed."""
+    rows = [weigh(f"2030-06-{d:02d}", 70.0, "fasted-post-void", at="06:40")
+            for d in range(1, 6)]
+    rows += [weigh(f"2030-06-{d:02d}", 70.1, "fasted-clothed", at="19:30")
+             for d in range(6, 10)]
+    out = build_report(Config(phases=((70.0, 68.0, 0.15),)), rows, [], [],
+                       today=TODAY)
+    line = next(ln for ln in out.splitlines() if "**Rate:**" in ln)
+    assert "NOT COMPARABLE" in line, line
+    assert "NOT READABLE" not in line, line
+
+
+def test_a_seam_outside_the_window_does_not_suppress_a_later_clean_rate(tmp_path):
+    """The sixth uncontrolled rule: scoping. Passing the whole history instead
+    of the window would let one protocol change suppress every rate forever,
+    and the entire suite stayed green under that mutation."""
+    rows = [weigh(f"2030-04-{d:02d}", 72.0, "fasted-clothed") for d in range(1, 15)]
+    rows += [weigh(f"2030-05-{d:02d}", 70.0 - d * 0.05, "fasted-post-void")
+             for d in range(1, 29)]
+    v = record(tmp_path, rows, "[targets]\nphases = [[70.0, 68.0, 0.15]]\n")
+    late = [r for r in v.verdicts() if r.get("metric") == "weight_rate"
+            and r["week"] >= "2030-05-13"]
+    assert late, "there are later weeks"
+    assert not any(r.get("reason") == "not_supported" for r in late), late

@@ -717,31 +717,6 @@ def resolve(datasets: dict[str, list[dict]],
                 for cid, rec in day:
                     by_kind.setdefault(str(rec.get("kind")), []).append((cid, rec))
                 groups = [by_kind[k] for k in sorted(by_kind)]
-            elif dataset == "weight":
-                # THE SAME RULE, AND `protocol` IS WHAT SAYS SO (#174). Two
-                # weigh-ins on one day under two DECLARED protocols are not two
-                # readings of one quantity: `fasted-post-void` at 06:40 and
-                # `fed-evening-clothed` at 18:05 differ by breakfast, a day's
-                # fluid and a pair of shoes. Bucketing by date alone put them
-                # in one contest, and the ladder discarded the second - the
-                # engine's own explanation read `discarded: hand=65.8`.
-                #
-                # That is a validly recorded reading disappearing because
-                # another reading shares its date, which is the one thing an
-                # append-only record must not do. The value was not wrong and
-                # there is no better one; it is a measurement of something
-                # else, and #174's whole argument is that a protocol is what
-                # pins down which something.
-                #
-                # SILENCE STILL COMPETES. Rows naming no protocol group
-                # together, so a record that has never used the field
-                # adjudicates exactly as before - `None` is one bucket, not
-                # one bucket each.
-                by_protocol: dict[str, list[tuple[str, dict]]] = {}
-                for cid, rec in day:
-                    key = str(rec.get("protocol") or "")
-                    by_protocol.setdefault(key, []).append((cid, rec))
-                groups = [by_protocol[k] for k in sorted(by_protocol)]
 
             for group in groups:
                 merged, just, expl = _merge_fields(dataset, group, precedence,

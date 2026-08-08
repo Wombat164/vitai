@@ -187,10 +187,20 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                 # G69's reason for putting the direction in words in the first
                 # place was that the sign is a detail rather than the message.
                 phrase = direction if rate else "holding steady"
+                # BACK TO WHAT `v0` ACTUALLY STANDS ON. `v0` is a trailing
+                # 7-day mean at `anchor0`, so it reaches up to six days before
+                # it - and scoping the window to `anchor0..last` let a seam the
+                # rate is literally standing on go unseen. Measured: a protocol
+                # change four days before `anchor0` printed "FAST - raise
+                # intake", a deficit instruction manufactured entirely by the
+                # change, while `compute_verdicts` refused the same week. Two
+                # surfaces disagreeing about one record is the defect this
+                # whole change is about. The #37 timing check shares the bound
+                # and inherits the fix.
+                reach = (anchor0 - timedelta(days=6)).isoformat() if anchor0 else ""
                 window = [w for w in weight
                           if w.get("kg") is not None
-                          and anchor0 and anchor0.isoformat() <= w["date"]
-                          <= pts[-1][0]]
+                          and anchor0 and reach <= w["date"] <= pts[-1][0]]
                 timing = weigh_in_timing(window)
                 # #37: do not print an actionable verdict beside a caveat
                 # saying the number is noise. "SLOW - check logging" tells an
@@ -213,11 +223,26 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                 span = (f" over {days} days" if days != 7 else "")
                 if days > COLD_SPAN_DAYS:
                     span += ", a thin sample"
-                if target is not None:
-                    verdict = ("NOT COMPARABLE - the weigh-in protocol "
-                               f"changed ({' then '.join(seam['protocols'])})"
-                               if seam["seam"]
-                               else "NOT READABLE - weigh-in times vary too much"
+                if seam["seam"]:
+                    # NO DIRECTION WORD BESIDE IT, and no target line. Saying
+                    # "gaining, and also NOT COMPARABLE" hands the reader the
+                    # number's meaning and then withdraws it, which is the
+                    # laundering G69 removed from the magnitude. If the rate
+                    # cannot be compared, the direction is not a finding
+                    # either: it is the protocol change, in words.
+                    #
+                    # PRINTED WITH OR WITHOUT A TARGET. A record with no phase
+                    # configured still deserves to know its trend crossed a
+                    # seam - #37's timing caveat already prints unconditionally
+                    # and this is the same class of statement.
+                    L += ["", "**Rate:** NOT COMPARABLE - the weigh-in "
+                              "protocol changed over this window "
+                              f"({' then '.join(seam['protocols'])}), so the "
+                              "two ends measure different things.",
+                          "", "> Weigh in the same way for a fortnight and "
+                              "this line comes back."]
+                elif target is not None:
+                    verdict = ("NOT READABLE - weigh-in times vary too much"
                                if unreadable
                                else "ON TARGET" if abs(rate - target) <= 0.25
                                else "FAST - raise intake" if rate > target

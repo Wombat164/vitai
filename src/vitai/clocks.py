@@ -195,9 +195,17 @@ def protocol_seam(rows: list[dict]) -> dict:
     unanchored interval rather than a change of procedure - which is what the
     rest of #174 is about, and is not decided here.
     """
-    named = [str(r["protocol"]) for r in rows
-             if r.get("protocol") not in (None, "")]
-    distinct = sorted(set(named))
+    # IN THE ORDER THEY WERE USED, not alphabetically. The report joins these
+    # with the word "then", and a sorted set made it assert a chronology the
+    # record contradicts - `zz-morning` followed by `aa-evening` rendered as
+    # "aa-evening then zz-morning". Ordered by first appearance by DATE, with
+    # file order breaking a tie, because that is the sequence the athlete
+    # actually moved through.
+    dated = sorted((str(r.get("date") or ""), i, str(r["protocol"]))
+                   for i, r in enumerate(rows)
+                   if r.get("protocol") not in (None, ""))
+    named = [p for _, _, p in dated]
+    distinct = list(dict.fromkeys(named))
     return {"protocols": distinct, "seam": len(distinct) > 1,
             "stated": len(named), "silent": len(rows) - len(named)}
 

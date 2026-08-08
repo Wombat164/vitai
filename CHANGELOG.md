@@ -170,24 +170,18 @@ adds accessors over what the engine already knew.
 
 ### Fixed
 
-- **A validly recorded weigh-in was being discarded** (#174, and ines-E2).
-  Resolution bucketed `weight` by date alone, so a 06:40 `fasted-post-void`
-  reading and an 18:05 `fed-evening-clothed` one landed in one contest and the
-  ladder threw the second away - the engine's own explanation read
-  `discarded: hand=65.8`. They are not two readings of one quantity. Weight now
-  groups by declared `protocol`, which is the rule `measurements` has applied
-  by `kind` all along, one line up in the same function. Rows naming no
-  protocol still group together, so a record that has never used the field
-  adjudicates exactly as before.
-- **A rate across a protocol change is declined.** `fasted-post-void` and
-  `fed-evening-clothed` differ by breakfast, a day's fluid and a pair of shoes.
-  The engine already refuses a rate whose weigh-in TIMES are spread widely
-  enough to account for it; this is the same refusal with a discrete cause,
-  reported as `not_supported` in the verdicts and as NOT COMPARABLE in the
-  rollup - a different sentence from the timing caveat, because telling
-  somebody to weigh more consistently would be advice about the wrong thing.
-  No size is stated: what a clothed weigh-in adds is a per-protocol accuracy
-  claim the engine has no basis for.
+- **A rate across a protocol change is declined** (#174, proposal 4).
+  `fasted-post-void` and `fed-evening-clothed` differ by breakfast, a day's
+  fluid and a pair of shoes, so the two ends of such a rate measure different
+  things. The engine already refuses a rate whose weigh-in TIMES are spread
+  widely enough to account for it; this is the same refusal with a discrete
+  cause - `not_supported` in the verdicts, NOT COMPARABLE in the rollup, with
+  no direction word beside it and no size attached, because what a clothed
+  weigh-in adds is a per-protocol accuracy claim the engine has no basis for.
+- The rollup's rate window now reaches back over the trailing mean its earlier
+  anchor stands on. Scoped to the anchor alone, a protocol change the rate was
+  standing on went unseen and printed "FAST - raise intake" while the verdicts
+  refused the same week. The #37 timing check shares the bound and inherits it.
 - `weight.protocol` leaves the field-population backlog: written from row one,
   validated, and until now read by nothing.
 
