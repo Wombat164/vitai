@@ -636,11 +636,18 @@ def restriction_scope(gate: dict) -> tuple[set[str], set[str]]:
     An empty `restricts` yields two empty sets. Absence is not a typo, and a
     gate scoped to MOVEMENTS says so through `restriction`.
     """
+    from .schema import _tokens
     from .vocab import resolve
 
     matchable: set[str] = set()
     unresolved: set[str] = set()
-    for token in str(gate.get("restricts") or "").split():
+    # `_tokens` IS THE TOKENISER, not a second one that agrees today. It is
+    # what `validate_record` and `gates_on` both read `restricts` with, and it
+    # accepts commas and lists as well as spaces. A bare `.split()` here made
+    # `restricts: "run,impact"` - validator-clean - read as one unresolvable
+    # token, which is two readers disagreeing about one field: the G89 shape
+    # the previous change removed from `hip_pain`.
+    for token in _tokens(gate.get("restricts")):
         slug = resolve("restrictions", "activity", token)
         if slug:
             matchable.add(slug)
@@ -654,6 +661,29 @@ def restriction_scope(gate: dict) -> tuple[set[str], set[str]]:
             matchable.add(token)
             unresolved.add(token)
     return matchable, unresolved
+
+
+def undecidable_scope(gate: dict, activity: str) -> set[str]:
+    """The tokens that leave this gate undecidable FOR THIS ACTIVITY.
+
+    Empty where the gate matched, and empty where every token resolved. This is
+    the question `may` asks; `unreadable_restriction` is a property of the gate
+    ALONE and answers a different one.
+
+    Confusing the two was a regression in the first cut of this change. A gate
+    reading `restricts: "impact zzz-typo"` MATCHES a run on `impact` and is
+    perfectly decidable, but it has an unresolved token, so a caller testing
+    the gate-only predicate treated it as unreadable - and the clearance
+    question for a hop test that was genuinely the way out went silent because
+    of an unrelated second word.
+    """
+    matchable, unresolved = restriction_scope(gate)
+    if not unresolved:
+        return set()
+    known = session_classes(activity)
+    if "all" in matchable or matchable & known:
+        return set()
+    return unresolved
 
 
 def unreadable_restriction(gate: dict) -> set[str]:
@@ -672,6 +702,28 @@ def unreadable_restriction(gate: dict) -> set[str]:
     restriction rework exists to remove."
     """
     return restriction_scope(gate)[1]
+
+
+def _illegible_reason(gate: dict, tokens: set[str]) -> str:
+    """The gate's own sentence, then why this engine cannot act on its scope."""
+    return (f"{gate.get('reason')} - this gate restricts "
+            + ", ".join(repr(t) for t in sorted(tokens))
+            + ", which no rule in this engine knows, so whether it covers this "
+              "activity cannot be decided. Run `vitai validate`: an unreadable "
+              "restriction is a typo in the record, and it is not treated as "
+              "permission")
+
+
+def _movement_reason(gate: dict) -> str:
+    """The other undecidable gate, and its opposite remedy.
+
+    Written once rather than in both branches. Two byte-identical copies of a
+    safety sentence had already drifted in how they were joined, which is how a
+    consumer ends up rendering one gate two ways.
+    """
+    return (f"{gate.get('reason')} - this gate restricts particular MOVEMENTS "
+            "rather than an activity, so whether it covers this depends on the "
+            "exercise. Ask per movement")
 
 
 def may(gates: list[dict], activity: str) -> dict:
@@ -731,7 +783,7 @@ def may(gates: list[dict], activity: str) -> dict:
             # used to intersect nothing and vanish, and the answer came back
             # `allowed` - the one outcome that must never be reached by a gate
             # failing to parse.
-            illegible.append(gate)
+            illegible.append((gate, unresolved))
         elif not blocked and gate.get("restriction"):
             unresolvable.append(gate)
 
@@ -752,31 +804,22 @@ def may(gates: list[dict], activity: str) -> dict:
         # the GATE still unreadable, and saying "nobody has said what 'run'
         # loads" about a record that classifies runs would send the reader to
         # fix the wrong end.
-        bad = sorted({t for g in illegible for t in unreadable_restriction(g)})
+        #
+        # ONE SENTENCE PER GATE, each attached to the gate that earned it. The
+        # first version pooled the tokens and appended a single singular clause
+        # over all of them, so two clinicians' sentences were comma-spliced and
+        # each gate was described as restricting the other's token - a sentence
+        # neither gate said, on a surface whose contract is that gate text is
+        # relayed verbatim.
         return {
             "activity": resolved, "verdict": UNKNOWN,
             "classes": sorted(known),
-            # BOTH kinds of undecidable gate, with BOTH remedies. The verdict
-            # is the same either way, so this changes no decision - but the
-            # answer claims to carry "the gates that decided it", and the two
-            # unknowns want opposite actions: fix a token in the record, versus
-            # ask per movement. Naming the second gate without its sentence
-            # would be worse than dropping it, since a consumer relays gate
-            # text verbatim and would have a slug it cannot explain.
-            "gates": [g.get("slug") for g in illegible + unresolvable],
+            "gates": [g.get("slug") for g, _ in illegible]
+                     + [g.get("slug") for g in unresolvable],
             "matched": [],
             "reason": "; ".join(
-                [", ".join(str(g.get("reason")) for g in illegible)
-                 + " - this gate restricts "
-                 + ", ".join(repr(t) for t in bad)
-                 + ", which no rule in this engine knows, so whether it "
-                   "covers this activity cannot be decided. Run `vitai "
-                   "validate`: an unreadable restriction is a typo in the "
-                   "record, and it is not treated as permission"]
-                + [str(g.get("reason")) + " - this gate restricts particular "
-                   "MOVEMENTS rather than an activity, so whether it covers "
-                   "this depends on the exercise. Ask per movement"
-                   for g in unresolvable]),
+                [_illegible_reason(g, toks) for g, toks in illegible]
+                + [_movement_reason(g) for g in unresolvable]),
         }
     if not catalogued:
         return {
@@ -792,10 +835,7 @@ def may(gates: list[dict], activity: str) -> dict:
             "activity": resolved, "verdict": UNKNOWN,
             "classes": sorted(known),
             "gates": [g.get("slug") for g in unresolvable], "matched": [],
-            "reason": "; ".join(str(g.get("reason")) for g in unresolvable)
-                      + " - this gate restricts particular MOVEMENTS rather "
-                        "than an activity, so whether it covers this depends "
-                        "on the exercise. Ask per movement",
+            "reason": "; ".join(_movement_reason(g) for g in unresolvable),
         }
     return {"activity": resolved, "verdict": ALLOWED,
             "classes": sorted(known), "gates": [], "matched": [],

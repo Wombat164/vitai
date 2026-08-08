@@ -49,9 +49,14 @@ from vitai.api import Vitai
 from vitai.safety import (gates_on, is_gated, may, restriction_scope,
                           unreadable_restriction)
 from vitai.schema import ACTIVITY_CLASSES, KEYS, validate_record
-from vitai.vocab import values as registry_values
+from vitai.vocab import session_classes as classes_of
+from vitai.vocab import session_types
 
-LIVE_CLASSES = set(registry_values("restrictions", "activity"))
+# WHAT THE MATCHER CAN ACTUALLY HIT, which is not the same as what the
+# validator accepts, and the gap between them is where `gym` lived. Comparing
+# against the legal set is a tautology - `resolve` can only ever return a legal
+# slug - so it would pass for any class nobody declares.
+DECLARED_CLASSES = {c for t in session_types() for c in classes_of(t)}
 
 # GENUINELY unreadable: nothing in the registry resolves it. `lower-body` was
 # the first choice and was wrong - the registry normalises it to `lower_body`,
@@ -190,7 +195,10 @@ def test_every_legal_class_resolves_to_something_a_session_can_carry(cls):
     assert not unreadable, f"{cls} is legal but nothing resolves it"
     assert resolved, cls
     if cls != "all":
-        assert resolved <= LIVE_CLASSES, f"{cls} resolves outside the live set"
+        assert resolved <= DECLARED_CLASSES, (
+            f"{cls} resolves to {resolved - DECLARED_CLASSES}, which no session "
+            "type declares - so a gate scoped to it matches nothing and "
+            "silently stops gating. That is the `gym` defect exactly.")
 
 
 def test_a_gate_naming_several_classes_reports_only_the_bad_ones():
@@ -337,3 +345,92 @@ def test_an_unreadable_gate_does_not_hide_a_movement_scoped_one():
     assert sorted(answer["gates"]) == ["hip", "knee"], answer["gates"]
     assert "vitai validate" in answer["reason"]
     assert "Ask per movement" in answer["reason"]
+
+
+# --- the rules the mutation pass found uncontrolled ---------------------------
+
+def test_a_legal_class_no_session_type_declares_would_be_caught():
+    """The control on the control. `test_every_legal_class_resolves...` is only
+    worth having if it can fail, and its first version could not: it compared
+    against the legal set, which `resolve` can only ever return a member of.
+
+    Simulated here rather than asserted about today's registry, because today's
+    registry is clean and the point is that it might not stay so.
+    """
+    invented = "aerial"
+    assert invented not in DECLARED_CLASSES
+    resolved, unreadable = {invented}, set()
+    assert not unreadable, "the weak assertion would pass"
+    assert not resolved <= DECLARED_CLASSES, \
+        "the strengthened one catches it"
+
+
+def test_the_illegible_branch_sits_ahead_of_the_uncatalogued_one():
+    """Ordering, which had no control anywhere in the suite.
+
+    Both answers are `unknown`, so nothing in the suite noticed - but demoted,
+    the gate DISAPPEARS from the answer and the reader is told nobody has said
+    what their activity loads, when the thing to fix is a token in the record.
+    """
+    gates = gates_for([episode(restricts=NONSENSE)])
+    answer = may(gates, "underwater-basket-weaving")
+    assert answer["verdict"] == "unknown"
+    assert answer["gates"] == ["hip"], "the unreadable gate must still be named"
+    assert "vitai validate" in answer["reason"]
+    assert "nobody has said what" not in answer["reason"]
+
+
+def test_a_matching_gate_keeps_its_clearance_question_despite_a_junk_token():
+    """The regression the second review caught, and the reason `gates_for` asks
+    "undecidable for THIS activity" rather than "unreadable at all".
+
+    The gate blocks running on `impact`; the hop test is exactly the way out.
+    A second, unrelated junk token must not silence that."""
+    from vitai.questions import gates_for as clearance_gates
+
+    plan = {"slug": "sat-long", "for_date": "2030-05-04", "activity": "run",
+            "outcome": "unresolved"}
+    mixed = episode(slug="knee", restricts=f"impact {NONSENSE}",
+                    precondition="hop-test", status="active")
+    assert clearance_gates(
+        plan, lambda d: gates_on([mixed], "2030-05-04")) == ["knee"]
+
+
+def test_a_direct_naming_gate_keeps_its_clearance_question_too():
+    """`restricts: aqua-jogging` bites aqua-jogging, so the check is the remedy
+    there as well - the token being unresolvable says nothing about whether the
+    gate covers the activity it names."""
+    from vitai.questions import gates_for as clearance_gates
+
+    plan = {"slug": "pool", "for_date": "2030-05-04",
+            "activity": "aqua-jogging", "outcome": "unresolved"}
+    direct = episode(restricts="aqua-jogging", precondition="hop-test",
+                     status="active")
+    assert clearance_gates(
+        plan, lambda d: gates_on([direct], "2030-05-04")) == ["hip"]
+
+
+def test_two_unreadable_gates_each_keep_their_own_sentence():
+    """No comma splice and no misattribution. The first version pooled the
+    tokens under one singular clause, so each gate was described as restricting
+    the other's token - a sentence neither gate said, on a surface that relays
+    gate text verbatim."""
+    gates = gates_for([episode(restricts="zzz-one"),
+                       episode(slug="knee", restricts="zzz-two")])
+    reason = may(gates, "run")["reason"]
+    first, _, second = reason.partition("; ")
+    assert second, reason
+    assert "'zzz-one'" in first and "'zzz-two'" not in first, first
+    assert "'zzz-two'" in second and "'zzz-one'" not in second, second
+
+
+def test_the_tokeniser_is_the_one_the_validator_uses():
+    """Two readers of one field is the G89 shape. `restricts: "run,impact"` is
+    validator-clean, and a bare split made it one unresolvable token."""
+    for written in ("run,impact", "run, impact", "run impact"):
+        assert validate_record("medical", episode(restricts=written)) == [], written
+        resolved, unreadable = restriction_scope({"restricts": written})
+        assert resolved == {"run", "impact"}, (written, resolved)
+        assert not unreadable, (written, unreadable)
+    resolved, _ = restriction_scope({"restricts": ["run", "impact"]})
+    assert resolved == {"run", "impact"}
