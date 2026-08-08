@@ -31,11 +31,13 @@ VITAI WILL NOT DO, and stops there - what the reader does about it is theirs
 to decide, and an instruction this tool cannot help anyone carry out is an
 open item they cannot close. The one exception is the acute tier, where
 calling emergency services is an act the person can perform immediately and
-alone. The thresholds below are deliberately conservative
-SCREENING bounds - wide enough that a trained endurance athlete's genuinely
-low resting heart rate does not trip them, narrow enough to catch a number
-that should not occur in a person who is fine. Over-triage is the accepted
-cost; under-triage is not.
+alone. The thresholds below are deliberately wide - wide
+enough that a trained endurance athlete's genuinely low resting heart rate
+does not trip them, narrow enough that a number outside them is one the
+record cannot explain by training. They say a figure is out of the range this
+engine is willing to reason about, which is a statement about the ENGINE's
+competence rather than about the person's health, and that is the whole claim.
+Reporting too often is the accepted cost; staying quiet is not.
 """
 
 from __future__ import annotations
@@ -255,8 +257,27 @@ AMENORRHOEA_PHRASES = ("period still absent", "periods stopped",
 # "no period this month", "no period yet" and "still no period", which is
 # under-triage in a marker that gates a clinical hold.
 AMENORRHOEA_EXCLUDES = ("pain", "cramp", "discomfort", "symptom", "bleed")
-BONE_STRESS_PHRASES = ("stress fracture", "stress fractures",
-                       "stress reaction", "bone stress")
+# THE BONE STRESS INJURY CONTINUUM, from the literature rather than from one
+# record's phrasing (G85). Sports medicine names the whole spectrum "bone
+# stress injury", graded from stress REACTION and stress RESPONSE - the early,
+# imaging-only end - through to a frank stress FRACTURE. Those are the words a
+# clinic letter uses, and a marker that knew only the last one read the
+# earliest and most treatable presentations as nothing.
+#
+# WIDENED BEFORE THE BACKSTOP CAME OFF, in that order, and the order was the
+# whole problem. `_corroborating_markers` also fired on the bare word `stress`
+# beside any body site - over-firing badly, which is what #115 removes - and
+# that loose branch was silently carrying `stress injury`, `stress response`
+# and `stress fx`. Taking it away without widening this list first bought a
+# false negative on the tier that suspends programming, which is under-triage
+# in exchange for precision, and that trade is not available here.
+#
+# `stress fractures` is gone: `stress fracture` is a prefix of it, `excludes`
+# is empty, so it could never add a match. A dead entry in a safety vocabulary
+# reads as coverage.
+BONE_STRESS_PHRASES = ("stress fracture", "stress reaction", "stress response",
+                       "stress injury", "stress lesion", "stress fx",
+                       "bone stress")
 PROSE_TRIGGERS = {"cardiac": CARDIAC_PHRASES, "syncope": SYNCOPE_PHRASES}
 
 # A phrase preceded by one of these is a denial, not a report. The guard
@@ -1348,16 +1369,41 @@ def _corroborating_markers(daily: list[dict], weight: list[dict],
               if _within(m)]
     if _asserted(notes, AMENORRHOEA_PHRASES, AMENORRHOEA_EXCLUDES):
         markers.append("menstrual function reported absent")
-    # `str(m.get("body_site"))` yields the string "None" for a null site,
-    # which is TRUTHY - so the body-site guard passed for every medical row
-    # that omitted a site, and the marker collapsed to "stress" in the title.
-    # A line reading "Work stress flare-up" became bone-stress injury history
-    # and held a healthy athlete's training (#67).
-    if _asserted(notes, BONE_STRESS_PHRASES) or any(
-            (m.get("body_site") or "")
-            and "stress" in str(m.get("title") or "").lower()
-            for m in medical):
-        markers.append("bone-stress injury history")
+    # THE PHRASE, NEVER THE BARE WORD, and the medical titles were already
+    # being read this way. #67 found that "Work stress flare-up" was becoming
+    # bone-stress injury history and holding a healthy athlete's training, and
+    # fixed the half where `body_site` was null - `str(None)` is the truthy
+    # string "None", so the site guard passed on every row that omitted one.
+    # The other half survived: with ANY site present, the bare word `stress`
+    # anywhere in a title still fired, so "Work stress flare-up" at a knee was
+    # still read as a bone injury. Same harm, one condition along.
+    #
+    # WIDEN FIRST, THEN REMOVE, and the first draft of this got the order
+    # wrong. It asserted that nothing was lost because the phrase list already
+    # read every title and note - measured, that was false. The loose branch
+    # was carrying `stress injury`, `stress response` and `stress fx`, so
+    # dropping it bought a false negative on the tier that suspends
+    # programming: `Stress injury, left femoral neck` stopped marking, and a
+    # femoral-neck injury is the one in this syndrome you least want silent.
+    # `BONE_STRESS_PHRASES` now spans the published continuum, so those cases
+    # come back through the precise route.
+    #
+    # ONE KNOWN GAP REMAINS, and it is not introduced here - it is uncovered
+    # here. `MRI: no acute change, stress reaction of the tibia` reads as a
+    # denial: the `:` breaks the clause, the comma deliberately does not
+    # (NegEx scopes through a coordinating list, so "denies dizziness, chest
+    # pain" denies both), and `no acute change` is left governing the finding
+    # after it. The loose branch was masking that by accident. Fixing it is a
+    # change to the negation scoping with its own prior art to argue, not a
+    # line in this one.
+    #
+    # THE MARKER REPORTS THE RECORD, IT DOES NOT DIAGNOSE. "bone-stress injury
+    # history" asserts that the athlete HAS one, inferred from a phrase; what
+    # is true is that the record says so somewhere. This is a screening input a
+    # reader will see, and the boundary rule is that the engine says what was
+    # written, never what it means.
+    if _asserted(notes, BONE_STRESS_PHRASES):
+        markers.append("the record mentions a bone stress injury")
     return markers
 
 

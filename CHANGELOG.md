@@ -170,6 +170,30 @@ adds accessors over what the engine already knew.
 
 ### Fixed
 
+- **`BONE_STRESS_PHRASES` widened to the published continuum** - stress
+  reaction, stress response, stress injury, stress lesion, stress fx, stress
+  fracture, bone stress. Sports medicine names the whole spectrum "bone stress
+  injury" and grades it from the imaging-only end to a frank fracture; the
+  marker knew only the last of those, so the earliest and most treatable
+  presentations read as nothing. `stress fractures` removed: `stress fracture`
+  is a prefix of it, so it could never add a match.
+- **A work-stress note was still being read as a bone injury** (#115, item 6).
+  #67 found "Work stress flare-up" becoming bone-stress injury history and
+  holding a healthy athlete's training, and fixed the half where `body_site`
+  was null - `str(None)` is the truthy string "None", so the site guard passed
+  on every row that omitted one. With a site PRESENT the bare word `stress`
+  anywhere in a title still fired. Same harm, one condition along. The phrase
+  list already reads every medical title and note, so dropping the loose
+  branch costs no sensitivity, and the test that proves it was already there.
+- **A screening marker asserted a condition the record only mentioned.**
+  "bone-stress injury history" says the athlete HAS one, inferred from a
+  phrase in a note. It now reports what the record says.
+- Two boundary strings that survived #121: the safety module described its
+  thresholds as "conservative SCREENING bounds", and `schema.SEVERITIES`
+  defined `red_flag` as "a claim that this needs a clinician now". Both now
+  describe what the ENGINE does - that a figure is outside the range it will
+  reason about, and that a hardcoded escalation fires - rather than what
+  anyone should do about it.
 - **A gate nobody could read was a clear run.** `restricts` was matched by set
   intersection on the RAW tokens, so anything the intersection could not hit
   vanished - and `may()` fell through to `allowed`, with the reason "no gate in
