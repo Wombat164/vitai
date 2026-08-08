@@ -170,6 +170,13 @@ adds accessors over what the engine already knew.
 
 ### Fixed
 
+- **`BONE_STRESS_PHRASES` widened to the published continuum** - stress
+  reaction, stress response, stress injury, stress lesion, stress fx, stress
+  fracture, bone stress. Sports medicine names the whole spectrum "bone stress
+  injury" and grades it from the imaging-only end to a frank fracture; the
+  marker knew only the last of those, so the earliest and most treatable
+  presentations read as nothing. `stress fractures` removed: `stress fracture`
+  is a prefix of it, so it could never add a match.
 - **A work-stress note was still being read as a bone injury** (#115, item 6).
   #67 found "Work stress flare-up" becoming bone-stress injury history and
   holding a healthy athlete's training, and fixed the half where `body_site`

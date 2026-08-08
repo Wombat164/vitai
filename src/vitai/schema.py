@@ -395,14 +395,15 @@ EXPECTATIONS = {
 MEDICAL_STATUSES = {"active", "monitoring", "resolved"}
 PROVIDER_TYPES = {"gp", "physio", "specialist", "other"}
 
-# The severity ladder the ENGINE reads. `red_flag` is not a stronger adjective
-# than `severe` - it is a different kind of thing. `severe` scales a coaching
-# adjustment; `red_flag` says the record holds something this engine will not
-# reason about at all, and it fires a hardcoded escalation that no coaching
-# logic can weigh against training goals. What the reader does with it is
-# theirs; the field states that the engine has stopped, not what anyone should
-# do next. The engine has its own independent red-flag triggers too (see
-# safety.py), so an LLM can only ever ADD an escalation, never remove one.
+# The severity ladder. `red_flag` is not a stronger adjective than `severe` -
+# it is the only value on this ladder the ENGINE itself reads. Everything else
+# here is written for a coach to weigh; `red_flag` is compared directly in
+# `safety.py` and fires a hardcoded URGENT escalation that no coaching logic
+# can trade against a training goal, on the affected activity. What the reader
+# does with it is theirs: the field records that the engine has stopped
+# programming there, not what anyone should do next. The engine has its own
+# independent red-flag triggers too, so an LLM can only ever ADD an
+# escalation, never remove one.
 SEVERITIES = {"none", "mild", "moderate", "severe", "red_flag"}
 
 # Activity classes an episode can gate. Closed, so a gate is machine-checkable

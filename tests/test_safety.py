@@ -1511,6 +1511,8 @@ def test_every_bone_stress_phrase_is_still_found_wherever_it_is_written():
     in a daily note and in a medical title alike."""
     from vitai.safety import BONE_STRESS_PHRASES, _corroborating_markers
     body = [weight(f"2030-05-{d:02d}", 75.0) for d in range(1, 15)]
+    assert len(BONE_STRESS_PHRASES) >= 6, \
+        "an emptied list would make this loop vacuous and the test green"
     for phrase in BONE_STRESS_PHRASES:
         titled = [medical("2030-05-02", slug="x", kind="injury",
                           title=f"Tibial {phrase}", body_site="shin")]
@@ -1520,3 +1522,82 @@ def test_every_bone_stress_phrase_is_still_found_wherever_it_is_written():
         days[1]["note"] = f"diagnosed with a {phrase} today"
         assert _corroborating_markers(days, body, [],
                                       date(2030, 5, 1), date(2030, 5, 14)), phrase
+
+
+# --- the parity the first draft asserted and did not have ---------------------
+
+# WHAT THE LOOSE BRANCH WAS SILENTLY CARRYING. Each of these marked before the
+# bare-word disjunct was removed and must still mark now: they are the reason
+# widening `BONE_STRESS_PHRASES` had to come first. Under-triage is not an
+# accepted cost on this path, and these are the cases that measure it.
+BONE_STRESS_TITLES = (
+    "Tibial stress reaction",
+    "Stress injury, left femoral neck",
+    "Stress response of the medial tibia on MRI",
+    "Metatarsal stress fx",
+    "Grade 2 stress lesion, second metatarsal",
+    "Bone stress on MRI",
+)
+
+# And what must stay silent. The whole point of removing the disjunct.
+NOT_BONE_STRESS_TITLES = (
+    "Work stress flare-up",
+    "Stress at work",
+    "Feeling stressed about the race",
+)
+
+
+@pytest.mark.parametrize("title", BONE_STRESS_TITLES)
+def test_a_clinic_phrasing_of_a_bone_stress_injury_marks(title):
+    """The precision gain must not cost sensitivity, and this is the check the
+    first draft was missing: every input here was caught by the loose branch,
+    so if the phrase list does not carry them the removal was a regression on
+    the tier that suspends programming."""
+    from vitai.safety import _corroborating_markers
+    body = [weight(f"2030-05-{d:02d}", 75.0) for d in range(1, 15)]
+    row = [medical("2030-05-02", slug="x", kind="injury", title=title,
+                   body_site="shin")]
+    assert _corroborating_markers(_fortnight(), body, row,
+                                  date(2030, 5, 1), date(2030, 5, 14)), title
+
+
+@pytest.mark.parametrize("title", NOT_BONE_STRESS_TITLES)
+def test_a_non_skeletal_use_of_the_word_stress_does_not_mark(title):
+    """With a body site present, which is the half #67's fix left open."""
+    from vitai.safety import _corroborating_markers
+    body = [weight(f"2030-05-{d:02d}", 75.0) for d in range(1, 15)]
+    row = [medical("2030-05-02", slug="x", kind="symptom", title=title,
+                   body_site="knee")]
+    assert _corroborating_markers(_fortnight(), body, row,
+                                  date(2030, 5, 1), date(2030, 5, 14)) == [], title
+
+
+def test_no_phrase_is_dead_weight_in_the_list():
+    """`stress fractures` was in the list and could never add a match -
+    `stress fracture` is a prefix of it and `excludes` is empty. A dead entry
+    in a safety vocabulary reads as coverage it does not provide."""
+    from vitai.safety import BONE_STRESS_PHRASES
+    for phrase in BONE_STRESS_PHRASES:
+        shadowed = [p for p in BONE_STRESS_PHRASES if p != phrase and p in phrase]
+        assert not shadowed, f"{phrase!r} can never match: {shadowed} matches first"
+
+
+# --- the prose rules, which had no control at all -----------------------------
+
+def test_the_engine_does_not_describe_its_own_thresholds_as_clinical():
+    """#115 items 1 and 5. Both strings passed `boundary_gate.py` for their
+    whole life - the gate strips markdown but not Python comment markers, so a
+    directive wrapped across a `#` continuation is invisible to it. Pinned
+    here because nothing else in the repo can tell whether they regressed."""
+    import vitai.safety as safety_module
+    from pathlib import Path
+    doc = safety_module.__doc__ or ""
+    assert "SCREENING bounds" not in doc, doc[:200]
+    assert "willing to reason about" in doc, doc[:400]
+
+    schema_src = (Path(safety_module.__file__).parent / "schema.py").read_text(
+        encoding="utf-8")
+    ladder = schema_src[schema_src.index("# The severity ladder"):
+                        schema_src.index("SEVERITIES = ")]
+    assert "needs a clinician" not in ladder, ladder
+    assert "what anyone should do next" in ladder, ladder
