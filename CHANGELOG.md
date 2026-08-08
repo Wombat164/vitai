@@ -170,6 +170,30 @@ adds accessors over what the engine already knew.
 
 ### Fixed
 
+- **A documented mapping that did not exist** (#126 follow-up). The README's
+  migration table and the wiki reference both said `sessions.location` is read
+  forward as `place`/`route` the same way `hip_pain` is read as `pain`. Nothing
+  reads it forward. Nobody was lying: a RENAME THAT WIDENED and a SPLIT INTO
+  OTHER TYPES were assumed to be one kind of event, and only one of them is.
+  `hip_pain` -> `pain` is a rename - the old value is exactly a valid new
+  value. `location` -> `place` + `route` is a split, and free text is a valid
+  value of neither, which is why the split happened. Which successor a string
+  belongs in is a judgement only the athlete can make, so nothing maps it, and
+  now that is said rather than left to be found by grep.
+
+### Added
+
+- **`schema.KEY_FORWARD` and `schema.TERMINAL_RETIREMENT`** (contract 38).
+  `KEY_RETIREMENT` recorded THAT a key was retired and nothing recorded whether
+  anything reads it forward. The first names the one CALLABLE that reads each
+  mapped key forward - and a test reads that callable's source for the key,
+  because a register that certifies an absent reader is worse than no register.
+  The second says why the rest are never read, and what to append instead, per
+  key: the two terminal retirements here need opposite advice.
+- **An `unread_retired_value` tripwire.** One `review` per field, not per line.
+  It does not claim the value is lost - the column still holds it - only that
+  no successor inherited it, so nothing built on the successors sees it.
+
 - **A gate that could not say where it hurt** (#126, G89 part two). `hip_pain`
   is retired in favour of `pain` + `pain_site`, and `canonical_daily` is meant
   to be the one place an old line is read forward. Eight readers re-implemented
