@@ -154,8 +154,25 @@ error rather than a finding.
 ## Retired keys stay legal
 
 A generalised key is retired, not removed: an old line carrying it keeps
-validating, and the engine reads it forward. `daily.hip_pain` became
-`pain` + `pain_site`; `sessions.location` became `place` + `route`.
+validating. Whether it is also READ FORWARD depends on which kind of
+retirement it was, and the two are not interchangeable.
+
+`daily.hip_pain` became `pain` + `pain_site`, and that is a RENAME that
+widened: the old value is exactly a valid new value, the site is recovered
+from the field's own name, and `resolution.canonical_daily` reads every old
+line forward. Nothing is lost and nothing needs doing.
+
+`sessions.location` became `place` + `route`, and that is a SPLIT into
+different types. Free text is a valid value of neither, and which one a given
+string belongs in is a judgement only the athlete can make - "canal path"
+could be either. So nothing maps it forward, deliberately. The column still
+holds what the line said; no successor inherited it, so nothing built on
+`place` or `route` sees it, and a `review` tripwire says so on any record that
+carries one.
+
+`schema.KEY_FORWARD` and `schema.TERMINAL_RETIREMENT` are the register, and
+they partition every retired key, so this page is checkable rather than
+merely written.
 
 Write the current names on new lines. Retiring is a three-part change, and the
 part that gets missed is that every reader must prefer the successor.

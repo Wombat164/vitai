@@ -631,6 +631,81 @@ KEY_RETIREMENT: dict[str, dict[str, int]] = {
     "sessions": {"location": 2},
 }
 
+# --- G89 PART TWO, AS DATA: a retirement either maps forward or it does not ---
+#
+# The README's migration table, and the wiki reference beside it, both said
+# `sessions.location` is read forward as `place`/`route` "the same as"
+# `hip_pain` is read as `pain`. Nothing reads it forward. Nothing was lying:
+# two retirements were assumed to be one kind of event, and only one of them
+# is.
+#
+# A RENAME AND A SPLIT ARE DIFFERENT ANIMALS. `hip_pain` -> `pain` is a rename
+# that widened: the old value is EXACTLY a valid new value, and site "hip" is
+# recovered from the field's own name. `location` -> `place` + `route` is a
+# split into different types, and the old value is a valid value of NEITHER -
+# which is the entire reason the split happened. Free text could not be
+# grouped or compared. And which successor a given string belongs in is a
+# judgement, not a lookup: "canal path" could be either, and only the athlete
+# knows.
+#
+# THE EGRESS ARGUMENT, STATED PRECISELY because a loose version of it is
+# wrong. Free text in `location` is not hidden - it is a projected column and
+# a consumer querying the table gets it. What mapping would change is WHICH
+# field holds it: `place` is the coarse tier `coarse()` emits by default
+# (#205), the one a caller reaches for when it wants the safe form. Free text
+# is legible as free text under its own retired name; the same string under
+# `place` is a coarse value by assertion. Moving it is not concealment either
+# way - it is putting an unvetted string in the field whose contract is that
+# it has been vetted.
+#
+# So for a split the honest answer is that nothing maps it, said out loud
+# rather than left to be found by grep. Data, not prose, because prose is
+# exactly what no check could contradict.
+#
+# EVERY ENTRY NAMES A CALLABLE, and the test reads its source for the retired
+# key. Naming a table was the first version and it cannot be checked: any
+# existing attribute satisfies a `hasattr`, so a future retirement could be
+# registered as mapped, gate off the tripwire below, and recreate the silent
+# drop with the register certifying it.
+KEY_FORWARD: dict[str, dict[str, str]] = {
+    "daily": {"hip_pain": "resolution.canonical_daily"},
+    "goals": {"status": "policy.lifecycle_of"},
+}
+
+# The other kind. Each carries WHY nothing maps it and WHAT the athlete does
+# instead, and the second is not boilerplate: the two terminal retirements
+# here need opposite advice, and one message for both told the `planned` case
+# to append a corrected session line, which is not where its successor lives.
+TERMINAL_RETIREMENT: dict[str, dict[str, tuple[str, str]]] = {
+    "sessions": {
+        "location": (
+            "split into `place` and `route`, which are different types rather "
+            "than new spellings; free text is a valid value of neither, and "
+            "choosing between them is the athlete's judgement, not a lookup",
+            "append corrected session lines carrying `place`, `route` or "
+            "both - the engine will not choose for you"),
+        "planned": (
+            "the successor points the other way (#221) - a plan is the object "
+            "and a session cites it - so there is nothing on a session row "
+            "for a forward map to write to",
+            "append `plans` rows for the plans that were followed, each "
+            "citing its session through `session_ref`"),
+    },
+}
+
+
+def forward_map_for(dataset: str, key: str) -> str | None:
+    """Who reads `key` forward, or None where nothing does and nothing should.
+
+    None is an ANSWER here, not a gap. `terminal_retirement` says why.
+    """
+    return KEY_FORWARD.get(dataset, {}).get(key)
+
+
+def terminal_retirement(dataset: str, key: str) -> tuple[str, str] | None:
+    """Why this retired key is never read forward, and what to do instead."""
+    return TERMINAL_RETIREMENT.get(dataset, {}).get(key)
+
 CURRENT_GENERATION: dict[str, int] = {name: 1 for name in KEYS}
 for _ds in ("weight", "daily", "sessions", "inferences", "medical",
             "achievements", "goals"):
