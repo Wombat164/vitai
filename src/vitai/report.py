@@ -13,7 +13,7 @@ from datetime import date, datetime, timedelta
 from statistics import mean
 
 from .weeks import week_of
-from .clocks import timing_caveat, weigh_in_timing
+from .clocks import protocol_seam, timing_caveat, weigh_in_timing
 from .composition import decompose, endpoints
 from .config import Config, phase_rate_for
 from .vocab import session_classes
@@ -201,6 +201,12 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                 # exactly that.
                 unreadable = (timing["known"] and not timing["unknown"]
                               and timing["drift_kg"] >= abs(rate))
+                # The seam is checked FIRST and reported instead, because the
+                # two say different things to a reader. "Weigh-in times vary"
+                # is a habit to tighten; a protocol change is a boundary the
+                # rate simply does not cross, and telling somebody to weigh
+                # more consistently would be advice about the wrong thing.
+                seam = protocol_seam(window)
                 # G27: a thin sample owes doubt. `ramp` already caveats its
                 # base size; the rate line - the number actually read every
                 # week - did not.
@@ -208,7 +214,10 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                 if days > COLD_SPAN_DAYS:
                     span += ", a thin sample"
                 if target is not None:
-                    verdict = ("NOT READABLE - weigh-in times vary too much"
+                    verdict = ("NOT COMPARABLE - the weigh-in protocol "
+                               f"changed ({' then '.join(seam['protocols'])})"
+                               if seam["seam"]
+                               else "NOT READABLE - weigh-in times vary too much"
                                if unreadable
                                else "ON TARGET" if abs(rate - target) <= 0.25
                                else "FAST - raise intake" if rate > target

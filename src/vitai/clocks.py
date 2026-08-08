@@ -166,6 +166,42 @@ def _minutes(hhmm: object) -> int | None:
     return t.hour * 60 + t.minute
 
 
+def protocol_seam(rows: list[dict]) -> dict:
+    """Did the PROCEDURE change under this rate? (#174, proposal 4)
+
+    Returns `{protocols, seam, stated, silent}` - the distinct protocols named
+    in the window, whether more than one was, and how many rows said and did
+    not say. A rate spanning a seam is measuring the change of procedure as
+    well as the change in the athlete.
+
+    THE CALIBRATION-SEAM ARGUMENT, ONE AXIS OVER. The engine already refuses a
+    rate whose weigh-in TIMES are spread widely enough to account for it. A
+    protocol change is the same defect with a discrete cause instead of a
+    continuous one: `fasted-post-void` and `fed-evening-clothed` are not two
+    readings of one measurand, they are two measurands, and the difference
+    between them is breakfast and a pair of shoes rather than anything the
+    athlete did. `protocol` was written for exactly this and nothing read it.
+
+    NO SIZE ESTIMATE, and that absence is the point. It would be easy to hold
+    a table of how many kilograms a clothed evening weigh-in adds and subtract
+    it; that is a per-protocol accuracy claim about equipment and habits this
+    engine has never seen, and it is the figure the project refuses to invent
+    everywhere else. What is knowable from the record is that the procedure
+    changed, which is enough to decline the comparison.
+
+    SILENCE IS NOT A PROTOCOL. Rows that name none are counted and otherwise
+    ignored: a record that has never used the field must not acquire a seam
+    the day it starts, and a run of unnamed rows beside one named row is an
+    unanchored interval rather than a change of procedure - which is what the
+    rest of #174 is about, and is not decided here.
+    """
+    named = [str(r["protocol"]) for r in rows
+             if r.get("protocol") not in (None, "")]
+    distinct = sorted(set(named))
+    return {"protocols": distinct, "seam": len(distinct) > 1,
+            "stated": len(named), "silent": len(rows) - len(named)}
+
+
 def weigh_in_timing(rows: list[dict]) -> dict:
     """How consistent were the weigh-in times behind a rate? (#37)
 
