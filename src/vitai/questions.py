@@ -172,13 +172,20 @@ def gates_for(plan: dict, gates_on_day) -> list[str]:
     which reappeared tomorrow, and an episode with a `resolved_date` before
     the plan produced a question the record already answered.
     """
-    from .safety import is_gated
+    from .safety import is_gated, unreadable_restriction
 
     activity = str(plan.get("activity") or "").strip()
     if not activity:
         return []
     for_day = _as_date(plan.get("for_date"))
     gates = gates_on_day(for_day) if for_day is not None else []
-    waiting = [g for g in gates if g.get("status") == "check_not_done"]
+    # AN UNREADABLE GATE IS NOT A QUESTION FOR THE ATHLETE. `is_gated` counts
+    # one as gating, which is the right answer for a bool on a safety surface -
+    # but a clearance question says the way out is doing a check, and the way
+    # out here is fixing a token in the record. Asking the athlete to earn
+    # clearance from a gate whose scope nobody can read sends them to do work
+    # that settles nothing. `may` reports it, and `validate` names the token.
+    waiting = [g for g in gates if g.get("status") == "check_not_done"
+               and not unreadable_restriction(g)]
     return sorted({str(g.get("slug")) for g in waiting
                    if is_gated([g], activity)})

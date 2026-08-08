@@ -170,6 +170,24 @@ adds accessors over what the engine already knew.
 
 ### Fixed
 
+- **A gate nobody could read was a clear run.** `restricts` was matched by set
+  intersection on the RAW tokens, so anything the intersection could not hit
+  vanished - and `may()` fell through to `allowed`, with the reason "no gate in
+  force covers this activity", on a record whose own gate said `blocked`.
+- **And the worst case needed no mistake by anybody.** `restricts: gym` is a
+  RETIRED activity class: `ACTIVITY_CLASSES` unions the retired values in, so
+  the line validates clean, and no session type declares `gym`, so it matched
+  nothing. A severe active episode, correctly written against the vocabulary of
+  its day, silently stopped gating. Every token now resolves through the
+  registry first, so `gym` becomes `strength` and bites - which is the
+  retirement doctrine already written in `vocab.py`, applied by the reader that
+  was not doing it.
+- A token nothing resolves is still tried verbatim, so a gate naming an
+  activity outright keeps biting it, and is reported as unreadable only when it
+  misses - `may()` answers `unknown` naming the token, and `is_gated()` refuses
+  rather than permits. An unreadable gate raises no clearance question: the way
+  out is fixing the record, not doing a check.
+
 - **A gate that could not say where it hurt** (#126, G89 part two). `hip_pain`
   is retired in favour of `pain` + `pain_site`, and `canonical_daily` is meant
   to be the one place an old line is read forward. Eight readers re-implemented
