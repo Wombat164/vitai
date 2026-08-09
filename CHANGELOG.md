@@ -260,6 +260,17 @@ adds accessors over what the engine already knew.
   differently: the same interval attaches to set 3 for one and set 4 for the
   other, and the rows validate identically either way. Nothing reads the field
   yet, which is why this is free to state and free to get right.
+- **Two rules had two homes each, and a sweep now says so.** `anatomy` carried
+  a byte-identical copy of `vocab._normalise` - the fold every registry lookup
+  uses to decide two spellings are one thing - so widening it for unicode
+  dashes would have reached every registry and left `pain_site` resolving the
+  old way. And `_numeric` sat in `query`, `resolution` and `safety`, where it
+  decides whether a pain score reaches a gate; it is `schema.is_number` now.
+- **A test sweeps the engine for byte-identical function bodies** across
+  modules and holds the answer to a pinned list. Every expensive defect this
+  engine has shipped is the same shape - a forward map at eight readers, a
+  second tokeniser, half a fold - and none of them disagreed on the day they
+  were written. They disagreed the first time one copy learned something.
 
 - **A rate across a protocol change is declined** (#174, proposal 4).
   `fasted-post-void` and `fed-evening-clothed` differ by breakfast, a day's

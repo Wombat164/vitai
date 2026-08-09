@@ -73,8 +73,23 @@ def _alias_index() -> dict[str, str]:
 
 
 def _normalise(text: str) -> str:
-    """Case, spacing and punctuation folded; 'IT band' == 'it_band'."""
-    return " ".join(str(text).replace("_", " ").replace("-", " ").lower().split())
+    """Case, spacing and punctuation folded; 'IT band' == 'it_band'.
+
+    ONE FOLD, NOT TWO. This was a byte-identical second copy of
+    `vocab._normalise`, which is the rule every registry lookup in the engine
+    uses to decide two spellings are one thing. Two copies of a fold do not
+    disagree on the day they are written; they disagree the first time one of
+    them learns something. A widening for unicode dashes - smart punctuation
+    from a phone is how a hand-written plain-text record acquires one - would
+    land in `vocab` and leave `pain_site` resolving the old way, silently,
+    which is the `hip_pain` shape exactly.
+
+    `vocab` imports `anatomy` lazily and inside functions, so taking the
+    dependency this direction adds no cycle.
+    """
+    from .vocab import _normalise as fold
+
+    return fold(text)
 
 
 def resolve(name: str | None) -> str | None:

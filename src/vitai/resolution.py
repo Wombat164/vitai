@@ -45,7 +45,7 @@ from .provenance import (TRUST_ORDER, capture_of, describe, distinct_origins,
                          shares_origin,
                          states_capture, trust_ceiling)
 
-from .schema import KEYS
+from .schema import KEYS, is_number
 
 # One definition, in provenance.py, so the ladder cannot drift between the
 # module that produces a level and the module that ranks it.
@@ -153,7 +153,10 @@ def _ladder(field: str, precedence: dict[str, tuple[str, ...]],
 
 
 def _numeric(v: object) -> bool:
-    return isinstance(v, (int, float)) and not isinstance(v, bool)
+    # ONE definition, in `schema` (see `is_number`). This was three
+    # byte-identical copies of a predicate that decides whether a value
+    # reaches a gate.
+    return is_number(v)
 
 
 def _disagrees(a: object, b: object) -> bool:

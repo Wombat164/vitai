@@ -1639,6 +1639,26 @@ def key_retirement(dataset: str, key: str) -> int | None:
     return KEY_RETIREMENT.get(dataset, {}).get(key)
 
 
+def is_number(value: object) -> bool:
+    """A real number the engine will compute with - and `True` is not one.
+
+    ONE DEFINITION, and it was three, found by sweeping for duplicated bodies.
+    `query`, `resolution` and `safety` each carried a byte-identical private
+    copy, and `safety`'s decides whether a pain score reaches a gate. Three
+    copies of a predicate do not disagree on the day they are written; they
+    disagree the first time one of them learns something - a numeric string
+    from an importer, say - and then a value is a number to the gate and not to
+    the ladder, or the other way round.
+
+    `bool` IS EXCLUDED, which is the whole reason this is a function rather
+    than an `isinstance` call at each site. In Python `True` is an `int`, so a
+    field carrying `true` would otherwise arrive at a threshold comparison as
+    the number one, and `pain: true` would read as pain of 1 rather than as
+    the type error it is.
+    """
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
 def line_generation(rec: dict) -> int:
     """A line's own schema generation - its `_gen` field, default 1 (legacy
     lines predate the marker and are held only to the founding schema)."""
