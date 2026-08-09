@@ -40,7 +40,7 @@ from .safety import (
     DISCLAIMER, active_episodes, banner, escalations, gates_on, hold_gates,
     is_gated, may, urgent_now,
 )
-from .schema import CURRENT_GENERATION, KEYS, coarse
+from .schema import CURRENT_GENERATION, KEYS, aliases_for, coarse, units
 from .verdicts import compute_verdicts
 from .questions import open_questions
 from .weeks import session_weeks
@@ -2557,6 +2557,26 @@ def field_types(dataset: str | None = None) -> dict:
                 # Published rather than internal for the reason the rest of
                 # this accessor is: it exists because consumers were guessing.
                 "sensitivity": sensitivity(name, field),
+                # WHAT THE NUMBER IS IN, and the same argument one more time
+                # (#310). A client kept a hand-written `{distance_km: "km",
+                # rhr: "bpm"}` map, which is a copy of a fact this engine
+                # validates against - and a client guessing a unit from a name
+                # suffix is one rename away from printing kilometres as
+                # seconds, since nothing says which names carry a unit.
+                #
+                # `{}` for a field with no quantity. Otherwise a UCUM code, a
+                # named ordinal scale, or a REFERENCE to the field whose units
+                # this takes - a goal's target is in the units of its metric,
+                # and answering that with a constant would be wrong
+                # confidently. A code, never a conversion: converting needs a
+                # dependency this engine does not ship.
+                "units": units(name, field),
+                # AND WHAT A PERSON CALLS IT. Nobody asks how their rhr was.
+                # This map cannot be derived from anything - it is about
+                # English - and the client copy of it failed SILENTLY: a
+                # question naming a metric the list had forgotten matched no
+                # topic and fell through to a standing fact pack.
+                "aliases": aliases_for(field),
             }
             for field in KEYS[name]
         }

@@ -1,0 +1,336 @@
+# Units and the words people use for them (#310).
+#
+# A client hand-maintained two maps the engine already knew: what unit each
+# field holds, and what an English speaker calls it. Both went stale the way a
+# copy of somebody else's knowledge does, and the second failed SILENTLY - a
+# question naming a metric that was not on the list matched no topic and fell
+# through to a standing fact pack, so a model answered a question about step
+# counts by describing a set of goals.
+#
+# UCUM, UNRESERVEDLY, AND AS REGISTRY DATA. The Unified Code for Units of
+# Measure is what FHIR binds `Quantity.code` to and what IEEE 1752 uses; a
+# consumer that already speaks either reads these without a translation table.
+# It is NEVER a conversion library here. Converting needs a runtime dependency
+# and this engine ships none, so the code is published and the arithmetic is
+# the consumer's - which is also the honest division, because a conversion is
+# a claim about the world and a code is a statement about the record.
+#
+# THE UNIT IS IN THE NAME AND THAT IS NOT A PUBLICATION. `distance_km` states
+# its unit by a convention nothing enforces, and `steps` and `rhr` state
+# nothing at all. A client guessing a unit from a name suffix is one rename
+# away from printing kilometres as seconds, and there is no rule saying which
+# names carry a unit and which do not.
+#
+# A FIELD'S UNIT IS IMMUTABLE, FULL STOP, and this is where the design here
+# departs from what the issue's comment proposed. That asked for a table keyed
+# by (field, generation), so that old rows resolve against the generation they
+# were stamped with - which is the right instinct, and it rests on `_gen` being
+# on every row and never rewritten. Measured, `_gen` is absent on 128 rows
+# across 13 datasets in the shipped fixtures and `line_generation` defaults a
+# missing one to 1; it is not a column in the read model, so a consumer holding
+# a row cannot tell which generation to look up; and `_carry_meta` takes the
+# MAXIMUM across merged claims, so a row assembled from two generations reports
+# the newer. A table keyed on that would answer confidently and sometimes
+# wrongly, which is worse than the field names it replaces.
+#
+# So the rule is stronger and needs no key: a field's unit never changes.
+# Changing what a field holds is a NEW FIELD, and the retirement register
+# (`schema.KEY_FORWARD` / `TERMINAL_RETIREMENT`) already exists to say the old
+# one is retired and whether anything reads it forward. That gives the property
+# the generation table was for - there is no moment at which one field name
+# means two units - without depending on a marker that does not hold.
+#
+# FOUR KINDS OF ANSWER, because fewer would force a lie:
+#
+#   ucum      a fixed unit, the same in every row that carries the field
+#   scale     an ordinal score on a NAMED scale, with no unit at all - a 7 on
+#             the Borg scale is not seven of anything, and giving it a unit
+#             invites the arithmetic that turns an ordinal into a fake ratio
+#   unit_of   the unit is whatever the field NAMED BY another field holds. A
+#             goal's `target` is in the units of its `metric`: a reference,
+#             not a constant, and answering with a constant would be wrong
+#             confidently
+#   scale_of  the same, one axis over: the row itself names its scale. `daily`
+#             carries `mood_scale` and `pain_scale`, so stating a scale here
+#             would be a second copy of a fact the row already holds - free to
+#             disagree with it, and the row is the one that is right
+#
+# ALIASES ARE ABOUT ENGLISH and cannot be derived from anything. Nobody asks
+# how their rhr was. Kept to the fields a client can be asked about, because a
+# vocabulary that grows by guesswork is how "unusual" arrives as a category -
+# and deliberately not safety-bearing, so it stays outside the rule that keeps
+# gate vocabularies curated (#56).
+
+version = 1
+
+# --- mass -----------------------------------------------------------------
+
+[unit.kg]
+ucum = "kg"
+label = "kilograms"
+aliases = ["weight", "body weight", "bodyweight", "mass", "scale"]
+
+[unit.kg_lo]
+ucum = "kg"
+label = "kilograms"
+
+[unit.kg_hi]
+ucum = "kg"
+label = "kilograms"
+
+[unit.grams]
+ucum = "g"
+label = "grams"
+aliases = ["portion", "serving", "amount"]
+
+[unit.grams_lo]
+ucum = "g"
+label = "grams"
+
+[unit.grams_hi]
+ucum = "g"
+label = "grams"
+
+# --- distance, time, terrain ----------------------------------------------
+
+[unit.distance_km]
+ucum = "km"
+label = "kilometres"
+aliases = ["distance", "how far", "mileage", "km"]
+
+[unit.duration_s]
+ucum = "s"
+label = "seconds"
+aliases = ["duration", "how long", "time", "elapsed"]
+
+[unit.active_min]
+ucum = "min"
+label = "minutes"
+aliases = ["active minutes", "moving time", "time active"]
+
+[unit.sleep_h]
+ucum = "h"
+label = "hours"
+aliases = ["sleep", "how much sleep", "hours slept", "sleep duration"]
+
+[unit.elevation_m]
+ucum = "m"
+label = "metres"
+aliases = ["elevation", "climbing", "ascent", "vert", "hills"]
+
+# --- counts ---------------------------------------------------------------
+
+# `{steps}` is UCUM's annotation form: dimensionless, with the annotation
+# carrying what is being counted. A count is not a length in disguise.
+[unit.steps]
+ucum = "{steps}"
+label = "steps"
+aliases = ["steps", "step count", "walking"]
+
+# --- rates ----------------------------------------------------------------
+
+# `/min` is UCUM for "per minute" and is what FHIR uses for heart rate. The
+# annotation is deliberately omitted: what is per minute is said by the field.
+[unit.rhr]
+ucum = "/min"
+label = "beats per minute"
+aliases = ["resting heart rate", "resting hr", "resting pulse", "rhr"]
+
+[unit.avg_hr]
+ucum = "/min"
+label = "beats per minute"
+aliases = ["heart rate", "average heart rate", "hr", "pulse", "average hr"]
+
+[unit.max_hr]
+ucum = "/min"
+label = "beats per minute"
+aliases = ["max heart rate", "peak heart rate", "maximum hr"]
+
+[unit.cadence]
+ucum = "/min"
+label = "per minute"
+aliases = ["cadence", "steps per minute", "rpm", "turnover"]
+
+[unit.avg_power]
+ucum = "W"
+label = "watts"
+aliases = ["power", "watts", "average power"]
+
+# --- energy ---------------------------------------------------------------
+
+# The nutritional Calorie. UCUM distinguishes the thermochemical calorie from
+# the several others, and food labelling everywhere this engine is used means
+# the thermochemical kilocalorie.
+[unit.kcal]
+ucum = "kcal_th"
+label = "kilocalories"
+aliases = ["calories burned", "energy burned", "session calories"]
+
+[unit.kcal_in]
+ucum = "kcal_th"
+label = "kilocalories"
+aliases = ["calories", "intake", "energy in", "eaten", "calories eaten"]
+
+[unit.kcal_out]
+ucum = "kcal_th"
+label = "kilocalories"
+aliases = ["calories out", "energy out", "burned", "expenditure"]
+
+# --- macronutrients -------------------------------------------------------
+
+[unit.protein_g]
+ucum = "g"
+label = "grams"
+aliases = ["protein", "how much protein"]
+
+[unit.fat_g]
+ucum = "g"
+label = "grams"
+aliases = ["fat", "dietary fat"]
+
+[unit.carb_g]
+ucum = "g"
+label = "grams"
+aliases = ["carbs", "carbohydrate", "carbohydrates"]
+
+[unit.fibre_g]
+ucum = "g"
+label = "grams"
+aliases = ["fibre", "fiber"]
+
+[unit.sugar_g]
+ucum = "g"
+label = "grams"
+aliases = ["sugar", "sugars"]
+
+[unit.sodium_mg]
+ucum = "mg"
+label = "milligrams"
+aliases = ["sodium", "salt"]
+
+# --- per-100g nutrition ----------------------------------------------------
+#
+# UCUM expresses "per 100 grams" as a quotient with a numeric factor. These are
+# properties of a FOOD rather than of a day, which is why they are separate
+# fields rather than the same ones scaled.
+
+[unit.kcal_100g]
+ucum = "kcal_th/(100.g)"
+label = "kilocalories per 100 g"
+
+[unit.protein_100g]
+ucum = "g/(100.g)"
+label = "grams per 100 g"
+
+[unit.fat_100g]
+ucum = "g/(100.g)"
+label = "grams per 100 g"
+
+[unit.carb_100g]
+ucum = "g/(100.g)"
+label = "grams per 100 g"
+
+[unit.fibre_100g]
+ucum = "g/(100.g)"
+label = "grams per 100 g"
+
+[unit.sugar_100g]
+ucum = "g/(100.g)"
+label = "grams per 100 g"
+
+[unit.sodium_mg_100g]
+ucum = "mg/(100.g)"
+label = "milligrams per 100 g"
+
+# --- proportions -----------------------------------------------------------
+
+[unit.body_fat_pct]
+ucum = "%"
+label = "per cent"
+aliases = ["body fat", "body fat percentage", "fat percentage"]
+
+[unit.body_fat_lo]
+ucum = "%"
+label = "per cent"
+
+[unit.body_fat_hi]
+ucum = "%"
+label = "per cent"
+
+[unit.guard_pct]
+ucum = "%"
+label = "per cent"
+
+# UCUM writes a plain ratio as `1`. A confidence is a number between 0 and 1
+# and not a percentage, and saying so stops a consumer rendering 0.8 as 0.8%.
+[unit.confidence]
+ucum = "1"
+label = "a ratio between 0 and 1"
+
+# --- ordinal scales, which have no unit ------------------------------------
+#
+# A 7 on the Borg scale is not seven of anything. Giving these a unit would
+# invite the arithmetic that turns an ordinal into a fake ratio - the mean of
+# two RPEs is not an RPE - so they name their scale instead, and the scale
+# registry says what its endpoints mean.
+
+[unit.rpe]
+scale = "borg-cr10"
+label = "rating of perceived exertion"
+aliases = ["rpe", "effort", "how hard", "perceived exertion"]
+
+# THE ROW ALREADY NAMES ITS OWN SCALE. `daily` carries `mood_scale` and
+# `pain_scale` for exactly this, so hard-coding one here would be a second
+# statement of the same fact - free to disagree with the first, and the row
+# is the one that is right. `scale_of` is the ordinal twin of `unit_of`: the
+# answer is a reference, and a consumer that cannot follow it has been told
+# so rather than handed a default.
+[unit.mood]
+scale_of = "mood_scale"
+label = "mood score"
+aliases = ["mood", "how i felt", "feeling"]
+
+[unit.pain]
+scale_of = "pain_scale"
+label = "pain score"
+aliases = ["pain", "how much it hurt", "soreness"]
+
+[unit.hip_pain]
+scale_of = "pain_scale"
+label = "pain score"
+
+# --- units borrowed from another field -------------------------------------
+#
+# The unit is not a property of these fields at all. A goal's target is in
+# whatever its metric is measured in, and asking this table for a constant
+# would get a wrong answer confidently. `unit_of` names the field to read
+# instead, and a consumer that cannot follow it has been told so rather than
+# handed a default.
+
+[unit.target]
+unit_of = "metric"
+label = "in the units of the goal's metric"
+
+[unit.target_hi]
+unit_of = "metric"
+label = "in the units of the goal's metric"
+
+# `value` means three different things in three datasets, so it is resolved
+# per dataset below rather than here.
+[unit.value]
+unit_of = "kind"
+label = "in the units of the measurement's kind"
+
+# --- where one field name means different things per dataset ---------------
+#
+# Small on purpose, exactly as `SENSITIVITY_OVERRIDE` is: an override is a
+# place a name stopped carrying its meaning, and a long list of them would say
+# the names are wrong rather than that these datasets are unusual.
+
+[override.thresholds.value]
+unit_of = "key"
+label = "in the units of the threshold's key"
+
+[override.checks.value]
+unit_of = "slug"
+label = "in whatever the named check measures"

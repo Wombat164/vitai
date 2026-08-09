@@ -11,6 +11,33 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **Units and aliases are published, in UCUM** (#310). `vitai schema --json`
+  now carries `units` and `aliases` per field beside `types`, `affinity`,
+  `sensitivity` and `coarse_companion`. A client was hand-maintaining both:
+  the unit map because the unit lived in the field NAME by a convention
+  nothing enforces, and the English map because nothing anywhere said that
+  "resting heart rate" means `rhr`. The second failed silently - a question
+  naming a forgotten metric matched no topic and fell through to a standing
+  fact pack.
+- **Four kinds of answer, because fewer would force a lie.** A `ucum` code; a
+  named ordinal `scale`, because a 7 on the Borg scale is not seven of
+  anything; `unit_of`, where the unit belongs to another field (a goal's
+  target is in the units of its metric); and `scale_of`, where the row names
+  its own scale. A field with no quantity says `{}` rather than an empty unit.
+- **A classification gate**, the shape #299 used for sensitivity: a numeric
+  field with no entry fails the build rather than arriving unlabelled.
+
+### Changed
+
+- **A field's unit is immutable, and that replaces the proposed
+  `(field, generation)` key.** The generation table was the right instinct and
+  rests on `_gen`, which does not hold it: `_gen` is absent on 128 rows across
+  13 datasets in the shipped fixtures and defaults to 1, it is not a column in
+  the read model so a consumer cannot look it up, and `_carry_meta` takes the
+  maximum across merged claims. Changing what a field holds is a NEW FIELD,
+  which the retirement register already records - the same property, without
+  the unreliable key.
+
 - **What the scale cannot see: fat and fat-free mass, derived** (#46, G36).
   `schema.py` stated the intent - `kg` and `body_fat_pct` are the observed
   atoms and the decomposition is derived, never stored - and nothing was ever
