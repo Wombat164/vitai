@@ -1511,6 +1511,52 @@ SENSITIVITY_OVERRIDE: dict[str, dict[str, str]] = {
 }
 
 
+def units(dataset: str, field: str) -> dict:
+    """What a field holds, as data rather than as a naming convention (#310).
+
+    Returns `{}` for a field with no quantity - a date, a slug, a note - and
+    otherwise a dict carrying `label` plus exactly ONE of:
+
+      `ucum`      a fixed UCUM code, the same in every row
+      `scale`     a named ordinal scale, which has no unit at all
+      `unit_of`   the name of the FIELD whose units this takes
+      `scale_of`  the name of the field naming this row's scale
+
+    A CODE, NEVER A CONVERSION. UCUM is registry data here, the way FHIR binds
+    `Quantity.code` and IEEE 1752 uses it; converting between units needs a
+    runtime dependency this engine does not ship, and it is the consumer's
+    arithmetic anyway. Publishing the code is a statement about the record;
+    performing the conversion would be a claim about the world.
+    """
+    from .vocab import registry
+
+    table = registry("units")
+    entry = (table.get("override", {}).get(dataset, {}).get(field)
+             or table.get("unit", {}).get(field))
+    if not entry:
+        return {}
+    # `aliases` shares this table because both are facts about the same field
+    # and one file is easier to keep right than two. It is published under its
+    # own key, not inside this one: a unit is what the number is in, and an
+    # alias is what a person calls it, and a consumer switching on the first
+    # should not have to step over the second.
+    return {k: v for k, v in entry.items() if k != "aliases"}
+
+
+def aliases_for(field: str) -> list[str]:
+    """The words a person uses for this field, or an empty list.
+
+    ABOUT ENGLISH, and derivable from nothing. Nobody asks how their rhr was,
+    and a client that hand-maintains this map is maintaining a copy of the
+    engine's vocabulary that fails silently when it drifts: a question naming a
+    metric the list has forgotten matches no topic at all.
+    """
+    from .vocab import registry
+
+    entry = registry("units").get("unit", {}).get(field) or {}
+    return [str(a) for a in entry.get("aliases") or []]
+
+
 def sensitivity(dataset: str, field: str) -> str:
     """The class this field belongs to. RAISES on one nobody has classified.
 

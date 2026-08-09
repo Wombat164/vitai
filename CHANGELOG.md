@@ -11,6 +11,38 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **Units and aliases are published, in UCUM** (#310). `vitai schema --json`
+  now carries `units` and `aliases` per field beside `types`, `affinity`,
+  `sensitivity` and `coarse_companion`. A client was hand-maintaining both:
+  the unit map because the unit lived in the field NAME by a convention
+  nothing enforces, and the English map because nothing anywhere said that
+  "resting heart rate" means `rhr`. The second failed silently - a question
+  naming a forgotten metric matched no topic and fell through to a standing
+  fact pack.
+- **Six kinds of answer, because fewer forced a lie.** A `ucum` code;
+  `unit_of` where the unit belongs to another field (a goal's target is in the
+  units of its metric); `scale_of` where the row names its own scale;
+  `unit_in` where the row names the unit itself (`sets.load` is kilograms on a
+  barbell and a pin position on a machine stack, which is not a mass);
+  `machine_scoped` for an ordinal on one manufacturer's scale; and `ordinal`
+  for a position that indexes rather than measures. Plus `unstated`, for a
+  check whose slug is athlete-invented and whose quantity nothing knows.
+- **A classification gate**, the shape #299 used for sensitivity: a numeric
+  field with no entry fails the build. Built from the shipped corpus rather
+  than from `schema._TYPES`, because `_TYPES` has no entry for any of the
+  fourteen numbers on `sets` - so a gate reading it walked past `load`, the
+  one a strength client most needs.
+
+### Changed
+
+- **A field's unit is immutable, and that replaces the proposed
+  `(field, generation)` key.** The generation table was the right instinct and
+  rests on `_gen`, which does not hold it: `_gen` is absent on 128 rows across
+  13 datasets in the shipped fixtures and defaults to 1, it is not a column in
+  the read model so a consumer cannot look it up, and `_carry_meta` takes the
+  maximum across merged claims. Changing what a field holds is a NEW FIELD,
+  which the retirement register already records - the same property, without
+  the unreliable key.
 - **Which kind of channel last said anything** (#146). `capture` says how a
   value arrived; a new `initiative` axis on the same registry says whether a
   person had to do anything for it to arrive at all - the active-versus-passive

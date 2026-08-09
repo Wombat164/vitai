@@ -35,16 +35,23 @@ def test_every_dataset_and_field_is_covered():
         assert set(fields) == set(KEYS[dataset]), dataset
 
 
-def test_each_entry_answers_all_five_questions():
-    """`coarse_companion` joined the three at #205: a field with one has no
-    column in the read model and is absent from every default projection, so
-    an accessor a consumer builds its projection from has to say which fields
-    those are rather than describing them like any other column."""
+def test_each_entry_answers_every_question_a_consumer_was_guessing_at():
+    """The list grows by one each time a client is caught keeping its own copy.
+
+    `coarse_companion` joined at #205: a field with one has no column in the
+    read model and is absent from every default projection, so an accessor a
+    consumer builds its projection from has to say which fields those are.
+    `sensitivity` joined at #299, after a client's hand-written egress map gave
+    an unknown field the most permissive class. `units` and `aliases` join at
+    #310, after a hand-written unit map and a hand-written English one - the
+    second of which failed silently, routing a question about steps to a pack
+    of goals.
+    """
     for dataset, fields in field_types().items():
         for name, spec in fields.items():
             assert set(spec) == {"types", "affinity", "container",
-                                 "coarse_companion",
-                                 "sensitivity"}, f"{dataset}.{name}"
+                                 "coarse_companion", "sensitivity",
+                                 "units", "aliases"}, f"{dataset}.{name}"
             assert spec["affinity"] in {"TEXT", "REAL"}
             assert isinstance(spec["container"], bool)
             assert spec["coarse_companion"] is None or (
