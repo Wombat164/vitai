@@ -44,7 +44,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from .schema import IDENTITY_KEY, _restriction_classes, onset_of
+from .schema import IDENTITY_KEY, _restriction_classes, is_number, onset_of
 
 # --- escalation levels --------------------------------------------------------
 # EMERGENCY: same day, do not wait for the weekly review.
@@ -368,7 +368,10 @@ def _as_date(value: str | date | None) -> date | None:
 
 
 def _numeric(v: object) -> bool:
-    return isinstance(v, (int, float)) and not isinstance(v, bool)
+    # ONE definition, in `schema` (see `is_number`). This was three
+    # byte-identical copies of a predicate that decides whether a value
+    # reaches a gate.
+    return is_number(v)
 
 
 # --- episodes -----------------------------------------------------------------
