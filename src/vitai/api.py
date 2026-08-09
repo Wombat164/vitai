@@ -1276,6 +1276,7 @@ class Vitai:
         # reproducible.
         return build_report(self.config, d["weight"], d["daily"],
                             d["sessions"], today=on,
+                            raw_daily=self.dataset("daily"),
                             gates=self.gates(on),
                             escalations=self.urgent(on),
                             events=self.events(on))
@@ -1711,7 +1712,8 @@ class Vitai:
                       built_on=on.isoformat())
         (derived / "weekly.md").write_text(
             build_report(self.config, d["weight"], d["daily"], d["sessions"],
-                         today=on, gates=derivations["gates"],
+                         today=on, raw_daily=self.dataset("daily"),
+                         gates=derivations["gates"],
                          escalations=urgent_now(derivations["escalations"],
                                                 on=on),
                          events=self.events(on)),

@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import date
 from pathlib import Path
 
 from vitai.api import Vitai
@@ -399,3 +400,82 @@ def test_the_sleep_row_carries_it_too(tmp_path):
         "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
     got = [r for r in Vitai(root).verdicts() if r["metric"] == "sleep"]
     assert got and all(r["provisional"] is True for r in got), got
+
+
+# --- section 3: the page a human actually reads --------------------------------
+
+def rollup(tmp_path: Path, mark_last: bool) -> str:
+    """A record whose last seven days trip sleep, steps and rhr at once."""
+    root = tmp_path / "content"
+    (root / "data").mkdir(parents=True)
+    (root / "vitai.toml").write_text(
+        '[athlete]\nname = "T"\n'
+        "[tripwires]\nsteps_floor = 12000\nsleep_floor_h = 8\n"
+        "rhr_baseline = 45\n"
+        "[resolution]\nsource_order = ['watch', 'app']\n", encoding="utf-8")
+    rows = [{**{k: None for k in KEYS["daily"]}, "date": f"2030-05-{n:02d}",
+             "steps": 9000, "sleep_h": 6.5, "rhr": 58, "source": "watch",
+             "coverage": "full"} for n in range(6, 13)]
+    if mark_last:
+        # OUTVOTED, so this also pins the raw read on the report path: the
+        # watch above already called the day `full`.
+        rows.append({**rows[-1], "source": "app", "coverage": PARTIAL})
+    (root / "data" / "daily.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    return Vitai(root).rollup(today=date(2030, 5, 12))
+
+
+def test_the_weekly_rollup_marks_the_lines_built_over_an_open_day(tmp_path):
+    """The verdict column does not reach this page - the tripwire block
+    re-derives its own seven-day figures - so an open week rendered exactly
+    like a finished one after the flag shipped."""
+    marked = rollup(tmp_path, True)
+    lines = [ln for ln in marked.splitlines() if "day still open" in ln]
+    assert len(lines) == 3, marked
+    assert any("Sleep" in ln for ln in lines), lines
+    assert any("Steps" in ln for ln in lines), lines
+    assert any("Resting HR" in ln for ln in lines), lines
+    # STILL A FIGURE. The suffix qualifies the number, it does not replace it.
+    assert "6.5h avg" in marked and "9,000/day avg" in marked
+
+
+def test_a_finished_week_renders_without_the_suffix(tmp_path):
+    """The negative half. A marker that is always there says nothing, and the
+    same three alerts must fire unqualified when every day is closed."""
+    plain = rollup(tmp_path, False)
+    assert "day still open" not in plain, plain
+    for word in ("Sleep", "Steps", "Resting HR"):
+        assert word in plain, word
+
+
+def test_the_weight_rate_line_is_never_marked(tmp_path):
+    """`coverage` lives on `daily` and the rate comes from the weight ladder,
+    so a suffix there would assert a linkage the record cannot express - the
+    same mistake as the contraindication carry-forward this PR deleted."""
+    marked = rollup(tmp_path, True)
+    for line in marked.splitlines():
+        if "kg/week" in line:
+            assert "day still open" not in line, line
+
+
+def test_the_written_weekly_md_is_marked_too(tmp_path):
+    """`rollup()` and `build()` render the same report through two call sites,
+    and pinning one leaves the other free. Reverting `raw_daily` on the
+    `build()` site passed every test in this file - the same defect the review
+    found on the verdicts path, one function later."""
+    root = tmp_path / "content"
+    (root / "data").mkdir(parents=True)
+    (root / "vitai.toml").write_text(
+        '[athlete]\nname = "T"\n[tripwires]\nsteps_floor = 12000\n'
+        "[resolution]\nsource_order = ['watch', 'app']\n", encoding="utf-8")
+    rows = [{**{k: None for k in KEYS["daily"]}, "date": f"2030-05-{n:02d}",
+             "steps": 9000, "source": "watch", "coverage": "full"}
+            for n in range(6, 13)]
+    rows.append({**rows[-1], "source": "app", "coverage": PARTIAL})
+    (root / "data" / "daily.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+
+    v = Vitai(root, on=date(2030, 5, 12))
+    v.build()
+    written = (root / "derived" / "weekly.md").read_text(encoding="utf-8")
+    assert "day still open" in written, written
