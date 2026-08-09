@@ -566,7 +566,26 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     history. It does not claim the value is lost - the column still holds
 #     it - only that no successor inherited it, so nothing built on the
 #     successors sees it.
-CONTRACT_VERSION = "38"
+# 39: `verdicts` gains `observed_days` (#93, ask 2).
+#
+#     Contract 29 added `window_days` because "a statistic with no stated
+#     population is half an answer and the missing half is the misleading
+#     one". That was the DENOMINATOR. This is the numerator, and without it
+#     the same sentence applies again: `sleep 6.7, window_days 7` is published
+#     by this corpus for a week holding ONE night, judged against a floor and
+#     rendering exactly like a week holding seven.
+#
+#     "No unaccounted efforts" becomes "no unaccounted efforts across 78 per
+#     cent coverage", which the issue rightly calls a different and honest
+#     claim. Every AVERAGE row carries it, the RED-S intake and protein floors
+#     included - those fire from seven logged days inside a fourteen-day
+#     window, so the fraction varies most exactly where it matters most.
+#
+#     NO THRESHOLD ANYWHERE IN IT. The engine does not decide how thin is too
+#     thin - that number would have no published basis and this repo has paid
+#     for hand-rolled cutoffs before (G85). It states the denominator and the
+#     numerator and lets the reader judge.
+CONTRACT_VERSION = "39"
 
 _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity would
               # `place_precise` (#205) has NO column and is absent from every
@@ -665,7 +684,8 @@ _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity wou
 # inverse, and the two together mean a row always says either what it vouches
 # for or why it will not.
 VERDICT_KEYS = ["week", "metric", "value", "target", "verdict", "goal",
-                "reason", "due", "statistic", "window_days", "answers"]
+                "reason", "due", "statistic", "window_days", "observed_days",
+                "answers"]
 
 # Derived tables (rebuilt every build, like everything else in derived/).
 CONTRIBUTION_KEYS = ["date", "goal", "metric", "dataset", "period", "value",
