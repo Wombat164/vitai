@@ -315,3 +315,60 @@ def test_a_seam_outside_the_window_does_not_suppress_a_later_clean_rate(tmp_path
             and r["week"] >= "2030-05-13"]
     assert late, "there are later weeks"
     assert not any(r.get("reason") == "not_supported" for r in late), late
+
+
+# --- one spelling is not two protocols ----------------------------------------
+
+def test_a_spelling_variant_does_not_manufacture_a_seam():
+    """A FALSE REFUSAL IS NOT A SAFE ONE. Comparing raw strings meant
+    `Fasted-Post-Void` and `fasted-post-void` were two protocols, so a rate was
+    declined as NOT COMPARABLE for an athlete who weighed the same way both
+    times. The validator does report the spelling - `protocol` must be a slug -
+    but it is a separate call, and a refusal that fires on a typo is one
+    readers learn to skip past.
+    """
+    for variant in ("Fasted-Post-Void", "fasted_post_void", "fasted post void",
+                    "FASTED-POST-VOID"):
+        scope = protocol_seam([weigh("2030-05-01", 70.0, "fasted-post-void"),
+                               weigh("2030-05-08", 69.8, variant)])
+        assert scope["seam"] is False, variant
+        assert scope["protocols"] == ["fasted-post-void"], variant
+
+
+def test_two_real_protocols_still_are():
+    """The fold must not merge anything that differs by more than punctuation.
+    A slug vocabulary has no pair distinguished only by a hyphen."""
+    scope = protocol_seam([weigh("2030-05-01", 70.0, "fasted-post-void"),
+                           weigh("2030-05-08", 71.4, "fed-evening-clothed")])
+    assert scope["seam"] is True
+    assert len(scope["protocols"]) == 2
+
+
+def test_the_athletes_own_spelling_is_what_gets_reported():
+    """Only the COMPARISON folds. The rollup relays what the record says, and
+    normalising the reported name would show the athlete a word they did not
+    write."""
+    scope = protocol_seam([weigh("2030-05-01", 70.0, "Fasted Post Void"),
+                           weigh("2030-05-08", 71.4, "fed-evening-clothed")])
+    assert "Fasted Post Void" in scope["protocols"]
+
+
+def test_the_first_spelling_wins_when_they_disagree():
+    """Deterministic, and it is the one the athlete used first - so a later
+    typo does not rename their protocol in the report."""
+    scope = protocol_seam([weigh("2030-05-01", 70.0, "fasted-post-void"),
+                           weigh("2030-05-04", 70.0, "Fasted-Post-Void"),
+                           weigh("2030-05-08", 71.4, "fed-evening-clothed")])
+    assert scope["protocols"] == ["fasted-post-void", "fed-evening-clothed"]
+
+
+def test_a_rate_is_not_declined_for_a_typo(tmp_path):
+    """End to end, which is where the harm was: the verdict, not the helper."""
+    rows = [weigh(f"2030-05-{d:02d}", 70.0 - d * 0.05, "fasted-post-void")
+            for d in range(1, 15)]
+    rows += [weigh(f"2030-05-{d:02d}", 70.0 - d * 0.05, "Fasted-Post-Void")
+             for d in range(15, 29)]
+    v = record(tmp_path, rows, "[targets]\nphases = [[70.0, 68.0, 0.15]]\n")
+    rates = [r for r in v.verdicts() if r.get("metric") == "weight_rate"]
+    assert rates
+    assert not any(r.get("reason") == "not_supported" for r in rates), rates

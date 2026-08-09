@@ -237,6 +237,15 @@ adds accessors over what the engine already knew.
 
 ### Fixed
 
+- **A spelling made a phantom protocol seam** (found reviewing #315).
+  `protocol_seam` compared the raw strings, so `Fasted-Post-Void` and
+  `fasted-post-void` were two protocols and a weight rate was declined as NOT
+  COMPARABLE for an athlete who weighed the same way both times. The comparison
+  now folds through `vocab._normalise` - the same fold every registry lookup
+  uses - while the reported name stays the athlete's own spelling. The
+  validator still reports the slug fault; a refusal that fires on a typo is one
+  readers learn to skip past.
+
 - **A rate across a protocol change is declined** (#174, proposal 4).
   `fasted-post-void` and `fed-evening-clothed` differ by breakfast, a day's
   fluid and a pair of shoes, so the two ends of such a rate measure different

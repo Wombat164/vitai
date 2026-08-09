@@ -201,11 +201,29 @@ def protocol_seam(rows: list[dict]) -> dict:
     # "aa-evening then zz-morning". Ordered by first appearance by DATE, with
     # file order breaking a tie, because that is the sequence the athlete
     # actually moved through.
+    # ONE SPELLING IS NOT TWO PROTOCOLS. Comparing the raw strings meant
+    # `Fasted-Post-Void` and `fasted-post-void` were two, so a rate was
+    # declined as NOT COMPARABLE for an athlete who weighed the same way both
+    # times. The validator does report the spelling - `protocol` must be a
+    # slug - but it is a separate call, and a refusal that fires on a typo is
+    # a refusal readers learn to skip past.
+    #
+    # THE ENGINE'S OWN FOLD, not a second one. `vocab._normalise` is what every
+    # registry lookup uses to decide that "Gym A" and `gym_a` are one thing,
+    # and folding case and separators cannot merge two protocols that are
+    # genuinely different: a slug vocabulary has no pair distinguished only by
+    # a hyphen. The RAW spelling is what gets reported, because the athlete's
+    # own words are what a reader should see - only the COMPARISON folds.
+    from .vocab import _normalise
+
     dated = sorted((str(r.get("date") or ""), i, str(r["protocol"]))
                    for i, r in enumerate(rows)
                    if r.get("protocol") not in (None, ""))
     named = [p for _, _, p in dated]
-    distinct = list(dict.fromkeys(named))
+    seen: dict[str, str] = {}
+    for spelling in named:
+        seen.setdefault(_normalise(spelling), spelling)
+    distinct = list(seen.values())
     return {"protocols": distinct, "seam": len(distinct) > 1,
             "stated": len(named), "silent": len(rows) - len(named)}
 
