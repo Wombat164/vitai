@@ -30,6 +30,18 @@ adds accessors over what the engine already knew.
 
 ### Fixed
 
+- **`disagreed` read only the runner-up** (#94, ask 4). `_merge_fields`
+  records `discarded` over every losing claim - widened for #73, with the
+  comment saying so - and recorded `disagreed` two lines below it from the
+  runner-up alone. The comment beside `unattributed_loser`, in the same dict,
+  names the defect exactly ("a third unattributed claim differing wildly went
+  unnoticed") while fixing a neighbour. So a scale saying 70.0, an app saying
+  70.0 and a watch saying 84.5 produced no `source_disagreement` tripwire and
+  no `!` in the CLI, because the two the ladder happened to compare agreed.
+- **And the tripwire named the pair that agreed.** With the flag widened, the
+  message read `app says 70.0, scale says 70.0` under a disagreement heading.
+  It now cites the discarded claims, which the row already carried.
+
 - The leak sweep in `test_sensitive_tiers` calls every zero-argument public
   method, and `pin_policy` (#148) was the first writer with an all-optional
   signature - so every suite run appended a row to the shipped demo, leaving
