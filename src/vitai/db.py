@@ -585,9 +585,36 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     thin - that number would have no published basis and this repo has paid
 #     for hand-rolled cutoffs before (G85). It states the denominator and the
 #     numerator and lets the reader judge.
-CONTRACT_VERSION = "39"
+# 40: `provenance` gains `field_sources` (#325).
+#
+#     A wrist watch and a rowing console recorded one session: the watch had
+#     heart rate and an energy estimate, the console had distance, stroke rate
+#     and watts. One session, two instruments, and the right outcome is one
+#     row carrying both - which the resolution layer already produces, with
+#     `source` reading `matrix-console+polar` to say so.
+#
+#     What it could not say is WHICH INSTRUMENT SUPPLIED WHICH FIELD. The
+#     merged row's single `source` is true of half its values and false of the
+#     rest, and a consumer emitting a per-value `source` - which the fact-pack
+#     shape already does - was therefore uniformly wrong for half of them.
+#
+#     `explanations` looked like the answer and is not: it records the winner
+#     of a CONTEST, and complementary instruments never contest. Heart rate
+#     had one witness, distance had one witness, and a field with one witness
+#     "is taken verbatim and explains nothing" - deliberately, or the
+#     explanations become noise. So the case this is about was exactly the
+#     case that stayed silent.
+#
+#     DERIVED, NOT STORED, and present only on a merged row. Nothing is asked
+#     of the athlete and nothing changes on a line written by one writer,
+#     where the row's own `source` is already the whole truth.
+CONTRACT_VERSION = "40"
 
 _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity would
+              # A JSON map (#325), and every container column is TEXT for
+              # the same reason `derived_from` is: REAL affinity would
+              # mangle the serialised text.
+              "field_sources",
               # `place_precise` (#205) has NO column and is absent from every
               # default projection, but `column_affinity` answers for any name
               # it is asked about and told a consumer building its own
@@ -736,7 +763,7 @@ GATE_KEYS = ["date", "source_kind", "slug", "restricts", "reason", "severity",
 ESCALATION_KEYS = ["date", "level", "trigger", "detail", "action"]
 
 PROVENANCE_KEYS = ["date", "dataset", "origin", "independent_sources",
-                   "trust", "chain"]
+                   "trust", "chain", "field_sources"]
 
 # One row per (track, distance), because a track can hold several efforts and
 # hanging them off `sessions` would flatten that.
@@ -778,7 +805,8 @@ DERIVED_TABLES: dict[str, list[str]] = {
 # is mangled - and `test_every_list_column_is_text` asserts it. The set is
 # checked against the fixtures in both directions, so it cannot quietly
 # describe a field that stopped being a list or miss one that became one.
-LIST_COLS = frozenset({"derived_from", "basis_claims"})
+LIST_COLS = frozenset({"derived_from", "basis_claims",
+                       "field_sources"})
 
 
 def _cols(keys: list[str]) -> str:
@@ -868,4 +896,11 @@ def _cell(v: object) -> object:
         # happened to type is not part of what the lineage says. A consumer
         # reads it with `json.loads`.
         return json.dumps(sorted(str(x) for x in v), separators=(",", ":"))
+    if isinstance(v, dict):
+        # `field_sources` is the first map-valued column (#325). Sorted by KEY
+        # for the reason a list is sorted by value: what a merged row says
+        # about which instrument supplied which field does not depend on the
+        # order the fields happen to be walked in, and two builds of one
+        # record must compare equal as text.
+        return json.dumps({k: v[k] for k in sorted(v)}, separators=(",", ":"))
     return v

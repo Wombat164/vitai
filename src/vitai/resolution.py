@@ -227,6 +227,20 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
             "chain": "; ".join(sorted({describe(r) for r in recs})),
         }
 
+    # WHICH INSTRUMENT SUPPLIED WHICH FIELD (#325), on a merged row only.
+    #
+    # `explanations` looks like the answer and is not: it records the winner of
+    # a CONTEST, and complementary instruments never contest. A watch supplies
+    # heart rate, a console supplies distance, each field has ONE witness, and
+    # a field with one witness "is taken verbatim and explains nothing" -
+    # deliberately, or the explanations become noise nobody reads. So the case
+    # this is for was exactly the case that stayed silent, and the merged row's
+    # single `source` was true of half its values and false of the rest.
+    #
+    # Filled below as each field's winner is chosen, so it cannot drift from
+    # what the row actually took.
+    field_sources: dict[str, str] = {}
+
     for field in KEYS[dataset]:
         if field in NON_QUANTITY_FIELDS:
             continue
@@ -260,6 +274,7 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
                                       *_recency(w[1])))
         winner_id, winner = witnesses[0]
         canonical[field] = winner[field]
+        field_sources[field] = str(winner.get("source") or UNKNOWN_SOURCE)
         # `witnesses` counts INDEPENDENT ORIGINS, not rows (#35/#51). Five
         # rows carrying one watch's reading through five platforms are one
         # witness, and reporting five is the false confidence this exists to
@@ -338,6 +353,13 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
                     not rec.get("source") and rec[field] != winner[field]
                     for _, rec in witnesses[1:]),
             })
+    # ONLY ON A MERGE. A line written by one writer already says everything
+    # this could: its own `source` is true of every value it holds, and a map
+    # repeating that field by field would be ceremony on the 99 per cent of
+    # rows that have one author.
+    if len(claims) > 1 and isinstance(canonical.get("_provenance"), dict):
+        canonical["_provenance"]["field_sources"] = dict(field_sources)
+
     return canonical, justifications, explanations
 
 
