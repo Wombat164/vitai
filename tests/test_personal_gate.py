@@ -26,13 +26,47 @@ def findings(path: str, text: str) -> list[str]:
 
 # ---- what the word matcher could not see ---------------------------------------
 
+def _read(ext: str) -> bool:
+    """Would the gate open a file with this suffix? The rule the walker uses."""
+    return not (ext in gate.BINARY_EXT and ext not in gate.TRACK_BINARY)
+
+
 def test_a_committed_track_is_seen_at_all():
-    """`.gpx` was not in TEXT_EXT, so the gate skipped the file on its suffix
-    and never opened it. A GPX is the single most home-locating artifact this
-    project produces: a few hundred timestamped coordinates starting at the
-    athlete's front door."""
+    """`.gpx` was skipped on its suffix and never opened. A GPX is the single
+    most home-locating artifact this project produces: a few hundred
+    timestamped coordinates starting at the athlete's front door.
+
+    `.fit` is binary and is read anyway, because the track rule checks WHERE a
+    file is rather than what is in it - excluding the suffix would take the
+    file out of that check too."""
     for ext in (".gpx", ".tcx", ".fit"):
-        assert ext in gate.TEXT_EXT, ext
+        assert _read(ext), ext
+
+
+def test_A_SUFFIX_NOBODY_ANTICIPATED_IS_READ_BY_DEFAULT():
+    """#312, and the reason the rule is inverted rather than extended.
+
+    A client repo began tracking hand-written Android sources carrying a
+    private package namespace in `package` and `applicationId` declarations.
+    The gate caught the literal in `.gitignore` - extensionless, so in the old
+    allowlist - and admitted it in the sources themselves, then reported
+    clean.
+
+    An allowlist is a list of the file types somebody had thought of. These
+    are the ones that arrived; the point of the inversion is that the NEXT
+    ones are covered without appearing in any list."""
+    for ext in (".java", ".gradle", ".kt", ".kts", ".swift", ".properties",
+                ".m", ".h", ".xml", ".plist", ".pro", ".rb", ".sh", ".ps1",
+                ".sql", ".env", ".lock", ".mjs", ".css", ".html"):
+        assert _read(ext), ext
+
+
+def test_a_binary_is_still_skipped():
+    """The inversion must not turn the gate into a scanner of every jar and
+    font in the tree: those yield no readable text and cost the run."""
+    for ext in (".png", ".ttf", ".jar", ".apk", ".zip", ".db", ".pdf",
+                ".pyc", ".mp4"):
+        assert not _read(ext), ext
 
 
 def test_a_coordinate_outside_a_synthetic_path_is_caught():
