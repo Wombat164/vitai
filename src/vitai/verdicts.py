@@ -818,7 +818,8 @@ def _default_floor_rows(weight: list[dict], daily: list[dict],
                         BEHIND if ea < EA_LOW_THRESHOLD else ON,
                         statistic=COMPOSITE, window_days=RED_S_WINDOW_DAYS,
                         provisional=open_day_in(raw_window or window)))
-    out += _symptom_rows(weight, daily, sessions, medical)
+    out += _symptom_rows(weight, daily, sessions, medical,
+                         raw_daily if raw_daily is not None else daily)
     return out
 
 
@@ -830,10 +831,25 @@ SYMPTOM_METRICS = {"cardiac": "symptom_chest_pain", "syncope": "symptom_syncope"
 
 
 def _symptom_rows(weight: list[dict], daily: list[dict], sessions: list[dict],
-                  medical: list[dict]) -> list[dict]:
-    """One row per (week, symptom class): how many were reported, against zero."""
+                  medical: list[dict], raw_daily: list[dict]) -> list[dict]:
+    """One row per (week, symptom class): how many were reported, against zero.
+
+    MARKED LIKE THE REST (#186), and this was the omission review found after
+    the totality claim had already been made twice. It is a COUNT over a week,
+    and a count is exactly the shape an open day can still change - one more
+    report arrives when the rest of the day is logged, and the row said `null`,
+    which reads as "never checked".
+
+    Marked when any daily row in that week is open, even where the escalation
+    came from `medical` rather than from `daily`. That over-marks: a chest-pain
+    note dated inside an open week is not itself provisional. Over-marking is
+    the direction the issue asks for, and the alternative - tracing each count
+    back to the dataset that raised it - would make a safety row's flag depend
+    on a join that can silently go wrong."""
     from .safety import escalations
 
+    open_weeks = {_week_key(str(d["date"])) for d in raw_daily
+                  if d.get("date") and d.get("coverage") == PARTIAL}
     counts: dict[tuple[str, str], int] = {}
     for row in escalations(medical, daily, weight, sessions,
                            include_low_energy_availability=False):
@@ -841,5 +857,6 @@ def _symptom_rows(weight: list[dict], daily: list[dict], sessions: list[dict],
         if metric and row.get("date"):
             key = (_week_key(str(row["date"])), metric)
             counts[key] = counts.get(key, 0) + 1
-    return [_row(wk, metric, float(n), 0.0, BEHIND, statistic=COUNT)
+    return [_row(wk, metric, float(n), 0.0, BEHIND, statistic=COUNT,
+                 provisional=wk in open_weeks)
             for (wk, metric), n in sorted(counts.items())]

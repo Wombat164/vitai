@@ -16,7 +16,14 @@ adds accessors over what the engine already knew.
   been validated all along, and been read by nothing - so a nutrition export
   taken at lunchtime produced a well-formed row asserting an intake shortfall
   that had not happened, rendering exactly like a row asserting one that had.
-  `verdicts` gains `provisional`.
+  `verdicts` gains `provisional`, carried by every metric built from the daily
+  rows: `steps`, `sleep`, `rhr`, `pain_gate`, the three RED-S floors and the
+  symptom counts.
+- **And `weekly.md` says it too**, which is a visible change to the rendered
+  report. The tripwire block does not read the verdict rows - it re-derives its
+  own seven-day figures - so sleep, steps, resting HR and the pain gate now
+  carry a ` (day still open)` suffix there. The weight rate does not: it comes
+  from the weight ladder, and `coverage` lives on `daily`.
 - **A second field, not a third value of `answers`**, which departs from the
   note that reserved `provisional` there. They answer different questions:
   `answers` says what resolution the engine will vouch for, and a provisional

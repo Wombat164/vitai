@@ -267,10 +267,15 @@ def full_record(tmp_path: Path, outvote: bool) -> Vitai:
                 "pain": 1, "source": "watch", "coverage": "full", **kw}
 
     rows = [full_day(f"2030-05-{n:02d}") for n in range(1, 14)]
+    # A RED-FLAG SITE on the open day, so the fixture reaches a symptom count -
+    # the metric class review found silent after the totality claim had been
+    # made twice. `chest` maps to the cardiac trigger whatever the score.
     rows.append(full_day("2030-05-14", kcal_in=200, protein_g=12,
+                         pain=4, pain_site="chest",
                          coverage="full" if outvote else PARTIAL))
     if outvote:
         rows.append(full_day("2030-05-14", kcal_in=200, protein_g=12,
+                             pain=4, pain_site="chest",
                              source="app", coverage=PARTIAL))
     (root / "data" / "daily.jsonl").write_text(
         "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
@@ -287,22 +292,33 @@ def full_record(tmp_path: Path, outvote: bool) -> Vitai:
     return Vitai(root)
 
 
-DAILY_BUILT = ("steps", "sleep", "rhr", "pain_gate", "intake_floor",
-               "protein_floor", "energy_availability")
+# NOT A LIST OF WHAT MUST BE MARKED - a list of what may go unmarked, which
+# is the inversion this test needed. Twice now a hardcoded set of metrics-that-
+# carry-the-flag was written around the very gap it existed to find: first it
+# omitted `pain_gate`, then, rewritten to name all seven, it omitted the two
+# symptom counts. Listing the exemptions instead means a NEW metric fails this
+# test by default and has to be argued into the list.
+#
+# `weight_rate` is the only member and the reason is structural: it is built
+# from the weight ladder, and `coverage` exists on `daily` alone, so no open
+# day can reach it. Anything added here needs the same kind of sentence.
+MAY_BE_UNMARKED = {"weight_rate"}
+
+REACHES = ("steps", "sleep", "rhr", "pain_gate", "intake_floor",
+           "protein_floor", "energy_availability", "symptom_chest_pain")
 
 
 def test_every_metric_built_from_the_daily_rows_answers_the_question(tmp_path):
     """An inconsistent flag is worse than none, because absence reads as
     "this one is final" - so a consumer would have to hardcode which metrics
-    are wired, which is the duplication this engine exists to prevent.
-
-    `pain_gate` was the one left out, and the first version of this test
-    hardcoded a set that did not name it - a consistency check written around
-    the gap it was there to find. The fixture now reaches all seven."""
+    are wired, which is the duplication this engine exists to prevent."""
     got = {r["metric"]: r for r in full_record(tmp_path, False).verdicts()}
-    missing = [m for m in DAILY_BUILT if m not in got]
+    missing = [m for m in REACHES if m not in got]
     assert not missing, f"fixture no longer reaches {missing}"
-    for metric in DAILY_BUILT:
+    silent = sorted(m for m, r in got.items()
+                    if r["provisional"] is None and m not in MAY_BE_UNMARKED)
+    assert not silent, f"built over an open day and says nothing: {silent}"
+    for metric in REACHES:
         assert got[metric]["provisional"] is True, metric
         assert got[metric]["value"] is not None, f"{metric} still scores"
 
@@ -319,7 +335,10 @@ def test_the_floors_hear_the_open_claim_that_lost_the_contest(tmp_path):
     canonical = [r for r in v.canonical("daily") if r["date"] == "2030-05-14"]
     assert canonical[0]["coverage"] == "full", "the ladder picked the watch"
     got = {r["metric"]: r for r in v.verdicts()}
-    for metric in ("intake_floor", "protein_floor", "energy_availability"):
+    # The symptom count reads raw for the same reason and was pinned by
+    # nothing: the outvote passed straight through it.
+    for metric in ("intake_floor", "protein_floor", "energy_availability",
+                   "symptom_chest_pain"):
         assert got[metric]["provisional"] is True, metric
 
 
@@ -408,14 +427,29 @@ def rollup(tmp_path: Path, mark_last: bool) -> str:
     """A record whose last seven days trip sleep, steps and rhr at once."""
     root = tmp_path / "content"
     (root / "data").mkdir(parents=True)
+    # `phases`, so the rate line takes the `kg/week` branch the guard below
+    # inspects; `pain_gate` and a pain score, so the gate-fired alert renders.
+    # Both were absent in the first version and both guards were vacuous.
     (root / "vitai.toml").write_text(
         '[athlete]\nname = "T"\n'
+        "[targets]\nphases = [[75.0, 68.0, 0.2]]\n"
         "[tripwires]\nsteps_floor = 12000\nsleep_floor_h = 8\n"
-        "rhr_baseline = 45\n"
+        "rhr_baseline = 45\npain_gate = 2\n"
         "[resolution]\nsource_order = ['watch', 'app']\n", encoding="utf-8")
     rows = [{**{k: None for k in KEYS["daily"]}, "date": f"2030-05-{n:02d}",
-             "steps": 9000, "sleep_h": 6.5, "rhr": 58, "source": "watch",
+             "steps": 9000, "sleep_h": 6.5, "rhr": 58, "pain": 5,
+             "pain_site": "knee", "source": "watch",
              "coverage": "full"} for n in range(6, 13)]
+    # WEIGHT ROWS, because the guard below asserts the rate line is NOT marked
+    # and the first version of this fixture wrote none - so no rate line
+    # rendered, the guard's loop never ran, and appending the suffix to that
+    # exact line passed the whole suite. A test that cannot produce the row it
+    # judges is not coverage, which this PR has now said three times.
+    (root / "data" / "weight.jsonl").write_text(
+        "".join(json.dumps(
+            {**{k: None for k in KEYS["weight"]}, "date": f"2030-05-{n:02d}",
+             "kg": 72.0 - n * 0.1, "source": "scale"}) + "\n"
+            for n in range(1, 13)), encoding="utf-8")
     if mark_last:
         # OUTVOTED, so this also pins the raw read on the report path: the
         # watch above already called the day `full`.
@@ -431,10 +465,9 @@ def test_the_weekly_rollup_marks_the_lines_built_over_an_open_day(tmp_path):
     like a finished one after the flag shipped."""
     marked = rollup(tmp_path, True)
     lines = [ln for ln in marked.splitlines() if "day still open" in ln]
-    assert len(lines) == 3, marked
-    assert any("Sleep" in ln for ln in lines), lines
-    assert any("Steps" in ln for ln in lines), lines
-    assert any("Resting HR" in ln for ln in lines), lines
+    assert len(lines) == 4, marked
+    for word in ("Sleep", "Steps", "Resting HR", "Pain"):
+        assert any(word in ln for ln in lines), (word, lines)
     # STILL A FIGURE. The suffix qualifies the number, it does not replace it.
     assert "6.5h avg" in marked and "9,000/day avg" in marked
 
@@ -444,7 +477,7 @@ def test_a_finished_week_renders_without_the_suffix(tmp_path):
     same three alerts must fire unqualified when every day is closed."""
     plain = rollup(tmp_path, False)
     assert "day still open" not in plain, plain
-    for word in ("Sleep", "Steps", "Resting HR"):
+    for word in ("Sleep", "Steps", "Resting HR", "Pain"):
         assert word in plain, word
 
 

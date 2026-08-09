@@ -149,6 +149,11 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
     # still logging it. The suffix goes on the three alerts built from the same
     # seven-day window and nowhere else - the weight rate is built from the
     # weight ladder, where `coverage` cannot reach it.
+    #
+    # THE PAIN GATE IS IN THAT SET and was missed on the first pass, for the
+    # third time in this issue: the verdict row carried the flag while the
+    # alert built from the same window did not, so the page and the table
+    # disagreed about one record.
     open_window = open_day_in(within_days(raw_daily if raw_daily is not None
                                           else daily, today, 7, "date"))
     still_open = " (day still open)" if open_window else ""
@@ -434,7 +439,7 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
         if scored and max(p for p, _ in scored) > cfg.pain_gate:
             worst, site = max(scored, key=lambda s: s[0])
             alerts.append(f"**Pain {worst}/10 at {site}** - gate fired: "
-                          "no loaded work at that site")
+                          f"no loaded work at that site{still_open}")
         elif not scored and logged:
             # A calendar window is right for "is this current", and wrong as a
             # way to make an unresolved reading disappear. Someone who logs
@@ -447,6 +452,11 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                 alerts.append(
                     f"Pain {score}/10 at "
                     f"{last.get('pain_site') or 'unspecified site'} was "
+                    # NO SUFFIX. This branch fires only when the seven-day
+                    # window is EMPTY, so no open day inside it can be moving
+                    # this figure - it reports a reading from before the
+                    # window, and marking it would claim a bearing the record
+                    # does not have.
                     f"last logged {ago} days ago and nothing since - not a "
                     "current gate, but it was never recorded as resolved")
     if cfg.sleep_floor_h is not None:
