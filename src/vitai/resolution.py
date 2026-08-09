@@ -321,7 +321,7 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
         # value the manual line supplied gets handed to whichever single
         # instrument happens to corroborate it - measured, and it attributed
         # `type` to a watch, a device "observing" the word "row".
-        if winner.get("origin"):
+        if winner.get("origin") and str(winner["origin"]) != UNKNOWN_SOURCE:
             field_origins[field] = str(winner["origin"])
         # `witnesses` counts INDEPENDENT ORIGINS, not rows (#35/#51). Five
         # rows carrying one watch's reading through five platforms are one
@@ -539,11 +539,15 @@ def _prune_field_sources(canonical: dict, claims: list[tuple[str, dict]]) -> Non
             continue
         by_name: dict[str, list[dict]] = {}
         for _, rec in claims:
-            if attr == "origin" and not rec.get("origin"):
-                # An unstated origin is not a name. `source` defaults to
+            if attr == "origin" and str(rec.get("origin") or "") in ("", UNKNOWN_SOURCE):
+                # An unstated origin is not a name, and neither is an
+                # explicitly stated `unknown`. `source` defaults to
                 # UNKNOWN_SOURCE because a claim always arrived SOMEHOW;
-                # `origin` is optional and silence about the instrument must
-                # not become a bucket that can be attributed to.
+                # `origin` is optional, and `provenance.is_independent`
+                # already rules that an unstated OR UNKNOWN origin cannot
+                # count as a witness. Testing falsiness alone let a Takeout-
+                # style `origin: "unknown"` through as a device - naming an
+                # instrument the same row's own `origin` column denies.
                 continue
             by_name.setdefault(str(rec.get(attr) or UNKNOWN_SOURCE),
                                []).append(rec)
@@ -580,19 +584,18 @@ def _substantiated(canonical: dict, named: dict[str, str],
                   if any(rec.get(field) == value for rec in recs)}
         if len(owners) == 1:
             kept[field] = owners.pop()
-        # NO CONTROL FOR THE `> 1` CASE, and this note is here because review
-        # found it unwitnessed and I could not fix it. Mutating the condition
-        # to take an arbitrary owner passes the whole suite. Reaching it needs
-        # a value that MOVED after the merge - in practice the session
-        # identity triple - held by two claimants of one canonical row, and
-        # sessions bucket BY `activity_id`, so a second claimant for the moved
-        # identity splits into a separate row instead of contesting it. Every
-        # fixture I built either merged with one claimant or did not merge.
+        # WITNESSED, after a note here claimed it could not be. That note
+        # said sessions bucket by `activity_id`, which is false - they cluster
+        # by TIME OVERLAP (`_same_activity`), and #43 records keying on
+        # `activity_id` as future work. The real obstacle was duller: the
+        # fixtures in this file carry `start_time: "18:00"`, which `parse_time`
+        # cannot read, so the strong test was never available, shape decided,
+        # and three same-type claims tripped the routine guard into staying
+        # separate. With real timestamps three claims merge and the branch
+        # fires on the first try.
         #
-        # Left standing rather than deleted: it predates this change, it is
-        # the conservative direction (say nothing rather than guess), and a
-        # branch I cannot reach is also a branch I cannot show is dead. What I
-        # will not do is claim it is tested.
+        # A wrong reason written into the source as doctrine is worse than no
+        # comment, which is the whole argument this change makes elsewhere.
     return kept
 
 

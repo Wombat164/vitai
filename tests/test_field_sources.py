@@ -591,3 +591,69 @@ def test_a_merge_where_nobody_names_an_instrument_publishes_an_empty_map(tmp_pat
     prov = [r for r in v.resolution()["provenance"] if r["dataset"] == "sessions"]
     assert prov and prov[0].get("field_sources"), "it is a merge"
     assert prov[0].get("field_origins") == {}, prov[0].get("field_origins")
+
+
+def overlapping(hour: int, start: str, **kw) -> dict:
+    """A session whose `start_time` `parse_time` can actually read.
+
+    The helper at the top of this file uses `"18:00"`, which parses to None -
+    so the strong timestamp test in `_same_activity` is never available to it
+    and shape decides instead. That is fine for two claims and fatal for
+    three: three same-type claims with no readable interval trip the routine
+    guard and stay separate, which is what made the branch below look
+    unreachable when it is not."""
+    return {**{k: None for k in KEYS["sessions"]}, "date": "2030-05-01",
+            "type": "row", "duration_s": 1800, "start_time": start,
+            "recorded_at": f"2030-05-01T{hour:02d}:00:00Z", **kw}
+
+
+def test_two_claimants_for_a_moved_value_name_neither(tmp_path):
+    """The coin-toss rule, which a note in the source claimed could not be
+    witnessed. It can, and the note's reason was wrong about the resolver:
+    sessions cluster by TIME OVERLAP, not by `activity_id`.
+
+    Three overlapping claims merge into one row. `polar` wins the ladder and
+    supplies `activity_id: X`, then `_keep_identity_together` takes the triple
+    from file order and the row ends up with `Y` - which strava AND garmin
+    both hold. Two claimants for one moved value, so the map names neither."""
+    rows = [overlapping(19, "2030-05-01T18:00:00Z", source="strava",
+                        distance_km=8.1, activity_id="Y"),
+            overlapping(20, "2030-05-01T18:05:00Z", source="garmin",
+                        cadence=26, activity_id="Y"),
+            overlapping(21, "2030-05-01T18:10:00Z", source="polar",
+                        origin="polar-watch", avg_hr=142, activity_id="X")]
+    v = ranked(tmp_path, rows, "['polar', 'strava', 'garmin']")
+
+    assert len(v.canonical("sessions")) == 1, "three overlapping claims merge"
+    assert v.canonical("sessions")[0]["activity_id"] == "Y"
+    src = field_sources(v)
+    assert "activity_id" not in src, (
+        "two claimants hold the moved value, so neither is named")
+    assert src["avg_hr"] == "polar", "and an uncontested field still is"
+
+
+def test_an_explicit_unknown_origin_is_not_an_instrument(tmp_path):
+    """`unknown` is a LEGAL stated origin - `provenance.origin_of` names
+    Takeout as the real producer - and `is_independent` already rules that an
+    unstated or unknown origin cannot count as a witness. The first cut here
+    tested falsiness only, so an explicit `unknown` was published as a device,
+    naming an instrument the same row's own `origin` column denies.
+
+    THE TWO GUARDS ARE REDUNDANT FOR THIS CASE and that is measured, not
+    assumed: removing either one alone leaves this green, and removing both
+    turns it red. They are not redundant in general - the merge gate is the
+    only thing stopping a field WON by an anonymous claim being handed to a
+    corroborator, and the prune bucket-skip is the only thing stopping
+    `unknown` being re-attributed to a moved value - so each has its own test
+    above. Kept in both places because the rule reads the same in both, and a
+    reader who finds it stated once will assume the other site does not need
+    it."""
+    v = record(tmp_path, [session(19, source="polar", origin="unknown",
+                                  avg_hr=142),
+                          session(20, source="matrix-console",
+                                  origin="matrix-rower", distance_km=8.1)])
+    src, org = field_sources(v), field_origins(v)
+    assert src["avg_hr"] == "polar", "the feed is still known"
+    assert "avg_hr" not in org, org
+    assert "unknown" not in org.values(), org
+    assert org["distance_km"] == "matrix-rower"
