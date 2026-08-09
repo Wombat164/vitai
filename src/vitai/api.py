@@ -1246,7 +1246,8 @@ class Vitai:
         return compute_verdicts(self.config, d["weight"], d["daily"],
                                 d["sessions"], today=on,
                                 goals=d["goals"], thresholds=d["thresholds"],
-                                medical=d["medical"])
+                                medical=d["medical"],
+                                raw_daily=self.dataset("daily"))
 
     def rollup(self, today: date | None = None) -> str:
         """The weekly report as Markdown - the same text `build` writes out.
@@ -1603,7 +1604,8 @@ class Vitai:
         verdicts = compute_verdicts(cfg, d["weight"], d["daily"],
                                     d["sessions"], today=today,
                                     goals=d["goals"], thresholds=d["thresholds"],
-                                    medical=d["medical"])
+                                    medical=d["medical"],
+                                    raw_daily=self.dataset("daily"))
         on = (today or self.on).isoformat()
         return {
             "session_weeks": session_weeks(d["sessions"], on),

@@ -24,8 +24,10 @@ only the third:
     to live on. The one case the field exists to serve is the one it
     structurally cannot represent.
   - `daily.coverage` HAD no consumer, and #186 gave it one: a weekly verdict
-    built over a day the record marks `partial` is answered `provisional`
-    rather than final. The writing half of that issue is still open - one
+    built over a day the record marks `partial` carries `provisional: true`,
+    a column of its own beside the verdict rather than a value in `answers` -
+    the row still scores, and says its inputs were not closed. The writing
+    half of that issue is still open - one
     field on a row several sources write to, so whichever importer sets it
     wins uncontested - but reading it errs the safe way, since over-marking a
     figure as not-final is the direction the issue asks for.

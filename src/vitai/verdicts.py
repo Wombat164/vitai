@@ -72,10 +72,17 @@ PENDING = "pending"                  # answerable, and not yet: a source is due
 # ONE FIELD WITH THE REFUSALS, not a parallel table. #177 already shipped a
 # vocabulary for what the engine will not answer and enforced totality in both
 # directions; this is the positive half of the same question, and keeping them
-# apart would ship two vocabularies for one thing. `provisional` - a day still
-# open, so the number is "so far" rather than final - is the third value this
-# field is shaped for, and it belongs to the day-completeness work, which this
-# issue's own Related section files separately.
+# apart would ship two vocabularies for one thing. `provisional` was reserved
+# here as a third value - a day still open, so the number is "so far" rather
+# than final - and the completeness work (#186) landed it as its own COLUMN
+# instead, so this note is corrected where it stands rather than left to give
+# a future contributor written licence to add the token.
+#
+# They answer different questions. This one says what RESOLUTION the engine
+# will vouch for; a provisional magnitude is still a magnitude, and a
+# provisional DIRECTION is still a direction - `weight_rate` and
+# `energy_availability` are direction metrics an open day affects just as
+# much. A third value here could not express either pair.
 #
 # A CLIENT CANNOT DERIVE THIS. It would have to reimplement the per-field
 # policy, every client would derive it slightly differently, and that
@@ -484,8 +491,18 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
                      sessions: list[dict], today: date | None = None,
                      goals: list[dict] | None = None,
                      thresholds: list[dict] | None = None,
-                     medical: list[dict] | None = None) -> list[dict]:
-    """Deterministic weekly verdict rows across all configured metrics."""
+                     medical: list[dict] | None = None,
+                     raw_daily: list[dict] | None = None) -> list[dict]:
+    """Deterministic weekly verdict rows across all configured metrics.
+
+    `raw_daily` is the UNADJUDICATED daily rows, and only `coverage` is read
+    from them (#186). A claim that a day was still being logged is not a
+    competing measurement, so it must not lose a precedence contest to a
+    source that simply did not know - a watch syncing steps and calling the
+    day `full` beats a nutrition app's lunchtime `partial`, which is the exact
+    incident this reads coverage for. Defaults to the canonical rows, so a
+    caller that does not pass it behaves as before rather than worse.
+    """
     rows: list[dict] = []
     weeks = _weeks_covered(weight, daily, sessions)
     if not weeks:
@@ -586,6 +603,10 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
     daily_by_week: dict[str, list[dict]] = defaultdict(list)
     for d in daily:
         daily_by_week[_week_key(d["date"])].append(d)
+    raw_by_week: dict[str, list[dict]] = defaultdict(list)
+    for d in (raw_daily if raw_daily is not None else daily):
+        if d.get("date"):
+            raw_by_week[_week_key(d["date"])].append(d)
 
     for wk in weeks:
         days = daily_by_week.get(wk, [])
@@ -595,7 +616,7 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
         # over a day the record says was still being logged will change when
         # the rest of that day arrives, and that is true of the aggregate
         # however many finished days sit beside it.
-        open_day = any(d.get("coverage") == PARTIAL for d in days) or None
+        open_day = open_day_in(raw_by_week.get(wk, days))
         eff = cfg_for[wk]
         active = goals_for[wk]
         if eff.steps_floor is not None:
@@ -655,7 +676,8 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
     # athlete who had configured nothing - the state every new user is in -
     # got `tripwires: none` while eating 1200 kcal a day and losing a kilo a
     # week. These rows fire from defaults, like the absolute RHR band.
-    rows += _default_floor_rows(weight, daily, sessions, medical or [])
+    rows += _default_floor_rows(weight, daily, sessions, medical or [],
+                                raw_daily)
 
     # G72: when a declared medication makes rapid loss the EXPECTED outcome,
     # the rate verdict is meaningless and actively harmful - it tells someone
@@ -669,7 +691,7 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
     # is that the record says so.
     if _drops_rate_verdict(medical or [], weeks):
         rows = [_row(r["week"], r["metric"], r["value"], r["target"], NODATA,
-                     r["goal"], reason=CONTRAINDICATED,
+                     r["goal"], reason=CONTRAINDICATED, provisional=r.get("provisional"),
                      statistic=r["statistic"])
                 if r["metric"] == "weight_rate" else r for r in rows]
 
@@ -678,7 +700,7 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
     # stops is the judging.
     if cfg.suppressed_metrics:
         rows = [_row(r["week"], r["metric"], r["value"], r["target"], NODATA,
-                     r["goal"], reason=SUPPRESSED, statistic=r["statistic"])
+                     r["goal"], reason=SUPPRESSED, provisional=r.get("provisional"), statistic=r["statistic"])
                 if r["metric"] in cfg.suppressed_metrics else r
                 for r in rows]
     rows.sort(key=lambda r: (r["week"], r["metric"]))
@@ -700,8 +722,32 @@ def _drops_rate_verdict(medical: list[dict], weeks: list[str]) -> bool:
     return last is not None and "rapid_loss" in _expectations(medical, last)
 
 
+def open_day_in(days: list[dict]) -> bool | None:
+    """Does any claim about these days say it was still being logged (#186)?
+
+    ANY CLAIM, NOT THE CANONICAL ONE, and that is the difference between
+    erring safe and only appearing to. `coverage` is not in
+    `NON_QUANTITY_FIELDS`, so two sources disagreeing about it resolve by the
+    precedence ladder - and the ladder is configured for quantities. A watch
+    that syncs steps and calls the day `full` beats a nutrition app's
+    lunchtime export calling it `partial`, which is the exact shape of the
+    incident this feature exists for, losing a contest it should never have
+    entered. A claim of openness is not a competing measurement of anything:
+    one source saying "there is more to come" is not refuted by another source
+    not knowing that.
+
+    `False`, NOT `None`, where nothing says the day is open. `None` is
+    reserved for a row this is not computed for, so a consumer can tell
+    "checked, and final" from "never checked" - and cannot, if a bare `or
+    None` deletes the negative. `observed_days` is the precedent in the other
+    direction: its `None` only ever means not computed.
+    """
+    return any(d.get("coverage") == PARTIAL for d in days)
+
+
 def _default_floor_rows(weight: list[dict], daily: list[dict],
-                        sessions: list[dict], medical: list[dict]) -> list[dict]:
+                        sessions: list[dict], medical: list[dict],
+                        raw_daily: list[dict] | None = None) -> list[dict]:
     """Verdict rows for the absolute nutrition floors and energy availability.
 
     These live in `verdicts` as well as in the escalation surface because a
@@ -718,6 +764,10 @@ def _default_floor_rows(weight: list[dict], daily: list[dict],
     window, _, end = _window(daily, RED_S_WINDOW_DAYS)
     if not window:
         return []
+    # The same window over the raw rows, for `coverage` only - see
+    # `open_day_in` for why the canonical answer is the wrong one here.
+    raw_window, _, _ = _window(raw_daily if raw_daily is not None else daily,
+                               RED_S_WINDOW_DAYS)
     wk = _week_key(end.isoformat())
     out: list[dict] = []
 
@@ -730,7 +780,8 @@ def _default_floor_rows(weight: list[dict], daily: list[dict],
         out.append(_row(wk, "intake_floor", mean_intake, floor,
                         BEHIND if mean_intake <= floor else ON,
                         statistic=AVERAGE, window_days=RED_S_WINDOW_DAYS,
-                        observed_days=len(intakes)))
+                        observed_days=len(intakes),
+                        provisional=open_day_in(raw_window or window)))
 
     kg = _latest_weight(weight, end)
     proteins = [float(r["protein_g"]) for r in window
@@ -740,7 +791,8 @@ def _default_floor_rows(weight: list[dict], daily: list[dict],
         out.append(_row(wk, "protein_floor", per_kg, PROTEIN_FLOOR_G_PER_KG,
                         BEHIND if per_kg < PROTEIN_FLOOR_G_PER_KG else ON,
                         statistic=AVERAGE, window_days=RED_S_WINDOW_DAYS,
-                        observed_days=len(proteins)))
+                        observed_days=len(proteins),
+                        provisional=open_day_in(raw_window or window)))
 
     ea, _terms = energy_availability(daily, weight, sessions)
     if ea is not None:
@@ -752,7 +804,8 @@ def _default_floor_rows(weight: list[dict], daily: list[dict],
         # of no per-day series that exists.
         out.append(_row(wk, "energy_availability", ea, EA_LOW_THRESHOLD,
                         BEHIND if ea < EA_LOW_THRESHOLD else ON,
-                        statistic=COMPOSITE, window_days=RED_S_WINDOW_DAYS))
+                        statistic=COMPOSITE, window_days=RED_S_WINDOW_DAYS,
+                        provisional=open_day_in(raw_window or window)))
     out += _symptom_rows(weight, daily, sessions, medical)
     return out
 

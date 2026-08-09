@@ -142,13 +142,25 @@ def test_a_provisional_magnitude_is_still_a_magnitude(tmp_path):
     assert row["value"] is not None
 
 
-def test_a_refusal_carries_no_provisional_flag(tmp_path):
-    """It describes a value. A row with none has no figure to call not-final."""
-    rows = [day(f"2030-05-{d:02d}", steps=None, coverage=PARTIAL)
-            for d in range(6, 13)]
-    for r in record(tmp_path, rows).verdicts():
-        if r.get("value") is None:
-            assert not r.get("provisional"), r
+def test_a_suppressed_row_keeps_its_flag(tmp_path):
+    """A suppressed metric is still RECORDED, just not scored - the row keeps
+    its figure by design. So there IS a number to call not-final, and the
+    rewrite that relabels the row was silently dropping the flag.
+
+    The test that stood here asserted the opposite rule over a fixture that
+    produced no rows at all, so its loop never ran and it would have passed
+    whatever the code did."""
+    rows = [day(f"2030-05-{d:02d}") for d in range(6, 12)]
+    rows.append(day("2030-05-12", coverage=PARTIAL))
+    root = (tmp_path / "content")
+    v = record(tmp_path, rows)
+    (root / "vitai.toml").write_text(
+        '[athlete]\nname = "T"\n[tripwires]\nsteps_floor = 8000\n'
+        '[preferences]\nsuppressed_metrics = ["steps"]\n', encoding="utf-8")
+    got = steps_rows(Vitai(root))
+    assert got and all(r["reason"] == "suppressed" for r in got), got
+    assert all(r["value"] is not None for r in got), "the figure is kept"
+    assert all(r["provisional"] is True for r in got), got
 
 
 # --- the vocabulary and the column ---------------------------------------------
@@ -190,3 +202,118 @@ def test_the_corpus_exercises_it():
               if r.get("provisional")]
     assert marked, "yasmin has weeks holding a partial day"
     assert all(r["value"] is not None for r in marked)
+
+
+# --- the metrics the first cut skipped ----------------------------------------
+
+def nutrition(tmp_path: Path, partial_last: bool) -> Vitai:
+    """Fourteen days of intake, the last optionally still being logged."""
+    root = tmp_path / "content"
+    (root / "data").mkdir(parents=True)
+    (root / "vitai.toml").write_text('[athlete]\nname = "T"\n', encoding="utf-8")
+    rows = [{**{k: None for k in KEYS["daily"]}, "date": f"2030-05-{n:02d}",
+             "kcal_in": 1150, "protein_g": 90, "source": "app"}
+            for n in range(1, 14)]
+    last = {**{k: None for k in KEYS["daily"]}, "date": "2030-05-14",
+            "kcal_in": 200, "protein_g": 12, "source": "app"}
+    if partial_last:
+        last["coverage"] = PARTIAL
+    rows.append(last)
+    (root / "data" / "daily.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    (root / "data" / "weight.jsonl").write_text(json.dumps(
+        {**{k: None for k in KEYS["weight"]}, "date": "2030-05-01", "kg": 70.0,
+         "source": "scale"}) + "\n", encoding="utf-8")
+    return Vitai(root)
+
+
+def test_the_incident_row_itself_is_marked(tmp_path):
+    """THE MOTIVATING CASE, and the first cut skipped it. `intake_floor` is
+    built from the same daily rows as the metrics that were wired, and it is
+    the row the issue's whole account is about: a nutrition export taken at
+    lunchtime producing a well-formed intake shortfall that had not happened.
+    It rendered as final."""
+    got = {r["metric"]: r for r in nutrition(tmp_path, True).verdicts()}
+    assert got["intake_floor"]["provisional"] is True, got["intake_floor"]
+    assert got["intake_floor"]["verdict"] == "behind", "still scored"
+    assert got["intake_floor"]["value"] is not None
+
+
+def test_every_metric_built_from_the_daily_rows_answers_the_question(tmp_path):
+    """An inconsistent flag is worse than none, because absence reads as
+    "this one is final" - so a consumer would have to hardcode which metrics
+    are wired, which is the duplication this engine exists to prevent."""
+    from_daily = {"steps", "sleep", "rhr", "intake_floor", "protein_floor",
+                  "energy_availability"}
+    got = {r["metric"]: r for r in nutrition(tmp_path, True).verdicts()}
+    # `energy_availability` needs sessions to price the exercise term, so a
+    # nutrition-only record reaches the two floors; the point is that every
+    # metric that IS produced answers rather than staying silent.
+    reached = from_daily & set(got)
+    assert len(reached) >= 2, sorted(got)
+    for metric in sorted(reached):
+        assert got[metric]["provisional"] is not None, metric
+
+
+def test_a_finished_fortnight_says_final_rather_than_nothing(tmp_path):
+    """`False`, not `None`. A consumer must be able to tell "checked, and
+    final" from "never checked", and a bare `or None` deletes the negative."""
+    got = {r["metric"]: r for r in nutrition(tmp_path, False).verdicts()}
+    assert got["intake_floor"]["provisional"] is False, got["intake_floor"]
+
+
+def test_a_partial_claim_is_not_outvoted_by_a_source_that_did_not_know(tmp_path):
+    """`coverage` is not in `NON_QUANTITY_FIELDS`, so two sources disagreeing
+    about it resolve by the precedence ladder - and a watch that syncs steps
+    and calls the day `full` beat a nutrition app's lunchtime `partial`. That
+    is the incident losing a contest it should never have entered: a claim of
+    openness is not a competing measurement, and one source saying "there is
+    more to come" is not refuted by another not knowing it."""
+    root = tmp_path / "content"
+    (root / "data").mkdir(parents=True)
+    (root / "vitai.toml").write_text(
+        '[athlete]\nname = "T"\n[tripwires]\nsteps_floor = 8000\n'
+        "[resolution]\nsource_order = ['watch', 'app']\n", encoding="utf-8")
+    rows = [day(f"2030-05-{d:02d}", coverage="full") for d in range(6, 12)]
+    rows.append(day("2030-05-12", coverage="full", source="watch"))
+    rows.append(day("2030-05-12", coverage=PARTIAL, source="app"))
+    (root / "data" / "daily.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+
+    v = Vitai(root)
+    canonical = [r for r in v.canonical("daily") if r["date"] == "2030-05-12"]
+    assert canonical[0]["coverage"] == "full", "the ladder picked the watch"
+    got = steps_rows(v)
+    assert got and all(r["provisional"] is True for r in got), (
+        "and the app's claim still counts")
+
+
+def test_the_rhr_row_carries_it_too(tmp_path):
+    """Covered by nothing on the first pass: the fixtures read steps and the
+    corpus witness is all sleep, so reverting the rhr call site passed the
+    entire suite."""
+    root = tmp_path / "content"
+    (root / "data").mkdir(parents=True)
+    (root / "vitai.toml").write_text(
+        '[athlete]\nname = "T"\n[tripwires]\nrhr_baseline = 45\n',
+        encoding="utf-8")
+    rows = [day(f"2030-05-{d:02d}", rhr=52) for d in range(6, 12)]
+    rows.append(day("2030-05-12", rhr=52, coverage=PARTIAL))
+    (root / "data" / "daily.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    got = [r for r in Vitai(root).verdicts() if r["metric"] == "rhr"]
+    assert got and all(r["provisional"] is True for r in got), got
+
+
+def test_the_sleep_row_carries_it_too(tmp_path):
+    root = tmp_path / "content"
+    (root / "data").mkdir(parents=True)
+    (root / "vitai.toml").write_text(
+        '[athlete]\nname = "T"\n[tripwires]\nsleep_floor_h = 7.0\n',
+        encoding="utf-8")
+    rows = [day(f"2030-05-{d:02d}", sleep_h=6.0) for d in range(6, 12)]
+    rows.append(day("2030-05-12", sleep_h=6.0, coverage=PARTIAL))
+    (root / "data" / "daily.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    got = [r for r in Vitai(root).verdicts() if r["metric"] == "sleep"]
+    assert got and all(r["provisional"] is True for r in got), got
