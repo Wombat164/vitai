@@ -577,7 +577,9 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #
 #     "No unaccounted efforts" becomes "no unaccounted efforts across 78 per
 #     cent coverage", which the issue rightly calls a different and honest
-#     claim. It applies to every average the engine already publishes.
+#     claim. Every AVERAGE row carries it, the RED-S intake and protein floors
+#     included - those fire from seven logged days inside a fourteen-day
+#     window, so the fraction varies most exactly where it matters most.
 #
 #     NO THRESHOLD ANYWHERE IN IT. The engine does not decide how thin is too
 #     thin - that number would have no published basis and this repo has paid

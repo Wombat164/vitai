@@ -273,13 +273,15 @@ def _public_calls(v: Vitai):
             continue                    # refuses on this record; nothing left
 
 
-def test_no_public_surface_emits_the_precise_tier():
+def test_no_public_surface_emits_the_precise_tier(tmp_path):
     """THE LOAD-BEARING TEST. Twenty-five public methods hand a caller the
     same dict that came off the JSONL line, and a gate implemented per caller
     is correct in the callers somebody remembered. So this does not name them:
     it walks the class, calls everything callable with no arguments, and
-    asserts the shipped precise value appears in none of it."""
-    v = Vitai(DEMO)
+    asserts the shipped precise value appears in none of it.
+
+    On a COPY: calling everything includes calling the writers."""
+    v = Vitai(demo_copy(tmp_path))
     leaked = []
     for name, out in _public_calls(v):
         if LEAK in json.dumps(out, default=str):
@@ -288,7 +290,7 @@ def test_no_public_surface_emits_the_precise_tier():
     assert not leaked, f"the precise tier reached {leaked}"
 
 
-def test_the_sweep_would_notice():
+def test_the_sweep_would_notice(tmp_path):
     """A sweep that called nothing would pass the test above for the wrong
     reason. So this asserts the COARSE partner of the same row comes through
     the same walk.
@@ -297,7 +299,7 @@ def test_the_sweep_would_notice():
     also occurs in a context row's `facilities` string - so the first version
     of this was satisfied even if no session row travelled at all.
     """
-    v = Vitai(DEMO)
+    v = Vitai(demo_copy(tmp_path))
     coarse_value = [r["place"] for r in v.dataset("sessions")
                     if r.get("place_precise") is None and r.get("place")]
     saw = [name for name, out in _public_calls(v)
@@ -319,7 +321,7 @@ ARG_TAKING_COVERED = {"dataset", "day", "derived", "precise", "append",
 ARG_TAKING_OUT_OF_SCOPE = {
     # Writes and administration. None return a record row they read back.
     "init", "build", "conform", "implementation", "infer",
-    "accept_inferences", "assert_delivery", "artifact", "keep",
+    "accept_inferences", "assert_delivery", "artifact", "keep", "pin_policy",
     "add_artifact", "remove_artifact",
     # Computed scalars, strings and vocabulary answers. Where they read rows
     # at all they read them through the door above, so what they return is
@@ -336,11 +338,35 @@ ARG_TAKING_OUT_OF_SCOPE = {
 }
 
 
-def test_every_argument_taking_method_is_accounted_for():
+def demo_copy(tmp_path) -> Path:
+    """The shipped demo, somewhere writable.
+
+    `_public_calls` CALLS every zero-argument public method, and some of those
+    write. Pointing it at `examples/demo` appended to the shipped fixture on
+    every suite run - see the sweep below for the whole argument. Anything that
+    sweeps takes a copy; the read-only assertions can stay on the original.
+    """
+    import shutil
+
+    root = tmp_path / "demo"
+    shutil.copytree(DEMO, root)
+    return root
+
+
+def test_every_argument_taking_method_is_accounted_for(tmp_path):
     """The completeness half. The sweep skips anything raising TypeError, so
     without this a new arg-taking reader would be outside the guarantee and
-    nothing would say so."""
-    v = Vitai(DEMO)
+    nothing would say so.
+
+    ON A COPY, because the sweep CALLS every zero-argument public method and
+    some of those write. `pin_policy` (#148) is the first with an all-optional
+    signature, so it ran against the shipped demo and appended a `thresholds`
+    row to it on every suite run - leaving `examples/` dirty and quietly
+    breaking the demo-drift check every PR here is verified with. Listing the
+    method would fix this instance; copying fixes the class, and the next
+    writer with a default-only signature does not have to be remembered.
+    """
+    v = Vitai(demo_copy(tmp_path))
     skipped = set()
     for name in sorted(dir(v)):
         if name.startswith("_") or name in ("root", "config", "on", "as_of"):

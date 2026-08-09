@@ -280,6 +280,13 @@ def _row(week: str, metric: str, value: float | None, target: float | None,
     # `due` says when the source that has been supplying this metric is next
     # expected. It belongs to a REFUSAL and never to a judgement: a verdict
     # the engine reached needs no promise about what arrives later.
+    # `observed_days` DESCRIBES A VALUE. A refusal has no population to state,
+    # and filling it would be describing nothing - held here, with the other
+    # totality rules, rather than trusted at each caller.
+    if verdict == NODATA and observed_days is not None:
+        raise ValueError(
+            f"a {NODATA} row has no value and so no population to describe; "
+            f"observed_days={observed_days!r} describes nothing")
     if due is not None and verdict != NODATA:
         raise ValueError(f"{verdict} is a judgement and carries no due date "
                          f"(got {due!r})")
@@ -527,9 +534,19 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
 
     # --- easy-run HR discipline: weekly avg of run avg_hr vs cap ------------
     by_week_hr: dict[str, list[int]] = defaultdict(list)
+    # DAYS, NOT SESSIONS, and the first cut of `observed_days` counted rows.
+    # Sessions are not merged per date - only `daily` is - so two runs on one
+    # Tuesday counted as two days, and a week with doubles published
+    # `observed_days: 9` against `window_days: 7`. A hundred and twenty-nine
+    # per cent coverage is not a thin claim, it is a broken one, and it landed
+    # in a column whose whole contract is "how many days of the stated window
+    # actually held the metric". The shipped corpus never runs twice in a day,
+    # which is why no fixture witnessed it.
+    hr_days: dict[str, set[str]] = defaultdict(set)
     for s in sessions:
         if s.get("type") == "run" and s.get("avg_hr"):
             by_week_hr[_week_key(s["date"])].append(s["avg_hr"])
+            hr_days[_week_key(s["date"])].add(str(s["date"]))
     for wk in weeks:
         cap = cfg_for[wk].easy_hr_cap
         hrs = by_week_hr.get(wk)
@@ -539,7 +556,7 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
         aim, goal = _target_for(goals_for[wk], "easy_hr", float(cap))
         rows.append(_row(wk, "easy_hr", avg, aim,
                          ON if avg <= aim else BEHIND, goal,
-                         statistic=AVERAGE, observed_days=len(hrs)))
+                         statistic=AVERAGE, observed_days=len(hr_days[wk])))
 
     # --- daily floors/gates, weekly aggregated ------------------------------
     daily_by_week: dict[str, list[dict]] = defaultdict(list)
@@ -682,7 +699,8 @@ def _default_floor_rows(weight: list[dict], daily: list[dict],
         mean_intake = sum(intakes) / len(intakes)
         out.append(_row(wk, "intake_floor", mean_intake, floor,
                         BEHIND if mean_intake <= floor else ON,
-                        statistic=AVERAGE, window_days=RED_S_WINDOW_DAYS))
+                        statistic=AVERAGE, window_days=RED_S_WINDOW_DAYS,
+                        observed_days=len(intakes)))
 
     kg = _latest_weight(weight, end)
     proteins = [float(r["protein_g"]) for r in window
@@ -691,7 +709,8 @@ def _default_floor_rows(weight: list[dict], daily: list[dict],
         per_kg = (sum(proteins) / len(proteins)) / kg
         out.append(_row(wk, "protein_floor", per_kg, PROTEIN_FLOOR_G_PER_KG,
                         BEHIND if per_kg < PROTEIN_FLOOR_G_PER_KG else ON,
-                        statistic=AVERAGE, window_days=RED_S_WINDOW_DAYS))
+                        statistic=AVERAGE, window_days=RED_S_WINDOW_DAYS,
+                        observed_days=len(proteins)))
 
     ea, _terms = energy_availability(daily, weight, sessions)
     if ea is not None:

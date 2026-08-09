@@ -24,8 +24,17 @@ adds accessors over what the engine already knew.
 - **No threshold came with it**, and that is the part most likely to be added
   later. The engine does not decide how thin is too thin - that number would
   have no published basis, and this repo has been bitten twice by cutoffs it
-  invented. It states the fraction and lets the reader judge. A test refuses
-  any branch on the count.
+  invented. It states the fraction and lets the reader judge, and a test
+  PARSES the engine looking for any ordering comparison on the count - a grep
+  for five spellings missed the one a consumer would actually write.
+
+### Fixed
+
+- The leak sweep in `test_sensitive_tiers` calls every zero-argument public
+  method, and `pin_policy` (#148) was the first writer with an all-optional
+  signature - so every suite run appended a row to the shipped demo, leaving
+  `examples/` dirty and quietly breaking the demo-drift check. It runs on a
+  copy now, which fixes the class rather than the instance.
 
 - **`situation` names the thresholds with no history** (#148, the half
   `policy_digest` only made detectable). `as_of` reconstructs the record by

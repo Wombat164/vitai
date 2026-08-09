@@ -395,8 +395,9 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
         if len(rhrs) >= 3:
             recent = mean(v for _, v in rhrs)
             if recent > cfg.rhr_baseline + 5:
-                alerts.append(f"**Resting HR {recent:.0f}** - more than 5 over "
-                              f"baseline {cfg.rhr_baseline}")
+                alerts.append(f"**Resting HR {recent:.0f}"
+                              f"{over_days(len(rhrs), 7)}** - more than 5 "
+                              f"over baseline {cfg.rhr_baseline}")
     if cfg.pain_gate is not None:
         # `pain` only. These are CANONICAL rows, so a legacy `hip_pain` line
         # arrives already mapped forward, and the fallback that used to sit
