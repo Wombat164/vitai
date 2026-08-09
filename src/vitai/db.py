@@ -593,7 +593,15 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     row carrying both - which the resolution layer already produces, with
 #     `source` reading `matrix-console+polar` to say so.
 #
-#     What it could not say is WHICH INSTRUMENT SUPPLIED WHICH FIELD. The
+#     What it could not say is WHICH SOURCE SUPPLIED WHICH FIELD - the
+#     CHANNEL, and the distinction is this repo's own (#35/#51): `source` is
+#     the channel a value arrived by and `origin` is the instrument that
+#     observed it. A watch relayed through a platform has one origin and two
+#     possible sources, so a map keyed on source answers "which feed" rather
+#     than "which device". The issue asks for instruments and proposes a
+#     `source_of` map holding source values; this ships the map it proposes
+#     and says plainly which of the two it carries. The origin chain is on the
+#     same row, in `chain`. The
 #     merged row's single `source` is true of half its values and false of the
 #     rest, and a consumer emitting a per-value `source` - which the fact-pack
 #     shape already does - was therefore uniformly wrong for half of them.
@@ -605,9 +613,19 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     explanations become noise. So the case this is about was exactly the
 #     case that stayed silent.
 #
-#     DERIVED, NOT STORED, and present only on a merged row. Nothing is asked
-#     of the athlete and nothing changes on a line written by one writer,
-#     where the row's own `source` is already the whole truth.
+#     DERIVED, NOT STORED, and present only where MORE THAN ONE SOURCE
+#     contributed - not merely more than one row, since two claims from one
+#     writer are one writer. Nothing is asked of the athlete and nothing
+#     changes on a single-source row, where the row's own `source` is already
+#     the whole truth.
+#
+#     KNOWN LIMIT, stated rather than discovered later: a `provenance` row is
+#     keyed by (dataset, date, origin) and carries no ordinal, so two MERGED
+#     activities on one date - a morning and an evening outing, each watch
+#     plus console - produce two rows a consumer cannot tell apart. That
+#     ambiguity predates this column and is harmless for `trust` and `chain`,
+#     which are cluster-symmetric; it is not harmless for per-field
+#     attribution, and closing it needs an identity on the provenance row.
 CONTRACT_VERSION = "40"
 
 _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity would
@@ -805,8 +823,7 @@ DERIVED_TABLES: dict[str, list[str]] = {
 # is mangled - and `test_every_list_column_is_text` asserts it. The set is
 # checked against the fixtures in both directions, so it cannot quietly
 # describe a field that stopped being a list or miss one that became one.
-LIST_COLS = frozenset({"derived_from", "basis_claims",
-                       "field_sources"})
+LIST_COLS = frozenset({"derived_from", "basis_claims"})
 
 
 def _cols(keys: list[str]) -> str:
@@ -881,8 +898,30 @@ def _table(con: sqlite3.Connection, table: str, keys: list[str],
     if rows:
         con.executemany(
             f"INSERT INTO {table} VALUES ({','.join('?' * len(keys))})",
-            [tuple(_cell(r.get(k)) for k in keys) for r in rows],
+            [tuple(_map_cell(r.get(k)) if k in MAP_COLS else _cell(r.get(k))
+                   for k in keys) for r in rows],
         )
+
+
+# COLUMNS WHOSE VALUE IS A MAP (#325). Scoped rather than handled in `_cell`,
+# because `_cell` sees every raw line's every field: a blanket dict branch
+# turned a malformed `note: {...}` on an athlete's line from a loud
+# `InterfaceError` at build time into a silently stored JSON string. Widening
+# what the engine accepts is not a side effect a serialiser gets to have.
+MAP_COLS = frozenset({"field_sources"})
+
+
+def _map_cell(v: object) -> object:
+    """A map column, key-sorted.
+
+    Sorted for the reason a list column is value-sorted: what a merged row
+    says about which source supplied which field does not depend on the order
+    the fields happen to be walked in, and two builds of one record must
+    compare equal as text.
+    """
+    if not isinstance(v, dict):
+        return _cell(v)
+    return json.dumps({k: str(v[k]) for k in sorted(v)}, separators=(",", ":"))
 
 
 def _cell(v: object) -> object:
@@ -896,11 +935,4 @@ def _cell(v: object) -> object:
         # happened to type is not part of what the lineage says. A consumer
         # reads it with `json.loads`.
         return json.dumps(sorted(str(x) for x in v), separators=(",", ":"))
-    if isinstance(v, dict):
-        # `field_sources` is the first map-valued column (#325). Sorted by KEY
-        # for the reason a list is sorted by value: what a merged row says
-        # about which instrument supplied which field does not depend on the
-        # order the fields happen to be walked in, and two builds of one
-        # record must compare equal as text.
-        return json.dumps({k: v[k] for k in sorted(v)}, separators=(",", ":"))
     return v
