@@ -444,8 +444,8 @@ def test_the_registry_parses_and_declares_its_version():
     assert data["version"] == 1
     # A REGISTER of the tables this file is allowed to hold. `name` joined at
     # #331 - display names, which are neither `label` (that names the UNIT,
-    # and two fields share one) nor `aliases` (that is a sorted recognition
-    # set whose first entry is not a name).
+    # and two fields share one) nor `aliases` (that is a recognition set, and
+    # no end of it is a name).
     assert set(data) == {"version", "unit", "override", "name"}
 
 

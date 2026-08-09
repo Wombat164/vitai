@@ -1633,9 +1633,10 @@ def display_name(dataset: str, field: str) -> str:
     """What to call this field on a surface a person reads (#331).
 
     NOT `aliases`, which is for RECOGNITION - it is what makes "resting heart
-    rate" verify against `rhr`, and it is right for that. It is a set, published
-    sorted, and its first entry is not a display name: `kcal_out` would render
-    as "burned" and `sleep_h` as "hours slept".
+    rate" verify against `rhr`, and it is right for that. It is a SET, and no
+    end of it is a display name: every word in it was chosen to be matched
+    rather than printed, so `kcal_out` yields "calories out" in registry order
+    and "burned" sorted, and `rir` yields the raw token or "left in the tank".
 
     NOT `units(...)["label"]` either, though the issue proposed it as the
     precedent. That label names the UNIT: `kcal_in` and `kcal_out` both answer

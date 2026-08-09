@@ -1,11 +1,12 @@
 """One published display name per field (#331).
 
 A client that wants to show a field to a person had nothing canonical to show.
-`aliases` is published per field and arrives alphabetically sorted, because it
-is for RECOGNITION - it is what makes "resting heart rate" verify against
-`rhr`, and it is excellent at that. It is not a display name, and its first
-entry is not a candidate for one: `kcal_out` renders as "burned" and `sleep_h`
-as "hours slept".
+`aliases` is published per field and is for RECOGNITION - it is what makes
+"resting heart rate" verify against `rhr`, and it is excellent at that. It is
+not a display name, and no end of it is a candidate for one: every word in it
+was chosen to be matched rather than printed. `kcal_out` gives "calories out"
+in registry order and "burned" sorted; `rir` gives the raw token or "left in
+the tank".
 
 `units[...]["label"]` is not one either, though the issue proposed it as the
 precedent. That label names the UNIT. `kcal_in` and `kcal_out` both answer
