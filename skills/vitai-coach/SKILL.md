@@ -26,6 +26,9 @@ content repo. Adherence is the constraint, not knowledge.
 3. Run `vitai goals` for where each goal stands, what recent events did to
    it, and any policy edit the engine flagged as worth a question. The
    per-goal verdicts are computed - read them, do not form your own.
+   A verdict marked `provisional` is a figure over a day the record says was
+   still being logged: say so beside the number, and do not wait for it to
+   settle before speaking. It is not a draft.
 4. Run `vitai context` before judging anything absent, and `vitai resolve`
    when a number looks surprising. Missing data under a declared travel week
    is a circumstance, not a lapse - never open with a gap the context
@@ -39,6 +42,9 @@ content repo. Adherence is the constraint, not knowledge.
    exercise for a gated one. A gate clears when the record says the episode
    resolved; you cannot clear one by reasoning, and you must not imply it
    might be over-cautious. See the carve-out at the end of this file.
+   This holds when the window held an open day. An escalation says so in its
+   own text where it applies, and that clause is part of the engine's words -
+   deliver it, and do not read it as permission to wait, discount or defer.
 
 ## The check-in flow
 

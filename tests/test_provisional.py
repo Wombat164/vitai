@@ -551,3 +551,91 @@ def test_the_stale_pain_alert_marks_its_nothing_since_claim(tmp_path):
     assert all("day still open" in ln for ln in stale), stale
     # And it still says the reading itself, unhedged.
     assert "Pain 5/10 at knee" in out
+
+
+# --- the founding incident's own surface ---------------------------------------
+
+def starved(tmp_path: Path, outvote: bool) -> Vitai:
+    """Fourteen days under the intake floor, the last still being logged.
+
+    This is #186's incident: a nutrition export taken at lunchtime reading as
+    half a day. The metric it drags down is the mean this escalation fires on.
+    """
+    root = tmp_path / "content"
+    (root / "data").mkdir(parents=True)
+    (root / "vitai.toml").write_text(
+        '[athlete]\nname = "T"\n'
+        "[resolution]\nsource_order = ['watch', 'app']\n", encoding="utf-8")
+    rows = [{**{k: None for k in KEYS["daily"]}, "date": f"2030-05-{n:02d}",
+             "kcal_in": 900, "protein_g": 40, "source": "watch",
+             "coverage": "full"} for n in range(1, 14)]
+    rows.append({**rows[-1], "date": "2030-05-14", "kcal_in": 300,
+                 "coverage": "full" if outvote else PARTIAL})
+    if outvote:
+        rows.append({**rows[-1], "source": "app", "coverage": PARTIAL})
+    (root / "data" / "daily.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    (root / "data" / "weight.jsonl").write_text(json.dumps(
+        {**{k: None for k in KEYS["weight"]}, "date": "2030-05-01", "kg": 70.0,
+         "source": "scale"}) + "\n", encoding="utf-8")
+    return Vitai(root)
+
+
+def test_the_intake_escalation_says_the_window_held_an_open_day(tmp_path):
+    """The surface the first three rounds missed: the verdict row said
+    provisional and the page said it, while the URGENT escalation built from
+    the same mean said nothing - on the founding incident's own metric."""
+    got = starved(tmp_path, False).urgent(on=date(2030, 5, 14))
+    floors = [e for e in got if e["trigger"] in ("intake_floor", "protein_floor")]
+    assert floors, got
+    assert all("still being logged" in e["detail"] for e in floors), floors
+
+
+def test_it_does_not_soften_defer_or_downgrade_the_escalation(tmp_path):
+    """The safety boundary, asserted rather than promised in a comment. The
+    clause adds a fact; it may not touch the level, the trigger, the figure or
+    the action, and the same escalations must fire either way."""
+    open_ = {(e["trigger"], e["level"], e["action"])
+             for e in starved(tmp_path / "a", False).urgent(on=date(2030, 5, 14))}
+    closed = {(e["trigger"], e["level"], e["action"])
+              for e in starved(tmp_path / "b", True).urgent(on=date(2030, 5, 14))}
+    assert open_ == closed, (open_, closed)
+    assert any(t == "intake_floor" and lv == "urgent" for t, lv, _ in open_)
+    # The number and the floor it is judged against are untouched.
+    detail = [e["detail"] for e in starved(tmp_path / "c", False)
+              .urgent(on=date(2030, 5, 14)) if e["trigger"] == "intake_floor"][0]
+    assert "at or below the 1200 floor" in detail, detail
+
+
+def test_the_escalation_hears_the_claim_that_lost_the_contest(tmp_path):
+    """Raw here too, and this is the test standing in for a parameter.
+
+    Every other reader of `coverage` takes the unadjudicated rows as an
+    argument. This surface does not need one, because `Vitai.safety` builds
+    from `datasets()`, which is already raw - so the property is a fact about
+    the call chain rather than about this function's signature, and a fact
+    about a call chain is exactly what a test is for. Switch `safety()` to
+    `canonical()` and this goes red: the watch calls the day `full`, and the
+    escalation stops hearing the app that was still logging it."""
+    v = starved(tmp_path, True)
+    canonical = [r for r in v.canonical("daily") if r["date"] == "2030-05-14"]
+    assert canonical[0]["coverage"] == "full", "the ladder picked the watch"
+    got = [e for e in v.urgent(on=date(2030, 5, 14))
+           if e["trigger"] == "intake_floor"]
+    assert got and "still being logged" in got[0]["detail"], got
+
+
+def test_a_closed_fortnight_gets_no_clause(tmp_path):
+    """A clause that is always there says nothing, and on the safety tier a
+    permanent hedge is worse than none."""
+    rows_closed = starved(tmp_path, False)
+    (rows_closed.root / "data" / "daily.jsonl").write_text(
+        "".join(json.dumps({**{k: None for k in KEYS["daily"]},
+                            "date": f"2030-05-{n:02d}", "kcal_in": 900,
+                            "protein_g": 40, "source": "watch",
+                            "coverage": "full"}) + "\n"
+                for n in range(1, 15)), encoding="utf-8")
+    got = [e for e in Vitai(rows_closed.root).urgent(on=date(2030, 5, 14))
+           if e["trigger"] in ("intake_floor", "protein_floor")]
+    assert got, "the floors still fire"
+    assert not any("still being logged" in e["detail"] for e in got), got

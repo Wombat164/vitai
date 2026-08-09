@@ -24,6 +24,13 @@ adds accessors over what the engine already knew.
   own seven-day figures - so sleep, steps, resting HR and the pain gate now
   carry a ` (day still open)` suffix there. The weight rate does not: it comes
   from the weight ladder, and `coverage` lives on `daily`.
+- **And the intake floors say it in their escalation text.** #186's founding
+  incident is a lunchtime nutrition export reading as half a day, and the
+  metric it drags down is the RED-S intake mean - so the URGENT escalation the
+  most under-configured athlete sees was the last surface still silent about
+  it. The clause states a fact and nothing more: the level, the trigger, the
+  figure, the floor and the action are untouched, and `provisional` is read by
+  no branch in `safety.py`. Over-caution that adds information is not hedging.
 - **A second field, not a third value of `answers`**, which departs from the
   note that reserved `provisional` there. They answer different questions:
   `answers` says what resolution the engine will vouch for, and a provisional
