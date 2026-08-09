@@ -11,6 +11,19 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **One published display name per field** (#331). A client had `aliases` and
+  `units` and still had nothing to PRINT, so it softened the field name's
+  underscores and showed "kcal in". `aliases` is for RECOGNITION - it is what
+  makes "resting heart rate" verify against `rhr` - and it is published
+  sorted, so its head is an accident of the alphabet: `kcal_out` would render
+  as "burned". `units[...]["label"]` names the UNIT, and `kcal_in` and
+  `kcal_out` both answer "kilocalories". `field_types` gains `display_name`,
+  which reaches `vitai schema --json` and the MCP `schema` tool unchanged.
+- **Derived where derivation is honest, curated where it is not.** Softening
+  underscores is right for most of the 189 field names - `pain_site` is "pain
+  site" - and hand-writing the rest would be a second copy of the field list.
+  What derivation cannot do is expand an abbreviation, so 49 are registry
+  data, and a gate refuses a new abbreviated field that has none.
 - **A merged row can say which INSTRUMENT supplied which field** (#325,
   contract 42). `provenance` gains `field_origins` beside the `field_sources`
   map contract 40 shipped. They answer different questions and the code has

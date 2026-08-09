@@ -2713,7 +2713,7 @@ def field_types(dataset: str | None = None) -> dict:
     array as a scalar drops the field rather than failing.
     """
     from .db import LIST_COLS, column_affinity
-    from .schema import SENSITIVE, _TYPES, sensitivity
+    from .schema import SENSITIVE, _TYPES, display_name, sensitivity
 
     names = [dataset] if dataset is not None else list(KEYS)
     if dataset is not None and dataset not in KEYS:
@@ -2765,6 +2765,18 @@ def field_types(dataset: str | None = None) -> dict:
                 # question naming a metric the list had forgotten matched no
                 # topic and fell through to a standing fact pack.
                 "aliases": aliases_for(field),
+                # AND THE ONE NAME TO PRINT (#331). `aliases` is for
+                # recognition and its first entry is not a display name - it is
+                # sorted, so `kcal_out` would render as "burned". `units.label`
+                # is not one either: it names the UNIT, and `kcal_in` and
+                # `kcal_out` both answer "kilocalories".
+                #
+                # So a client softened the field name's underscores, which
+                # invents nothing and is obviously the same token, and got
+                # "kcal in". The engine knows which of `burned`, `calories
+                # out`, `energy out` and `expenditure` it would use in its own
+                # prose; a consumer cannot.
+                "display_name": display_name(name, field),
             }
             for field in KEYS[name]
         }

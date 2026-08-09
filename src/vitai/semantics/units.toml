@@ -545,3 +545,78 @@ label = "beats per minute"
 [unit.pain_gate]
 ordinal = "a pain score on whatever scale the daily rows use"
 label = "pain score"
+
+# --- display names (#331) -----------------------------------------------------
+#
+# ONE NAME PER FIELD, for a surface a person reads. Separate from `aliases`,
+# which is for RECOGNITION and is excellent at it: it is what makes "resting
+# heart rate" verify against `rhr`. It is not a display name and its first
+# entry is not a candidate for one - sorted alphabetically, `kcal_out` would
+# render as "burned" and `sleep_h` as "hours slept".
+#
+# Separate from `label` too, which names the UNIT. `kcal_in` and `kcal_out`
+# both label "kilocalories", so a consumer using it as a field name shows two
+# different fields the same word. That the issue proposed `label` as the
+# precedent is the clearest sign the distinction is not obvious.
+#
+# ONLY THE ONES DERIVATION GETS WRONG are listed. Softening underscores to
+# spaces is right for about 150 of the 189 field names - `pain_site` really is
+# "pain site" - and hand-writing those would be a second copy of the field
+# list that drifts. What derivation cannot do is expand an abbreviation or a
+# unit suffix, and `test_display_names.py` fails if a new field arrives
+# carrying one with no entry here.
+[name]
+active_min = "active minutes"
+activity_id = "activity ID"
+avg_hr = "average heart rate"
+avg_power = "average power"
+body_fat_hi = "body fat, upper bound"
+body_fat_lo = "body fat, lower bound"
+body_fat_pct = "body fat"
+carb_g = "carbohydrate"
+distance_km = "distance"
+duration_s = "duration"
+elevation_m = "elevation gain"
+fat_g = "fat"
+fibre_g = "fibre"
+grams_hi = "grams, upper bound"
+grams_lo = "grams, lower bound"
+guard_pct = "guard band"
+kcal = "energy"
+kcal_100g = "energy per 100 g"
+kcal_in = "energy in"
+kcal_out = "energy out"
+kg = "weight"
+kg_hi = "weight, upper bound"
+kg_lo = "weight, lower bound"
+max_hr = "maximum heart rate"
+protein_g = "protein"
+rest_s = "rest"
+rhr = "resting heart rate"
+rpe = "perceived exertion"
+rpe_scale = "perceived exertion scale"
+sha256 = "content hash"
+sleep_h = "sleep"
+sugar_g = "sugar"
+target_hi = "target, upper bound"
+
+# Found by auditing every TOKEN in every uncurated field name rather than by
+# trusting the abbreviation list I seeded by eye - which missed nine tokens
+# across sixteen fields, including `rir` rendering as "rir" and `sodium_mg` as
+# "sodium mg". That is the issue's own complaint, in the change that closes it.
+angle_deg = "angle"
+carb_100g = "carbohydrate per 100 g"
+derived_op = "derivation"
+fat_100g = "fat per 100 g"
+fibre_100g = "fibre per 100 g"
+lever_pos = "lever position"
+pad_pos = "pad position"
+policy_asof = "policy as of"
+protein_100g = "protein per 100 g"
+rir = "reps in reserve"
+seat_pos = "seat position"
+seq = "sequence"
+session_ref = "session reference"
+sodium_mg = "sodium"
+sodium_mg_100g = "sodium per 100 g"
+sugar_100g = "sugar per 100 g"

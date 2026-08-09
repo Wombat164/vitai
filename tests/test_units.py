@@ -433,7 +433,11 @@ def test_the_unit_accessor_returns_strings_and_never_a_quantity():
 def test_the_registry_parses_and_declares_its_version():
     data = tomllib.loads(REGISTRY.read_text(encoding="utf-8"))
     assert data["version"] == 1
-    assert set(data) == {"version", "unit", "override"}
+    # A REGISTER of the tables this file is allowed to hold. `name` joined at
+    # #331 - display names, which are neither `label` (that names the UNIT,
+    # and two fields share one) nor `aliases` (that is a sorted recognition
+    # set whose first entry is not a name).
+    assert set(data) == {"version", "unit", "override", "name"}
 
 
 @pytest.mark.parametrize("dataset,field", sorted(NUMERIC))

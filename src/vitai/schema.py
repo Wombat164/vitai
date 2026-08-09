@@ -1583,6 +1583,56 @@ def aliases_for(field: str) -> list[str]:
     return [str(a) for a in entry.get("aliases") or []]
 
 
+# The tokens a field name can carry that a person does not say out loud. A
+# field whose name contains one of these needs a curated display name, and
+# `test_display_names.py` fails the build if it does not have one - which is
+# what stops the next `sleep_h` shipping as "sleep h".
+# FOUND BY AUDIT, not by eye. The first version of this set was seeded from
+# what looked abbreviated to me and missed nine tokens across sixteen fields -
+# `rir` published as "rir", `sodium_mg` as "sodium mg", `seat_pos` as "seat
+# pos". Enumerating every token across every field name found them in one
+# pass. A list of what to catch, written from memory, catches what you already
+# remembered.
+ABBREVIATIONS = frozenset({
+    "kcal", "rhr", "hr", "bpm", "kg", "km", "g", "s", "h", "m", "pct", "ml",
+    "rpe", "id", "sha256", "ucum", "max", "avg", "min", "lo", "hi",
+    "100g", "deg", "mg", "op", "pos", "ref", "rir", "seq", "asof",
+})
+
+
+def display_name(dataset: str, field: str) -> str:
+    """What to call this field on a surface a person reads (#331).
+
+    NOT `aliases`, which is for RECOGNITION - it is what makes "resting heart
+    rate" verify against `rhr`, and it is right for that. It is a set, published
+    sorted, and its first entry is not a display name: `kcal_out` would render
+    as "burned" and `sleep_h` as "hours slept".
+
+    NOT `units(...)["label"]` either, though the issue proposed it as the
+    precedent. That label names the UNIT: `kcal_in` and `kcal_out` both answer
+    "kilocalories", so a consumer using it would show two different fields the
+    same word, and 306 of the engine's fields have no units entry at all.
+
+    DERIVED WHERE DERIVATION IS HONEST, curated where it is not. Softening
+    underscores is right for most field names - `pain_site` is "pain site" -
+    and hand-writing those would be a second copy of the field list, which is
+    the duplication this engine exists to prevent. What derivation cannot do
+    is expand an abbreviation or a unit suffix, so those are registry data,
+    and a gate refuses a new abbreviated field that has no entry.
+
+    Dataset-scoped overrides use the same `[override.<dataset>.<field>]` shape
+    `units` uses, for a name that means different things in two datasets.
+    """
+    from .vocab import registry
+
+    table = registry("units")
+    named = (table.get("name_override", {}).get(dataset, {}).get(field)
+             or table.get("name", {}).get(field))
+    if named:
+        return str(named)
+    return field.replace("_", " ")
+
+
 def sensitivity(dataset: str, field: str) -> str:
     """The class this field belongs to. RAISES on one nobody has classified.
 

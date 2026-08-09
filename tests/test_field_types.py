@@ -45,13 +45,16 @@ def test_each_entry_answers_every_question_a_consumer_was_guessing_at():
     an unknown field the most permissive class. `units` and `aliases` join at
     #310, after a hand-written unit map and a hand-written English one - the
     second of which failed silently, routing a question about steps to a pack
-    of goals.
+    of goals. `display_name` joins at #331: a client had `aliases` and `units`
+    and still had nothing to PRINT, so it softened the field name's
+    underscores and showed "kcal in".
     """
     for dataset, fields in field_types().items():
         for name, spec in fields.items():
             assert set(spec) == {"types", "affinity", "container",
                                  "coarse_companion", "sensitivity",
-                                 "units", "aliases"}, f"{dataset}.{name}"
+                                 "units", "aliases",
+                                 "display_name"}, f"{dataset}.{name}"
             assert spec["affinity"] in {"TEXT", "REAL"}
             assert isinstance(spec["container"], bool)
             assert spec["coarse_companion"] is None or (
