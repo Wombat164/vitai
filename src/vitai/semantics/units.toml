@@ -406,9 +406,11 @@ unit_in = "load_unit"
 label = "in whatever `load_unit` says, which may not be a mass"
 aliases = ["load", "weight lifted", "how heavy"]
 
+# The rest AFTER this set - see `schema.KEYS["sets"]`, which is where the
+# direction is defined.
 [unit.rest_s]
 ucum = "s"
-label = "seconds"
+label = "seconds of rest after this set"
 aliases = ["rest", "rest between sets"]
 
 [unit.angle_deg]

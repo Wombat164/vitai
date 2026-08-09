@@ -1191,8 +1191,10 @@ fixture = ["rowing-erg"]
 #
 # A LENGTH IS ALREADY A ROW, which is the useful surprise: the `sets` model
 # fits lane work as it stands. A length is one row, the stroke is `exercise`,
-# the length number is `set_index`, the time is `duration_s`, the rest before
-# the next is `rest_s`, and a 4 x 50 is `block` plus `round`. A medley set is
+# the length number is `set_index`, the time is `duration_s`, the rest after it is
+# `rest_s` (the direction is defined in `schema.KEYS["sets"]`, not here - this
+# aside was the only statement of it for a while, which is a sport-specific
+# comment doing a schema's job), and a 4 x 50 is `block` plus `round`. A medley set is
 # four rows with four different exercises - the same shape a circuit already
 # uses - because a swim set is N lengths and the stroke can change every
 # length, where a lifting set is N reps of one movement by definition.

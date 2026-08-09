@@ -252,6 +252,14 @@ adds accessors over what the engine already knew.
   value that is a slug plus an invisible character validated clean. Found
   through `protocol`, where the fold then merged it onto the real slug with the
   validator saying nothing, so the fault had no witness anywhere.
+- **`rest_s` now has a stated direction** (#225). It is the rest AFTER this
+  set, and the schema is where that is defined. It had been stated once, in a
+  swimming aside in `exercises.toml` - "the rest before the next is `rest_s`" -
+  which is the same rule from the other side, in a sport-specific comment doing
+  a schema's job. A direction nothing states is one two importers settle
+  differently: the same interval attaches to set 3 for one and set 4 for the
+  other, and the rows validate identically either way. Nothing reads the field
+  yet, which is why this is free to state and free to get right.
 
 - **A rate across a protocol change is declined** (#174, proposal 4).
   `fasted-post-void` and `fed-evening-clothed` differ by breakfast, a day's

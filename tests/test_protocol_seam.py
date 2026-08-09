@@ -441,3 +441,54 @@ def test_a_rate_is_not_declined_for_a_typo(tmp_path):
     rates = [r for r in v.verdicts() if r.get("metric") == "weight_rate"]
     assert rates
     assert not any(r.get("reason") == "not_supported" for r in rates), rates
+
+# --- a direction nothing states is one two importers settle differently ------
+
+def test_rest_is_the_rest_after_this_set():
+    """#225. The direction was stated ONCE, in a swimming aside in
+    `exercises.toml` - "the rest before the next is `rest_s`" - which is the
+    same rule from the other side and is a sport-specific comment doing a
+    schema's job. Two importers reading the schema would settle it
+    differently, and the rows validate identically either way: the same
+    interval attaches to set 3 for one and set 4 for the other.
+
+    Pinned in the schema, where the field lives, and referenced from the two
+    places that mention it - so a later reader finds one definition rather
+    than an aside and a silence.
+    """
+    from pathlib import Path as _P
+
+    src = _P(__file__).resolve().parents[1] / "src" / "vitai"
+    schema_src = (src / "schema.py").read_text(encoding="utf-8")
+    assert "`rest_s` IS THE REST AFTER THIS SET" in schema_src
+
+    # The aside defers rather than restating, so the two cannot drift apart.
+    exercises = (src / "semantics" / "exercises.toml").read_text(encoding="utf-8")
+    assert 'the direction is defined in `schema.KEYS["sets"]`' in exercises
+    assert "the rest before\n# the next is `rest_s`" not in exercises
+
+    from vitai.schema import units
+    assert "after this set" in units("sets", "rest_s")["label"]
+
+
+def test_rest_s_is_still_only_validated_and_not_computed_with():
+    """Which is why this is a definition rather than a change. The moment a
+    consumer arrives it inherits a stated direction instead of guessing one -
+    and if this test starts failing, that consumer exists and the definition
+    above is now load-bearing rather than documentary."""
+    from pathlib import Path as _P
+    import re
+
+    src = _P(__file__).resolve().parents[1] / "src" / "vitai"
+    readers = []
+    for path in src.rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        body = "\n".join(ln for ln in text.splitlines()
+                         if not ln.lstrip().startswith("#"))
+        if re.search(r'(?:\.get\(|\[)\s*(["\'])rest_s\1', body):
+            readers.append(path.name)
+    # NOT ONE, not even the validator: `sets.py` checks it inside a loop over
+    # a tuple of field names, so nothing in the engine names `rest_s` to read
+    # a value out of a row. The direction is therefore free to state and free
+    # to get right, which is the whole reason to do it now.
+    assert readers == [], readers

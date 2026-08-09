@@ -33,7 +33,7 @@ from vitai.vocab import registry
 # The whole table, hashed, so a change to ANY key of ANY entry has to be
 # deliberate - not just the `ucum` codes, which is all the first version
 # covered.
-PINNED_DIGEST = "d9db586651825725"
+PINNED_DIGEST = "d5b1a7ad5cf0b4ca"
 
 REGISTRY = Path(__file__).resolve().parents[1] / "src" / "vitai" / "semantics" / "units.toml"
 def _numeric_in_the_corpus() -> set[tuple[str, str]]:

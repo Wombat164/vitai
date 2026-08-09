@@ -207,6 +207,25 @@ KEYS: dict[str, list[str]] = {
     # session by (date, start_time) - offset-bearing per the clocks canon,
     # and NOT called `session`, which would imply an identity `sessions` does
     # not have (#43).
+    # `rest_s` IS THE REST AFTER THIS SET, and this is the only place that says
+    # so (#225). It was stated once, in a swimming aside in `exercises.toml` -
+    # "the rest before the next is `rest_s`" - which is the same rule from the
+    # other side and is a sport-specific comment doing a schema's job. A
+    # direction nothing states is one two importers settle differently: the
+    # same rest interval attaches to set 3 for one and set 4 for the other, and
+    # the rows validate identically either way.
+    #
+    # AFTER rather than BEFORE, because it is what the athlete observes. The
+    # set ends, the clock runs, the next one starts; a rest recorded before a
+    # set cannot be known when that set's row is written. It also makes the
+    # LAST set's `rest_s` meaningful - the rest before the next exercise - where
+    # a before-rule would leave the first set of every block carrying a value
+    # about a boundary it did not sit on.
+    #
+    # NOTHING READS IT YET, which is why this is a definition rather than a
+    # change: `sets.py` validates it is a number and no consumer computes with
+    # it. Stating the direction now costs nothing and stops the first consumer
+    # inheriting an ambiguity that is invisible in the data.
     "sets": ["date", "session_start", "exercise", "block", "round",
              "set_index",
              "reps_completed", "reps_attempted", "load", "load_type",
