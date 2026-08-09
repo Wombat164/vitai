@@ -167,8 +167,12 @@ def test_it_reaches_the_read_model(tmp_path):
 
 
 def test_it_sits_beside_the_denominator_in_the_column_order():
-    """Appended, never inserted, and next to the field it completes."""
-    assert VERDICT_KEYS[-3:] == ["window_days", "observed_days", "answers"]
+    """Appended, never inserted, and next to the field it completes. Asserted
+    as a slice of the earlier columns rather than by index from the end, so
+    the next appended column does not break it."""
+    assert VERDICT_KEYS[:8] == ["week", "metric", "value", "target", "verdict",
+                                "goal", "reason", "due"]
+    assert VERDICT_KEYS[8:11] == ["statistic", "window_days", "observed_days"]
 
 
 def test_a_refusal_carries_no_numerator(tmp_path):

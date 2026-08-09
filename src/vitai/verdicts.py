@@ -25,7 +25,7 @@ from .weeks import week_of
 from .clocks import protocol_seam, weigh_in_timing
 from .config import Config, overlay, phase_rate_for
 from .policy import state
-from .schema import EXTERNAL_METRIC
+from .schema import EXTERNAL_METRIC, PARTIAL
 from .schema import statistics as _statistics
 
 ON, AHEAD, BEHIND, NODATA = "on_target", "ahead", "behind", "no_data"
@@ -263,7 +263,8 @@ def _row(week: str, metric: str, value: float | None, target: float | None,
          reason: str | None = None, due: str | None = None,
          statistic: str | None = None,
          window_days: int | None = None,
-         observed_days: int | None = None) -> dict:
+         observed_days: int | None = None,
+         provisional: bool | None = None) -> dict:
     # A reason is REQUIRED with a refusal and forbidden without one, so a new
     # refusal site cannot ship unlabelled and a judged row cannot carry a
     # reason nobody asked for. This is the totality the issue asks for, held
@@ -358,7 +359,30 @@ def _row(week: str, metric: str, value: float | None, target: float | None,
             # thin, because that number would have no basis and this project
             # has been bitten by hand-rolled cutoffs before (G85). It reports
             # the denominator and lets the reader judge.
-            "observed_days": observed_days, "answers": answers}
+            "observed_days": observed_days,
+            # A DAY IN THIS WINDOW IS STILL OPEN (#186). `daily.coverage` says
+            # `partial` when a source knew the day was unfinished - a nutrition
+            # export taken at lunchtime, a same-day device sync - and the
+            # engine has never read it. So a row asserting a large intake
+            # shortfall that had not happened yet rendered exactly like a row
+            # asserting one that had, and the issue is blunt about the choice:
+            # scoring an open day is fine, scoring it as FINAL is the one
+            # option that is wrong.
+            #
+            # A SECOND FIELD, NOT A THIRD VALUE OF `answers`, and this departs
+            # from the note above that reserved `provisional` there. They
+            # answer different questions: `answers` says what RESOLUTION the
+            # engine will vouch for, and a provisional magnitude is still a
+            # magnitude - a number to render, marked not-final. Folding them
+            # together would make a consumer choose between knowing the number
+            # is provisional and knowing it is a number.
+            #
+            # ABSENT IS NOT `full`. Only an explicit `partial` sets this. Most
+            # of every record predates the field, and reading silence as
+            # complete would be the confident answer this exists to remove -
+            # while reading silence as open would mark the whole corpus.
+            "provisional": provisional,
+            "answers": answers}
 
 
 def _awaiting(rows: list[dict], field: str, week: str,
@@ -567,6 +591,11 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
         days = daily_by_week.get(wk, [])
         if not days:
             continue
+        # ONE OPEN DAY MAKES THE WEEK PROVISIONAL (#186). A weekly figure built
+        # over a day the record says was still being logged will change when
+        # the rest of that day arrives, and that is true of the aggregate
+        # however many finished days sit beside it.
+        open_day = any(d.get("coverage") == PARTIAL for d in days) or None
         eff = cfg_for[wk]
         active = goals_for[wk]
         if eff.steps_floor is not None:
@@ -577,8 +606,8 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
                                         float(eff.steps_floor))
                 rows.append(_row(wk, "steps", avg, aim,
                                  ON if avg >= aim else BEHIND, goal,
-                                 statistic=AVERAGE,
-                                 observed_days=len(steps)))
+                                 statistic=AVERAGE, observed_days=len(steps),
+                                 provisional=open_day))
         if eff.sleep_floor_h is not None:
             sleeps = [d["sleep_h"] for d in days if d.get("sleep_h") is not None]
             if sleeps:
@@ -587,8 +616,8 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
                                         float(eff.sleep_floor_h))
                 rows.append(_row(wk, "sleep", avg, aim,
                                  ON if avg >= aim else BEHIND, goal,
-                                 statistic=AVERAGE,
-                                 observed_days=len(sleeps)))
+                                 statistic=AVERAGE, observed_days=len(sleeps),
+                                 provisional=open_day))
         if eff.pain_gate is not None:
             # `pain` after the gen-2 generalization. The comment here used to
             # say old lines arrive already mapped by `canonical_daily` and the
@@ -617,7 +646,8 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
                 rows.append(_row(wk, "rhr", avg, float(eff.rhr_baseline + 5),
                                  ON if avg <= eff.rhr_baseline + 5 else BEHIND,
                                  _goal_for(active, "rhr"), statistic=AVERAGE,
-                                 observed_days=len(rhrs)))
+                                 observed_days=len(rhrs),
+                                 provisional=open_day))
 
     # Safety floors that need no configuration (G68). Every rule above is
     # opt-in: it produces nothing until the athlete sets a threshold. That is

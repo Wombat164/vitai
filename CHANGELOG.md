@@ -11,6 +11,25 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **A weekly figure over an unfinished day says so** (#186, contract 41).
+  `daily.coverage` has carried `full | partial | manual` since generation 2,
+  been validated all along, and been read by nothing - so a nutrition export
+  taken at lunchtime produced a well-formed row asserting an intake shortfall
+  that had not happened, rendering exactly like a row asserting one that had.
+  `verdicts` gains `provisional`.
+- **A second field, not a third value of `answers`**, which departs from the
+  note that reserved `provisional` there. They answer different questions:
+  `answers` says what resolution the engine will vouch for, and a provisional
+  magnitude is still a magnitude - a number to render, marked not-final.
+- **Absent coverage is not read as complete, and not as open.** Most of every
+  record predates the field. Reading silence as complete is the confident
+  answer this removes; reading it as open would mark the whole corpus. Only an
+  explicit `partial` sets it, and the verdict itself does not move - scoring an
+  open day is fine, scoring it as final is not.
+- `daily.coverage` leaves the field-population backlog. The WRITING half of
+  #186 stays open: one field on a row several sources write to, so whichever
+  importer sets it wins uncontested.
+
 - **A merged row can say which SOURCE supplied which field** (#325, contract
   40). A watch and a rowing console recording one session resolve to one row
   whose `source` reads `matrix-console+polar` - true of the row and of no

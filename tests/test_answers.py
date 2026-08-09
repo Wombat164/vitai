@@ -162,17 +162,28 @@ def test_a_positional_reader_keeps_every_column_it_knew():
     original = ["week", "metric", "value", "target", "verdict", "goal"]
 
     assert VERDICT_KEYS[:len(original)] == original
-    assert VERDICT_KEYS[-1] == "answers"
+    # By prefix, not by index from the end: `[-1]` was a snapshot that broke
+    # the moment the next column was appended, and it taught a consumer that a
+    # positional read of the last column is stable, which is the opposite of
+    # what this test is for.
+    assert "answers" in VERDICT_KEYS[len(original):]
 
 
-def test_the_deferred_half_is_not_half_shipped():
-    """`provisional` - a day still open, so the number is "so far" rather than
-    final - is the third value this field is shaped for. It belongs to the
-    day-completeness work, which #185's own Related section files separately,
-    and shipping the token without the completeness signal behind it would be
-    a vocabulary nothing can populate.
+def test_the_deferred_half_shipped_beside_this_field_rather_than_inside_it():
+    """`provisional` was reserved as the third value of `answers` - a day still
+    open, so the number is "so far" rather than final - and the completeness
+    work (#186) has now landed it as its own column instead.
+
+    THEY ANSWER DIFFERENT QUESTIONS, which is why. `answers` says what
+    RESOLUTION the engine will vouch for, and a provisional magnitude is still
+    a magnitude: a number to render, marked not-final. As a third value it
+    would make a consumer choose between knowing the figure is provisional and
+    knowing it is a figure.
     """
+    from vitai.db import VERDICT_KEYS as _KEYS
+
     assert "provisional" not in ANSWERS
+    assert "provisional" in _KEYS
 
     # An earlier version put a `pytest.raises` here that fired on #177's
     # judgement-carries-no-reason guard - a rule that predates this change

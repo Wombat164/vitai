@@ -23,9 +23,12 @@ only the third:
     `sessions` has no occurred flag, so a plan that was not followed has no row
     to live on. The one case the field exists to serve is the one it
     structurally cannot represent.
-  - `daily.coverage` has NO SINGLE WRITER. One field on a row several sources
-    write to, so whichever importer sets it wins uncontested and its opinion
-    becomes the whole day's claim.
+  - `daily.coverage` HAD no consumer, and #186 gave it one: a weekly verdict
+    built over a day the record marks `partial` is answered `provisional`
+    rather than final. The writing half of that issue is still open - one
+    field on a row several sources write to, so whichever importer sets it
+    wins uncontested - but reading it errs the safe way, since over-marking a
+    figure as not-final is the direction the issue asks for.
   - `thresholds` and `meals` have NO PRODUCER. Nothing generates them; they
     wait for a surface that was never built.
   - `weight.kg_lo`/`kg_hi` had NO CONSUMER. The producer existed and worked,
@@ -180,7 +183,6 @@ UNREAD = (
     "sessions.rpe_scale",
     "sets.rpe_scale",
     "daily.alcohol",
-    "daily.coverage",
     # #280. Interface fields, and the same shape as the declared scales above:
     # written by the record and read by nothing INSIDE the engine, because
     # their whole purpose is that a CLIENT can tell its own derivation from
