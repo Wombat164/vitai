@@ -1583,6 +1583,89 @@ def aliases_for(field: str) -> list[str]:
     return [str(a) for a in entry.get("aliases") or []]
 
 
+# The tokens a field name can carry that a person does not say out loud. A
+# field whose name contains one of these needs a curated display name, and
+# `test_display_names.py` fails the build if it does not have one - which is
+# what stops the next `sleep_h` shipping as "sleep h".
+# THE WORDS DERIVATION MAY PASS THROUGH, and this replaced a denylist.
+#
+# The first version listed what to REJECT - abbreviations - and review killed
+# it with the PR's own headline example: `power_w` sailed straight through,
+# because "w" was not on a list I had built by auditing the fields that
+# already exist. A denylist derived from today's field set is by construction
+# a list of what you already have. It cannot catch the next field, which is
+# the only thing a gate is for.
+#
+# So this is an allowlist and it fails CLOSED. A new field introduces a token
+# nobody has blessed, and the gate stops the build until someone either
+# curates a display name for the field or adds the word here on purpose.
+# `power_w`, `hrv_ms`, `temp_c`, `bp_sys`, `one_rm` and `ts_utc` all fail now;
+# under the denylist fourteen of twenty plausible next fields passed.
+#
+# Being long is the point rather than a cost: every entry is a word somebody
+# decided a person would read, and the list only grows by that decision.
+PLAIN_WORDS = frozenset({
+    "about", "accountability", "activity", "alcohol", "anchored",
+    "angle", "artifact", "at", "attempted", "basis", "block", "body",
+    "build", "by", "bytes", "cadence", "capture", "captured", "change",
+    "claims", "class", "completed", "confidence", "context", "contract",
+    "coverage", "dataset", "date", "deadline", "depends", "derived",
+    "device", "end", "equipment", "event", "evidence", "exercise",
+    "expects", "facilities", "failure", "feel", "field", "food", "for",
+    "from", "goal", "grams", "hip", "immovable", "index", "item", "key",
+    "kind", "level", "lifecycle", "load", "location", "machine", "meal",
+    "measured", "media", "metric", "miss", "mode", "model", "modelled",
+    "mood", "motivator", "note", "occurred", "on", "onset", "origin",
+    "outcome", "pain", "path", "period", "phase", "place", "planned",
+    "polarity", "policy", "precondition", "priority", "protocol",
+    "provider", "rationale", "read", "reason", "recorded", "removed",
+    "reps", "requires", "resistance", "resolved", "restriction",
+    "restricts", "result", "round", "route", "scale", "serves",
+    "session", "set", "setting", "severity", "side", "site", "sleep",
+    "source", "start", "statement", "status", "steps", "success",
+    "supersedes", "surface", "table", "target", "tempo", "text", "tier",
+    "time", "title", "track", "tracker", "type", "unit", "value",
+    "verification", "weather", "week",
+})
+
+
+def display_name(dataset: str, field: str) -> str:
+    """What to call this field on a surface a person reads (#331).
+
+    NOT `aliases`, which is for RECOGNITION - it is what makes "resting heart
+    rate" verify against `rhr`, and it is right for that. It is a SET, and no
+    end of it is a display name: every word in it was chosen to be matched
+    rather than printed, so `kcal_out` yields "calories out" in registry order
+    and "burned" sorted, and `rir` yields the raw token or "left in the tank".
+
+    NOT `units(...)["label"]` either, though the issue proposed it as the
+    precedent. That label names the UNIT: `kcal_in` and `kcal_out` both answer
+    "kilocalories", so a consumer using it would show two different fields the
+    same word, and 306 of the engine's fields have no units entry at all.
+
+    DERIVED WHERE DERIVATION IS HONEST, curated where it is not. Softening
+    underscores is right for most field names - `pain_site` is "pain site" -
+    and hand-writing those would be a second copy of the field list, which is
+    the duplication this engine exists to prevent. What derivation cannot do
+    is expand an abbreviation or a unit suffix, so those are registry data,
+    and a gate refuses a new abbreviated field that has no entry.
+
+    NO DATASET-SCOPED OVERRIDE, and the first version shipped one that could
+    not be reached. The docstring advertised `[override.<dataset>.<field>]`
+    while the code read `name_override`, so the documented shape was silently
+    ignored and the implemented shape failed the registry's own table register
+    - and deleting the branch entirely passed the whole suite. No field needs
+    it today; when one does, it can arrive with a test.
+    """
+    from .vocab import registry
+
+    table = registry("units")
+    named = table.get("name", {}).get(field)
+    if named:
+        return str(named)
+    return field.replace("_", " ")
+
+
 def sensitivity(dataset: str, field: str) -> str:
     """The class this field belongs to. RAISES on one nobody has classified.
 
