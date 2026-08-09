@@ -2150,6 +2150,29 @@ class Vitai:
                      if (d := str(r.get("date") or "")) and d <= horizon]
             last_seen[name] = max(dates) if dates else None
 
+        # WHICH KIND OF CHANNEL LAST SAID ANYTHING (#146). `last_seen` above is
+        # per DATASET and answers how stale each one is. This is the other cut:
+        # a record where the watches keep syncing and every line the athlete
+        # wrote himself stopped a month ago is not the same record as one where
+        # nothing is happening, and `last_seen` cannot tell them apart because
+        # both channels write into the same datasets.
+        #
+        # Read over the RAW rows, not the canonical ones. Resolution picks one
+        # claim per contest and discards the rest, so a manual line that lost
+        # to a device line would take the athlete's own voice out of the count
+        # - the silence would be the ladder's, not his.
+        from .provenance import channel_liveness
+        # THE DATASET MAPPING, not a flat list: `journal` and `checks` have no
+        # `capture` column, and their initiative is a property of the dataset.
+        # Flattened, the one dataset that is nothing but the athlete writing
+        # sentences was invisible to the axis that asks whether he wrote.
+        #
+        # GUARDED like every other derived section (see this method's own rule
+        # above), so a failure here is named in `unavailable` rather than
+        # taking down a brief whose whole job is to still answer.
+        channels = section("channels", lambda: channel_liveness(
+            self.datasets(), horizon), {})
+
         return {
             # A consumer gates on these before trusting anything below.
             "schema": schema(),
@@ -2181,6 +2204,7 @@ class Vitai:
                 "problems": report["problems"],
                 "advisories": report["advisories"],
                 "last_seen": last_seen,
+                "channels": channels,
                 "duplicate_captures": self.duplicate_captures(),
                 "conservation": self.conservation(),
                 "retracted": self.retractions(),

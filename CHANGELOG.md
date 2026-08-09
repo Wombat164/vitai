@@ -43,6 +43,20 @@ adds accessors over what the engine already knew.
   maximum across merged claims. Changing what a field holds is a NEW FIELD,
   which the retirement register already records - the same property, without
   the unreliable key.
+- **Which kind of channel last said anything** (#146). `capture` says how a
+  value arrived; a new `initiative` axis on the same registry says whether a
+  person had to do anything for it to arrive at all - the active-versus-passive
+  split digital phenotyping and mHealth have drawn for years, where the point
+  is that the two fail differently and the active side stops first. `situation`
+  now carries `unresolved.channels`: when each side last reached the record and
+  how long it has been quiet. No contrast field - both numbers are there, and
+  emitting the difference only when the active side is the quieter would be the
+  engine choosing which shape is worth naming.
+- On the corpus that filed it, at the viewpoint its own expectation names, that
+  reads: active silent since 2030-03-07, passive current. Two dates - no
+  verdict, no threshold, and no word for what the gap means. The record cannot tell a bereavement from a holiday from a phone in a
+  drawer, and a persona exists in this corpus to prove that guessing is wrong
+  even when the guess is right.
 
 - **What the scale cannot see: fat and fat-free mass, derived** (#46, G36).
   `schema.py` stated the intent - `kg` and `body_fat_pct` are the observed
