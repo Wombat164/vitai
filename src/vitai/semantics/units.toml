@@ -96,7 +96,7 @@ label = "kilograms"
 [unit.grams]
 ucum = "g"
 label = "grams"
-aliases = ["portion", "serving"]
+aliases = ["portion", "serving", "grams"]
 
 [unit.grams_lo]
 ucum = "g"
@@ -134,7 +134,7 @@ ucum = "m"
 label = "metres"
 # NOT "climbing", which is a session type here. "How much climbing this week"
 # legitimately means metres gained or hours on rock.
-aliases = ["elevation", "ascent", "vert"]
+aliases = ["elevation", "ascent", "vert", "elevation gain"]
 
 # --- counts ---------------------------------------------------------------
 
@@ -163,7 +163,7 @@ aliases = ["heart rate", "average heart rate", "hr", "pulse", "average hr"]
 [unit.max_hr]
 ucum = "/min"
 label = "beats per minute"
-aliases = ["max heart rate", "peak heart rate", "maximum hr"]
+aliases = ["max heart rate", "peak heart rate", "maximum hr", "maximum heart rate"]
 
 # WHAT is per minute varies by session TYPE - steps on a run, revolutions on a
 # ride, strokes on a row - and the field cannot say which, so the annotation is
@@ -192,7 +192,7 @@ aliases = ["power", "watts", "average power"]
 [unit.kcal]
 ucum = "kcal"
 label = "kilocalories"
-aliases = ["session calories", "calories for the session"]
+aliases = ["session calories", "calories for the session", "session energy"]
 
 [unit.kcal_in]
 ucum = "kcal"
@@ -422,7 +422,7 @@ label = "degrees"
 [unit.reps_completed]
 ucum = "{reps}"
 label = "repetitions"
-aliases = ["reps", "repetitions"]
+aliases = ["reps", "repetitions", "reps completed"]
 
 [unit.reps_attempted]
 ucum = "{reps}"
@@ -560,7 +560,7 @@ label = "pain score"
 # precedent is the clearest sign the distinction is not obvious.
 #
 # ONLY THE ONES DERIVATION GETS WRONG are listed. Softening underscores to
-# spaces is right for about 150 of the 189 field names - `pain_site` really is
+# spaces is right for 135 of the 189 field names - `pain_site` really is
 # "pain site" - and hand-writing those would be a second copy of the field
 # list that drifts. What derivation cannot do is expand an abbreviation or a
 # unit suffix, and `test_display_names.py` fails if a new field arrives
@@ -582,7 +582,7 @@ fibre_g = "fibre"
 grams_hi = "grams, upper bound"
 grams_lo = "grams, lower bound"
 guard_pct = "guard band"
-kcal = "energy"
+kcal = "session energy"
 kcal_100g = "energy per 100 g"
 kcal_in = "energy in"
 kcal_out = "energy out"
@@ -620,3 +620,13 @@ session_ref = "session reference"
 sodium_mg = "sodium"
 sodium_mg_100g = "sodium per 100 g"
 sugar_100g = "sugar per 100 g"
+
+# Not abbreviations - words that are wrong in CONTEXT, which no token check
+# can find. Review found these by reading the derived list, which is the only
+# way: `with` is a real word and a terrible column heading, and "to date" is
+# an English idiom meaning "so far" - the opposite of an interval end.
+with = "trained with"
+to_date = "end date"
+from_date = "start date"
+place_precise = "precise place"
+slug = "identifier"

@@ -1587,16 +1587,45 @@ def aliases_for(field: str) -> list[str]:
 # field whose name contains one of these needs a curated display name, and
 # `test_display_names.py` fails the build if it does not have one - which is
 # what stops the next `sleep_h` shipping as "sleep h".
-# FOUND BY AUDIT, not by eye. The first version of this set was seeded from
-# what looked abbreviated to me and missed nine tokens across sixteen fields -
-# `rir` published as "rir", `sodium_mg` as "sodium mg", `seat_pos` as "seat
-# pos". Enumerating every token across every field name found them in one
-# pass. A list of what to catch, written from memory, catches what you already
-# remembered.
-ABBREVIATIONS = frozenset({
-    "kcal", "rhr", "hr", "bpm", "kg", "km", "g", "s", "h", "m", "pct", "ml",
-    "rpe", "id", "sha256", "ucum", "max", "avg", "min", "lo", "hi",
-    "100g", "deg", "mg", "op", "pos", "ref", "rir", "seq", "asof",
+# THE WORDS DERIVATION MAY PASS THROUGH, and this replaced a denylist.
+#
+# The first version listed what to REJECT - abbreviations - and review killed
+# it with the PR's own headline example: `power_w` sailed straight through,
+# because "w" was not on a list I had built by auditing the fields that
+# already exist. A denylist derived from today's field set is by construction
+# a list of what you already have. It cannot catch the next field, which is
+# the only thing a gate is for.
+#
+# So this is an allowlist and it fails CLOSED. A new field introduces a token
+# nobody has blessed, and the gate stops the build until someone either
+# curates a display name for the field or adds the word here on purpose.
+# `power_w`, `hrv_ms`, `temp_c`, `bp_sys`, `one_rm` and `ts_utc` all fail now;
+# under the denylist fourteen of twenty plausible next fields passed.
+#
+# Being long is the point rather than a cost: every entry is a word somebody
+# decided a person would read, and the list only grows by that decision.
+PLAIN_WORDS = frozenset({
+    "about", "accountability", "activity", "alcohol", "anchored",
+    "angle", "artifact", "at", "attempted", "basis", "block", "body",
+    "build", "by", "bytes", "cadence", "capture", "captured", "change",
+    "claims", "class", "completed", "confidence", "context", "contract",
+    "coverage", "dataset", "date", "deadline", "depends", "derived",
+    "device", "end", "equipment", "event", "evidence", "exercise",
+    "expects", "facilities", "failure", "feel", "field", "food", "for",
+    "from", "goal", "grams", "hip", "immovable", "index", "item", "key",
+    "kind", "level", "lifecycle", "load", "location", "machine", "meal",
+    "measured", "media", "metric", "miss", "mode", "model", "modelled",
+    "mood", "motivator", "note", "occurred", "on", "onset", "origin",
+    "outcome", "pain", "path", "period", "phase", "place", "planned",
+    "polarity", "policy", "precondition", "priority", "protocol",
+    "provider", "rationale", "read", "reason", "recorded", "removed",
+    "reps", "requires", "resistance", "resolved", "restriction",
+    "restricts", "result", "round", "route", "scale", "serves",
+    "session", "set", "setting", "severity", "side", "site", "sleep",
+    "source", "start", "statement", "status", "steps", "success",
+    "supersedes", "surface", "table", "target", "tempo", "text", "tier",
+    "time", "title", "track", "tracker", "type", "unit", "value",
+    "verification", "weather", "week",
 })
 
 
@@ -1620,14 +1649,17 @@ def display_name(dataset: str, field: str) -> str:
     is expand an abbreviation or a unit suffix, so those are registry data,
     and a gate refuses a new abbreviated field that has no entry.
 
-    Dataset-scoped overrides use the same `[override.<dataset>.<field>]` shape
-    `units` uses, for a name that means different things in two datasets.
+    NO DATASET-SCOPED OVERRIDE, and the first version shipped one that could
+    not be reached. The docstring advertised `[override.<dataset>.<field>]`
+    while the code read `name_override`, so the documented shape was silently
+    ignored and the implemented shape failed the registry's own table register
+    - and deleting the branch entirely passed the whole suite. No field needs
+    it today; when one does, it can arrive with a test.
     """
     from .vocab import registry
 
     table = registry("units")
-    named = (table.get("name_override", {}).get(dataset, {}).get(field)
-             or table.get("name", {}).get(field))
+    named = table.get("name", {}).get(field)
     if named:
         return str(named)
     return field.replace("_", " ")

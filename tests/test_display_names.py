@@ -20,14 +20,37 @@ DERIVED WHERE DERIVATION IS HONEST. Softening underscores is right for most of
 the 189 distinct field names - `pain_site` really is "pain site" - and
 hand-writing those would be a second copy of the field list that goes stale.
 What derivation cannot do is expand an abbreviation or a unit suffix, so those
-33 are registry data, and the gate at the bottom of this file refuses a new
-abbreviated field that has no entry.
+54 are registry data, and the gate at the bottom of this file refuses a name
+built from a word nobody blessed.
 """
 
 from __future__ import annotations
 
 from vitai.api import field_types
-from vitai.schema import ABBREVIATIONS, KEYS, aliases_for, display_name, units
+from vitai.schema import KEYS, PLAIN_WORDS, aliases_for, display_name, units
+
+# Every word the engine is allowed to show a person: the derivation's
+# vocabulary, plus the words its curated names introduce.
+#
+# WRITTEN OUT, not computed from the registry, and that is the whole point.
+# The first version built this half by reading the curated names themselves,
+# which made the allowlist self-defeating: setting `seat_pos = "seat pos"`
+# blessed "pos" on the way past, and the gate that exists to catch exactly
+# that entry waved it through. An allowlist derived from the thing it checks
+# is not an allowlist.
+#
+# Here rather than in `schema` because it is the TEST's question - production
+# only needs to know which words derivation may pass through.
+CURATED_WORDS = frozenset({
+    "100", "active", "as", "average", "band", "bound", "carbohydrate",
+    "content", "derivation", "distance", "duration", "elevation", "energy",
+    "exertion", "fat", "fibre", "g", "gain", "guard", "hash", "heart", "id",
+    "identifier", "in", "lever", "lower", "maximum", "minutes", "of", "out",
+    "pad", "per", "perceived", "position", "power", "precise", "protein",
+    "rate", "reference", "reserve", "rest", "resting", "seat", "sequence",
+    "session", "sodium", "sugar", "trained", "upper", "weight", "with",
+})
+BLESSED = PLAIN_WORDS | CURATED_WORDS
 
 
 def test_the_fields_the_issue_names_read_as_a_person_would_say_them():
@@ -53,13 +76,25 @@ def test_it_is_not_the_first_alias():
 
 
 def test_the_name_is_still_a_word_people_use_for_it():
-    """Not a licence to invent. The display name should be IN the recognition
-    set where that set exists - it is the one the engine would use in its own
-    prose, not a new coinage nobody would say."""
-    for dataset, field in (("daily", "kcal_in"), ("daily", "kcal_out"),
-                           ("daily", "sleep_h"), ("daily", "rhr")):
-        known = aliases_for(field)
-        assert display_name(dataset, field) in known, (field, known)
+    """Not a licence to invent: the display name is the one the engine would
+    use in its own prose, not a new coinage.
+
+    EVERY FIELD WITH ALIASES, not the four I first hand-picked - which all
+    passed, while five others did not. The client printed "maximum heart
+    rate", the athlete typed it back, and the recognition index the same
+    client was given did not contain it. `max_hr`, `kcal`, `elevation_m`,
+    `reps_completed` and `grams` each gained the missing alias."""
+    checked = 0
+    for dataset in KEYS:
+        for field in KEYS[dataset]:
+            known = aliases_for(field)
+            if not known:
+                continue
+            checked += 1
+            assert display_name(dataset, field) in known, (field, known)
+    # A floor, so the test cannot quietly stop checking anything: 33 today,
+    # counted per (dataset, field) since a field can appear in two datasets.
+    assert checked >= 33, checked
 
 
 def test_it_is_not_the_unit_label():
@@ -70,7 +105,7 @@ def test_it_is_not_the_unit_label():
 
 
 def test_a_plain_field_name_is_derived_rather_than_hand_written():
-    """The other 150. A registry entry per field would be a second copy of the
+    """The other 135. A registry entry per field would be a second copy of the
     field list, and the copy is what goes stale."""
     from vitai.vocab import registry
 
@@ -95,31 +130,70 @@ def test_it_reaches_the_published_surface():
 
 # --- the gate ------------------------------------------------------------------
 
-def test_a_field_carrying_an_abbreviation_has_a_curated_name():
+def test_every_published_name_is_made_of_words_somebody_blessed():
     """THE CONTROL THAT MATTERS, because everything above is about today's
     fields and this is about tomorrow's.
 
-    A new field called `power_w` or `vo2_max` would derive to "power w", ship,
-    and read as a typo on the client's screen - the exact failure this issue
-    reports, one field later. So a name carrying a token a person does not say
-    out loud must be in the registry.
+    AN ALLOWLIST, after review killed the denylist with this test's own
+    headline example. The first version listed abbreviations to reject, and
+    `power_w` walked through it: "w" was not on a list built by auditing the
+    fields that already exist. Fourteen of twenty plausible next fields
+    passed. A denylist derived from today's field set is a list of what you
+    already have, and the next field is the only thing a gate is for.
 
-    The check is on the DERIVED form, not on the registry: an entry that
-    happens to restate the derivation still passes, and what fails is a field
-    reaching a person with an abbreviation in it."""
-    from vitai.vocab import registry
+    Now a token must be one somebody decided a person would read. It fails
+    CLOSED: a new field either gets a curated name or its words get added to
+    `PLAIN_WORDS` deliberately.
 
-    curated = registry("units").get("name", {})
+    CHECKED ON THE PUBLISHED NAME, curated or derived. The first version
+    skipped curated fields entirely - `if field in curated: continue` - so
+    changing `seat_pos` to "seat pos" in the registry passed the whole suite,
+    republishing one of the nine defects this PR cites as fixed."""
     offenders = []
     for dataset in KEYS:
         for field in KEYS[dataset]:
-            if field in curated:
-                continue
-            if set(field.split("_")) & ABBREVIATIONS:
-                offenders.append(f"{dataset}.{field} -> {display_name(dataset, field)!r}")
+            shown = display_name(dataset, field)
+            for word in shown.replace(",", " ").split():
+                if word.lower().strip(".") not in BLESSED:
+                    offenders.append(f"{dataset}.{field} -> {shown!r} ({word!r})")
     assert not offenders, (
-        "these would render an abbreviation at a person; add a [name] entry "
-        f"in semantics/units.toml: {sorted(set(offenders))}")
+        "these would show a person a word nothing has blessed. Either add a "
+        "[name] entry in semantics/units.toml, or add the word to "
+        f"schema.PLAIN_WORDS on purpose: {sorted(set(offenders))}")
+
+
+def test_the_gate_would_stop_the_fields_that_walked_through_the_old_one():
+    """Named explicitly, because "it fails closed" is a claim about inputs
+    that do not exist yet and is otherwise untestable."""
+    from vitai.schema import PLAIN_WORDS
+
+    for field in ("power_w", "weight_lb", "hrv_ms", "temp_c", "waist_cm",
+                  "cal_burned", "bp_sys", "one_rm", "ftp_w", "ts_utc"):
+        shown = display_name("sessions", field)
+        assert any(w.lower() not in BLESSED for w in shown.split()), (
+            f"{field} -> {shown!r} would ship unnoticed")
+    assert "w" not in PLAIN_WORDS and "ms" not in PLAIN_WORDS
+
+
+def test_a_curated_name_may_not_restate_the_abbreviation_it_replaces():
+    """The junk-entry hole. Review changed `seat_pos` to "seat pos" in the
+    registry and the full suite stayed green."""
+    from vitai.vocab import registry
+
+    for field, name in registry("units").get("name", {}).items():
+        for word in name.replace(",", " ").split():
+            assert word.lower().strip(".") in BLESSED, (field, name, word)
+
+
+def test_no_two_fields_of_one_dataset_show_the_same_name():
+    """The PR's central argument, asserted. The whole case against
+    `units.label` is that two fields answer "kilocalories" - so a display name
+    that collided would reproduce the defect it exists to remove. It held by
+    luck before this: setting `carb_g = "fat"` passed the whole suite."""
+    for dataset in KEYS:
+        shown = [display_name(dataset, f) for f in KEYS[dataset]]
+        dupes = {n for n in shown if shown.count(n) > 1}
+        assert not dupes, f"{dataset}: {sorted(dupes)}"
 
 
 def test_the_registry_names_no_field_the_engine_does_not_have():
@@ -152,13 +226,17 @@ def test_a_plain_word_field_is_not_replaced_by_a_colloquial_alias():
         assert display_name("daily", field) != sorted(aliases_for(field))[0], field
 
 
-def test_the_abbreviation_list_was_built_by_audit_not_by_memory():
-    """A regression guard on the nine tokens the eyeballed list missed. Each
-    was published at a person before the audit found it."""
-    for token in ("rir", "mg", "pos", "seq", "ref", "op", "deg", "100g", "asof"):
-        assert token in ABBREVIATIONS, token
+def test_the_fields_two_successive_audits_found(tmp_path):
+    """A regression guard on the sixteen fields a token audit caught after my
+    eyeballed list missed them, and the five review caught after the token
+    audit could not - those are real words that are wrong in CONTEXT, which no
+    token check finds. Reading the derived list is the only way."""
     assert display_name("sets", "rir") == "reps in reserve"
     assert display_name("meals", "sodium_mg") == "sodium"
+    assert display_name("sets", "seat_pos") == "seat position"
+    assert display_name("sessions", "with") == "trained with"
+    assert display_name("regimes", "to_date") == "end date"
+    assert display_name("goals", "slug") == "identifier"
 
 
 def test_it_reaches_the_cli_and_the_agent_surface(tmp_path):

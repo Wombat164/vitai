@@ -33,7 +33,9 @@ from vitai.vocab import registry
 # The whole table, hashed, so a change to ANY key of ANY entry has to be
 # deliberate - not just the `ucum` codes, which is all the first version
 # covered.
-PINNED_DIGEST = "d5b1a7ad5cf0b4ca"
+# Updated deliberately at #331, which added the [name] table to the digest's
+# coverage: 54 display names are 54 strings a client prints.
+PINNED_DIGEST = "71ce48e513dba748"
 
 REGISTRY = Path(__file__).resolve().parents[1] / "src" / "vitai" / "semantics" / "units.toml"
 def _numeric_in_the_corpus() -> set[tuple[str, str]]:
@@ -188,6 +190,13 @@ def test_every_entry_is_pinned_so_a_change_has_to_be_deliberate():
         (name, key, str(value))
         for name, entry in table["unit"].items()
         for key, value in entry.items() if key != "aliases")
+    # AND THE DISPLAY NAMES (#331). Same argument the docstring makes for
+    # `label`: these are 54 strings a client actually prints, and a change
+    # from "energy in" to something else should be a deliberate act with a
+    # digest update, not a quiet edit. Review found `seat_pos` could be set
+    # back to "seat pos" with the whole suite green.
+    flat += sorted(("name." + field, "name", str(value))
+                   for field, value in table.get("name", {}).items())
     flat += sorted(
         (f"{dataset}.{field}", key, str(value))
         for dataset, fields in table["override"].items()

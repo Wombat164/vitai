@@ -22,8 +22,11 @@ adds accessors over what the engine already knew.
 - **Derived where derivation is honest, curated where it is not.** Softening
   underscores is right for most of the 189 field names - `pain_site` is "pain
   site" - and hand-writing the rest would be a second copy of the field list.
-  What derivation cannot do is expand an abbreviation, so 49 are registry
-  data, and a gate refuses a new abbreviated field that has none.
+  What derivation cannot do is expand an abbreviation or catch a real word
+  that is wrong in context - `with` is a terrible column heading - so 54 are
+  registry data. The gate is an ALLOWLIST: a published name must be built from
+  words somebody blessed, so a new field fails closed until it gets a name or
+  its words are added on purpose.
 - **A merged row can say which INSTRUMENT supplied which field** (#325,
   contract 42). `provenance` gains `field_origins` beside the `field_sources`
   map contract 40 shipped. They answer different questions and the code has
