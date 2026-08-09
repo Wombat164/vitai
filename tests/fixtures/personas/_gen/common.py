@@ -211,7 +211,13 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # `derived_external` row from this generation on - no persona writes one, so
 # every persona line gains two explicit nulls and a generation stamp, and no
 # value moves.
-AUTHORED_AGAINST_CONTRACT = "41"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #325's `field_origins` (contract 42), and the review the gate
+# demands is recorded rather than implied: every builder was checked for a
+# write to a provenance row or a read of `field_sources`, and there is none -
+# the nine mentions across four builders are all prose. The map is derived
+# from `origin` on raw claims the builders already write, so no line shape
+# moves, no generation stamps, and no persona value changes.
+AUTHORED_AGAINST_CONTRACT = "42"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     # #221: a new dataset, empty for every persona.
     "plans": 1,

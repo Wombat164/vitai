@@ -262,6 +262,22 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
     # Filled below as each field's winner is chosen, so it cannot drift from
     # what the row actually took.
     field_sources: dict[str, str] = {}
+    # AND THE INSTRUMENT, which is what #325's title actually asks and what
+    # `field_sources` cannot answer. `source` is the FEED a value arrived by;
+    # `origin` is the device that observed it, and the two come apart on the
+    # case the issue narrates - a hand-merged console row carrying the watch's
+    # heart rate forward has `source: matrix-console` for a number a Polar
+    # measured. Attributing that number to the console is true of the channel
+    # and false of the instrument, and a consumer rendering "HR 142 (matrix
+    # console)" is stating something no device ever said.
+    #
+    # A SEPARATE MAP RATHER THAN A REPLACEMENT. Both questions are real and a
+    # consumer needs different ones at different times: which feed to re-pull
+    # from, and which device to trust or retire. Most records answer only the
+    # first - `origin` is optional and 57% of the corpus's daily rows carry
+    # none - so folding them would make the answer disappear whenever the
+    # weaker field is absent.
+    field_origins: dict[str, str] = {}
 
     for field in KEYS[dataset]:
         if field in NON_QUANTITY_FIELDS:
@@ -297,6 +313,16 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
         winner_id, winner = witnesses[0]
         canonical[field] = winner[field]
         field_sources[field] = str(winner.get("source") or UNKNOWN_SOURCE)
+        # SILENCE IS NOT AN ENTRY, enforced here as well as in the pruner,
+        # and the two are NOT equivalent - which is why this one needs its own
+        # comment and its own test. The pruner's bucket-skip stops an
+        # origin-less claim being re-attributed to; this stops a field WON by
+        # an origin-less claim from being attributed at all. Without it, a
+        # value the manual line supplied gets handed to whichever single
+        # instrument happens to corroborate it - measured, and it attributed
+        # `type` to a watch, a device "observing" the word "row".
+        if winner.get("origin") and str(winner["origin"]) != UNKNOWN_SOURCE:
+            field_origins[field] = str(winner["origin"])
         # `witnesses` counts INDEPENDENT ORIGINS, not rows (#35/#51). Five
         # rows carrying one watch's reading through five platforms are one
         # witness, and reporting five is the false confidence this exists to
@@ -406,6 +432,7 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
             {str(rec.get("source") or UNKNOWN_SOURCE)
              for _, rec in claims}) > 1:
         canonical["_provenance"]["field_sources"] = dict(field_sources)
+        canonical["_provenance"]["field_origins"] = dict(field_origins)
 
     return canonical, justifications, explanations
 
@@ -506,30 +533,72 @@ def _prune_field_sources(canonical: dict, claims: list[tuple[str, dict]]) -> Non
     meta = canonical.get("_provenance")
     if not isinstance(meta, dict):
         return
-    sources = meta.get("field_sources")
-    if not isinstance(sources, dict):
-        return
-    by_source: dict[str, list[dict]] = {}
-    for _, rec in claims:
-        by_source.setdefault(str(rec.get("source") or UNKNOWN_SOURCE),
-                             []).append(rec)
+    for key, attr in (("field_sources", "source"), ("field_origins", "origin")):
+        named = meta.get(key)
+        if not isinstance(named, dict):
+            continue
+        by_name: dict[str, list[dict]] = {}
+        for _, rec in claims:
+            if attr == "origin" and str(rec.get("origin") or "") in ("", UNKNOWN_SOURCE):
+                # An unstated origin is not a name, and neither is an
+                # explicitly stated `unknown`. `source` defaults to
+                # UNKNOWN_SOURCE because a claim always arrived SOMEHOW;
+                # `origin` is optional, and `provenance.is_independent`
+                # already rules that an unstated OR UNKNOWN origin cannot
+                # count as a witness. Testing falsiness alone let a Takeout-
+                # style `origin: "unknown"` through as a device - naming an
+                # instrument the same row's own `origin` column denies.
+                continue
+            by_name.setdefault(str(rec.get(attr) or UNKNOWN_SOURCE),
+                               []).append(rec)
+        meta[key] = _substantiated(canonical, named, by_name)
+
+
+def _substantiated(canonical: dict, named: dict[str, str],
+                   by_name: dict[str, list[dict]]) -> dict[str, str]:
+    """The attributions the finished row can still show true."""
     kept = {}
-    for field, source in sources.items():
+    for field, name in named.items():
         value = canonical.get(field)
         if value is None:
             continue                    # the row does not hold it after all
-        if any(rec.get(field) == value for rec in by_source.get(source, ())):
-            kept[field] = source
-        else:
-            # A later step took this from somewhere else. Re-attribute it if
-            # exactly one source can account for the value, and say nothing if
-            # more than one can - a coin toss between two claims that agree is
-            # not attribution.
-            owners = {name for name, recs in by_source.items()
-                      if any(rec.get(field) == value for rec in recs)}
-            if len(owners) == 1:
-                kept[field] = owners.pop()
-    meta["field_sources"] = kept
+        if any(rec.get(field) == value for rec in by_name.get(name, ())):
+            kept[field] = name
+            continue
+        # A later step took this from somewhere else. Re-attribute it if
+        # exactly one claimant can account for the value, and say nothing if
+        # more than one can - a coin toss between two claims that agree is not
+        # attribution.
+        #
+        # THAT RULE IS DELIBERATELY NOT APPLIED ABOVE, and I tried to "fix"
+        # that before measuring what it would cost. Where the ladder winner
+        # DOES hold the value, several witnesses agreeing on it is not a coin
+        # toss: the ladder decided, and `explanations.chosen_source` and
+        # `justifications` name the same winner for the same field. Dropping
+        # the attribution there would make this map disagree with the other
+        # two provenance surfaces about who won, to express something they
+        # already express better - corroboration is `independent_sources`, a
+        # contest is `explanations`. This map answers which claimant supplied
+        # the value the row took, and that question has an answer here.
+        owners = {who for who, recs in by_name.items()
+                  if any(rec.get(field) == value for rec in recs)}
+        if len(owners) == 1:
+            kept[field] = owners.pop()
+        # WITNESSED, after a note here claimed it could not be. That note
+        # said sessions bucket by `activity_id`, which is false - they cluster
+        # by TIME OVERLAP (`_same_activity`), and nothing in the resolver
+        # reads `activity_id` at all - #43 settled it as a dedupe key an
+        # IMPORTER can check, which is a different layer. The obstacle was
+        # duller: the
+        # fixtures in this file carry `start_time: "18:00"`, which `parse_time`
+        # cannot read, so the strong test was never available, shape decided,
+        # and three same-type claims tripped the routine guard into staying
+        # separate. With real timestamps three claims merge and the branch
+        # fires on the first try.
+        #
+        # A wrong reason written into the source as doctrine is worse than no
+        # comment, which is the whole argument this change makes elsewhere.
+    return kept
 
 
 # The external identity of a session is a TRIPLE, and its parts are only

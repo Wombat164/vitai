@@ -11,6 +11,33 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **A merged row can say which INSTRUMENT supplied which field** (#325,
+  contract 42). `provenance` gains `field_origins` beside the `field_sources`
+  map contract 40 shipped. They answer different questions and the code has
+  always said so: `source` is the FEED a value arrived by, `origin` is the
+  device that observed it. A consumer rendering "HR 142 (Polar watch)" needs
+  the second and had only the first, which says `polar` - the platform.
+- **What it does NOT fix, and the residual is real.** #325 narrates a
+  hand-merged console row carrying a watch's heart rate forward.
+  `field_sources` attributes that number to the console; `field_origins`
+  attributes it to the rower, which is wrong in the same way. Two claims
+  assert different instruments for one value and the engine cannot ADJUDICATE
+  which is right - a hand-merged row is not a less-trusted witness, it is an
+  ordinary claim making a false assertion. Where the row went in by
+  SUPERSEDING, the retired line is dropped before resolution and no map is
+  published at all, though the append-only file keeps it forever. Recovering
+  that means comparing a correction against the line it retires at WRITE time,
+  which is a laundering detector rather than an attribution map. Written as
+  two lines, one per instrument, the same two instruments resolve correctly.
+- **A merge where nobody names an instrument publishes an EMPTY map**, 129 of
+  the corpus's 1557 merge rows. A non-merged row has no map at all; the
+  difference says "this row is a merge and none of its writers said what
+  observed it", which is a prompt to fix the connector.
+- **A claim that names no instrument contributes no entry.** `field_sources`
+  falls back to `unknown` because a claim always arrived somehow; silence
+  about a device must not become a device that can be attributed to. Nor does
+  an EXPLICIT `unknown`, which is a legal stated origin - `is_independent`
+  already rules that an unstated or unknown origin cannot count as a witness.
 - **A weekly figure over an unfinished day says so** (#186, contract 41).
   `daily.coverage` has carried `full | partial | manual` since generation 2,
   been validated all along, and been read by nothing - so a nutrition export
