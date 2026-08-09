@@ -197,6 +197,76 @@ class Vitai:
         return coarse(name, append(self.root / "data", name, record,
                                    device=self.config.device))
 
+    def undated_policy(self, on: date | str | None = None) -> dict:
+        """Threshold keys the toml sets and the record has no dated row for.
+
+        THE HALF OF #148 THAT `policy_digest` ONLY MADE DETECTABLE. `as_of`
+        reconstructs the record at an instant by filtering on `recorded_at`,
+        which is right for everything the record HOLDS. Thresholds live in
+        `vitai.toml`, outside the append-only record: dated `thresholds` rows
+        overlay it per week, and a week with no row is judged by whatever the
+        file says TODAY. So editing a floor in September silently re-judges
+        every earlier week that lacked an explicit row, and a reconstruction of
+        March returns March's data under September's policy.
+
+        Measured on the shipped corpus rather than argued: 225 judged weeks
+        across three personas, and not one dated threshold row anywhere. The
+        gap is total, not partial.
+
+        Returns `{key: value}` for the keys in that state - the ones a
+        consumer is being handed a verdict about whose standard has no history.
+        """
+        from .config import THRESHOLD_TYPES
+        from .policy import state as policy_state
+
+        when = _viewpoint(on) if on is not None else self.on
+        held = policy_state(self.dataset("goals"), self.dataset("thresholds"),
+                            when).thresholds
+        cfg = self.config
+        return {key: getattr(cfg, key) for key in THRESHOLD_TYPES
+                if getattr(cfg, key, None) is not None and key not in held}
+
+    def pin_policy(self, on: date | str | None = None,
+                   reason: str = "pinned from vitai.toml") -> list[dict]:
+        """Give the toml's current thresholds the dated history data already has.
+
+        Appends one `thresholds` row per key from `undated_policy`, so
+        `policy.state` becomes total from that date and a later edit to the
+        file stops reaching backwards through the record.
+
+        EXPLICIT, NEVER A BUILD SIDE EFFECT, and that is the whole reason this
+        is a verb rather than something `build` does when it notices a change.
+        The engine writes to the record only when asked - `assert_delivery` is
+        the precedent - and a build that quietly appended to the athlete's
+        files would make `vitai build` unrepeatable and put the engine's own
+        opinion into a record that is supposed to be theirs.
+
+        IT PINS FORWARD AND NEVER BACKWARDS. The rows are dated `on`, which
+        defaults to the record's own horizon, and they say nothing about what
+        the thresholds were before that. Backfilling them would be inventing a
+        history: the toml has no past, which is the defect, and writing one
+        from its present state would bury the defect under a fabrication that
+        looks exactly like a record.
+
+        `set_by` is `athlete`, because the file is theirs and this only moves
+        what it already says into a place that can be dated.
+        """
+        when = _viewpoint(on) if on is not None else self.on
+        pending = self.undated_policy(when)
+        if not pending:
+            return []
+        return self.append_many("thresholds", [
+            {"date": when.isoformat(), "key": key, "value": value,
+             # `change`, and it costs no false churn: `undated_policy`
+             # returns only keys with NO dated row, so a pinned line is the
+             # first in its chain, and `_edits` diffs consecutive lines with
+             # the declaration excluded. Nothing reads it as the athlete
+             # changing their mind, because they did not - the record goes
+             # from saying nothing to saying what the file already said.
+             "change_kind": "change", "set_by": "athlete",
+             "reason": reason}
+            for key, value in sorted(pending.items())])
+
     def append_many(self, name: str, records: list[dict]) -> list[dict]:
         """Append many rows in one pass - what a bulk import should call.
 
@@ -2205,6 +2275,18 @@ class Vitai:
                 "advisories": report["advisories"],
                 "last_seen": last_seen,
                 "channels": channels,
+                # THE STANDARD WITH NO HISTORY (#148). Every threshold here is
+                # one the toml sets and the record has never dated, so every
+                # verdict against it - including one reconstructed for a week
+                # two years ago - was judged by the file as it is right now.
+                # Editing it re-judges that history silently.
+                #
+                # Reported beside what is stale and what is missing, because
+                # that is what it is: `policy_digest` made the difference
+                # detectable and this says which keys it applies to. `vitai
+                # pin-policy` is the remedy, and it pins forward only.
+                "undated_policy": section(
+                    "undated_policy", lambda: self.undated_policy(when), {}),
                 "duplicate_captures": self.duplicate_captures(),
                 "conservation": self.conservation(),
                 "retracted": self.retractions(),

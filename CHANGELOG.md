@@ -11,6 +11,20 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **`situation` names the thresholds with no history** (#148, the half
+  `policy_digest` only made detectable). `as_of` reconstructs the record by
+  filtering on `recorded_at`, which is right for everything the record holds -
+  and thresholds live in `vitai.toml`, outside it. A week with no dated row is
+  judged by whatever the file says today, so editing a floor in September
+  silently re-judges every earlier week that lacked one, reconstructions
+  included. Measured on the shipped corpus: 225 judged weeks across three
+  personas, and not one dated threshold row anywhere.
+- **`vitai pin-policy`**, which gives the toml's thresholds the dated history
+  the data already has. Explicit, never a build side effect: the engine writes
+  to the record only when asked. It pins FORWARD only - the toml has no past,
+  which is the defect, and writing one from its present state would bury that
+  under a fabrication indistinguishable from a record.
+
 - **Units and aliases are published, in UCUM** (#310). `vitai schema --json`
   now carries `units` and `aliases` per field beside `types`, `affinity`,
   `sensitivity` and `coarse_companion`. A client was hand-maintaining both:

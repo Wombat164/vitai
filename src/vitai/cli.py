@@ -223,6 +223,38 @@ def cmd_goals(args: argparse.Namespace) -> None:
                   f"{e['before']:g} -> {e['after']:g} after a miss ({why})")
 
 
+def cmd_pin_policy(args: argparse.Namespace) -> None:
+    """Give the toml's thresholds the dated history the data already has (#148).
+
+    `as_of` reconstructs the record at an instant by filtering on
+    `recorded_at`, which is right for everything the record holds. Thresholds
+    live in `vitai.toml`, outside it: a week with no dated row is judged by
+    whatever the file says today, so editing a floor in September re-judges
+    every earlier week that lacked one - silently, and including reconstructions.
+
+    `--dry-run` lists the keys in that state and writes nothing, which is what
+    `situation`'s `undated_policy` reports. Without it, one row per key is
+    appended, dated the record's own horizon.
+
+    IT PINS FORWARD ONLY. The toml has no past - that is the defect - and
+    writing one from its present state would bury the defect under a
+    fabrication that reads exactly like a record.
+    """
+    v = Vitai(_root(args))
+    pending = v.undated_policy()
+    if not pending:
+        print("every configured threshold already has a dated row.")
+        return
+    if args.dry_run:
+        for key, value in sorted(pending.items()):
+            print(f"{key} = {value}   (no dated row; judged by vitai.toml today)")
+        print(f"\n{len(pending)} key(s). Run without --dry-run to pin them "
+              f"from {v.on.isoformat()}.")
+        return
+    for row in v.pin_policy(reason=args.reason):
+        print(json.dumps(row))
+
+
 def cmd_append(args: argparse.Namespace) -> None:
     """Append a JSON object to a dataset, with the clocks stamped for you.
 
@@ -1441,6 +1473,8 @@ def main(argv: list[str] | None = None) -> None:
         ("goals", cmd_goals, "active goals: progress, dates, contributions, flagged edits"),
         ("append", cmd_append,
          "append JSONL rows from stdin, stamping recorded_at and _gen"),
+        ("pin-policy", cmd_pin_policy,
+         "date the toml's thresholds into the record so history stops moving"),
         ("dataset", cmd_dataset,
          "one dataset's live rows, with supersedes already applied (#258)"),
         ("derived", cmd_derived,
@@ -1508,6 +1542,11 @@ def main(argv: list[str] | None = None) -> None:
         if name == "infer":
             p.add_argument("--dry-run", action="store_true",
                            help="print validated inferences without appending")
+        if name == "pin-policy":
+            p.add_argument("--dry-run", action="store_true",
+                           help="list the undated thresholds and write nothing")
+            p.add_argument("--reason", default="pinned from vitai.toml",
+                           help="why these were dated, recorded on each row")
         if name == "check":
             p.add_argument("--date", required=True, metavar="YYYY-MM-DD")
             p.add_argument("--metric", required=True,
