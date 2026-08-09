@@ -11,6 +11,22 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **A mean now says over how many days** (#93, ask 2). Contract 29 added
+  `window_days` because "a statistic with no stated population is half an
+  answer and the missing half is the misleading one". That was the
+  denominator. `verdicts` gains `observed_days`, the numerator - and the
+  shipped corpus turns out to publish a weekly sleep average built from ONE
+  logged night, judged against a floor, rendering exactly like a week of
+  seven. In the rollup, three logged step days out of seven printed as "Steps
+  12,000/day avg - floor met" with a coverage line underneath saying "daily:
+  7", which actively reinforced the wrong reading; it now says "over 3 of the
+  last 7 days".
+- **No threshold came with it**, and that is the part most likely to be added
+  later. The engine does not decide how thin is too thin - that number would
+  have no published basis, and this repo has been bitten twice by cutoffs it
+  invented. It states the fraction and lets the reader judge. A test refuses
+  any branch on the count.
+
 - **`situation` names the thresholds with no history** (#148, the half
   `policy_digest` only made detectable). `as_of` reconstructs the record by
   filtering on `recorded_at`, which is right for everything the record holds -

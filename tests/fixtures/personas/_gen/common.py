@@ -211,7 +211,7 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # `derived_external` row from this generation on - no persona writes one, so
 # every persona line gains two explicit nulls and a generation stamp, and no
 # value moves.
-AUTHORED_AGAINST_CONTRACT = "38"  # vitai.db.CONTRACT_VERSION is a string
+AUTHORED_AGAINST_CONTRACT = "39"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     # #221: a new dataset, empty for every persona.
     "plans": 1,

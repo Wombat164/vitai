@@ -262,7 +262,8 @@ def _row(week: str, metric: str, value: float | None, target: float | None,
          verdict: str, goal: str | None = None,
          reason: str | None = None, due: str | None = None,
          statistic: str | None = None,
-         window_days: int | None = None) -> dict:
+         window_days: int | None = None,
+         observed_days: int | None = None) -> dict:
     # A reason is REQUIRED with a refusal and forbidden without one, so a new
     # refusal site cannot ship unlabelled and a judged row cannot carry a
     # reason nobody asked for. This is the totality the issue asks for, held
@@ -333,7 +334,24 @@ def _row(week: str, metric: str, value: float | None, target: float | None,
             "value": round(value, 3) if value is not None else None,
             "target": target, "verdict": verdict, "goal": goal,
             "reason": reason, "due": due, "statistic": statistic,
-            "window_days": window_days, "answers": answers}
+            "window_days": window_days,
+            # HOW MANY OF THOSE DAYS THE RECORD ACTUALLY HELD (#93, ask 2).
+            # `window_days` is the denominator a reader ASSUMES; this is the
+            # numerator, and without it "steps 12,000/day average over 7 days"
+            # is indistinguishable from an average of one Tuesday. A floor met
+            # on three logged days of seven is a different and much weaker
+            # claim than a floor met on seven, and the row said the same thing
+            # for both.
+            #
+            # A SECOND FIELD RATHER THAN A NARROWER VERDICT, which is the shape
+            # #177 and #189 already settled here: the verdict answers one
+            # question, and a consumer that ignores this degrades to exactly
+            # today's behaviour rather than breaking on a widened vocabulary.
+            # And NO THRESHOLD - the engine does not decide how thin is too
+            # thin, because that number would have no basis and this project
+            # has been bitten by hand-rolled cutoffs before (G85). It reports
+            # the denominator and lets the reader judge.
+            "observed_days": observed_days, "answers": answers}
 
 
 def _awaiting(rows: list[dict], field: str, week: str,
@@ -521,7 +539,7 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
         aim, goal = _target_for(goals_for[wk], "easy_hr", float(cap))
         rows.append(_row(wk, "easy_hr", avg, aim,
                          ON if avg <= aim else BEHIND, goal,
-                         statistic=AVERAGE))
+                         statistic=AVERAGE, observed_days=len(hrs)))
 
     # --- daily floors/gates, weekly aggregated ------------------------------
     daily_by_week: dict[str, list[dict]] = defaultdict(list)
@@ -542,7 +560,8 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
                                         float(eff.steps_floor))
                 rows.append(_row(wk, "steps", avg, aim,
                                  ON if avg >= aim else BEHIND, goal,
-                                 statistic=AVERAGE))
+                                 statistic=AVERAGE,
+                                 observed_days=len(steps)))
         if eff.sleep_floor_h is not None:
             sleeps = [d["sleep_h"] for d in days if d.get("sleep_h") is not None]
             if sleeps:
@@ -551,7 +570,8 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
                                         float(eff.sleep_floor_h))
                 rows.append(_row(wk, "sleep", avg, aim,
                                  ON if avg >= aim else BEHIND, goal,
-                                 statistic=AVERAGE))
+                                 statistic=AVERAGE,
+                                 observed_days=len(sleeps)))
         if eff.pain_gate is not None:
             # `pain` after the gen-2 generalization. The comment here used to
             # say old lines arrive already mapped by `canonical_daily` and the
@@ -579,7 +599,8 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
                 avg = mean(rhrs)
                 rows.append(_row(wk, "rhr", avg, float(eff.rhr_baseline + 5),
                                  ON if avg <= eff.rhr_baseline + 5 else BEHIND,
-                                 _goal_for(active, "rhr"), statistic=AVERAGE))
+                                 _goal_for(active, "rhr"), statistic=AVERAGE,
+                                 observed_days=len(rhrs)))
 
     # Safety floors that need no configuration (G68). Every rule above is
     # opt-in: it produces nothing until the athlete sets a threshold. That is

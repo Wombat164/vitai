@@ -30,6 +30,29 @@ MAX_RATE_SPAN_DAYS = 14
 COLD_SPAN_DAYS = 9
 
 
+def over_days(observed: int, window: int) -> str:
+    """" over 3 of the last 7 days", or "" where the window is complete (#93).
+
+    A MEAN WITH NO STATED POPULATION READS AS A CLAIM ABOUT THE WINDOW. "Steps
+    12,000/day avg - floor met" over a week the athlete logged three times is
+    a floor met on three days, rendered identically to a floor met on seven -
+    and the coverage line below it, saying "daily: 7", actively reinforces the
+    wrong reading.
+
+    SILENT WHEN COMPLETE, because a phrase on every line is a phrase nobody
+    reads, and the marked minority is legible precisely because the unmarked
+    majority is quiet.
+
+    NO THRESHOLD AND NO ADJECTIVE. It does not say "sparse" or "thin" or
+    decline below some count: the engine has no published basis for where thin
+    begins, and this repo has been bitten twice by cutoffs it invented. It
+    states the fraction and stops.
+    """
+    if observed >= window or observed <= 0:
+        return ""
+    return f" over {observed} of the last {window} days"
+
+
 def within_days(rows: list[dict], today: date, days: int,
                 field: str) -> list[dict]:
     """Rows carrying `field`, within `days` CALENDAR days of `today` (G30).
@@ -413,7 +436,8 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
     if cfg.sleep_floor_h is not None:
         sleeps = [r["sleep_h"] for r in within_days(daily, today, 7, "sleep_h")]
         if sleeps and mean(sleeps) < cfg.sleep_floor_h:
-            alerts.append(f"**Sleep {mean(sleeps):.1f}h avg** - under the "
+            alerts.append(f"**Sleep {mean(sleeps):.1f}h avg"
+                          f"{over_days(len(sleeps), 7)}** - under the "
                           f"{cfg.sleep_floor_h:.0f}h floor")
     if cfg.steps_floor is not None:
         steps = [r["steps"] for r in within_days(daily, today, 7, "steps")]
@@ -421,7 +445,8 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
             avg = mean(steps)
             met = avg >= cfg.steps_floor
             verdict = "floor met" if met else f"below the {cfg.steps_floor:,} floor"
-            alerts.append(f"Steps {avg:,.0f}/day avg - {verdict}")
+            alerts.append(f"Steps {avg:,.0f}/day avg"
+                          f"{over_days(len(steps), 7)} - {verdict}")
     skipped = sum(unreadable_dates(daily, today, f)
                   for f in ("rhr", "sleep_h", "steps", "pain"))
     if skipped:
