@@ -19,13 +19,19 @@ adds accessors over what the engine already knew.
   "resting heart rate" means `rhr`. The second failed silently - a question
   naming a forgotten metric matched no topic and fell through to a standing
   fact pack.
-- **Four kinds of answer, because fewer would force a lie.** A `ucum` code; a
-  named ordinal `scale`, because a 7 on the Borg scale is not seven of
-  anything; `unit_of`, where the unit belongs to another field (a goal's
-  target is in the units of its metric); and `scale_of`, where the row names
-  its own scale. A field with no quantity says `{}` rather than an empty unit.
+- **Six kinds of answer, because fewer forced a lie.** A `ucum` code;
+  `unit_of` where the unit belongs to another field (a goal's target is in the
+  units of its metric); `scale_of` where the row names its own scale;
+  `unit_in` where the row names the unit itself (`sets.load` is kilograms on a
+  barbell and a pin position on a machine stack, which is not a mass);
+  `machine_scoped` for an ordinal on one manufacturer's scale; and `ordinal`
+  for a position that indexes rather than measures. Plus `unstated`, for a
+  check whose slug is athlete-invented and whose quantity nothing knows.
 - **A classification gate**, the shape #299 used for sensitivity: a numeric
-  field with no entry fails the build rather than arriving unlabelled.
+  field with no entry fails the build. Built from the shipped corpus rather
+  than from `schema._TYPES`, because `_TYPES` has no entry for any of the
+  fourteen numbers on `sets` - so a gate reading it walked past `load`, the
+  one a strength client most needs.
 
 ### Changed
 

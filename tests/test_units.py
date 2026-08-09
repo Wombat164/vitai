@@ -20,6 +20,7 @@ conversion would be a claim about the world.
 
 from __future__ import annotations
 
+import json
 import tomllib
 from pathlib import Path
 
@@ -29,10 +30,45 @@ from vitai.api import field_types
 from vitai.schema import KEYS, aliases_for, units
 from vitai.vocab import registry
 
+# The whole table, hashed, so a change to ANY key of ANY entry has to be
+# deliberate - not just the `ucum` codes, which is all the first version
+# covered.
+PINNED_DIGEST = "d9db586651825725"
+
 REGISTRY = Path(__file__).resolve().parents[1] / "src" / "vitai" / "semantics" / "units.toml"
-NUMERIC = {(ds, f) for ds, fields in field_types().items()
-           for f, spec in fields.items()
-           if spec["types"] and set(spec["types"]) & {"integer", "number"}}
+def _numeric_in_the_corpus() -> set[tuple[str, str]]:
+    """Every (dataset, field) that actually holds a number in a shipped record.
+
+    NOT `spec["types"]`, which is where the first gate looked and is why it
+    silently skipped all fourteen numeric fields on `sets` plus
+    `artifacts.bytes`: `schema._TYPES` has no entry for them, so they publish
+    `types: null` and a check for "numeric" walked straight past. A strength
+    client reading `load` got nothing at all - the reported failure, in the
+    dataset it most concerns. Reading the corpus cannot make that mistake,
+    because a number in a file is a number whatever the type table says.
+    """
+    root = Path(__file__).resolve().parent
+    seen: set[tuple[str, str]] = set()
+    paths = list((root / "fixtures" / "personas").glob("*/data/*.jsonl"))
+    paths += list((root.parent / "examples" / "demo" / "data").glob("*.jsonl"))
+    for path in paths:
+        dataset = path.stem
+        if dataset not in KEYS:
+            continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            for field, value in json.loads(line).items():
+                if (isinstance(value, (int, float)) and not isinstance(value, bool)
+                        and field in KEYS[dataset]):
+                    seen.add((dataset, field))
+    return seen
+
+
+DECLARED = {(ds, f) for ds, fields in field_types().items()
+            for f, spec in fields.items()
+            if spec["types"] and set(spec["types"]) & {"integer", "number"}}
+NUMERIC = DECLARED | _numeric_in_the_corpus()
 
 
 # --- the gate -----------------------------------------------------------------
@@ -45,14 +81,19 @@ def test_every_number_the_engine_holds_says_what_it_is_in():
     missing = sorted(f"{ds}.{f}" for ds, f in NUMERIC if not units(ds, f))
     assert not missing, (
         f"{missing} are numeric and say nothing about their units. Add an entry "
-        "to semantics/units.toml: a `ucum` code, a named `scale`, or a "
-        "`unit_of`/`scale_of` naming the field that decides it.")
+        "to semantics/units.toml: a `ucum` code, a `unit_of`/`scale_of`/"
+        "`unit_in` naming the field that decides it, or `machine_scoped` / "
+        "`ordinal` / `unstated` where there is no unit to give.")
+    assert len(NUMERIC) > len(DECLARED), (
+        "the gate must read the corpus as well as the type table - reading "
+        "only the table is what let all of `sets` through")
 
 
 def test_each_entry_gives_exactly_one_answer():
     """Four kinds, and a field must pick one. Two would mean the table
     disagreed with itself; none would mean the entry exists and says nothing."""
-    kinds = {"ucum", "scale", "unit_of", "scale_of"}
+    kinds = {"ucum", "unit_of", "scale_of", "unit_in", "machine_scoped",
+             "ordinal", "unstated"}
     for dataset in KEYS:
         for field in KEYS[dataset]:
             spec = units(dataset, field)
@@ -70,6 +111,30 @@ def test_a_field_with_no_quantity_says_nothing_rather_than_something_empty():
     for dataset, field in (("daily", "note"), ("daily", "date"),
                            ("sessions", "type"), ("weight", "source")):
         assert units(dataset, field) == {}, f"{dataset}.{field}"
+
+
+def test_following_a_reference_lands_somewhere(tmp_path):
+    """A POINTER TO NOTHING IS WORSE THAN SILENCE, because `{}` also means "not
+    a quantity" - so a consumer cannot tell a dead reference from a field that
+    has no unit, and the first version shipped three dead ones.
+
+    `thresholds.value -> key` resolved for ZERO shipped rows: the six
+    registered keys are not field names. `measurements.value -> kind` resolved
+    for one of eight legal kinds. Both are now entries in the table, so
+    following the pointer arrives.
+    """
+    from vitai.policy import THRESHOLD_METRIC
+    from vitai.schema import MEASUREMENT_KINDS
+
+    def resolves(name):
+        return any(units(ds, name) for ds in KEYS)
+
+    for kind in MEASUREMENT_KINDS:
+        if kind == "other":
+            continue           # deliberately open, and says so by its name
+        assert resolves(kind), f"measurements.kind={kind!r} points at nothing"
+    for key in THRESHOLD_METRIC:
+        assert resolves(key), f"thresholds.key={key!r} points at nothing"
 
 
 def test_a_reference_names_a_field_that_exists_in_that_dataset():
@@ -98,7 +163,7 @@ def test_a_named_scale_is_one_the_scale_registry_knows():
 
 # --- what the codes are -------------------------------------------------------
 
-def test_the_units_are_pinned_so_a_change_has_to_be_deliberate():
+def test_every_entry_is_pinned_so_a_change_has_to_be_deliberate():
     """A FIELD'S UNIT IS IMMUTABLE, and this is the control on that rule.
 
     The issue's comment proposed a table keyed by (field, generation), so old
@@ -107,34 +172,33 @@ def test_the_units_are_pinned_so_a_change_has_to_be_deliberate():
     shipped fixtures and defaults to 1; it is not a column in the read model,
     so a consumer holding a row cannot look it up; and `_carry_meta` takes the
     MAXIMUM across merged claims, so a row assembled from two generations
-    reports the newer.
+    reports the newer. So the rule is stronger and needs no key: the unit never
+    changes, and changing what a field holds is a NEW FIELD.
 
-    So the rule is stronger and needs no key: the unit never changes, and
-    changing what a field holds is a NEW FIELD - which the retirement register
-    (#309) already exists to record. This pin is what makes that enforceable.
+    EVERY KEY, not just `ucum`, which is what the first version pinned. That
+    left two holes a mutation walked straight through: `hip_pain`'s `scale_of`
+    could be repointed at `mood_scale` with the whole suite green, and any
+    `label` could be changed from "kilograms" to "pounds" while the code stayed
+    `kg` - and the label is the string a client actually prints beside the
+    number. "Printing kilometres as seconds", one key over.
     """
-    pinned = {
-        "kg": "kg", "kg_lo": "kg", "kg_hi": "kg",
-        "grams": "g", "grams_lo": "g", "grams_hi": "g",
-        "distance_km": "km", "duration_s": "s", "active_min": "min",
-        "sleep_h": "h", "elevation_m": "m",
-        "steps": "{steps}",
-        "rhr": "/min", "avg_hr": "/min", "max_hr": "/min", "cadence": "/min",
-        "avg_power": "W",
-        "kcal": "kcal_th", "kcal_in": "kcal_th", "kcal_out": "kcal_th",
-        "protein_g": "g", "fat_g": "g", "carb_g": "g", "fibre_g": "g",
-        "sugar_g": "g", "sodium_mg": "mg",
-        "kcal_100g": "kcal_th/(100.g)", "protein_100g": "g/(100.g)",
-        "fat_100g": "g/(100.g)", "carb_100g": "g/(100.g)",
-        "fibre_100g": "g/(100.g)", "sugar_100g": "g/(100.g)",
-        "sodium_mg_100g": "mg/(100.g)",
-        "body_fat_pct": "%", "body_fat_lo": "%", "body_fat_hi": "%",
-        "guard_pct": "%", "confidence": "1",
-    }
-    table = registry("units")["unit"]
-    actual = {name: entry["ucum"] for name, entry in table.items()
-              if "ucum" in entry}
-    assert actual == pinned
+    import hashlib
+    table = registry("units")
+    flat = sorted(
+        (name, key, str(value))
+        for name, entry in table["unit"].items()
+        for key, value in entry.items() if key != "aliases")
+    flat += sorted(
+        (f"{dataset}.{field}", key, str(value))
+        for dataset, fields in table["override"].items()
+        for field, entry in fields.items()
+        for key, value in entry.items() if key != "aliases")
+    digest = hashlib.sha256(repr(sorted(flat)).encode()).hexdigest()[:16]
+    assert digest == PINNED_DIGEST, (
+        f"the units table changed: {digest}\n"
+        "If a UNIT changed, that is a new field, not an edit - retire the old "
+        "one through `KEY_RETIREMENT` and give the new one its own name. If a "
+        "label or a reference changed, update PINNED_DIGEST deliberately.")
 
 
 def test_a_count_is_not_a_length_in_disguise():
@@ -146,12 +210,19 @@ def test_a_count_is_not_a_length_in_disguise():
 
 
 def test_an_ordinal_score_is_not_given_a_unit():
-    """A 7 on the Borg scale is not seven of anything. A unit here would invite
-    the arithmetic that turns an ordinal into a fake ratio - the mean of two
-    RPEs is not an RPE."""
-    rpe = units("sessions", "rpe")
-    assert "ucum" not in rpe
-    assert rpe["scale"] == "borg-cr10"
+    """A 7 on the Borg scale is not seven of anything, so no unit - and no
+    fixed SCALE either, which the first version got wrong.
+
+    `rpe_scale` exists on both sessions and sets (#246) and its contract is
+    that absent means unstated and no reader may invent a denominator: a
+    stored 7 is "quite light" on Borg 6-20 and "very hard" on CR10. Naming
+    CR10 here published one of those as fact for every row of both datasets,
+    including a vendor import saying the other."""
+    for dataset in ("sessions", "sets"):
+        rpe = units(dataset, "rpe")
+        assert "ucum" not in rpe, dataset
+        assert "scale" not in rpe, dataset
+        assert rpe["scale_of"] == "rpe_scale", dataset
 
 
 def test_a_scale_the_row_names_itself_is_not_restated_here():
@@ -178,7 +249,12 @@ def test_one_name_meaning_three_things_is_resolved_per_dataset():
     its meaning."""
     assert units("measurements", "value")["unit_of"] == "kind"
     assert units("thresholds", "value")["unit_of"] == "key"
-    assert units("checks", "value")["unit_of"] == "slug"
+    # A check's slug is athlete-invented and nothing knows what it measures, so
+    # this is NOT a reference: `unit_of` would send a consumer to look up a
+    # name that is not a field, and it would get `{}` - which also means "not a
+    # quantity", so a dead pointer and a non-quantity are indistinguishable.
+    assert "unit_of" not in units("checks", "value")
+    assert units("checks", "value")["unstated"]
 
 
 # --- the English half ----------------------------------------------------------
@@ -216,6 +292,44 @@ def test_no_alias_is_a_field_name_belonging_to_something_else():
     for name, entry in registry("units")["unit"].items():
         for alias in entry.get("aliases") or []:
             assert alias == name or alias not in every, f"{alias!r} on {name}"
+
+
+def test_no_alias_collides_with_another_registry():
+    """THE TESTS THAT SHIPPED FIRST WERE BLIND TO EVERY OTHER VOCABULARY, and
+    real collisions were in the file: "climbing" was an alias of `elevation_m`
+    and also of the `climb` session type, "walking" was an alias of `steps` and
+    also of the `walk` type AND of an activity class the restriction vocabulary
+    reads, and "scale" was an alias of `kg`, a live `weight.source` value, and
+    the word this file's own ordinal machinery uses.
+
+    A router keyed on these hits a name that means an activity, which is the
+    silent mis-routing this entry exists to stop - and for the restriction
+    vocabulary it reaches the curated gate side, which #56 keeps deliberately
+    separate."""
+    from vitai.vocab import activity_classes
+
+    taken: dict[str, str] = {}
+    for slug, entry in registry("session_types")["types"].items():
+        taken[slug] = "a session type"
+        for alias in entry.get("aliases") or []:
+            taken[alias] = f"an alias of session type {slug}"
+    for cls in activity_classes():
+        taken[cls] = "an activity class the restriction vocabulary reads"
+    for slug in registry("scales")["scales"]:
+        taken[slug] = "a named scale"
+
+    for name, entry in registry("units")["unit"].items():
+        for alias in entry.get("aliases") or []:
+            assert alias not in taken, (
+                f"{alias!r} on {name} is already {taken[alias]}")
+
+
+def test_an_override_never_carries_aliases_that_would_be_dropped():
+    """`aliases_for` reads the `unit` table only, so an alias written into an
+    override would be silently ignored."""
+    for dataset, fields in registry("units")["override"].items():
+        for field, entry in fields.items():
+            assert "aliases" not in entry, f"{dataset}.{field}"
 
 
 # --- and it reaches a consumer -------------------------------------------------
@@ -281,9 +395,30 @@ def test_the_table_holds_nothing_a_conversion_could_be_built_from():
             yield node
 
     table = registry("units")
-    numbers = [v for v in leaves({k: v for k, v in table.items()
-                                  if k != "version"})
-               if isinstance(v, (int, float)) and not isinstance(v, bool)]
+    def numeric(value):
+        if isinstance(value, bool):
+            return False
+        if isinstance(value, (int, float)):
+            return True
+        # A FACTOR IN QUOTES IS STILL A FACTOR. The first version checked the
+        # type, so `si = "4.184"` passed it and the banned-words test too.
+        try:
+            float(str(value))
+        except ValueError:
+            return False
+        return True
+
+    # `ucum` is exempt: `1` is UCUM's own code for a plain ratio, and a CODE
+    # is never a factor. Everything else in the table must be unarithmetic.
+    def strip_codes(node):
+        if isinstance(node, dict):
+            return {k: strip_codes(v) for k, v in node.items() if k != "ucum"}
+        if isinstance(node, list):
+            return [strip_codes(v) for v in node]
+        return node
+
+    numbers = [v for v in leaves(strip_codes(
+        {k: v for k, v in table.items() if k != "version"})) if numeric(v)]
     assert not numbers, numbers
 
 
