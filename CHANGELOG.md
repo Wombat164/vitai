@@ -55,6 +55,15 @@ adds accessors over what the engine already knew.
 
 ### Fixed
 
+- **The ordering rule was pinned where it is defined and nowhere it is used.**
+  `clocks.order_key` is doctrine - order on valid time, keep transaction time
+  separate, never trust the order lines sit in - and eight readers depend on
+  it. Replacing it with a constant, so a stable sort keeps arrival order, left
+  2258 of 2264 tests passing: four failures in its own unit tests and two added
+  with the protocol seam. Every reader that decides something with it - which
+  threshold is in force, which goal, which line is current for an identity -
+  had no witness. Now twelve fail, at the use sites.
+
 - **`disagreed` read only the runner-up** (#94, ask 4). `_merge_fields`
   records `discarded` over every losing claim - widened for #73, with the
   comment saying so - and recorded `disagreed` two lines below it from the
