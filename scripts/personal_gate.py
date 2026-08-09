@@ -38,13 +38,44 @@ DENY_HASHES = {
     "ff7efa9ab15c1f6cc542f89ebff56191efc89872db51721f98f5105fee03122f",
 }
 
-TEXT_EXT = {".py", ".md", ".toml", ".yml", ".yaml", ".svg", ".txt", ".json",
-            ".jsonl", ".ts", ".cfg", ".ini", "",
-            # Track files were never opened (#64). A GPX is the single most
-            # home-locating artifact this project produces - a few hundred
-            # timestamped coordinates starting at the athlete's front door -
-            # and the gate skipped it on the suffix check.
-            ".gpx", ".tcx", ".fit", ".csv"}
+# WHAT IS NOT READ, rather than what is (#312).
+#
+# This was an ALLOWLIST of text suffixes, and it was surprised twice by the
+# same mechanism. First track files, which the file's own comment records: "a
+# GPX is the single most home-locating artifact this project produces ... and
+# the gate skipped it on the suffix check". Then native mobile sources - a
+# client repo began tracking `.java` and `.gradle` files carrying a private
+# package namespace in `package` and `applicationId` declarations, and the
+# gate caught the literal in `.gitignore` (extensionless, so in the list) and
+# admitted it in the sources themselves. It reported clean afterwards.
+#
+# An allowlist is a list of the file types somebody had thought of, and the
+# next one arrives the same way both of these did. So the rule is inverted:
+# everything tracked is read unless it is known to be binary. A new file type
+# is now scanned by default and the failure mode is noise rather than a
+# silent hole - and `.gradle`, `.kt`, `.swift` and `.properties`, which is
+# where package names, bundle identifiers, signing configs, keystore paths
+# and developer account names live, are covered without naming them.
+BINARY_EXT = {
+    # Images and fonts.
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".bmp", ".tiff",
+    ".ttf", ".otf", ".woff", ".woff2", ".eot",
+    # Archives and packages.
+    ".zip", ".gz", ".bz2", ".xz", ".tar", ".7z", ".rar", ".whl", ".jar",
+    ".aar", ".apk", ".aab",
+    # Built objects and stores.
+    ".pyc", ".pyo", ".so", ".dylib", ".dll", ".exe", ".bin", ".class",
+    ".db", ".sqlite", ".sqlite3",
+    # Media and documents.
+    ".mp3", ".mp4", ".wav", ".m4a", ".mov", ".avi", ".pdf",
+}
+
+# `.fit` IS BINARY AND IS STILL READ, which is not an oversight. A FIT stores
+# coordinates as int32 semicircles, so scanning its bytes finds nothing - but
+# the track rule below checks WHERE a file is rather than what is in it, and
+# excluding the suffix here would take the file out of that check too. The
+# same argument covers any binary a track can arrive as.
+TRACK_BINARY = {".fit"}
 
 # A track file is checked by WHERE IT IS, not by what can be read out of it.
 # Scanning the text is not enough: FIT stores coordinates as binary int32
@@ -226,9 +257,10 @@ def numeric_findings(path: Path, text: str) -> list[str]:
 def main() -> int:
     bad = 0
     for path in tracked_files():
-        if path.suffix.lower() not in TEXT_EXT or not path.exists():
+        suffix = path.suffix.lower()
+        if not path.exists():
             continue
-        if path.name in ("Outfit-600.ttf",) or path.suffix in (".png", ".ttf"):
+        if suffix in BINARY_EXT and suffix not in TRACK_BINARY:
             continue
         try:
             text = path.read_text(encoding="utf-8", errors="ignore")

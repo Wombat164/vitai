@@ -45,6 +45,29 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: pip install -e . pytest
       - run: pytest -q
+      # THE SUITE MUST NOT WRITE TO THE RECORD IT READS (#322).
+      #
+      # `tests/test_sensitive_tiers.py` sweeps every public method on `Vitai`,
+      # enumerated from the class rather than from a roster - deliberately, so
+      # a method added tomorrow is covered without anyone remembering it. The
+      # cost of that is that a method added tomorrow is also CALLED, and #318
+      # added `pin_policy()`, a writer. The sweep pointed at `examples/demo`
+      # appended four dated threshold rows to the shipped fixture on every
+      # suite run.
+      #
+      # It escaped the repo. A downstream consumer emitting a build artifact
+      # from `examples/demo` after running the suite got seven thresholds
+      # where a fresh clone got three, so its committed output stopped
+      # reproducing - which is where this was found, in another repo's CI
+      # rather than in this one.
+      #
+      # #319 fixed the sweep by copying the corpus first. This is the part
+      # that keeps it fixed: the next writer on the public API cannot
+      # reintroduce it silently, because the suite leaving a tracked file
+      # modified is now a red build rather than a thing somebody notices
+      # weeks later.
+      - name: the suite left the working tree clean
+        run: git diff --exit-code
 
   demo:
     # "Demo or it didn't happen": the committed demo data must match the
