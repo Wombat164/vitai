@@ -17,14 +17,18 @@ adds accessors over what the engine already knew.
   always said so: `source` is the FEED a value arrived by, `origin` is the
   device that observed it. A consumer rendering "HR 142 (Polar watch)" needs
   the second and had only the first, which says `polar` - the platform.
-- **What it does NOT fix, measured and pinned.** #325 narrates a hand-merged
-  console row carrying a watch's heart rate forward. `field_sources`
-  attributes that number to the console; `field_origins` attributes it to the
-  rower, which is wrong in the same way. No derived map can do better - the
-  merged row itself asserts the rower observed a heart rate, and the fact that
-  a Polar measured it is not in the record. Written as two lines, one per
-  instrument, the same two instruments resolve correctly. Attribution is only
-  ever as good as the claim.
+- **What it does NOT fix, and the residual is real.** #325 narrates a
+  hand-merged console row carrying a watch's heart rate forward.
+  `field_sources` attributes that number to the console; `field_origins`
+  attributes it to the rower, which is wrong in the same way. Two claims
+  assert different instruments for one value and the engine cannot ADJUDICATE
+  which is right - a hand-merged row is not a less-trusted witness, it is an
+  ordinary claim making a false assertion. Where the row went in by
+  SUPERSEDING, the retired line is dropped before resolution and no map is
+  published at all, though the append-only file keeps it forever. Recovering
+  that means comparing a correction against the line it retires at WRITE time,
+  which is a laundering detector rather than an attribution map. Written as
+  two lines, one per instrument, the same two instruments resolve correctly.
 - **A claim that names no instrument contributes no entry.** `field_sources`
   falls back to `unknown` because a claim always arrived somehow; silence
   about a device must not become a device that can be attributed to.

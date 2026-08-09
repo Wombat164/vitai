@@ -274,7 +274,7 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
     # A SEPARATE MAP RATHER THAN A REPLACEMENT. Both questions are real and a
     # consumer needs different ones at different times: which feed to re-pull
     # from, and which device to trust or retire. Most records answer only the
-    # first - `origin` is optional and 43% of the corpus's daily rows carry
+    # first - `origin` is optional and 57% of the corpus's daily rows carry
     # none - so folding them would make the answer disappear whenever the
     # weaker field is absent.
     field_origins: dict[str, str] = {}
@@ -313,6 +313,14 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
         winner_id, winner = witnesses[0]
         canonical[field] = winner[field]
         field_sources[field] = str(winner.get("source") or UNKNOWN_SOURCE)
+        # SILENCE IS NOT AN ENTRY, enforced here as well as in the pruner,
+        # and the two are NOT equivalent - which is why this one needs its own
+        # comment and its own test. The pruner's bucket-skip stops an
+        # origin-less claim being re-attributed to; this stops a field WON by
+        # an origin-less claim from being attributed at all. Without it, a
+        # value the manual line supplied gets handed to whichever single
+        # instrument happens to corroborate it - measured, and it attributed
+        # `type` to a watch, a device "observing" the word "row".
         if winner.get("origin"):
             field_origins[field] = str(winner["origin"])
         # `witnesses` counts INDEPENDENT ORIGINS, not rows (#35/#51). Five
@@ -572,6 +580,19 @@ def _substantiated(canonical: dict, named: dict[str, str],
                   if any(rec.get(field) == value for rec in recs)}
         if len(owners) == 1:
             kept[field] = owners.pop()
+        # NO CONTROL FOR THE `> 1` CASE, and this note is here because review
+        # found it unwitnessed and I could not fix it. Mutating the condition
+        # to take an arbitrary owner passes the whole suite. Reaching it needs
+        # a value that MOVED after the merge - in practice the session
+        # identity triple - held by two claimants of one canonical row, and
+        # sessions bucket BY `activity_id`, so a second claimant for the moved
+        # identity splits into a separate row instead of contesting it. Every
+        # fixture I built either merged with one claimant or did not merge.
+        #
+        # Left standing rather than deleted: it predates this change, it is
+        # the conservative direction (say nothing rather than guess), and a
+        # branch I cannot reach is also a branch I cannot show is dead. What I
+        # will not do is claim it is tested.
     return kept
 
 

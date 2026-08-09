@@ -410,13 +410,19 @@ def test_a_hand_merged_row_is_not_rescued_by_this_and_says_so(tmp_path):
     what the issue calls wrong - and `field_origins` attributes it to
     `matrix-rower`, which is wrong in the same way and for the same reason.
 
-    No derived map can fix it. The merged row ITSELF asserts that the rower
-    observed a heart rate; the record does not contain the fact that a Polar
-    measured it, so there is nothing to recover. Attribution is only ever as
-    good as the claim, and a row that launders two instruments into one is a
-    lossy input, not a resolution failure. Fixing it means not writing that
-    row - two lines, one per instrument, which is the shape every test above
-    uses and which the engine already merges correctly."""
+    THE CLAIM THIS DOCSTRING FIRST MADE WAS FALSE, and review caught it: it
+    said "the record does not contain the fact that a Polar measured it, so
+    there is nothing to recover". The record does contain it. In this shape
+    both lines are live and the watch's claim is sitting in the claims table
+    asserting `polar-watch` observed 142. What is true is narrower and is the
+    honest statement: two claims assert different instruments for one value,
+    and the engine cannot ADJUDICATE which is right - a hand-merged row is not
+    a less-trusted witness, it is an ordinary claim making a false assertion,
+    and no precedence rule detects that.
+
+    Fixing it means not writing that row - two lines, one per instrument,
+    which is the shape every test above uses and which the engine already
+    merges correctly."""
     merged = session(20, **{**CONSOLE,
                             **{k: WATCH[k] for k in ("avg_hr", "max_hr", "kcal")}})
     v = record(tmp_path, [session(19, **WATCH), merged])
@@ -518,3 +524,70 @@ def test_the_map_columns_are_written_key_sorted(tmp_path):
                                      separators=(",", ":")), col
     finally:
         con.close()
+
+
+def test_the_shape_the_issue_narrates_publishes_no_map_at_all(tmp_path):
+    """#325's incident is a row that went in BY SUPERSEDING, and no test here
+    built that shape - the limit test above keeps both lines live, which is a
+    different thing.
+
+    With a correct `supersedes` the loader retires the watch line before
+    resolution sees it, so there is ONE claim, no merge, and no map. That is
+    right - a single-source row's own `source` and `origin` are the whole
+    truth it has - and it is also the residual this PR does not close: the row
+    asserts that a rower observed a heart rate, nothing contradicts it in the
+    loaded record, and the retired line survives only in the append-only file.
+    Recovering it means comparing a correction against the line it retires at
+    WRITE time, which is a laundering detector rather than an attribution map
+    and wants its own change."""
+    from vitai.jsonl import line_key
+
+    watch = session(19, **WATCH)
+    merged = session(20, **{**CONSOLE,
+                            **{k: WATCH[k] for k in ("avg_hr", "max_hr", "kcal")}},
+                     supersedes=line_key("sessions", watch))
+    v = record(tmp_path, [watch, merged])
+
+    assert len(v.dataset("sessions")) == 1, "the watch line was retired"
+    assert field_sources(v) == {}, "no merge, so no map"
+    assert field_origins(v) == {}
+    # And the file still holds the retired line, which is why the residual is
+    # recoverable in principle and why the docstring above no longer says it
+    # is not.
+    raw = (tmp_path / "content" / "data" / "sessions.jsonl").read_text()
+    assert '"origin": "polar-watch"' in raw and '"avg_hr": 142' in raw
+
+
+def test_a_field_won_by_an_anonymous_claim_is_not_handed_to_a_corroborator(tmp_path):
+    """The merge-loop gate, which review found unwitnessed and load-bearing.
+
+    Removing `if winner.get("origin")` passed all 2315 tests while changing
+    output: a field the manual line WON gets attributed to whichever single
+    instrument also happens to hold the value, via the pruner's re-attribution
+    branch. The pruner's own bucket-skip does not save this - the two guards
+    stop different things."""
+    manual = session(19, source="manual", avg_hr=142, kcal=310)
+    watch = session(20, source="polar", origin="polar-watch",
+                    avg_hr=142, kcal=310, max_hr=168)
+    v = ranked(tmp_path, [manual, watch], "['manual', 'polar']")
+
+    src, org = field_sources(v), field_origins(v)
+    assert src["avg_hr"] == "manual", "the ladder gave it to the manual line"
+    assert "avg_hr" not in org, org
+    assert "kcal" not in org, org
+    assert org["max_hr"] == "polar-watch", "and a field only it holds survives"
+
+
+def test_a_merge_where_nobody_names_an_instrument_publishes_an_empty_map(tmp_path):
+    """Absent versus empty, pinned rather than left to a consumer to discover.
+
+    A non-merged row has no map at all; a merged row where no claim names an
+    instrument has an EMPTY one. The difference is information - the second
+    says "this row is a merge and not one of its writers said what observed
+    it", which is a prompt to fix the connector, and collapsing them to null
+    would lose it."""
+    v = record(tmp_path, [session(19, source="polar", avg_hr=142),
+                          session(20, source="matrix-console", distance_km=8.1)])
+    prov = [r for r in v.resolution()["provenance"] if r["dataset"] == "sessions"]
+    assert prov and prov[0].get("field_sources"), "it is a merge"
+    assert prov[0].get("field_origins") == {}, prov[0].get("field_origins")
