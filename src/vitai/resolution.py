@@ -6,10 +6,25 @@ and it certainly does not hold 5,287. It holds ONE canonical value chosen by
 precedence, with both claims retained as observations and the choice
 explained.
 
-This runs at build time, BEFORE any derivation. Everything downstream - the
-rollup, verdicts, contributions, the read model's primary tables - consumes
-canonical rows. Raw claims are projected into companion `*_claims` tables for
-anyone who wants to audit the adjudication.
+This runs at build time, BEFORE any derivation. The rollup, verdicts,
+contributions and the read model's primary tables consume canonical rows, and
+raw claims are projected into companion `*_claims` tables for anyone who wants
+to audit the adjudication.
+
+ONE DOCUMENTED EXCEPTION, and it is narrow (#186). `daily.coverage` is read
+RAW by `verdicts.open_day_in`, by the report's tripwire block and by the
+intake floors, because it is not a measurement - it is a claim that a
+measurement is not finished. Adjudicating it destroys it: a watch that syncs
+steps and calls the day `full` outranks a nutrition app's lunchtime `partial`,
+and the resolved row then reads `full` on the exact day the flag exists to
+hear. A claim of openness is not refuted by a source that did not know.
+
+That sentence was written here as "EVERYTHING downstream consumes canonical
+rows" and left standing when the exception landed, which is the licence this
+codebase keeps paying for. The general rule is unchanged and any NEW raw read
+needs the same kind of argument written next to it: the field must be a claim
+ABOUT a measurement rather than a measurement, and the reason precedence
+destroys it must be stated.
 
 Three rules do the work:
 

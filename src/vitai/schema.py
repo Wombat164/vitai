@@ -352,6 +352,13 @@ INFERENCE_KINDS = {"pattern", "risk", "recommendation", "observation", "question
 # about the athlete than the free text it replaces.
 FEELS = {"fun", "neutral", "chore"}
 COVERAGES = {"full", "partial", "manual"}
+
+# THE ONE COVERAGE VALUE THAT MEANS UNFINISHED. `full` and `manual` describe a
+# day that was logged; only `partial` says the record knew there was more to
+# come. Named rather than spelled at the reader, because a verdict turns on it
+# (#186) and a literal in a comparison is how a vocabulary quietly grows a
+# second spelling.
+PARTIAL = "partial"
 # Sourced from semantics/settings.toml (#53): WHERE an activity happened, as
 # its own axis, so `other` + `outdoor` expresses the catchall a vendor would
 # pre-coordinate into `OTHER_OUTDOOR`. Retired values stay legal.

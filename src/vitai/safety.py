@@ -1115,10 +1115,41 @@ def _intake_and_protein_floors(daily: list[dict], weight: list[dict],
     not - and was eating ~1200 kcal a day while exclusively breastfeeding and
     losing a kilo a week. The engine said `tripwires: none`, because every
     rule it had needed a threshold somebody had set.
+
+    #186 REACHES HERE, and this is the founding incident's own surface. The
+    issue's incident is a nutrition export taken at lunchtime that read as
+    half a day's intake; the metric it dragged down is this mean. So the
+    escalation the record's most under-configured athlete sees was the one
+    place still saying nothing about it, while the verdict row beside it and
+    the page around it both said the window held an open day.
+
+    WHAT THE CLAUSE MAY NOT DO, because this is the safety tier and
+    under-triage is the error that matters. It does not lower the level, does
+    not defer the escalation, does not suppress it, and does not change the
+    number or the floor it is compared against. `provisional` exists nowhere
+    in this module and no branch here reads it. The clause states a FACT about
+    the window - one of these days was still being logged - and the fact is
+    also the action: re-import and look again. A mean over fourteen days moves
+    little for one part-day, so this will usually be over-caution; over-
+    caution that adds information is not the same as hedging, and hedging is
+    what the coach skill forbids.
+
+    NO `raw_daily` PARAMETER, and the first version of this had one. Every
+    other reader of `coverage` in this codebase takes the unadjudicated rows
+    as an argument, so adding a fifth felt like consistency - but `Vitai.safety`
+    builds from `datasets()`, which is already raw, so the parameter could
+    never differ from `daily` at the only call site that renders these
+    strings. A parameter no caller can vary is not caution; it is a branch
+    that reads like coverage. The property it was protecting is real and is
+    pinned by a test instead: if this surface is ever switched to
+    `canonical()`, the outvoted-claim test goes red and says why.
     """
     window, start, end = _window(daily, RED_S_WINDOW_DAYS)
     if not window:
         return []
+    open_day = any(r.get("coverage") == "partial" for r in window)
+    still_open = (" - one day in this window was still being logged, so "
+                  "re-import before acting on the figure" if open_day else "")
     out: list[dict] = []
     expects = _expectations(medical, end)
     floor = INTAKE_FLOOR_KCAL
@@ -1134,7 +1165,8 @@ def _intake_and_protein_floors(daily: list[dict], weight: list[dict],
                       f"{len(intakes)} days, at or below the {floor:.0f} floor")
             if "elevated_requirement" in expects:
                 detail += " (raised for a declared physiological state)"
-            out.append(_escalation(end.isoformat(), URGENT, "intake_floor", detail))
+            out.append(_escalation(end.isoformat(), URGENT, "intake_floor",
+                                   detail + still_open))
 
     # Protein against bodyweight, and the lean-mass composite that matters
     # during rapid loss (G72): weight coming off fast, protein far too low, and
@@ -1167,7 +1199,7 @@ def _intake_and_protein_floors(daily: list[dict], weight: list[dict],
                 detail += (f"; losing {loss:.1f}%/week with no resistance "
                            "training - lean-mass loss risk")
             out.append(_escalation(end.isoformat(), URGENT, "protein_floor",
-                                   detail))
+                                   detail + still_open))
     return out
 
 

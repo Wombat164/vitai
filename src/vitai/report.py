@@ -16,6 +16,7 @@ from .weeks import week_of
 from .clocks import protocol_seam, timing_caveat, weigh_in_timing
 from .composition import decompose, endpoints
 from .config import Config, phase_rate_for
+from .verdicts import open_day_in
 from .vocab import session_classes
 
 
@@ -135,8 +136,27 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                  sessions: list[dict], today: date | None = None,
                  gates: list[dict] | None = None,
                  escalations: list[dict] | None = None,
-                 events: list[dict] | None = None) -> str:
+                 events: list[dict] | None = None,
+                 raw_daily: list[dict] | None = None) -> str:
     today = today or date.today()
+    # #186 SECTION 3, "wherever it is shown". The tripwire block does not read
+    # the verdict rows - it re-derives its own seven-day figures from `daily` -
+    # so the column added to `verdicts` does not reach this page, and an open
+    # week rendered exactly like a finished one here after the flag shipped.
+    #
+    # RAW, for the reason the verdicts use raw: the canonicaliser picks one
+    # claim per day, and a watch that calls the day `full` outvotes the app
+    # still logging it. The suffix goes on the three alerts built from the same
+    # seven-day window and nowhere else - the weight rate is built from the
+    # weight ladder, where `coverage` cannot reach it.
+    #
+    # THE PAIN GATE IS IN THAT SET and was missed on the first pass, for the
+    # third time in this issue: the verdict row carried the flag while the
+    # alert built from the same window did not, so the page and the table
+    # disagreed about one record.
+    open_window = open_day_in(within_days(raw_daily if raw_daily is not None
+                                          else daily, today, 7, "date"))
+    still_open = " (day still open)" if open_window else ""
     gates = gates or []
     escalations = escalations or []
     events = events or []
@@ -397,7 +417,7 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
             if recent > cfg.rhr_baseline + 5:
                 alerts.append(f"**Resting HR {recent:.0f}"
                               f"{over_days(len(rhrs), 7)}** - more than 5 "
-                              f"over baseline {cfg.rhr_baseline}")
+                              f"over baseline {cfg.rhr_baseline}{still_open}")
     if cfg.pain_gate is not None:
         # `pain` only. These are CANONICAL rows, so a legacy `hip_pain` line
         # arrives already mapped forward, and the fallback that used to sit
@@ -419,7 +439,7 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
         if scored and max(p for p, _ in scored) > cfg.pain_gate:
             worst, site = max(scored, key=lambda s: s[0])
             alerts.append(f"**Pain {worst}/10 at {site}** - gate fired: "
-                          "no loaded work at that site")
+                          f"no loaded work at that site{still_open}")
         elif not scored and logged:
             # A calendar window is right for "is this current", and wrong as a
             # way to make an unresolved reading disappear. Someone who logs
@@ -429,17 +449,31 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
             last = max(logged, key=lambda d: _as_day(d["date"]))
             if (score := _pain_of(last)) > cfg.pain_gate:
                 ago = (today - _as_day(last["date"])).days
+                # MARKED, and the first version of this was not - defended
+                # by a premise that is simply false. It said the branch fires
+                # only when the seven-day window is EMPTY. Its guard is `not
+                # scored and logged`, and `scored` counts PAIN-carrying rows
+                # only, so the window can be full of steps and sleep with one
+                # day still open.
+                #
+                # The FIGURE is final either way: any in-window pain reading
+                # would have taken the branch above, so `last` provably
+                # predates the window. What is not final is "AND NOTHING
+                # SINCE" - a claim about the window, which the rest of an open
+                # day can falsify. The suffix sits at the end of the sentence
+                # because that clause is what it qualifies.
                 alerts.append(
                     f"Pain {score}/10 at "
                     f"{last.get('pain_site') or 'unspecified site'} was "
                     f"last logged {ago} days ago and nothing since - not a "
-                    "current gate, but it was never recorded as resolved")
+                    "current gate, but it was never recorded as "
+                    f"resolved{still_open}")
     if cfg.sleep_floor_h is not None:
         sleeps = [r["sleep_h"] for r in within_days(daily, today, 7, "sleep_h")]
         if sleeps and mean(sleeps) < cfg.sleep_floor_h:
             alerts.append(f"**Sleep {mean(sleeps):.1f}h avg"
                           f"{over_days(len(sleeps), 7)}** - under the "
-                          f"{cfg.sleep_floor_h:.0f}h floor")
+                          f"{cfg.sleep_floor_h:.0f}h floor{still_open}")
     if cfg.steps_floor is not None:
         steps = [r["steps"] for r in within_days(daily, today, 7, "steps")]
         if steps:
@@ -447,7 +481,7 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
             met = avg >= cfg.steps_floor
             verdict = "floor met" if met else f"below the {cfg.steps_floor:,} floor"
             alerts.append(f"Steps {avg:,.0f}/day avg"
-                          f"{over_days(len(steps), 7)} - {verdict}")
+                          f"{over_days(len(steps), 7)} - {verdict}{still_open}")
     skipped = sum(unreadable_dates(daily, today, f)
                   for f in ("rhr", "sleep_h", "steps", "pain"))
     if skipped:

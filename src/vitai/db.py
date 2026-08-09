@@ -626,7 +626,31 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     ambiguity predates this column and is harmless for `trust` and `chain`,
 #     which are cluster-symmetric; it is not harmless for per-field
 #     attribution, and closing it needs an identity on the provenance row.
-CONTRACT_VERSION = "40"
+# 41: `verdicts` gains `provisional` (#186).
+#
+#     `daily.coverage` has carried `full | partial | manual` since generation
+#     2, been validated all along, and been read by nothing. The cost is not
+#     theoretical: a nutrition export taken at lunchtime produced a
+#     well-formed row asserting a large intake shortfall that had not
+#     happened, and it rendered exactly like a row asserting one that had.
+#
+#     A weekly figure built over a day the record marks `partial` will change
+#     when the rest of that day arrives. The issue is blunt about the choice -
+#     scoring an open day is fine, scoring it as FINAL is the one option that
+#     is wrong - so the row now says which it is.
+#
+#     A SECOND FIELD, not a third value of `answers`, and that departs from a
+#     note in `verdicts.py` which reserved `provisional` there. They answer
+#     different questions: `answers` says what RESOLUTION the engine will
+#     vouch for, and a provisional magnitude is still a magnitude, a number to
+#     render and mark not-final. Folding them would make a consumer choose
+#     between knowing the number is provisional and knowing it is a number.
+#
+#     ABSENT IS NOT `full`. Only an explicit `partial` sets it: most of every
+#     record predates the field, and reading silence as complete is the
+#     confident answer this removes, while reading silence as open would mark
+#     the whole corpus.
+CONTRACT_VERSION = "41"
 
 _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity would
               # A JSON map (#325), and every container column is TEXT for
@@ -730,7 +754,7 @@ _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity wou
 # for or why it will not.
 VERDICT_KEYS = ["week", "metric", "value", "target", "verdict", "goal",
                 "reason", "due", "statistic", "window_days", "observed_days",
-                "answers"]
+                "answers", "provisional"]
 
 # Derived tables (rebuilt every build, like everything else in derived/).
 CONTRIBUTION_KEYS = ["date", "goal", "metric", "dataset", "period", "value",

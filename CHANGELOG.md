@@ -11,6 +11,39 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **A weekly figure over an unfinished day says so** (#186, contract 41).
+  `daily.coverage` has carried `full | partial | manual` since generation 2,
+  been validated all along, and been read by nothing - so a nutrition export
+  taken at lunchtime produced a well-formed row asserting an intake shortfall
+  that had not happened, rendering exactly like a row asserting one that had.
+  `verdicts` gains `provisional`, carried by every metric built from the daily
+  rows: `steps`, `sleep`, `rhr`, `pain_gate`, the three RED-S floors and the
+  symptom counts.
+- **And `weekly.md` says it too**, which is a visible change to the rendered
+  report. The tripwire block does not read the verdict rows - it re-derives its
+  own seven-day figures - so sleep, steps, resting HR and the pain gate now
+  carry a ` (day still open)` suffix there. The weight rate does not: it comes
+  from the weight ladder, and `coverage` lives on `daily`.
+- **And the intake floors say it in their escalation text.** #186's founding
+  incident is a lunchtime nutrition export reading as half a day, and the
+  metric it drags down is the RED-S intake mean - so the URGENT escalation the
+  most under-configured athlete sees was the last surface still silent about
+  it. The clause states a fact and nothing more: the level, the trigger, the
+  figure, the floor and the action are untouched, and `provisional` is read by
+  no branch in `safety.py`. Over-caution that adds information is not hedging.
+- **A second field, not a third value of `answers`**, which departs from the
+  note that reserved `provisional` there. They answer different questions:
+  `answers` says what resolution the engine will vouch for, and a provisional
+  magnitude is still a magnitude - a number to render, marked not-final.
+- **Absent coverage is not read as complete, and not as open.** Most of every
+  record predates the field. Reading silence as complete is the confident
+  answer this removes; reading it as open would mark the whole corpus. Only an
+  explicit `partial` sets it, and the verdict itself does not move - scoring an
+  open day is fine, scoring it as final is not.
+- `daily.coverage` leaves the field-population backlog. The WRITING half of
+  #186 stays open: one field on a row several sources write to, so whichever
+  importer sets it wins uncontested.
+
 - **A merged row can say which SOURCE supplied which field** (#325, contract
   40). A watch and a rowing console recording one session resolve to one row
   whose `source` reads `matrix-console+polar` - true of the row and of no
@@ -54,6 +87,21 @@ adds accessors over what the engine already knew.
   for five spellings missed the one a consumer would actually write.
 
 ### Fixed
+
+- **A transaction time was compared as text, and nothing said so.**
+  `clocks.order_key`'s docstring spends three lines on why the third element is
+  an INSTANT - "comparing stamps as text orders two rows written either side of
+  a timezone change by wall clock rather than by when they were written" - and
+  replacing `stamp_instant(stamp)` with `str(stamp)` passed all 2275 tests. An
+  athlete who flies east writes 23:30+02:00 and then 22:00Z, later by the clock
+  on the wall and earlier by every clock that matters, and the record took the
+  wrong line as current. Covered at the key and at the two readers that pick a
+  current line from it.
+- **The doctrine has a second implementation, now pinned beside the first.**
+  `devices.merge` re-derives it by hand - knowingly, with a comment saying so -
+  and it is the sort that actually orders every dataset a consumer reads.
+  #323's duplicate sweep cannot see the pair because they are not
+  byte-identical. Both are now checked to agree on the half they share.
 
 - **`disagreed` read only the runner-up** (#94, ask 4). `_merge_fields`
   records `discarded` over every losing claim - widened for #73, with the

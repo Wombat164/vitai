@@ -1246,7 +1246,8 @@ class Vitai:
         return compute_verdicts(self.config, d["weight"], d["daily"],
                                 d["sessions"], today=on,
                                 goals=d["goals"], thresholds=d["thresholds"],
-                                medical=d["medical"])
+                                medical=d["medical"],
+                                raw_daily=self.dataset("daily"))
 
     def rollup(self, today: date | None = None) -> str:
         """The weekly report as Markdown - the same text `build` writes out.
@@ -1275,6 +1276,7 @@ class Vitai:
         # reproducible.
         return build_report(self.config, d["weight"], d["daily"],
                             d["sessions"], today=on,
+                            raw_daily=self.dataset("daily"),
                             gates=self.gates(on),
                             escalations=self.urgent(on),
                             events=self.events(on))
@@ -1603,7 +1605,8 @@ class Vitai:
         verdicts = compute_verdicts(cfg, d["weight"], d["daily"],
                                     d["sessions"], today=today,
                                     goals=d["goals"], thresholds=d["thresholds"],
-                                    medical=d["medical"])
+                                    medical=d["medical"],
+                                    raw_daily=self.dataset("daily"))
         on = (today or self.on).isoformat()
         return {
             "session_weeks": session_weeks(d["sessions"], on),
@@ -1709,7 +1712,8 @@ class Vitai:
                       built_on=on.isoformat())
         (derived / "weekly.md").write_text(
             build_report(self.config, d["weight"], d["daily"], d["sessions"],
-                         today=on, gates=derivations["gates"],
+                         today=on, raw_daily=self.dataset("daily"),
+                         gates=derivations["gates"],
                          escalations=urgent_now(derivations["escalations"],
                                                 on=on),
                          events=self.events(on)),
