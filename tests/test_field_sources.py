@@ -333,7 +333,188 @@ def test_a_malformed_map_on_a_raw_line_still_fails_loudly(tmp_path):
         Vitai(root).build()
 
 
-def test_the_map_column_is_the_only_one_serialised_as_a_map():
+def test_the_columns_serialised_as_maps_are_named_here_and_nowhere_else():
+    """A REGISTER, not a count. `_map_cell` accepts a dict where `_cell`
+    refuses one, so every name in this set widens what the writer will take
+    without complaint - which is why the set is pinned exactly rather than
+    checked for membership. Adding one is a deliberate act that edits this
+    line; the failure it prevents is a dict reaching a column by accident.
+
+    `field_origins` joined at contract 42 (#325): the instrument half of the
+    same question, and a map for the same reason."""
     from vitai.db import MAP_COLS
 
-    assert MAP_COLS == {"field_sources"}
+    assert MAP_COLS == {"field_sources", "field_origins"}
+
+
+# --- and which INSTRUMENT supplied it (#325's title, contract 42) --------------
+
+def field_origins(v: Vitai, dataset: str = "sessions") -> dict:
+    rows = [r for r in v.resolution()["provenance"] if r["dataset"] == dataset]
+    return (rows[0].get("field_origins") or {}) if rows else {}
+
+
+def test_each_field_names_the_device_that_observed_it(tmp_path):
+    """What `field_sources` cannot answer. `source` is the FEED a value
+    arrived by and `origin` is the DEVICE that observed it - the map above
+    says `polar`, the platform; this one says `polar-watch`, the thing on the
+    wrist. A consumer rendering "HR 142 (Polar watch)" needs the second."""
+    got = field_origins(both(tmp_path))
+    assert got["avg_hr"] == "polar-watch"
+    assert got["max_hr"] == "polar-watch"
+    assert got["distance_km"] == "matrix-rower"
+    assert got["avg_power"] == "matrix-rower"
+
+
+def test_the_two_maps_answer_different_questions(tmp_path):
+    """Asserted rather than described, because "they are different" is the
+    whole justification for a second column. Every field has both, and for
+    every field they differ."""
+    v = both(tmp_path)
+    src, org = field_sources(v), field_origins(v)
+    assert set(org) <= set(src)
+    assert org, "the corpus fixture names instruments"
+    for field, instrument in org.items():
+        assert instrument != src[field], field
+
+
+def test_a_claim_that_names_no_instrument_contributes_no_entry(tmp_path):
+    """`field_sources` falls back to `unknown` because a claim always arrived
+    somehow. An instrument is different: silence about which device observed
+    a value must not become a device that can be attributed to."""
+    v = record(tmp_path, [session(19, source="polar", avg_hr=142),
+                          session(20, source="matrix-console",
+                                  origin="matrix-rower", distance_km=8.1)])
+    src, org = field_sources(v), field_origins(v)
+    assert src["avg_hr"] == "polar", "the feed is still known"
+    assert "avg_hr" not in org, org
+    assert org["distance_km"] == "matrix-rower"
+
+
+def test_it_names_no_field_the_row_does_not_hold_either(tmp_path):
+    """The pruning discipline `field_sources` already had, now shared: both
+    maps run through one substantiation pass, so neither can name a field the
+    finished row ended up without."""
+    v = both(tmp_path)
+    row = v.canonical("sessions")[0]
+    for field in field_origins(v):
+        assert row.get(field) is not None, field
+
+
+def test_a_hand_merged_row_is_not_rescued_by_this_and_says_so(tmp_path):
+    """THE LIMIT, measured and pinned rather than left for a consumer to
+    discover.
+
+    #325 narrates a hand-merged console row carrying the watch's heart rate
+    forward. `field_sources` attributes that HR to `matrix-console`, which is
+    what the issue calls wrong - and `field_origins` attributes it to
+    `matrix-rower`, which is wrong in the same way and for the same reason.
+
+    No derived map can fix it. The merged row ITSELF asserts that the rower
+    observed a heart rate; the record does not contain the fact that a Polar
+    measured it, so there is nothing to recover. Attribution is only ever as
+    good as the claim, and a row that launders two instruments into one is a
+    lossy input, not a resolution failure. Fixing it means not writing that
+    row - two lines, one per instrument, which is the shape every test above
+    uses and which the engine already merges correctly."""
+    merged = session(20, **{**CONSOLE,
+                            **{k: WATCH[k] for k in ("avg_hr", "max_hr", "kcal")}})
+    v = record(tmp_path, [session(19, **WATCH), merged])
+    src, org = field_sources(v), field_origins(v)
+    assert src["avg_hr"] == "matrix-console"
+    assert org["avg_hr"] == "matrix-rower", (
+        "the instrument map is no better here, and must not pretend to be")
+    # And the honest half: the SAME two instruments, written as two lines,
+    # resolve correctly. The difference is entirely in the input.
+    assert field_origins(both(tmp_path / "split"))["avg_hr"] == "polar-watch"
+
+
+def ranked(tmp_path: Path, rows: list[dict], order: str) -> Vitai:
+    root = tmp_path / "content"
+    (root / "data").mkdir(parents=True)
+    (root / "vitai.toml").write_text(
+        f'[athlete]\nname = "T"\n[resolution]\nsource_order = {order}\n',
+        encoding="utf-8")
+    (root / "data" / "sessions.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    return Vitai(root)
+
+
+def test_unknown_never_becomes_an_instrument(tmp_path):
+    """The narrow case the origin bucket-skip exists for, constructed rather
+    than assumed - I could not witness it until I built this and nearly
+    deleted the guard as unreachable.
+
+    `_keep_identity_together` takes the identity triple from file order AFTER
+    the merge, so the ladder winner for `activity_id` can lose the value to a
+    claim that never entered the contest. `field_sources` re-attributes it,
+    correctly, to `manual`. The instrument map must NOT do the same thing,
+    because the claim holding the value names no instrument - and `unknown`
+    re-attributed as an origin would be the map asserting that a device called
+    `unknown` observed it."""
+    anon = session(19, source="manual", distance_km=8.1, activity_id="B2")
+    named = session(20, source="polar", origin="polar-watch", avg_hr=142,
+                    activity_id="A1")
+    v = ranked(tmp_path, [anon, named], "['polar', 'manual']")
+
+    assert v.canonical("sessions")[0]["activity_id"] == "B2", (
+        "file order kept the identity together")
+    assert field_sources(v)["activity_id"] == "manual", (
+        "the feed re-attributes, because a claim always arrived somehow")
+    org = field_origins(v)
+    assert "activity_id" not in org, org
+    assert "unknown" not in org.values(), org
+    assert org["avg_hr"] == "polar-watch", "and the real ones survive"
+
+
+def test_the_instrument_map_is_substantiated_like_the_feed_map(tmp_path):
+    """Both maps run through ONE pass, so the discipline cannot be added to
+    one and forgotten on the other - which is what happened: the first cut
+    pruned `field_sources` only, and dropping `field_origins` from the pass
+    passed every test in this file.
+
+    The property: a value that moved after the merge re-attributes or goes
+    silent, and neither map names a claimant that cannot be shown to hold the
+    finished value."""
+    anon = session(19, source="manual", distance_km=8.1, activity_id="B2")
+    named = session(20, source="polar", origin="polar-watch", avg_hr=142,
+                    activity_id="A1")
+    v = ranked(tmp_path, [anon, named], "['polar', 'manual']")
+    row = v.canonical("sessions")[0]
+
+    raw = [r for r in v.dataset("sessions")]
+    for field, instrument in field_origins(v).items():
+        assert any(c.get("origin") == instrument and c.get(field) == row[field]
+                   for c in raw), (field, instrument, row.get(field))
+
+
+def test_it_reaches_the_read_model(tmp_path):
+    """A provenance column no consumer can query is the map staying inside the
+    resolver, which is the shape #325 is complaining about."""
+    v = both(tmp_path)
+    con = sqlite3.connect(v.build())
+    try:
+        cols = [r[1] for r in con.execute("PRAGMA table_info(provenance)")]
+        assert "field_origins" in cols, cols
+        got = con.execute("SELECT field_origins FROM provenance "
+                          "WHERE dataset = 'sessions'").fetchone()
+        assert got and got[0], got
+        assert json.loads(got[0])["avg_hr"] == "polar-watch", got[0]
+    finally:
+        con.close()
+
+
+def test_the_map_columns_are_written_key_sorted(tmp_path):
+    """Same rule the feed map already follows: a JSON object whose key order
+    depends on dict insertion is a diff that moves for no reason."""
+    con = sqlite3.connect(both(tmp_path).build())
+    try:
+        for col in ("field_sources", "field_origins"):
+            raw = con.execute(f"SELECT {col} FROM provenance "
+                              "WHERE dataset = 'sessions'").fetchone()[0]
+            # Compact separators, matching `_map_cell` - the property under
+            # test is the KEY ORDER, not the spacing.
+            assert raw == json.dumps(json.loads(raw), sort_keys=True,
+                                     separators=(",", ":")), col
+    finally:
+        con.close()

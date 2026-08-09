@@ -11,6 +11,23 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **A merged row can say which INSTRUMENT supplied which field** (#325,
+  contract 42). `provenance` gains `field_origins` beside the `field_sources`
+  map contract 40 shipped. They answer different questions and the code has
+  always said so: `source` is the FEED a value arrived by, `origin` is the
+  device that observed it. A consumer rendering "HR 142 (Polar watch)" needs
+  the second and had only the first, which says `polar` - the platform.
+- **What it does NOT fix, measured and pinned.** #325 narrates a hand-merged
+  console row carrying a watch's heart rate forward. `field_sources`
+  attributes that number to the console; `field_origins` attributes it to the
+  rower, which is wrong in the same way. No derived map can do better - the
+  merged row itself asserts the rower observed a heart rate, and the fact that
+  a Polar measured it is not in the record. Written as two lines, one per
+  instrument, the same two instruments resolve correctly. Attribution is only
+  ever as good as the claim.
+- **A claim that names no instrument contributes no entry.** `field_sources`
+  falls back to `unknown` because a claim always arrived somehow; silence
+  about a device must not become a device that can be attributed to.
 - **A weekly figure over an unfinished day says so** (#186, contract 41).
   `daily.coverage` has carried `full | partial | manual` since generation 2,
   been validated all along, and been read by nothing - so a nutrition export

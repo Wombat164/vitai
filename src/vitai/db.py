@@ -650,7 +650,32 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     record predates the field, and reading silence as complete is the
 #     confident answer this removes, while reading silence as open would mark
 #     the whole corpus.
-CONTRACT_VERSION = "41"
+# 42: `provenance` gains `field_origins` (#325).
+#
+#     #325's title asks which INSTRUMENT supplied which field. Contract 40
+#     shipped `field_sources`, which answers a different question and says so
+#     in its own comment: `source` is the FEED a value arrived by, `origin` is
+#     the device that observed it.
+#
+#     The two come apart on the case the issue narrates. A hand-merged console
+#     row carrying a watch's heart rate forward has `source: matrix-console`
+#     for a number a Polar measured, and the map attributed all three of
+#     `avg_hr`, `max_hr` and `kcal` to the console - the exact fields #325
+#     names as false of that source. Verified against the shipped code before
+#     this change; `field_sources` is not wrong there, it is answering about
+#     the channel, and the instrument question had no column at all.
+#
+#     A SECOND MAP RATHER THAN A REPLACEMENT. Both questions are real and a
+#     consumer needs different ones at different times - which feed to re-pull
+#     from, and which device to trust or retire. `origin` is optional and much
+#     of the corpus carries none, so folding them would delete the answer
+#     whenever the weaker field is absent.
+#
+#     AN UNSTATED ORIGIN IS NOT A NAME. `field_sources` falls back to
+#     `unknown` because a claim always arrived somehow; a claim that does not
+#     say which instrument observed it contributes no entry, rather than
+#     making `unknown` a device that can be attributed to.
+CONTRACT_VERSION = "42"
 
 _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity would
               # A JSON map (#325), and every container column is TEXT for
@@ -805,7 +830,7 @@ GATE_KEYS = ["date", "source_kind", "slug", "restricts", "reason", "severity",
 ESCALATION_KEYS = ["date", "level", "trigger", "detail", "action"]
 
 PROVENANCE_KEYS = ["date", "dataset", "origin", "independent_sources",
-                   "trust", "chain", "field_sources"]
+                   "trust", "chain", "field_sources", "field_origins"]
 
 # One row per (track, distance), because a track can hold several efforts and
 # hanging them off `sessions` would flatten that.
@@ -932,7 +957,7 @@ def _table(con: sqlite3.Connection, table: str, keys: list[str],
 # turned a malformed `note: {...}` on an athlete's line from a loud
 # `InterfaceError` at build time into a silently stored JSON string. Widening
 # what the engine accepts is not a side effect a serialiser gets to have.
-MAP_COLS = frozenset({"field_sources"})
+MAP_COLS = frozenset({"field_sources", "field_origins"})
 
 
 def _map_cell(v: object) -> object:
