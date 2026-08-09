@@ -80,9 +80,14 @@ PENDING = "pending"                  # answerable, and not yet: a source is due
 #
 # They answer different questions. This one says what RESOLUTION the engine
 # will vouch for; a provisional magnitude is still a magnitude, and a
-# provisional DIRECTION is still a direction - `weight_rate` and
-# `energy_availability` are direction metrics an open day affects just as
-# much. A third value here could not express either pair.
+# provisional DIRECTION is still a direction - `energy_availability` is a
+# direction metric an open day affects just as much. A third value here could
+# not express either pair.
+#
+# `weight_rate` was named here too and should not have been: it is built from
+# the weight ladder, `coverage` lives on `daily`, and no open day can reach
+# it. Left corrected rather than deleted, because the plausible-sounding
+# linkage is what put a dead carry-forward into `_drops_rate_verdict` below.
 #
 # A CLIENT CANNOT DERIVE THIS. It would have to reimplement the per-field
 # policy, every client would derive it slightly differently, and that
@@ -659,7 +664,7 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
                                  ON if worst <= eff.pain_gate else BEHIND,
                                  _goal_for(active, "pain")
                                  or _goal_for(active, "hip_pain"),
-                                 statistic=MAXIMUM))
+                                 statistic=MAXIMUM, provisional=open_day))
         if eff.rhr_baseline is not None:
             rhrs = [d["rhr"] for d in days if d.get("rhr") is not None]
             if rhrs:
@@ -690,9 +695,15 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
     # and never a deletion. The judgement still does not happen; what changes
     # is that the record says so.
     if _drops_rate_verdict(medical or [], weeks):
+        # NO `provisional` FORWARDED HERE, deliberately, and this is a
+        # correction. It rewrites `weight_rate` rows only, `weight_rate` is
+        # built from the weight ladder, and `coverage` exists on `daily`
+        # alone - so the argument could only ever have forwarded `None`. A
+        # carry-forward no test can make fire is not caution, it is an
+        # unreachable branch that reads like coverage. The suppression rewrite
+        # below DOES forward it, because that one rewrites daily-built rows.
         rows = [_row(r["week"], r["metric"], r["value"], r["target"], NODATA,
-                     r["goal"], reason=CONTRAINDICATED, provisional=r.get("provisional"),
-                     statistic=r["statistic"])
+                     r["goal"], reason=CONTRAINDICATED, statistic=r["statistic"])
                 if r["metric"] == "weight_rate" else r for r in rows]
 
     # G33, last: a suppressed metric is still RECORDED, just not scored. The
@@ -700,7 +711,8 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
     # stops is the judging.
     if cfg.suppressed_metrics:
         rows = [_row(r["week"], r["metric"], r["value"], r["target"], NODATA,
-                     r["goal"], reason=SUPPRESSED, provisional=r.get("provisional"), statistic=r["statistic"])
+                     r["goal"], reason=SUPPRESSED, statistic=r["statistic"],
+                     provisional=r.get("provisional"))
                 if r["metric"] in cfg.suppressed_metrics else r
                 for r in rows]
     rows.sort(key=lambda r: (r["week"], r["metric"]))

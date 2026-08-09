@@ -153,7 +153,7 @@ def test_a_suppressed_row_keeps_its_flag(tmp_path):
     rows = [day(f"2030-05-{d:02d}") for d in range(6, 12)]
     rows.append(day("2030-05-12", coverage=PARTIAL))
     root = (tmp_path / "content")
-    v = record(tmp_path, rows)
+    record(tmp_path, rows)
     (root / "vitai.toml").write_text(
         '[athlete]\nname = "T"\n[tripwires]\nsteps_floor = 8000\n'
         '[preferences]\nsuppressed_metrics = ["steps"]\n', encoding="utf-8")
@@ -239,20 +239,102 @@ def test_the_incident_row_itself_is_marked(tmp_path):
     assert got["intake_floor"]["value"] is not None
 
 
+def full_record(tmp_path: Path, outvote: bool) -> Vitai:
+    """Every daily-built metric at once, over an outvoted open day.
+
+    Written after review found the three RED-S floors, `energy_availability`
+    and the read-model path each unwitnessed - the fixtures above log steps
+    only, so a floor row never existed for them to check. This one carries
+    intake, protein, sleep, rhr and pain; a body-composition read and priced
+    sessions so EA computes; and, when `outvote` is set, a watch calling the
+    last day `full` against the app's `partial`.
+
+    THE OUTVOTE IS THE POINT for the floors. They window over the RAW rows
+    for the same reason the weekly loop does, and reading the canonical rows
+    instead would take the watch's answer - which is the incident."""
+    root = tmp_path / "content"
+    (root / "data").mkdir(parents=True)
+    (root / "vitai.toml").write_text(
+        '[athlete]\nname = "T"\n'
+        "[tripwires]\nsteps_floor = 8000\nsleep_floor_h = 7.5\n"
+        "rhr_baseline = 45\npain_gate = 2\n"
+        "[resolution]\nsource_order = ['watch', 'app']\n", encoding="utf-8")
+
+    def full_day(date: str, **kw) -> dict:
+        return {**{k: None for k in KEYS["daily"]}, "date": date, "steps": 9000,
+                "kcal_in": 1150, "protein_g": 90, "sleep_h": 7.0, "rhr": 52,
+                "pain": 1, "source": "watch", "coverage": "full", **kw}
+
+    rows = [full_day(f"2030-05-{n:02d}") for n in range(1, 14)]
+    rows.append(full_day("2030-05-14", kcal_in=200, protein_g=12,
+                         coverage="full" if outvote else PARTIAL))
+    if outvote:
+        rows.append(full_day("2030-05-14", kcal_in=200, protein_g=12,
+                             source="app", coverage=PARTIAL))
+    (root / "data" / "daily.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    # A composition read, because `_fat_free_mass` never estimates one and EA
+    # is simply not computed without it.
+    (root / "data" / "weight.jsonl").write_text(json.dumps(
+        {**{k: None for k in KEYS["weight"]}, "date": "2030-05-01", "kg": 70.0,
+         "body_fat_pct": 20.0, "source": "scale"}) + "\n", encoding="utf-8")
+    (root / "data" / "sessions.jsonl").write_text(
+        "".join(json.dumps(
+            {**{k: None for k in KEYS["sessions"]}, "date": f"2030-05-{n:02d}",
+             "sport": "run", "duration_s": 3600, "kcal": 600,
+             "source": "watch"}) + "\n" for n in range(1, 15)), encoding="utf-8")
+    return Vitai(root)
+
+
+DAILY_BUILT = ("steps", "sleep", "rhr", "pain_gate", "intake_floor",
+               "protein_floor", "energy_availability")
+
+
 def test_every_metric_built_from_the_daily_rows_answers_the_question(tmp_path):
     """An inconsistent flag is worse than none, because absence reads as
     "this one is final" - so a consumer would have to hardcode which metrics
-    are wired, which is the duplication this engine exists to prevent."""
-    from_daily = {"steps", "sleep", "rhr", "intake_floor", "protein_floor",
-                  "energy_availability"}
-    got = {r["metric"]: r for r in nutrition(tmp_path, True).verdicts()}
-    # `energy_availability` needs sessions to price the exercise term, so a
-    # nutrition-only record reaches the two floors; the point is that every
-    # metric that IS produced answers rather than staying silent.
-    reached = from_daily & set(got)
-    assert len(reached) >= 2, sorted(got)
-    for metric in sorted(reached):
-        assert got[metric]["provisional"] is not None, metric
+    are wired, which is the duplication this engine exists to prevent.
+
+    `pain_gate` was the one left out, and the first version of this test
+    hardcoded a set that did not name it - a consistency check written around
+    the gap it was there to find. The fixture now reaches all seven."""
+    got = {r["metric"]: r for r in full_record(tmp_path, False).verdicts()}
+    missing = [m for m in DAILY_BUILT if m not in got]
+    assert not missing, f"fixture no longer reaches {missing}"
+    for metric in DAILY_BUILT:
+        assert got[metric]["provisional"] is True, metric
+        assert got[metric]["value"] is not None, f"{metric} still scores"
+
+
+def test_the_floors_hear_the_open_claim_that_lost_the_contest(tmp_path):
+    """The floors window over the RAW rows, not the canonical ones.
+
+    Review found this unwitnessed: replacing `open_day_in(raw_window or
+    window)` with `open_day_in(window)` in all three floors passed the whole
+    suite, because the outvote fixture above logs steps and produces no floor
+    row. Here the watch wins the day and calls it `full`, and the floors must
+    still hear the app."""
+    v = full_record(tmp_path, True)
+    canonical = [r for r in v.canonical("daily") if r["date"] == "2030-05-14"]
+    assert canonical[0]["coverage"] == "full", "the ladder picked the watch"
+    got = {r["metric"]: r for r in v.verdicts()}
+    for metric in ("intake_floor", "protein_floor", "energy_availability"):
+        assert got[metric]["provisional"] is True, metric
+
+
+def test_the_outvoted_claim_reaches_the_read_model_too(tmp_path):
+    """The SQL surface, on the path review found unwitnessed: reverting
+    `raw_daily` at the `_derivations` call site - the one `build()` uses -
+    passed all 2295 tests, so a consumer querying the table lost the flag in
+    exactly the case the issue is about while `verdicts()` kept it."""
+    con = sqlite3.connect(full_record(tmp_path, True).build())
+    try:
+        got = dict(con.execute(
+            "SELECT metric, provisional FROM verdicts "
+            "WHERE metric IN ('intake_floor', 'energy_availability')"))
+        assert got and all(v == 1 for v in got.values()), got
+    finally:
+        con.close()
 
 
 def test_a_finished_fortnight_says_final_rather_than_nothing(tmp_path):
