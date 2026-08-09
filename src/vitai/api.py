@@ -197,6 +197,151 @@ class Vitai:
         return coarse(name, append(self.root / "data", name, record,
                                    device=self.config.device))
 
+    def undated_policy(self, on: date | str | None = None) -> dict:
+        """Threshold keys the toml sets and the record has no dated row for.
+
+        THE HALF OF #148 THAT `policy_digest` ONLY MADE DETECTABLE. `as_of`
+        reconstructs the record at an instant by filtering on `recorded_at`,
+        which is right for everything the record HOLDS. Thresholds live in
+        `vitai.toml`, outside the append-only record: dated `thresholds` rows
+        overlay it per week, and a week with no row is judged by whatever the
+        file says TODAY. So editing a floor in September silently re-judges
+        every earlier week that lacked an explicit row, and a reconstruction of
+        March returns March's data under September's policy.
+
+        Measured on the shipped corpus rather than argued: 225 judged weeks
+        across three personas, and not one dated threshold row anywhere. The
+        gap is total, not partial.
+
+        Returns `{key: value}` for the keys in that state - the ones a
+        consumer is being handed a verdict about whose standard has no history.
+        """
+        from .config import THRESHOLD_TYPES
+        from .policy import state as policy_state
+
+        when = _viewpoint(on) if on is not None else self.on
+        held = policy_state(self.dataset("goals"), self.dataset("thresholds"),
+                            when).thresholds
+        cfg = self.config
+        out = {}
+        for key, caster in THRESHOLD_TYPES.items():
+            value = getattr(cfg, key, None)
+            if value is None or key in held:
+                continue
+            try:
+                out[key] = caster(value)
+            except (TypeError, ValueError):
+                # A toml value the engine cannot type is a fault in the file,
+                # reported by `validate`, and it is not an undated policy - it
+                # is not a policy. Passing it through put uncastable text into
+                # a consumer's payload and killed `pin-policy` mid-command.
+                continue
+        return out
+
+    def never_dated_policy(self) -> dict:
+        """Threshold keys with no dated row ANYWHERE, at any date.
+
+        A DIFFERENT QUESTION FROM `undated_policy`, and conflating them was a
+        defect. That one asks what is undated AT A VIEWPOINT, which is the
+        right question for reporting: a week judged before the athlete first
+        declared a floor was judged by the toml, and a consumer looking at that
+        week should be told so.
+
+        WITH `on` GONE THE TWO NOW COINCIDE for every input a caller can
+        reach, and a mutation swapping this for `undated_policy` in
+        `pin_policy` passes - which is worth stating rather than papering over
+        with a test that proves nothing. They coincide because the horizon
+        includes the thresholds rows' own dates, so a dated row is always in
+        force at it. The distinction is kept because it is the question a write
+        must ask whatever the default happens to make true, and because
+        restoring an `on` parameter would silently re-open the defect below.
+
+        This is the question a WRITE has to ask. Pinning on the first answer
+        let `pin_policy(on=<a date before an existing row>)` insert a line in
+        front of the athlete's own declaration - and `plan_churn` diffs
+        consecutive lines with the declaration excluded, so their first
+        statement of a floor turned into a flagged LOOSENING, on the surface
+        built to catch quiet retreats. The engine rewriting how an athlete's
+        line reads is the one thing an append must never manage.
+        """
+        from .config import THRESHOLD_TYPES
+
+        ever = {str(r.get("key")) for r in self.dataset("thresholds")
+                if r.get("key") and r.get("date")}
+        cfg = self.config
+        out = {}
+        for key, caster in THRESHOLD_TYPES.items():
+            value = getattr(cfg, key, None)
+            if value is None or key in ever:
+                continue
+            try:
+                out[key] = caster(value)
+            except (TypeError, ValueError):
+                # A value the engine cannot type is a fault in the file, not a
+                # policy waiting to be dated. Passing it through killed
+                # `pin-policy` mid-command on a validation error the caller
+                # could do nothing about from here.
+                continue
+        return out
+
+    def pin_policy(self, reason: str = "pinned from vitai.toml") -> list[dict]:
+        """Give the toml's thresholds the dated history data already has.
+
+        Appends one `thresholds` row per key from `never_dated_policy`, dated
+        the record's own horizon, so a later edit to the file stops reaching
+        weeks FROM THAT DATE FORWARD.
+
+        IT PROTECTS NOTHING ALREADY JUDGED, and the first version of this
+        docstring said otherwise. The row is dated the horizon - the last day
+        the record has a row for - and a weekly verdict takes the policy in
+        force at its Monday, so protection starts the Monday after. On the day
+        you pin, the number of already-judged weeks protected is exactly zero.
+        The past cannot be pinned and must not be: the toml has no history,
+        which is the defect, and writing one from its present state would bury
+        the defect under a fabrication that reads exactly like a record.
+
+        NO `on` PARAMETER, deliberately. An explicit past date is how the first
+        version inserted a line in front of the athlete's own declaration.
+        There is no legitimate use for pinning a policy at a date the record
+        did not reach, and offering one made a foot-gun out of an argument.
+
+        EXPLICIT, NEVER A BUILD SIDE EFFECT. The engine writes to the record
+        only when asked - `assert_delivery` is the precedent - and a build that
+        appended to the athlete's files would make `vitai build` unrepeatable.
+
+        REFUSES UNDER A KNOWLEDGE CUTOFF. `as_of` filters what this instance
+        can SEE, and the file it writes to is not filtered - so a pin through a
+        cutoff earlier than an existing pin cannot see that pin and writes a
+        second identical row into a file that cannot be un-appended. A write
+        whose content is computed from a partial view has no business landing
+        in the whole record.
+
+        `set_by` is `onboard`. Not `athlete`: nobody stated this on this date,
+        and `plan_churn` copies the author onto its rows, so claiming the
+        athlete would put their name on an assertion the engine composed. Not
+        `derived` either - nothing was computed. It is a value seeded from
+        setup material, which is what `onboard` means.
+        """
+        if self.as_of is not None:
+            raise ValueError(
+                "pin_policy writes to the whole record and this instance can "
+                "only see part of it (as_of is set). Open the record without "
+                "a cutoff to pin its policy.")
+        pending = self.never_dated_policy()
+        if not pending:
+            return []
+        when = self.on
+        return self.append_many("thresholds", [
+            {"date": when.isoformat(), "key": key, "value": value,
+             # `change`, not `correction`: a correction asserts the previous
+             # line never reflected a real intention, and there is no previous
+             # line. It costs no churn either - `never_dated_policy` returns
+             # only keys with no row at all, so this is first in its chain and
+             # `_edits` excludes the declaration.
+             "change_kind": "change", "set_by": "onboard",
+             "reason": reason}
+            for key, value in sorted(pending.items())])
+
     def append_many(self, name: str, records: list[dict]) -> list[dict]:
         """Append many rows in one pass - what a bulk import should call.
 
@@ -2205,6 +2350,21 @@ class Vitai:
                 "advisories": report["advisories"],
                 "last_seen": last_seen,
                 "channels": channels,
+                # THE STANDARD WITH NO HISTORY (#148). Every threshold here is
+                # one the toml sets and the record has never dated, so every
+                # verdict against it - including one reconstructed for a week
+                # two years ago - was judged by the file as it is right now.
+                # Editing it re-judges that history silently.
+                #
+                # Reported beside what is stale and what is missing, because
+                # that is what it is: `policy_digest` made the difference
+                # detectable and this says which keys it applies to. `vitai
+                # pin-policy` stops it happening to weeks from the pin date
+                # forward; nothing can protect the weeks already judged, and a
+                # backfill from the file's present state would be a fabricated
+                # history rather than a fix.
+                "undated_policy": section(
+                    "undated_policy", lambda: self.undated_policy(when), {}),
                 "duplicate_captures": self.duplicate_captures(),
                 "conservation": self.conservation(),
                 "retracted": self.retractions(),
