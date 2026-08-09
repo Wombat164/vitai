@@ -1716,7 +1716,12 @@ def _bad_time(v: object) -> bool:
         return True
 
 
-SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+# `\Z`, NOT `$`. In Python `$` matches before a TRAILING NEWLINE, so
+# `"hop-test\n"` passed every slug check in this file - six of them - and a
+# value that is a slug plus an invisible character validated clean. Found via
+# `weight.protocol`, where the seam detector then folded it onto the real slug
+# with the validator saying nothing, so a fault had no witness anywhere.
+SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*\Z")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 

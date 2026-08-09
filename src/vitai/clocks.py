@@ -201,11 +201,54 @@ def protocol_seam(rows: list[dict]) -> dict:
     # "aa-evening then zz-morning". Ordered by first appearance by DATE, with
     # file order breaking a tie, because that is the sequence the athlete
     # actually moved through.
-    dated = sorted((str(r.get("date") or ""), i, str(r["protocol"]))
-                   for i, r in enumerate(rows)
-                   if r.get("protocol") not in (None, ""))
-    named = [p for _, _, p in dated]
-    distinct = list(dict.fromkeys(named))
+    # ONE SPELLING IS NOT TWO PROTOCOLS. Comparing the raw strings meant
+    # `Fasted-Post-Void` and `fasted-post-void` were two, so a rate was
+    # declined as NOT COMPARABLE for an athlete who weighed the same way both
+    # times. The validator does report the spelling - `protocol` must be a
+    # slug - but it is a separate call, and a refusal that fires on a typo is
+    # a refusal readers learn to skip past.
+    #
+    # THE WHOLE REGISTRY FOLD, not half of it. `vocab.resolve` normalises AND
+    # decamels - `index.get(_normalise(text)) or index.get(_normalise(
+    # _decamel(text)))` - so `FastedPostVoid` is one value with
+    # `fasted-post-void` to every lookup in the engine. Borrowing only
+    # `_normalise` left exactly the vendor and importer token shape `_decamel`
+    # exists for still seaming, while the comment claimed the registry's
+    # equivalence.
+    #
+    # A SEPARATOR FOLDS TO A WORD BOUNDARY, NEVER TO NOTHING. `post-void` and
+    # `postvoid` are two protocols and must stay two; `_normalise` replaces a
+    # hyphen with a space rather than deleting it, which is what keeps the fold
+    # injective over slugs - a kebab slug maps one-to-one onto its token list.
+    #
+    # AN EMPTY FOLD IS SILENCE. `" "`, `"-"` and `"___"` all normalise to
+    # nothing, and the raw-value filter above let them through as three named
+    # protocols that then merged into one. A placeholder is not a procedure.
+    #
+    # The RAW spelling is what gets reported, because the athlete's own words
+    # are what a reader should see - only the COMPARISON folds.
+    from .vocab import _decamel, _normalise
+
+    def fold(text: str) -> str:
+        plain = _normalise(text)
+        return plain if " " in plain else _normalise(_decamel(text))
+
+    # ORDERED BY `order_key`, NOT BY FILE POSITION, and that is this module's
+    # own acceptance criterion: "an ordering a formatter can change is not an
+    # ordering". Sorting by `(date, file index)` was cosmetic while both
+    # spellings were listed; now that the first one becomes the single
+    # athlete-facing name, reordering two lines in a file changed the report.
+    dated = sorted((r for r in rows if r.get("protocol") not in (None, "")),
+                   key=order_key)
+    seen: dict[str, str] = {}
+    for rec in dated:
+        spelling = str(rec["protocol"])
+        key = fold(spelling)
+        if not key:
+            continue
+        seen.setdefault(key, spelling)
+    distinct = list(seen.values())
+    named = [str(r["protocol"]) for r in dated if fold(str(r["protocol"]))]
     return {"protocols": distinct, "seam": len(distinct) > 1,
             "stated": len(named), "silent": len(rows) - len(named)}
 
