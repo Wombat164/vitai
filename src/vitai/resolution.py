@@ -586,8 +586,10 @@ def _substantiated(canonical: dict, named: dict[str, str],
             kept[field] = owners.pop()
         # WITNESSED, after a note here claimed it could not be. That note
         # said sessions bucket by `activity_id`, which is false - they cluster
-        # by TIME OVERLAP (`_same_activity`), and #43 records keying on
-        # `activity_id` as future work. The real obstacle was duller: the
+        # by TIME OVERLAP (`_same_activity`), and nothing in the resolver
+        # reads `activity_id` at all - #43 settled it as a dedupe key an
+        # IMPORTER can check, which is a different layer. The obstacle was
+        # duller: the
         # fixtures in this file carry `start_time: "18:00"`, which `parse_time`
         # cannot read, so the strong test was never available, shape decided,
         # and three same-type claims tripped the routine guard into staying
