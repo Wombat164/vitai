@@ -302,7 +302,27 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
                 # swallow a device reading and a recollection disagreeing by
                 # any amount at all.
                 "by_capture": _by_capture(winner, loser),
-                "disagreed": _disagrees(winner[field], loser[field]),
+                # EVERY DISCARD, not only the runner-up - the same widening
+                # `discarded` got one line above, and the comment beside
+                # `unattributed_loser` below already names this exact defect:
+                # "`disagreed` compares the winner with the runner-up only, so
+                # a third unattributed claim differing wildly went unnoticed".
+                # It was fixed there and not here, in the same dict.
+                #
+                # The consequence reaches a reader: `_contradictions` gates the
+                # `source_disagreement` tripwire on this flag, and the CLI
+                # marks a contested line with `!` only when it is set. So a
+                # scale saying 70.0, an app saying 70.0 and a watch saying 74.5
+                # produced no mark and no tripwire, because the runner-up
+                # happened to agree.
+                #
+                # WHICH ONE IT NAMES stays the runner-up: `over_source` and
+                # `over_value` describe the contest the ladder actually
+                # decided, and `discarded` beside them lists the rest. This
+                # flag answers "is there a disagreement here", which is a
+                # question about all of them.
+                "disagreed": any(_disagrees(winner[field], rec[field])
+                                 for _, rec in witnesses[1:]),
                 # Same origin means these are one measurement seen at two
                 # points on one pipe. The spread then measures PIPELINE
                 # FIDELITY, not truth - worth reporting, never worth counting
@@ -1581,11 +1601,21 @@ def _contradictions(explanations: list[dict]) -> list[dict]:
             continue
         if e.get("disagreed") and _numeric(e.get("chosen_value")) \
                 and _numeric(e.get("over_value")):
+            # NAMES WHAT WAS DISCARDED, not the runner-up. `disagreed` now
+            # answers "is there a disagreement here" over EVERY discard, so
+            # the pair the ladder happened to decide can be two claims that
+            # agree - a scale and an app both saying 70.0 while a watch says
+            # 84.5 produced a `source_disagreement` reading "app says 70.0,
+            # scale says 70.0", which looks like the tripwire is broken.
+            #
+            # `discarded` is already on the row and already lists all of them,
+            # so this needs no new column: the tripwire's job is to say look
+            # here, and the spread is what a reader has to look at.
             yield {
                 "date": e["date"],
                 "kind": "source_disagreement",
                 "detail": (f"{e['dataset']}.{e['field']}: "
                            f"{e['chosen_source']} says {e['chosen_value']}, "
-                           f"{e['over_source']} says {e['over_value']}"),
+                           f"against {e['discarded']}"),
                 "severity": "review",
             }
