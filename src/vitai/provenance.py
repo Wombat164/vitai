@@ -287,6 +287,9 @@ def derivation_groups(recs: list[dict]) -> list[list[dict]]:
 READERS = ("athlete", "model", "human-other")
 
 
+ACTIVE, PASSIVE = "active", "passive"
+
+
 def capture_of(rec: dict) -> str:
     """The acquisition method, resolved through the registry.
 
@@ -296,6 +299,121 @@ def capture_of(rec: dict) -> str:
     its properties.
     """
     return resolve("capture", "capture", rec.get("capture")) or UNKNOWN
+
+
+# DATASETS THAT HAVE NO `capture` COLUMN AND ARE STILL SOMEBODY TYPING (#146).
+#
+# Only six datasets carry `capture` at all. Reading initiative off that field
+# alone made `journal` - a dataset that is nothing BUT the athlete writing
+# sentences - resolve to `unknown` and drop out of the count entirely. So the
+# surface could report the athlete silent for a month on a day he had written
+# to it, which is the schema-gap-as-a-statement-about-the-person inversion the
+# registry note says this must not commit. The row-level guard was right and
+# the hole was one level up.
+#
+# Only where the DATASET ITSELF settles it. `journal` is prose somebody wrote
+# and `checks` is a thing somebody did; both are acts by construction. Nothing
+# else is listed, because guessing per dataset is how a vocabulary stops
+# meaning anything - the rest stay `unknown`, which is an answer.
+AUTHORED_DATASETS = {"journal": ACTIVE, "checks": ACTIVE}
+
+
+def initiative_of(rec: dict, dataset: str | None = None) -> str:
+    """Did a PERSON act to produce this value: `active`, `passive`, `derived`
+    or `unknown` (#146).
+
+    The axis `capture` could not answer. A photo of a console and a BLE read of
+    the same console are one origin and two captures, and they are also two
+    completely different facts about whether anybody was there.
+
+    A PERSON, NOT NECESSARILY THE ATHLETE, and the first wording said the
+    athlete and was wrong. `read_by` already carries `human-other` for the case
+    the record has: a partner who enters rows on the athlete's behalf. Those
+    rows are a person acting - the tool is being talked to - and the axis is
+    honest about that rather than pretending to know whose hands were on the
+    keyboard. A consumer that needs the narrower question reads `read_by`,
+    which exists for it.
+    """
+    from .vocab import registry
+
+    entry = (registry("capture").get("capture") or {}).get(capture_of(rec)) or {}
+    stated = str(entry.get("initiative") or UNKNOWN)
+    if stated == UNKNOWN and not states_capture(rec):
+        return AUTHORED_DATASETS.get(str(dataset or ""), UNKNOWN)
+    return stated
+
+
+def channel_liveness(rows: object, on: str) -> dict:
+    """When each kind of channel last reached the record, on or before `on`.
+
+    Takes either a list of rows or a `{dataset: rows}` mapping - the mapping
+    form is what lets `journal` and `checks` be seen at all, since their
+    initiative is a property of the dataset rather than of a field on the row.
+
+    Returns `{active: {...}, passive: {...}}`, each `{last_seen, quiet_days,
+    rows}`.
+
+    WHEN IT REACHED THE RECORD, not when it happened. `recorded_at` where the
+    row has one, falling back to `date`. The first cut read `date` and so
+    reported the athlete silent for a month on the day he sat down and entered
+    a month of backfill - which is the opposite of the fact this exists to
+    show. Arrival is the question; the observation date answers a different
+    one, and `last_seen` per dataset already answers that.
+
+    NO CONTRAST FIELD, deliberately, and the first cut had one. It emitted the
+    difference between the two only when the ACTIVE side was the quieter -
+    null in the reverse case - which is the engine choosing which shape is
+    worth naming and encoding that choice in the schema. Both numbers are
+    right here; a consumer that wants the difference can subtract, and one
+    that wants it in the other direction is not being told it does not exist.
+
+    AN OBSERVATION, NEVER A READING OF IT. Two dates. It does not say
+    engagement, adherence, motivation or concern, and it must never grow a
+    threshold that decides when a gap becomes one of those - the record cannot
+    tell a bereavement from a holiday from a phone left in a drawer, and a
+    persona in this corpus exists to prove that guessing is wrong even when the
+    guess is right. Silence is absence of information: not compliance, because
+    nothing was adhered to, and not refusal, because nothing was declined.
+
+    `derived` AND `unknown` ARE EXCLUDED. Arithmetic is not a person and not a
+    sensor, and an unstated channel is a gap in the record rather than a quiet
+    one.
+    """
+    from datetime import date as _date
+
+    if isinstance(rows, dict):
+        pairs = [(name, rec) for name, rs in rows.items() for rec in rs]
+    else:
+        pairs = [(None, rec) for rec in rows]
+
+    seen: dict[str, list[str]] = {ACTIVE: [], PASSIVE: []}
+    for dataset, rec in pairs:
+        side = initiative_of(rec, dataset)
+        if side not in seen:
+            continue
+        # A DATE THAT DOES NOT PARSE IS NOT A DATE. Left as a string it won a
+        # `max()` against real ones - a trailing space sorts above every digit -
+        # and put a non-date into a field typed `date | None`.
+        stamp = str(rec.get("recorded_at") or rec.get("date") or "")[:10]
+        try:
+            when = _date.fromisoformat(stamp)
+        except ValueError:
+            continue
+        if when.isoformat() <= on:
+            seen[side].append(when.isoformat())
+
+    try:
+        today = _date.fromisoformat(on)
+    except ValueError:
+        today = None
+
+    out: dict[str, object] = {}
+    for side, dates in seen.items():
+        last = max(dates) if dates else None
+        quiet = ((today - _date.fromisoformat(last)).days
+                 if last and today else None)
+        out[side] = {"last_seen": last, "quiet_days": quiet, "rows": len(dates)}
+    return out
 
 
 def may_transcribe(rec: dict) -> bool:
