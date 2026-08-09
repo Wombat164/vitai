@@ -1,37 +1,36 @@
-"""The ordering rule is pinned where it is defined and nowhere it is used.
+"""The ordering rule, checked where it is used and where it is not.
 
-`clocks.order_key` is doctrine: order on VALID time, keep transaction time
-separate, and never trust the order lines happen to sit in. Its own docstring
-puts it plainly - "an ordering a formatter can change is not an ordering" -
-and eight readers across five modules depend on it.
+`clocks.order_key` orders rows by valid time, then by whether a transaction
+time exists, then by that instant. Eight sort sites across FOUR modules use it
+- `clocks`, `jsonl`, `contributions` and `policy`; `schema` re-exports it and
+never sorts.
 
-Measured rather than assumed: replacing `order_key` with a constant, so a
-stable sort keeps arrival order, leaves **2258 of 2264 tests passing**. Four
-of the six failures are in `test_clocks.py`, the unit tests of the function
-itself; the other two were added with the protocol seam and are the only
-use-site coverage in the tree. Every reader that actually decides something
-with it - which threshold is in force, which goal, which device row, what a
-correction retires - is unprotected.
+WHAT THIS FILE IS AND IS NOT, corrected after review. The first version claimed
+to add use-site coverage and did not: the two sites it reaches, `policy._in_force`
+and `jsonl.heads`, were ALREADY witnessed by `test_clocks.py`, whose four tests
+assert through `state()` and `heads()` rather than through the key. Three of its
+tests could not fail at all, because `Vitai.dataset()` and `build()` are ordered
+by `devices.merge` - a second, hand-written implementation of the same doctrine
+- and never touch `order_key`. Those are gone.
 
-That is the same shape as every expensive defect here: a rule with one home
-and no witness at the places it is load-bearing. So this exercises each use
-site with a record whose FILE ORDER CONTRADICTS ITS DATES, and asserts the
-answer comes from the record.
+WHAT SURVIVES IS THE GAP THE REVIEW FOUND. Replacing `stamp_instant(stamp)`
+with `str(stamp)` - comparing transaction times as TEXT - passed all 2275
+tests, and it is the one property `order_key`'s own docstring spends three
+lines defending: "Comparing stamps as text orders two rows written either side
+of a timezone change by wall clock rather than by when they were written." An
+athlete who flies east gets the wrong threshold in force, and nothing said so.
 
-WHY IT MATTERS BEYOND TIDINESS, and #308 is the live instance: a client that
-re-derived this rule from prose got it wrong, taking the first and last
-elements of an append-only log as its span. Position and date agree on every
-log written once, in order, on one device - which is every log anyone has
-today. They stop agreeing when a file is restored from a backup or merged
-across devices, which is when somebody is already having a bad day.
+AND THE SECOND IMPLEMENTATION. `devices.merge` re-derives the doctrine by hand,
+knowingly and with a comment saying so, and it is the sort that actually orders
+every dataset a consumer reads. Two implementations of one rule is the shape
+this repo keeps paying for; the sweep in #323 cannot see this pair because they
+are not byte-identical. Both are pinned here.
 """
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
-from vitai.api import Vitai
 from vitai.clocks import order_key
 from vitai.schema import KEYS
 
@@ -40,20 +39,6 @@ from vitai.schema import KEYS
 # answer and anything reading the record gets the current one.
 EARLY = "2030-05-01T06:00:00Z"
 LATE = "2030-05-01T18:00:00Z"
-
-
-def write(root: Path, name: str, rows: list[dict]) -> None:
-    (root / "data").mkdir(parents=True, exist_ok=True)
-    (root / "data" / f"{name}.jsonl").write_text(
-        "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
-
-
-def record(tmp_path: Path, toml: str = "") -> Path:
-    root = tmp_path / "content"
-    (root / "data").mkdir(parents=True, exist_ok=True)
-    (root / "vitai.toml").write_text('[athlete]\nname = "T"\n' + toml,
-                                     encoding="utf-8")
-    return root
 
 
 def threshold(value: float, stamped: str, reason: str) -> dict:
@@ -70,9 +55,9 @@ def test_the_later_stamp_sorts_last_however_the_file_is_written():
     assert [r["value"] for r in sorted(reversed(rows), key=order_key)] == [7000, 9000]
 
 
-# --- and at every place that decides something with it -------------------------
+# --- the two sites it reaches, which `test_clocks.py` already reached ---------
 
-def test_which_threshold_is_in_force_comes_from_the_record(tmp_path):
+def test_which_threshold_is_in_force_comes_from_the_record():
     """`policy._in_force` decides which policy a week is judged against. Read
     by file position it would take whichever line a formatter left last."""
     from vitai.policy import state
@@ -84,7 +69,7 @@ def test_which_threshold_is_in_force_comes_from_the_record(tmp_path):
         assert held["steps_floor"] == 9000, order[0]["reason"]
 
 
-def test_which_goal_is_live_comes_from_the_record(tmp_path):
+def test_which_goal_is_live_comes_from_the_record():
     """The same reader, over `goals`, where the identity is the slug."""
     from vitai.policy import state
 
@@ -98,20 +83,6 @@ def test_which_goal_is_live_comes_from_the_record(tmp_path):
     for order in (rows, list(reversed(rows))):
         live = state(order, [], "2030-05-02").goals
         assert [g["target"] for g in live] == [68.0]
-
-
-def test_a_correction_retires_the_line_the_record_says_is_current(tmp_path):
-    """`jsonl` reads a dataset in `order_key` order before applying
-    `supersedes`. By file position a correction could retire the wrong one of
-    two lines sharing a date."""
-    root = record(tmp_path)
-    rows = [threshold(9000, LATE, "raised in the evening"),
-            threshold(7000, EARLY, "the morning figure")]
-    write(root, "thresholds", rows)
-    forwards = [r["value"] for r in Vitai(root).dataset("thresholds")]
-    write(root, "thresholds", list(reversed(rows)))
-    backwards = [r["value"] for r in Vitai(root).dataset("thresholds")]
-    assert forwards == backwards == [7000, 9000]
 
 
 def test_the_current_line_for_an_identity_comes_from_the_record():
@@ -129,42 +100,6 @@ def test_the_current_line_for_an_identity_comes_from_the_record():
     for order in (rows, list(reversed(rows))):
         head = heads(order, "thresholds")["steps_floor"]
         assert head["value"] == 9000, order[0]["reason"]
-
-
-def test_the_verdicts_a_record_produces_do_not_depend_on_line_order(tmp_path):
-    """The property that matters end to end, and the one a formatter could
-    have broken: reordering two lines in a file must not change a judgement."""
-    root = record(tmp_path, "[tripwires]\nsteps_floor = 5000\n")
-    daily = [{**{k: None for k in KEYS["daily"]}, "date": f"2030-05-{d:02d}",
-              "steps": 8000, "source": "manual"} for d in range(1, 15)]
-    write(root, "daily", daily)
-    rows = [threshold(9000, LATE, "raised in the evening"),
-            threshold(7000, EARLY, "the morning figure")]
-
-    write(root, "thresholds", rows)
-    forwards = Vitai(root).verdicts()
-    write(root, "thresholds", list(reversed(rows)))
-    backwards = Vitai(root).verdicts()
-    assert forwards == backwards
-    # And the weeks the dated row reaches take its figure, not the toml's -
-    # the week BEFORE 2030-05-01 correctly still reads the file, since no
-    # dated policy covers it (#148).
-    reached = [r for r in forwards
-               if r["metric"] == "steps" and r["week"] >= "2030-05-06"]
-    assert reached and all(r["target"] == 9000 for r in reached), reached
-
-
-def test_the_built_read_model_is_byte_identical_either_way(tmp_path):
-    """A reformat that reorders lines must not change the artifact a consumer
-    reads. This is `order_key`'s whole argument, at the surface a client
-    actually holds."""
-    rows = [threshold(9000, LATE, "raised in the evening"),
-            threshold(7000, EARLY, "the morning figure")]
-    first = record(tmp_path / "a")
-    write(first, "thresholds", rows)
-    second = record(tmp_path / "b")
-    write(second, "thresholds", list(reversed(rows)))
-    assert Vitai(first).build().read_bytes() == Vitai(second).build().read_bytes()
 
 
 def test_an_unstamped_file_keeps_the_order_it_had(tmp_path):
@@ -200,6 +135,84 @@ def test_valid_time_beats_transaction_time(tmp_path):
 
 
 # --- and the guard against this happening again --------------------------------
+
+# THE OTHER IMPLEMENTATION OF THIS RULE, declared. `devices.merge` re-derives
+# the ordering doctrine by hand - `(stamp is not None, stamp_instant(stamp) or
+# _NO_INSTANT, device, position)` - knowingly, with a comment saying it is
+# copying the canon, and it is the sort that actually orders every dataset a
+# consumer reads. #323's duplicate sweep cannot see the pair, because they are
+# not byte-identical: one sorts records, the other sorts a device's stream.
+#
+# Listed rather than merged, because they answer different questions and the
+# merge has a device and a position in its key. What must not happen is the two
+# drifting on the half they share, which the next test pins.
+SECOND_IMPLEMENTATION = ("devices.py", "merge")
+
+
+def test_the_hand_written_sort_still_agrees_on_the_half_they_share():
+    """RUN, not grepped. Both implementations must put an unstamped row before
+    a stamped one and both must compare INSTANTS rather than text - a fix to
+    one that misses the other is how a record starts answering two ways, and
+    `devices.merge` is the sort that actually orders every dataset a consumer
+    reads.
+
+    The first version of this checked the source for `stamp_instant`, which a
+    mutation walked straight through: reading a function's text is not running
+    it."""
+    from vitai.devices import merge
+
+    east = threshold(9000, "2030-05-01T23:30:00+02:00", "before the flight")
+    utc = threshold(7000, "2030-05-01T22:00:00+00:00", "after landing")
+    legacy = threshold(5000, None, "unstamped")
+    legacy["recorded_at"] = None
+
+    merged = merge([("phone", [east]), ("laptop", [utc])], "thresholds")
+    assert [r["value"] for r in merged] == [9000, 7000], "instants, not text"
+
+    with_legacy = merge([("phone", [legacy]), ("laptop", [utc])], "thresholds")
+    assert [r["value"] for r in with_legacy] == [5000, 7000], "absent first"
+
+
+def test_both_implementations_answer_the_same_way():
+    """The property that matters when there are two: on the inputs they share,
+    they agree. Asserted over the pair the timezone trap turns on."""
+    from vitai.devices import merge
+
+    east = threshold(9000, "2030-05-01T23:30:00+02:00", "before the flight")
+    utc = threshold(7000, "2030-05-01T22:00:00+00:00", "after landing")
+    by_key = [r["value"] for r in sorted([utc, east], key=order_key)]
+    by_merge = [r["value"] for r in merge([("a", [utc]), ("b", [east])],
+                                          "thresholds")]
+    assert by_key == by_merge == [9000, 7000]
+
+
+def test_a_transaction_time_is_compared_as_an_instant_and_not_as_text():
+    """THE GAP THE REVIEW FOUND, and the property the key's docstring argues
+    for: "comparing stamps as text orders two rows written either side of a
+    timezone change by wall clock rather than by when they were written".
+
+    Replacing `stamp_instant(stamp)` with `str(stamp)` passed all 2275 tests.
+    An athlete who flies east writes 23:30+02:00 and then 22:00Z - later by the
+    clock on the wall, earlier by every clock that matters - and the record
+    took the wrong one as current."""
+    east = threshold(9000, "2030-05-01T23:30:00+02:00", "before the flight")
+    utc = threshold(7000, "2030-05-01T22:00:00+00:00", "after landing")
+
+    assert [r["value"] for r in sorted([east, utc], key=order_key)] == [9000, 7000]
+    assert [r["value"] for r in sorted([utc, east], key=order_key)] == [9000, 7000]
+
+
+def test_the_timezone_case_reaches_the_readers_that_decide():
+    """Not just the key: the two sites that use it to pick a current line."""
+    from vitai.jsonl import heads
+    from vitai.policy import state
+
+    east = threshold(9000, "2030-05-01T23:30:00+02:00", "before the flight")
+    utc = threshold(7000, "2030-05-01T22:00:00+00:00", "after landing")
+    for order in ([east, utc], [utc, east]):
+        assert heads(order, "thresholds")["steps_floor"]["value"] == 7000
+        assert state([], order, "2030-05-02").thresholds["steps_floor"] == 7000
+
 
 def test_every_reader_that_orders_rows_uses_the_one_rule():
     """A ninth reader sorting by `date` alone, or by nothing, is how the rule
