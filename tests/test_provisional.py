@@ -486,9 +486,14 @@ def test_the_weight_rate_line_is_never_marked(tmp_path):
     so a suffix there would assert a linkage the record cannot express - the
     same mistake as the contraindication carry-forward this PR deleted."""
     marked = rollup(tmp_path, True)
-    for line in marked.splitlines():
-        if "kg/week" in line:
-            assert "day still open" not in line, line
+    rate = [ln for ln in marked.splitlines() if "kg/week" in ln]
+    # THE LINE MUST EXIST for the guard below to say anything. Without this,
+    # the fixture losing its phases or its weight rows would empty the loop and
+    # the guard would pass silently - which is exactly how the first version of
+    # this test came to assert nothing at all.
+    assert rate, marked
+    for line in rate:
+        assert "day still open" not in line, line
 
 
 def test_the_written_weekly_md_is_marked_too(tmp_path):
@@ -512,3 +517,37 @@ def test_the_written_weekly_md_is_marked_too(tmp_path):
     v.build()
     written = (root / "derived" / "weekly.md").read_text(encoding="utf-8")
     assert "day still open" in written, written
+
+
+def test_the_stale_pain_alert_marks_its_nothing_since_claim(tmp_path):
+    """The branch review found defended by a false premise.
+
+    A comment said it fires only when the seven-day window is EMPTY. Its guard
+    counts PAIN-carrying rows only, so the window can be full of steps with one
+    day still open - and the alert renders "and nothing since", a claim about
+    that window, beside a steps line already marked. The figure IS final; the
+    clause about the window is not."""
+    root = tmp_path / "content"
+    (root / "data").mkdir(parents=True)
+    (root / "vitai.toml").write_text(
+        '[athlete]\nname = "T"\n[tripwires]\nsteps_floor = 12000\n'
+        "pain_gate = 2\n", encoding="utf-8")
+    rows = [{**{k: None for k in KEYS["daily"]}, "date": "2030-05-02",
+             "pain": 5, "pain_site": "knee", "source": "manual",
+             "coverage": "full"}]
+    # Steps only in the window, so `scored` is empty and the stale branch
+    # fires, but the window is very much not.
+    rows += [{**{k: None for k in KEYS["daily"]}, "date": f"2030-05-{n:02d}",
+              "steps": 9000, "source": "manual", "coverage": "full"}
+             for n in range(6, 12)]
+    rows.append({**{k: None for k in KEYS["daily"]}, "date": "2030-05-12",
+                 "steps": 9000, "source": "manual", "coverage": PARTIAL})
+    (root / "data" / "daily.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+
+    out = Vitai(root).rollup(today=date(2030, 5, 12))
+    stale = [ln for ln in out.splitlines() if "nothing since" in ln]
+    assert stale, out
+    assert all("day still open" in ln for ln in stale), stale
+    # And it still says the reading itself, unhedged.
+    assert "Pain 5/10 at knee" in out

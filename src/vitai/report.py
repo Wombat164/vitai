@@ -449,16 +449,25 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
             last = max(logged, key=lambda d: _as_day(d["date"]))
             if (score := _pain_of(last)) > cfg.pain_gate:
                 ago = (today - _as_day(last["date"])).days
+                # MARKED, and the first version of this was not - defended
+                # by a premise that is simply false. It said the branch fires
+                # only when the seven-day window is EMPTY. Its guard is `not
+                # scored and logged`, and `scored` counts PAIN-carrying rows
+                # only, so the window can be full of steps and sleep with one
+                # day still open.
+                #
+                # The FIGURE is final either way: any in-window pain reading
+                # would have taken the branch above, so `last` provably
+                # predates the window. What is not final is "AND NOTHING
+                # SINCE" - a claim about the window, which the rest of an open
+                # day can falsify. The suffix sits at the end of the sentence
+                # because that clause is what it qualifies.
                 alerts.append(
                     f"Pain {score}/10 at "
                     f"{last.get('pain_site') or 'unspecified site'} was "
-                    # NO SUFFIX. This branch fires only when the seven-day
-                    # window is EMPTY, so no open day inside it can be moving
-                    # this figure - it reports a reading from before the
-                    # window, and marking it would claim a bearing the record
-                    # does not have.
                     f"last logged {ago} days ago and nothing since - not a "
-                    "current gate, but it was never recorded as resolved")
+                    "current gate, but it was never recorded as "
+                    f"resolved{still_open}")
     if cfg.sleep_floor_h is not None:
         sleeps = [r["sleep_h"] for r in within_days(daily, today, 7, "sleep_h")]
         if sleeps and mean(sleeps) < cfg.sleep_floor_h:
