@@ -55,14 +55,20 @@ adds accessors over what the engine already knew.
 
 ### Fixed
 
-- **The ordering rule was pinned where it is defined and nowhere it is used.**
-  `clocks.order_key` is doctrine - order on valid time, keep transaction time
-  separate, never trust the order lines sit in - and eight readers depend on
-  it. Replacing it with a constant, so a stable sort keeps arrival order, left
-  2258 of 2264 tests passing: four failures in its own unit tests and two added
-  with the protocol seam. Every reader that decides something with it - which
-  threshold is in force, which goal, which line is current for an identity -
-  had no witness. Now twelve fail, at the use sites.
+- **A transaction time was compared as text, and nothing said so.**
+  `clocks.order_key`'s docstring spends three lines on why the third element is
+  an INSTANT - "comparing stamps as text orders two rows written either side of
+  a timezone change by wall clock rather than by when they were written" - and
+  replacing `stamp_instant(stamp)` with `str(stamp)` passed all 2275 tests. An
+  athlete who flies east writes 23:30+02:00 and then 22:00Z, later by the clock
+  on the wall and earlier by every clock that matters, and the record took the
+  wrong line as current. Covered at the key and at the two readers that pick a
+  current line from it.
+- **The doctrine has a second implementation, now pinned beside the first.**
+  `devices.merge` re-derives it by hand - knowingly, with a comment saying so -
+  and it is the sort that actually orders every dataset a consumer reads.
+  #323's duplicate sweep cannot see the pair because they are not
+  byte-identical. Both are now checked to agree on the half they share.
 
 - **`disagreed` read only the runner-up** (#94, ask 4). `_merge_fields`
   records `discarded` over every losing claim - widened for #73, with the
