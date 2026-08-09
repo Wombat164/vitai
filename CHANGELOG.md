@@ -14,9 +14,9 @@ adds accessors over what the engine already knew.
 - **One published display name per field** (#331). A client had `aliases` and
   `units` and still had nothing to PRINT, so it softened the field name's
   underscores and showed "kcal in". `aliases` is for RECOGNITION - it is what
-  makes "resting heart rate" verify against `rhr` - and it is published
-  sorted, so its head is an accident of the alphabet: `kcal_out` would render
-  as "burned". `units[...]["label"]` names the UNIT, and `kcal_in` and
+  makes "resting heart rate" verify against `rhr` - and it is a SET whose
+  every word was chosen to be matched rather than printed: `kcal_out` holds
+  "burned". `units[...]["label"]` names the UNIT, and `kcal_in` and
   `kcal_out` both answer "kilocalories". `field_types` gains `display_name`,
   which reaches `vitai schema --json` and the MCP `schema` tool unchanged.
 - **Derived where derivation is honest, curated where it is not.** Softening

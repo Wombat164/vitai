@@ -63,16 +63,34 @@ def test_the_fields_the_issue_names_read_as_a_person_would_say_them():
 def test_it_is_not_the_first_alias():
     """The thing the issue rules out, asserted rather than described.
 
-    SORTED, which is the form a consumer receives - `emit_artifact` publishes
-    `sorted(aliases_for(field))`, so the head is an accident of the alphabet.
-    `aliases_for` itself returns registry order, and taking ITS head would
-    have made this test pass for `sleep_h` by luck: the registry happens to
-    list "sleep" first, and the published head is "hours slept"."""
-    for field in ("kcal_out", "sleep_h", "kcal_in"):
-        published = sorted(aliases_for(field))
-        assert display_name("daily", field) != published[0], field
-    assert sorted(aliases_for("kcal_out"))[0] == "burned"
-    assert sorted(aliases_for("sleep_h"))[0] == "hours slept"
+    EITHER ORDER, and the first version of this got the reason wrong. It said
+    the list "arrives sorted", so the head is an accident of the alphabet.
+    This engine publishes `aliases_for(field)` in REGISTRY order - a consumer
+    that sorts is sorting something already arbitrary. So the claim is not
+    about sorting at all: an alias list has no head that means anything,
+    because it is a recognition SET, and whichever end you take is a word
+    chosen to be matched rather than to be printed.
+
+    NOT "the name always differs from the head" either, which is the third
+    version of this test and the second thing I got wrong about it: for
+    `sleep_h` the registry head IS "sleep", which is the right name. A rule
+    that happens to hold is not the claim. The claim is that the head is not a
+    SOURCE - it produces a bad name often enough that a consumer cannot use
+    it - so the test names the fields where it does."""
+    for field, head_would_give in (("kcal_out", "calories out"),
+                                   ("grams", "portion"),
+                                   ("elevation_m", "elevation"),
+                                   ("rir", "rir")):
+        assert aliases_for(field)[0] == head_would_give, field
+        assert display_name("daily", field) != head_would_give, field
+    # And sorting it, which some consumer will do, is no better - `rir` goes
+    # from the raw token to "left in the tank", which is worse.
+    for field, sorted_head in (("kcal_out", "burned"),
+                               ("sleep_h", "hours slept"),
+                               ("rir", "left in the tank"),
+                               ("kcal_in", "calories")):
+        assert sorted(aliases_for(field))[0] == sorted_head, field
+        assert display_name("daily", field) != sorted_head, field
 
 
 def test_the_name_is_still_a_word_people_use_for_it():
@@ -149,12 +167,24 @@ def test_every_published_name_is_made_of_words_somebody_blessed():
     skipped curated fields entirely - `if field in curated: continue` - so
     changing `seat_pos` to "seat pos" in the registry passed the whole suite,
     republishing one of the nine defects this PR cites as fixed."""
+    from vitai.vocab import registry
+
+    CURATED = set(registry("units").get("name", {}))
     offenders = []
     for dataset in KEYS:
         for field in KEYS[dataset]:
             shown = display_name(dataset, field)
+            # DERIVED NAMES GET THE NARROWER LIST, and this cost a third
+            # instance of the same defect to learn. The union blesses every
+            # word a CURATED name introduces, including the unit letter in
+            # "energy per 100 g" and the function words in "policy as of" - so
+            # `alcohol_g` derived to "alcohol g" and the gate passed it,
+            # exactly the `sodium_mg` class the allowlist replaced the
+            # denylist to catch. A word earned by appearing inside a name
+            # somebody wrote is not a word derivation may emit on its own.
+            allowed = BLESSED if field in CURATED else PLAIN_WORDS
             for word in shown.replace(",", " ").split():
-                if word.lower().strip(".") not in BLESSED:
+                if word.lower().strip(".") not in allowed:
                     offenders.append(f"{dataset}.{field} -> {shown!r} ({word!r})")
     assert not offenders, (
         "these would show a person a word nothing has blessed. Either add a "
@@ -168,11 +198,17 @@ def test_the_gate_would_stop_the_fields_that_walked_through_the_old_one():
     from vitai.schema import PLAIN_WORDS
 
     for field in ("power_w", "weight_lb", "hrv_ms", "temp_c", "waist_cm",
-                  "cal_burned", "bp_sys", "one_rm", "ftp_w", "ts_utc"):
+                  "cal_burned", "bp_sys", "one_rm", "ftp_w", "ts_utc",
+                  # And the ones the UNION let through before derived names
+                  # got the narrower list. `alcohol_g` is not hypothetical:
+                  # `daily.alcohol` exists and `carb_g`/`fat_g`/`sugar_g` set
+                  # the convention.
+                  "alcohol_g", "weight_g", "session_id", "as_of", "week_of"):
         shown = display_name("sessions", field)
-        assert any(w.lower() not in BLESSED for w in shown.split()), (
+        assert any(w.lower() not in PLAIN_WORDS for w in shown.split()), (
             f"{field} -> {shown!r} would ship unnoticed")
-    assert "w" not in PLAIN_WORDS and "ms" not in PLAIN_WORDS
+    for token in ("w", "ms", "g", "id", "of", "as"):
+        assert token not in PLAIN_WORDS, token
 
 
 def test_a_curated_name_may_not_restate_the_abbreviation_it_replaces():
@@ -258,3 +294,30 @@ def test_it_reaches_the_cli_and_the_agent_surface(tmp_path):
     got = call(root, "schema", {})
     assert got["fields"]["daily"]["kcal_in"]["display_name"] == "energy in"
     assert json.dumps(got)  # and it survives the wire
+
+
+def test_every_blessed_word_is_earned_by_a_name_that_exists():
+    """BACK-PRESSURE on both lists, which review found had none.
+
+    A word blessed for a field that later retires stays blessed forever, and
+    the next field carrying it derives straight through. That is the rot that
+    killed the abbreviation list this replaced - twenty-one of its thirty
+    tokens were unwitnessed, because every field carrying them was curated,
+    so the list was mostly decoration.
+
+    Both directions are now closed: the gate above stops a name using a word
+    nobody blessed, and this stops a word outliving the name that earned it."""
+    from vitai.vocab import registry
+
+    curated = registry("units").get("name", {})
+    derived_words = {t for ds in KEYS for f in KEYS[ds] if f not in curated
+                     for t in f.split("_")}
+    curated_words = {w.lower().strip(".") for n in curated.values()
+                     for w in str(n).replace(",", " ").split()}
+
+    assert not (PLAIN_WORDS - derived_words), (
+        "blessed for derivation but no field derives it: "
+        f"{sorted(PLAIN_WORDS - derived_words)}")
+    assert not (CURATED_WORDS - curated_words - PLAIN_WORDS), (
+        "blessed for a curated name that no longer says it: "
+        f"{sorted(CURATED_WORDS - curated_words - PLAIN_WORDS)}")

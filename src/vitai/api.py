@@ -2766,10 +2766,12 @@ def field_types(dataset: str | None = None) -> dict:
                 # topic and fell through to a standing fact pack.
                 "aliases": aliases_for(field),
                 # AND THE ONE NAME TO PRINT (#331). `aliases` is for
-                # recognition and its first entry is not a display name - it is
-                # sorted, so `kcal_out` would render as "burned". `units.label`
-                # is not one either: it names the UNIT, and `kcal_in` and
-                # `kcal_out` both answer "kilocalories".
+                # recognition and has no entry that is a display name: it is a
+                # SET, published in registry order, and every word in it was
+                # chosen to be matched rather than to be printed - `kcal_out`
+                # holds "burned". `units.label` is not one either: it names the
+                # UNIT, and `kcal_in` and `kcal_out` both answer
+                # "kilocalories".
                 #
                 # So a client softened the field name's underscores, which
                 # invents nothing and is obviously the same token, and got
