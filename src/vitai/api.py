@@ -2150,6 +2150,21 @@ class Vitai:
                      if (d := str(r.get("date") or "")) and d <= horizon]
             last_seen[name] = max(dates) if dates else None
 
+        # WHICH KIND OF CHANNEL LAST SAID ANYTHING (#146). `last_seen` above is
+        # per DATASET and answers how stale each one is. This is the other cut:
+        # a record where the watches keep syncing and every line the athlete
+        # wrote himself stopped a month ago is not the same record as one where
+        # nothing is happening, and `last_seen` cannot tell them apart because
+        # both channels write into the same datasets.
+        #
+        # Read over the RAW rows, not the canonical ones. Resolution picks one
+        # claim per contest and discards the rest, so a manual line that lost
+        # to a device line would take the athlete's own voice out of the count
+        # - the silence would be the ladder's, not his.
+        from .provenance import channel_liveness
+        channels = channel_liveness(
+            [r for rows in self.datasets().values() for r in rows], horizon)
+
         return {
             # A consumer gates on these before trusting anything below.
             "schema": schema(),
@@ -2181,6 +2196,7 @@ class Vitai:
                 "problems": report["problems"],
                 "advisories": report["advisories"],
                 "last_seen": last_seen,
+                "channels": channels,
                 "duplicate_captures": self.duplicate_captures(),
                 "conservation": self.conservation(),
                 "retracted": self.retractions(),

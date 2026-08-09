@@ -287,6 +287,9 @@ def derivation_groups(recs: list[dict]) -> list[list[dict]]:
 READERS = ("athlete", "model", "human-other")
 
 
+ACTIVE, PASSIVE = "active", "passive"
+
+
 def capture_of(rec: dict) -> str:
     """The acquisition method, resolved through the registry.
 
@@ -296,6 +299,84 @@ def capture_of(rec: dict) -> str:
     its properties.
     """
     return resolve("capture", "capture", rec.get("capture")) or UNKNOWN
+
+
+def initiative_of(rec: dict) -> str:
+    """Did the athlete's own action produce this value: `active`, `passive`,
+    `derived` or `unknown` (#146).
+
+    The axis `capture` could not answer. A photo of a console and a BLE read
+    of the same console are one origin and two captures, and they are also two
+    completely different facts about whether anybody was there.
+    """
+    from .vocab import registry
+
+    entry = (registry("capture").get("capture") or {}).get(capture_of(rec)) or {}
+    return str(entry.get("initiative") or UNKNOWN)
+
+
+def channel_liveness(rows: list[dict], on: str) -> dict:
+    """When each kind of channel last said anything, on or before `on`.
+
+    Returns `{initiative: {"last_seen": date|None, "quiet_days": int|None,
+    "rows": n}}` for `active` and `passive` only, plus `contrast` - the days
+    between them where both have spoken and the passive side is the later one.
+
+    WHAT THIS IS FOR. An engine can see what arrived and not whether anybody
+    was there when it did. A record where the watches keep syncing and every
+    line the athlete wrote himself stopped a month ago is not the same record
+    as one where nothing is happening, and the difference is free: it is
+    already in `capture`, one registry field away.
+
+    AN OBSERVATION, NEVER A READING OF IT. It reports two dates and the gap
+    between them. It does not say engagement, adherence, motivation or
+    concern, and it must never grow a threshold that decides when the gap
+    becomes one of those - the record cannot tell a bereavement from a holiday
+    from a phone left in a drawer, and a persona in this corpus exists
+    precisely to prove that guessing is wrong even when the guess is right.
+    Silence is absence of information: not compliance, because nothing was
+    adhered to, and not refusal, because nothing was declined.
+
+    `derived` AND `unknown` ARE EXCLUDED. Arithmetic is not a person and not a
+    sensor, and an unstated capture is a gap in the record rather than a quiet
+    channel - counting it would let a record that has never written `capture`
+    report every channel as silent, which is a statement about the athlete
+    made out of a statement about the schema.
+    """
+    from datetime import date as _date
+
+    seen: dict[str, list[str]] = {ACTIVE: [], PASSIVE: []}
+    for rec in rows:
+        when = str(rec.get("date") or "")
+        if not when or when > on:
+            continue
+        side = initiative_of(rec)
+        if side in seen:
+            seen[side].append(when)
+
+    out: dict[str, object] = {}
+    for side, dates in seen.items():
+        last = max(dates) if dates else None
+        quiet = None
+        if last:
+            try:
+                quiet = (_date.fromisoformat(on) - _date.fromisoformat(last)).days
+            except ValueError:
+                quiet = None
+        out[side] = {"last_seen": last, "quiet_days": quiet, "rows": len(dates)}
+
+    # THE CONTRAST, and only where both sides have actually spoken. A record
+    # with no active rows at all has not gone quiet - it never used that
+    # channel, and reporting a gap would invent a history it does not have.
+    active, passive = out[ACTIVE], out[PASSIVE]
+    contrast = None
+    if (active["last_seen"] and passive["last_seen"]
+            and passive["quiet_days"] is not None
+            and active["quiet_days"] is not None
+            and active["quiet_days"] > passive["quiet_days"]):
+        contrast = active["quiet_days"] - passive["quiet_days"]
+    out["contrast_days"] = contrast
+    return out
 
 
 def may_transcribe(rec: dict) -> bool:

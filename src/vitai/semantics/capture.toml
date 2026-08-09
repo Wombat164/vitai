@@ -73,10 +73,42 @@
 # still resolve by precedence, because that is the athlete's configured
 # judgement and this is not entitled to overrule it.
 
-version = 1
+# INITIATIVE - did the athlete's own action produce THIS value? (#146)
+#
+# A fourth axis, and it answers a question none of the others can: `capture`
+# says how a value arrived, and this says whether a person had to do anything
+# for it to arrive at all. The registry's own note above is the licence -
+# "those are different virtues, and a query should be able to ask for either".
+#
+# PRIOR ART, because a vocabulary derived from one athlete's record is the G85
+# failure this project has paid for repeatedly. Digital phenotyping and mHealth
+# have drawn exactly this line for years: ACTIVE data collection needs the
+# participant to do something (a diary entry, a survey, a photograph), PASSIVE
+# collection runs from sensors without them. The whole point in that literature
+# is that the two fail differently and that active data stops first when
+# somebody disengages - which is precisely what makes it worth seeing here.
+#
+# WHY `file_export` IS PASSIVE, which is the one judgement call. Running an
+# export IS an act, but it produced the TRANSFER, not the values: they were
+# captured passively at the time and relayed later in bulk. Reading it as
+# active would let a single archive upload register as somebody starting to
+# talk to the tool again, which is the opposite of what happened.
+#
+# `derived` is neither. Nobody observed anything; the engine or a third party
+# computed it, and counting it either way would let arithmetic stand in for a
+# person or for a sensor.
+#
+# `unknown` IS ITS OWN VALUE AND MUST NOT COLLAPSE INTO EITHER. A record that
+# has never written `capture` would otherwise read as every channel silent,
+# which turns a schema gap into a statement about the athlete - the exact
+# inversion G82 forbids. Absence of a stated channel is not absence of the
+# channel.
+# 2: every mode declares its `initiative` (#146).
+version = 2
 
 [capture.connector]
 label = "Pulled by an API integration"
+initiative = "passive"
 aliases = ["api", "sync", "integration", "oauth"]
 may_transcribe = false
 has_artifact = false
@@ -85,6 +117,7 @@ restatements = 0
 
 [capture.file_export]
 label = "Parsed from a bulk export"
+initiative = "passive"
 aliases = ["export", "archive", "takeout", "dump", "csv", "bulk"]
 may_transcribe = false
 has_artifact = true
@@ -93,6 +126,7 @@ restatements = 0
 
 [capture.ble]
 label = "Read over a local device link"
+initiative = "passive"
 aliases = ["bluetooth", "ftms", "ant+", "gatt", "pm5"]
 may_transcribe = false
 has_artifact = false
@@ -101,6 +135,7 @@ restatements = 0
 
 [capture.photo]
 label = "An image of a display, read by a person or a model"
+initiative = "active"
 aliases = ["picture", "screenshot", "image", "camera"]
 may_transcribe = true
 has_artifact = true
@@ -109,6 +144,7 @@ restatements = 1
 
 [capture.narrative]
 label = "The athlete described it in conversation"
+initiative = "active"
 aliases = ["spoken", "told", "chat", "said", "stated-in-chat"]
 may_transcribe = true
 has_artifact = true
@@ -117,6 +153,7 @@ restatements = 2
 
 [capture.manual_entry]
 label = "Typed into a form or a file"
+initiative = "active"
 aliases = ["typed", "hand", "handwritten", "form", "by hand"]
 may_transcribe = false
 has_artifact = false
@@ -125,6 +162,7 @@ restatements = 2
 
 [capture.derived]
 label = "Computed by this engine"
+initiative = "derived"
 aliases = ["computed", "calculated", "engine"]
 may_transcribe = false
 has_artifact = true
@@ -138,6 +176,7 @@ restatements = 2
 
 [capture.unknown]
 label = "Not stated"
+initiative = "unknown"
 aliases = []
 may_transcribe = true
 has_artifact = false
@@ -149,6 +188,7 @@ restatements = 2
 # actor split matters: `derived` is this engine's own arithmetic, which is
 # reproducible from its inputs, and this is somebody else's, which is not.
 label = "Computed outside the engine from named rows in this record"
+initiative = "derived"
 aliases = ["athlete-derived", "reconstructed"]
 may_transcribe = false
 has_artifact = true
