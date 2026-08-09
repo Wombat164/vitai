@@ -232,16 +232,23 @@ def cmd_pin_policy(args: argparse.Namespace) -> None:
     whatever the file says today, so editing a floor in September re-judges
     every earlier week that lacked one - silently, and including reconstructions.
 
-    `--dry-run` lists the keys in that state and writes nothing, which is what
-    `situation`'s `undated_policy` reports. Without it, one row per key is
-    appended, dated the record's own horizon.
+    `--dry-run` lists the keys that have no dated row ANYWHERE and writes
+    nothing. Without it, one row per key is appended, dated the record's own
+    horizon.
 
-    IT PINS FORWARD ONLY. The toml has no past - that is the defect - and
-    writing one from its present state would bury the defect under a
-    fabrication that reads exactly like a record.
+    IT PROTECTS NOTHING ALREADY JUDGED. A weekly verdict takes the policy in
+    force at its Monday and the row is dated the last day the record has, so
+    protection starts the Monday after: on the day you pin, zero already-judged
+    weeks are covered. The past cannot be pinned and must not be - the toml has
+    no history, which is the defect, and writing one from its present state
+    would bury it under a fabrication that reads exactly like a record.
+
+    `situation`'s `undated_policy` answers the neighbouring question - what has
+    no policy in force AT A VIEWPOINT - which stays true for the weeks before a
+    pin however often you run this.
     """
     v = Vitai(_root(args))
-    pending = v.undated_policy()
+    pending = v.never_dated_policy()
     if not pending:
         print("every configured threshold already has a dated row.")
         return

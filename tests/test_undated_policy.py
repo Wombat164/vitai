@@ -10,8 +10,9 @@ lacked an explicit row, and a reconstruction of March returns March's data
 under September's policy. Not a staleness problem - a correctness one, in
 `as_of` itself and in every historical verdict already produced.
 
-MEASURED, NOT ARGUED: 225 judged weeks across three shipped personas, and not
-one dated threshold row anywhere. The gap is total.
+MEASURED, NOT ARGUED, and the first version of this number was wrong: 775
+distinct judged weeks across nine of the ten shipped personas, and not one
+dated threshold row anywhere in the corpus. The gap is total.
 
 Two halves, and the issue says they are not alternatives. `policy_digest`
 shipped the first - a content hash, so a comparison across a config change is
@@ -132,9 +133,17 @@ def test_it_pins_forward_and_never_backwards(tmp_path):
 
 
 def test_a_pinned_row_carries_who_and_why(tmp_path):
+    """`onboard`, not `athlete`. Nobody stated this on this date, and
+    `plan_churn` copies the author onto its rows - so claiming the athlete
+    would put their name on an assertion the engine composed. Not `derived`
+    either: nothing was computed. A value seeded from setup material is what
+    `onboard` means."""
     v = record(tmp_path, "[tripwires]\nsteps_floor = 8000\n")
     row = v.pin_policy(reason="dated during a review")[0]
-    assert row["set_by"] == "athlete", "the file is theirs"
+    assert row["set_by"] == "onboard"
+    assert row["change_kind"] == "change", (
+        "a correction asserts the previous line never reflected a real "
+        "intention, and there is no previous line")
     assert row["reason"] == "dated during a review"
     assert row["recorded_at"], "stamped by the writer, like every append"
 
@@ -197,3 +206,93 @@ def test_the_cli_pins_and_then_says_there_is_nothing_left(tmp_path):
     written = _cli(root)
     assert json.loads(written.splitlines()[0])["key"] == "sleep_floor_h"
     assert "already has a dated row" in _cli(root)
+
+
+# --- what the review found the first version would do ------------------------
+
+def test_pinning_never_writes_in_front_of_an_athletes_own_line(tmp_path):
+    """THE ONE AN APPEND MUST NEVER MANAGE. The first version took an `on`
+    parameter and asked "is anything in force at this date", so pinning at a
+    date BEFORE an existing declaration inserted a line in front of it - and
+    `plan_churn` diffs consecutive lines with the declaration excluded, so the
+    athlete's first statement of a floor became a flagged LOOSENING on the
+    surface built to catch quiet retreats.
+
+    The write now asks a different question - is there a dated row ANYWHERE -
+    and there is no `on` parameter at all, because no legitimate use for one
+    survived the question."""
+    import inspect
+    assert "on" not in inspect.signature(Vitai.pin_policy).parameters
+
+    v = record(tmp_path, "[tripwires]\nsteps_floor = 8000\n",
+               [{"date": "2030-05-10", "key": "steps_floor", "value": 7000,
+                 "change_kind": "change", "set_by": "athlete",
+                 "reason": "starting floor", "note": None}])
+    before = v.churn()
+    assert v.never_dated_policy() == {}, "the key HAS a dated row"
+    assert v.pin_policy() == []
+    assert Vitai(v.root).churn() == before
+
+
+def test_the_two_questions_are_not_the_same_question(tmp_path):
+    """`undated_policy` is for REPORTING and is viewpoint-relative: a week
+    judged before the athlete first declared a floor was judged by the toml,
+    and a consumer looking at that week is owed that. `never_dated_policy` is
+    what a WRITE must ask. Conflating them is what produced the defect above."""
+    v = record(tmp_path, "[tripwires]\nsteps_floor = 8000\n",
+               [{"date": "2030-05-10", "key": "steps_floor", "value": 7000,
+                 "change_kind": "change", "set_by": "athlete",
+                 "reason": "starting floor", "note": None}])
+    assert v.undated_policy(on="2030-05-01") == {"steps_floor": 8000}
+    assert v.never_dated_policy() == {}
+
+
+def test_it_refuses_to_write_through_a_knowledge_cutoff(tmp_path):
+    """`as_of` filters what this instance can SEE and the file it writes to is
+    not filtered, so a pin through a cutoff earlier than an existing pin cannot
+    see that pin and appends a second identical row - into a file that cannot
+    be un-appended. A write whose content is computed from a partial view has
+    no business landing in the whole record."""
+    import datetime as dt
+
+    import pytest
+
+    v = record(tmp_path, "[tripwires]\nsteps_floor = 8000\n")
+    v.pin_policy()
+    cutoff = dt.datetime(2020, 1, 1, tzinfo=dt.timezone.utc)
+    blind = Vitai(v.root, as_of=cutoff)
+    assert blind.never_dated_policy() == {"steps_floor": 8000}, "it cannot see it"
+    with pytest.raises(ValueError, match="as_of"):
+        blind.pin_policy()
+    assert len(Vitai(v.root).dataset("thresholds")) == 1
+
+
+def test_a_toml_value_the_engine_cannot_type_is_not_an_undated_policy(tmp_path):
+    """It is not a policy at all - it is a fault in the file, which `validate`
+    reports. Passing it through put uncastable text into a consumer's payload
+    and killed `pin-policy` mid-command on a validation error."""
+    v = record(tmp_path, '[tripwires]\nsteps_floor = "80OO"\n')
+    assert v.undated_policy() == {}
+    assert v.never_dated_policy() == {}
+    assert v.pin_policy() == []
+
+
+def test_several_keys_pin_in_a_stable_order(tmp_path):
+    """The single-key fixture gave the sort no coverage at all."""
+    v = record(tmp_path, "[tripwires]\nsteps_floor = 8000\nsleep_floor_h = 7.0\n"
+                         "pain_gate = 3\n")
+    keys = [r["key"] for r in v.pin_policy()]
+    assert keys == sorted(keys)
+    assert set(keys) == {"pain_gate", "sleep_floor_h", "steps_floor"}
+
+
+def test_the_measured_gap_is_what_the_corpus_actually_holds():
+    """The figure this was justified with was wrong, and a number advertised as
+    measured that the corpus contradicts is the defect class this repo keeps
+    catching."""
+    personas = sorted(p for p in PERSONAS.iterdir() if (p / "vitai.toml").exists())
+    assert len(personas) >= 10
+    with_gap = [p.name for p in personas if Vitai(p).never_dated_policy()]
+    assert len(with_gap) >= 9, with_gap
+    assert not any((p / "data" / "thresholds.jsonl").exists() for p in personas), \
+        "not one dated threshold row anywhere in the corpus"
