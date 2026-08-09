@@ -227,6 +227,27 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
             "chain": "; ".join(sorted({describe(r) for r in recs})),
         }
 
+    # WHICH SOURCE SUPPLIED WHICH FIELD (#325), on a merged row only.
+    #
+    # THE CHANNEL, NOT THE INSTRUMENT, and the repo's own #35/#51 distinction
+    # makes that worth saying out loud: `source` is the feed a value arrived
+    # by, `origin` is the device that observed it. A watch relayed through a
+    # platform has one origin and reaches the record under whichever source
+    # the relay was recorded as. The issue asks for instruments and proposes a
+    # map of sources; this is the map it proposes, named for what it holds.
+    #
+    # `explanations` looks like the answer and is not: it records the winner of
+    # a CONTEST, and complementary instruments never contest. A watch supplies
+    # heart rate, a console supplies distance, each field has ONE witness, and
+    # a field with one witness "is taken verbatim and explains nothing" -
+    # deliberately, or the explanations become noise nobody reads. So the case
+    # this is for was exactly the case that stayed silent, and the merged row's
+    # single `source` was true of half its values and false of the rest.
+    #
+    # Filled below as each field's winner is chosen, so it cannot drift from
+    # what the row actually took.
+    field_sources: dict[str, str] = {}
+
     for field in KEYS[dataset]:
         if field in NON_QUANTITY_FIELDS:
             continue
@@ -260,6 +281,7 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
                                       *_recency(w[1])))
         winner_id, winner = witnesses[0]
         canonical[field] = winner[field]
+        field_sources[field] = str(winner.get("source") or UNKNOWN_SOURCE)
         # `witnesses` counts INDEPENDENT ORIGINS, not rows (#35/#51). Five
         # rows carrying one watch's reading through five platforms are one
         # witness, and reporting five is the false confidence this exists to
@@ -358,6 +380,18 @@ def _merge_fields(dataset: str, claims: list[tuple[str, dict]],
                     not rec.get("source") and rec[field] != winner[field]
                     for _, rec in witnesses[1:]),
             })
+    # MORE THAN ONE SOURCE, not more than one row, and counting rows was
+    # wrong. Two claims from the SAME source - an informal re-export
+    # correcting an earlier line, which `_recency` calls the commonest case -
+    # are one writer, and the canonical `source` says so by staying a bare
+    # name with no `+`. A map there is ceremony on exactly the rows the issue
+    # asks us not to burden, and worse, a consumer using its presence as the
+    # merge signal would have been misled in both directions.
+    if isinstance(canonical.get("_provenance"), dict) and len(
+            {str(rec.get("source") or UNKNOWN_SOURCE)
+             for _, rec in claims}) > 1:
+        canonical["_provenance"]["field_sources"] = dict(field_sources)
+
     return canonical, justifications, explanations
 
 
@@ -435,7 +469,52 @@ def _carry_meta(canonical: dict, claims: list[tuple[str, dict]],
         canonical["_gen"] = max(gens)
     if dataset is not None:
         _keep_identity_together(dataset, canonical, claims)
+    _prune_field_sources(canonical, claims)
     return canonical
+
+
+def _prune_field_sources(canonical: dict, claims: list[tuple[str, dict]]) -> None:
+    """Drop any attribution the finished row no longer supports (#325).
+
+    The map is filled as each field's winner is chosen, which is right for a
+    quantity and NOT ENOUGH on its own: `_keep_identity_together` runs
+    afterwards and takes the identity triple from one claim in file order
+    rather than from the ladder winner. So the map could name `polar` for an
+    `activity_id` the console supplied, and could name a source for `track`
+    on a row whose `track` ended up null - naming a field the row does not
+    hold, which is the one thing this must never do.
+
+    Checked against the FINISHED row rather than trusted from the moment of
+    the merge. An attribution that cannot be shown true is dropped: silence is
+    a worse answer than a name, and a wrong name is worse than both.
+    """
+    meta = canonical.get("_provenance")
+    if not isinstance(meta, dict):
+        return
+    sources = meta.get("field_sources")
+    if not isinstance(sources, dict):
+        return
+    by_source: dict[str, list[dict]] = {}
+    for _, rec in claims:
+        by_source.setdefault(str(rec.get("source") or UNKNOWN_SOURCE),
+                             []).append(rec)
+    kept = {}
+    for field, source in sources.items():
+        value = canonical.get(field)
+        if value is None:
+            continue                    # the row does not hold it after all
+        if any(rec.get(field) == value for rec in by_source.get(source, ())):
+            kept[field] = source
+        else:
+            # A later step took this from somewhere else. Re-attribute it if
+            # exactly one source can account for the value, and say nothing if
+            # more than one can - a coin toss between two claims that agree is
+            # not attribution.
+            owners = {name for name, recs in by_source.items()
+                      if any(rec.get(field) == value for rec in recs)}
+            if len(owners) == 1:
+                kept[field] = owners.pop()
+    meta["field_sources"] = kept
 
 
 # The external identity of a session is a TRIPLE, and its parts are only

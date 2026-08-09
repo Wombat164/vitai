@@ -11,6 +11,31 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **A merged row can say which SOURCE supplied which field** (#325, contract
+  40). A watch and a rowing console recording one session resolve to one row
+  whose `source` reads `matrix-console+polar` - true of the row and of no
+  single value in it, so a consumer emitting a per-value `source` was uniformly
+  wrong for half of them. `provenance` gains `field_sources`. The channel, not
+  the instrument: `source` is the feed a value arrived by and `origin` is the
+  device that observed it, and a relayed watch has one origin under whichever
+  source the relay was recorded as.
+- **`explanations` looked like the answer and is not**, which is why this
+  needed building: it records the winner of a CONTEST, and complementary
+  instruments never contest. Heart rate had one witness and distance had one
+  witness, and a field with one witness is taken verbatim and explains nothing
+  - deliberately, or the explanations become noise. So the case this is for was
+  exactly the case that stayed silent.
+- **Derived, never stored, and absent unless more than one SOURCE
+  contributed** - not merely more than one row, since two claims from one
+  writer are one writer. The issue offers a `source_of` map on the line;
+  nothing goes on the line, because the engine holds both contributing claims
+  at the moment it merges them and was throwing the attribution away.
+- Known limit, stated rather than left to be found: a `provenance` row carries
+  no ordinal, so two merged activities on one date produce two rows a consumer
+  cannot tell apart. That predates this column and is harmless for `trust` and
+  `chain`; per-field attribution is the first thing on the row for which it is
+  not.
+
 - **A mean now says over how many days** (#93, ask 2). Contract 29 added
   `window_days` because "a statistic with no stated population is half an
   answer and the missing half is the misleading one". That was the

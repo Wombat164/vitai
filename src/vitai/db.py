@@ -585,9 +585,54 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     thin - that number would have no published basis and this repo has paid
 #     for hand-rolled cutoffs before (G85). It states the denominator and the
 #     numerator and lets the reader judge.
-CONTRACT_VERSION = "39"
+# 40: `provenance` gains `field_sources` (#325).
+#
+#     A wrist watch and a rowing console recorded one session: the watch had
+#     heart rate and an energy estimate, the console had distance, stroke rate
+#     and watts. One session, two instruments, and the right outcome is one
+#     row carrying both - which the resolution layer already produces, with
+#     `source` reading `matrix-console+polar` to say so.
+#
+#     What it could not say is WHICH SOURCE SUPPLIED WHICH FIELD - the
+#     CHANNEL, and the distinction is this repo's own (#35/#51): `source` is
+#     the channel a value arrived by and `origin` is the instrument that
+#     observed it. A watch relayed through a platform has one origin and two
+#     possible sources, so a map keyed on source answers "which feed" rather
+#     than "which device". The issue asks for instruments and proposes a
+#     `source_of` map holding source values; this ships the map it proposes
+#     and says plainly which of the two it carries. The origin chain is on the
+#     same row, in `chain`. The
+#     merged row's single `source` is true of half its values and false of the
+#     rest, and a consumer emitting a per-value `source` - which the fact-pack
+#     shape already does - was therefore uniformly wrong for half of them.
+#
+#     `explanations` looked like the answer and is not: it records the winner
+#     of a CONTEST, and complementary instruments never contest. Heart rate
+#     had one witness, distance had one witness, and a field with one witness
+#     "is taken verbatim and explains nothing" - deliberately, or the
+#     explanations become noise. So the case this is about was exactly the
+#     case that stayed silent.
+#
+#     DERIVED, NOT STORED, and present only where MORE THAN ONE SOURCE
+#     contributed - not merely more than one row, since two claims from one
+#     writer are one writer. Nothing is asked of the athlete and nothing
+#     changes on a single-source row, where the row's own `source` is already
+#     the whole truth.
+#
+#     KNOWN LIMIT, stated rather than discovered later: a `provenance` row is
+#     keyed by (dataset, date, origin) and carries no ordinal, so two MERGED
+#     activities on one date - a morning and an evening outing, each watch
+#     plus console - produce two rows a consumer cannot tell apart. That
+#     ambiguity predates this column and is harmless for `trust` and `chain`,
+#     which are cluster-symmetric; it is not harmless for per-field
+#     attribution, and closing it needs an identity on the provenance row.
+CONTRACT_VERSION = "40"
 
 _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity would
+              # A JSON map (#325), and every container column is TEXT for
+              # the same reason `derived_from` is: REAL affinity would
+              # mangle the serialised text.
+              "field_sources",
               # `place_precise` (#205) has NO column and is absent from every
               # default projection, but `column_affinity` answers for any name
               # it is asked about and told a consumer building its own
@@ -736,7 +781,7 @@ GATE_KEYS = ["date", "source_kind", "slug", "restricts", "reason", "severity",
 ESCALATION_KEYS = ["date", "level", "trigger", "detail", "action"]
 
 PROVENANCE_KEYS = ["date", "dataset", "origin", "independent_sources",
-                   "trust", "chain"]
+                   "trust", "chain", "field_sources"]
 
 # One row per (track, distance), because a track can hold several efforts and
 # hanging them off `sessions` would flatten that.
@@ -853,8 +898,30 @@ def _table(con: sqlite3.Connection, table: str, keys: list[str],
     if rows:
         con.executemany(
             f"INSERT INTO {table} VALUES ({','.join('?' * len(keys))})",
-            [tuple(_cell(r.get(k)) for k in keys) for r in rows],
+            [tuple(_map_cell(r.get(k)) if k in MAP_COLS else _cell(r.get(k))
+                   for k in keys) for r in rows],
         )
+
+
+# COLUMNS WHOSE VALUE IS A MAP (#325). Scoped rather than handled in `_cell`,
+# because `_cell` sees every raw line's every field: a blanket dict branch
+# turned a malformed `note: {...}` on an athlete's line from a loud
+# `InterfaceError` at build time into a silently stored JSON string. Widening
+# what the engine accepts is not a side effect a serialiser gets to have.
+MAP_COLS = frozenset({"field_sources"})
+
+
+def _map_cell(v: object) -> object:
+    """A map column, key-sorted.
+
+    Sorted for the reason a list column is value-sorted: what a merged row
+    says about which source supplied which field does not depend on the order
+    the fields happen to be walked in, and two builds of one record must
+    compare equal as text.
+    """
+    if not isinstance(v, dict):
+        return _cell(v)
+    return json.dumps({k: str(v[k]) for k in sorted(v)}, separators=(",", ":"))
 
 
 def _cell(v: object) -> object:
