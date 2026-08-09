@@ -94,7 +94,6 @@ def test_the_hardware_keeps_talking_while_the_athlete_stops():
     assert live["active"]["quiet_days"] == 24
     assert live["passive"]["last_seen"] == "2030-03-31"
     assert live["passive"]["quiet_days"] == 0
-    assert live["contrast_days"] == 24
 
 
 def test_a_record_that_never_used_a_channel_has_not_gone_quiet():
@@ -102,7 +101,7 @@ def test_a_record_that_never_used_a_channel_has_not_gone_quiet():
     live = channel_liveness([row("2030-03-01", "connector")], "2030-03-31")
     assert live["active"]["last_seen"] is None
     assert live["active"]["quiet_days"] is None
-    assert live["contrast_days"] is None
+    assert live["active"]["rows"] == 0
 
 
 def test_a_record_with_no_stated_capture_reports_no_silence():
@@ -113,7 +112,6 @@ def test_a_record_with_no_stated_capture_reports_no_silence():
     assert live["active"]["rows"] == 0 and live["passive"]["rows"] == 0
     assert live["active"]["last_seen"] is None
     assert live["passive"]["last_seen"] is None
-    assert live["contrast_days"] is None
 
 
 def test_derived_rows_count_as_neither():
@@ -121,19 +119,19 @@ def test_derived_rows_count_as_neither():
                              row("2030-03-01", "manual_entry")], "2030-03-31")
     assert live["passive"]["rows"] == 0
     assert live["active"]["rows"] == 1
-    assert live["contrast_days"] is None, "derived must not fake a live channel"
 
 
-def test_the_contrast_only_points_one_way():
-    """Active quieter than passive is the shape worth seeing. The reverse - a
-    device that stopped while the athlete kept writing - is a different fact
-    with a different cause, and reporting it in the same field would let a
-    consumer read one as the other."""
+def test_no_contrast_field_is_emitted():
+    """The first cut had one, and it fired only when the ACTIVE side was the
+    quieter - null in the reverse case. That is the engine choosing which shape
+    is worth naming and encoding the choice in the schema. Both numbers are
+    here; a consumer that wants the difference subtracts, and one that wants it
+    the other way round is not told it does not exist."""
     live = channel_liveness([row("2030-03-01", "connector"),
                              row("2030-03-31", "manual_entry")], "2030-03-31")
+    assert "contrast_days" not in live, live
     assert live["passive"]["quiet_days"] == 30
     assert live["active"]["quiet_days"] == 0
-    assert live["contrast_days"] is None
 
 
 def test_nothing_after_the_viewpoint_is_counted():
@@ -148,7 +146,7 @@ def test_it_reports_dates_and_a_gap_and_nothing_else():
     this grows one it is guessing at a cause the record cannot support."""
     live = channel_liveness([row("2030-03-01", "manual_entry"),
                              row("2030-03-31", "connector")], "2030-03-31")
-    assert set(live) == {"active", "passive", "contrast_days"}
+    assert set(live) == {"active", "passive"}
     assert set(live["active"]) == {"last_seen", "quiet_days", "rows"}
     assert all(not isinstance(v, str) or v[:2].isdigit()
                for side in ("active", "passive")
@@ -163,10 +161,10 @@ def test_stefan_e1_the_contrast_is_visible():
     rows = []
     for path in sorted((STEFAN / "data").glob("*.jsonl")):
         rows += [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
-    live = channel_liveness(rows, "2030-04-10")
+    live = channel_liveness({"weight": rows}, "2030-04-10")
     assert live["active"]["last_seen"] == "2030-03-07"
     assert live["passive"]["last_seen"] == "2030-04-10"
-    assert live["contrast_days"] == 34
+    assert live["active"]["quiet_days"] - live["passive"]["quiet_days"] == 34
 
 
 def test_stefan_reaches_the_brief():
@@ -180,7 +178,6 @@ def test_stefan_reaches_the_brief():
     assert channels["active"]["last_seen"] == "2030-03-07"
     assert channels["active"]["quiet_days"] >= 30
     assert channels["passive"]["quiet_days"] <= 1
-    assert channels["contrast_days"] >= 30
 
 
 def test_the_brief_names_no_cause_for_it():
@@ -239,3 +236,139 @@ def test_the_count_is_over_raw_rows_because_canonical_ones_lose_claims(tmp_path)
     assert channels["passive"]["rows"] == 1
     assert channels["active"]["last_seen"] == "2030-05-01", \
         "he typed something that day, whatever the ladder did with it"
+
+
+# --- the holes the second review found ---------------------------------------
+
+def test_the_journal_is_the_athlete_writing_and_must_be_seen(tmp_path):
+    """THE HOLE THAT MATTERED. Only six datasets carry `capture`. `journal` is
+    not one of them, so reading initiative off that field alone made the one
+    dataset that is nothing BUT the athlete typing sentences resolve to
+    `unknown` and drop out of the count. The engine could report him silent for
+    a month on a day he wrote to it - a statement about the athlete made out of
+    a statement about the schema, which is the inversion the registry note says
+    this must not commit. The row guard was right; the hole was one level up.
+    """
+    from vitai.schema import KEYS
+    assert "capture" not in KEYS["journal"], "if this changes, so does the fix"
+
+    live = channel_liveness(
+        {"weight": [{"date": "2030-04-10", "capture": "connector"}],
+         "journal": [{"date": "2030-04-09", "text": "still here. not running."}]},
+        "2030-04-10")
+    assert live["active"]["last_seen"] == "2030-04-09"
+    assert live["active"]["rows"] == 1
+
+
+def test_a_check_is_a_thing_somebody_did():
+    live = channel_liveness({"checks": [{"date": "2030-04-09", "slug": "hop"}]},
+                            "2030-04-10")
+    assert live["active"]["rows"] == 1
+
+
+def test_no_other_capture_less_dataset_is_guessed_at():
+    """Only where the DATASET itself settles it. Guessing per dataset is how a
+    vocabulary stops meaning anything, so the rest stay `unknown`."""
+    for dataset in ("goals", "medical", "context", "events", "plans",
+                    "thresholds", "achievements", "regimes"):
+        live = channel_liveness({dataset: [{"date": "2030-04-09"}]}, "2030-04-10")
+        assert live["active"]["rows"] == 0, dataset
+        assert live["passive"]["rows"] == 0, dataset
+
+
+def test_a_stated_capture_still_wins_over_the_dataset():
+    """The dataset fallback is for rows with nothing stated. A `journal` row
+    that somehow states a capture is read by what it says."""
+    live = channel_liveness(
+        {"journal": [{"date": "2030-04-09", "capture": "connector"}]},
+        "2030-04-10")
+    assert live["passive"]["rows"] == 1 and live["active"]["rows"] == 0
+
+
+def test_it_counts_when_the_row_ARRIVED_not_when_it_happened():
+    """The athlete types nothing for a month, then sits down and enters a
+    month of backfill. Reading `date` reported him silent for a month on the
+    day he wrote - the opposite of the fact this exists to show."""
+    live = channel_liveness(
+        [{"date": "2030-03-10", "capture": "manual_entry",
+          "recorded_at": "2030-04-10T19:00:00+02:00"}],
+        "2030-04-10")
+    assert live["active"]["last_seen"] == "2030-04-10"
+    assert live["active"]["quiet_days"] == 0
+
+
+def test_a_row_with_no_usable_date_is_not_counted():
+    """It used to reach `max()` as an empty string and win, putting a non-date
+    into a field typed `date | None`."""
+    live = channel_liveness([{"capture": "manual_entry"},
+                             {"date": "2030-04-01", "capture": "manual_entry"}],
+                            "2030-04-10")
+    assert live["active"]["last_seen"] == "2030-04-01"
+    assert live["active"]["rows"] == 1
+
+
+def test_a_date_that_does_not_parse_cannot_win_the_maximum():
+    """Compared as strings, an unparseable date beat every real one - it sorted
+    above them, erased the true `last_seen` and nulled `quiet_days`, putting a
+    non-date into a field typed `date | None`. Bad dates do reach here:
+    `validate` reports `2030-04-31` and the row stays live."""
+    # `2030-02-30` sorts BELOW the viewpoint, so it passes the horizon filter,
+    # and ABOVE the real reading, so it wins `max()`. Compared as strings it
+    # became `last_seen`; parsed for `quiet_days` a moment later, it raises.
+    live = channel_liveness([{"date": "2030-02-30", "capture": "manual_entry"},
+                             {"date": "2030-01-05", "capture": "manual_entry"}],
+                            "2030-04-10")
+    assert live["active"]["last_seen"] == "2030-01-05"
+    assert live["active"]["quiet_days"] == 95
+    assert live["active"]["rows"] == 1
+
+
+def test_a_trailing_space_is_tolerated_rather_than_dropped():
+    """The other side of the same guard: a date that is merely untidy is still
+    a date, and dropping it would lose a real arrival."""
+    live = channel_liveness([{"date": "2030-04-06 ", "capture": "manual_entry"}],
+                            "2030-04-10")
+    assert live["active"]["last_seen"] == "2030-04-06"
+
+
+def test_a_viewpoint_that_does_not_parse_does_not_crash_or_lie():
+    live = channel_liveness([{"date": "2030-04-05", "capture": "manual_entry"}],
+                            "not-a-date")
+    assert live["active"]["quiet_days"] is None
+
+
+def test_a_partner_typing_on_the_athletes_behalf_is_still_a_person():
+    """THE CLAIM IS NARROWED, NOT THE CODE. `read_by: human-other` is the case
+    the corpus has - a partner entering rows - and those rows are a person
+    acting, so the tool is being talked to. The first docstring said "the
+    athlete's own action", which was stronger than what is checked. A consumer
+    that needs the narrower question reads `read_by`, which exists for it."""
+    rec = {"date": "2030-06-10", "capture": "narrative", "read_by": "human-other"}
+    assert initiative_of(rec) == "active"
+
+
+def test_the_brief_degrades_rather_than_failing(tmp_path):
+    """`situation`'s stated invariant: every derived section is guarded and a
+    failure is named in `unavailable` rather than taking down a brief whose
+    whole job is to still answer. `channels` was computed outside the guard."""
+    root = tmp_path / "content"
+    (root / "data").mkdir(parents=True)
+    (root / "vitai.toml").write_text('[athlete]\nname = "T"\n', encoding="utf-8")
+    (root / "data" / "weight.jsonl").write_text(
+        json.dumps({"date": "2030-05-01", "kg": 70.0, "source": "scale"}) + "\n",
+        encoding="utf-8")
+    v = Vitai(root)
+    import vitai.provenance as prov
+
+    def boom(*_a, **_k):
+        raise ValueError("a channel it could not read")
+
+    saved = prov.channel_liveness
+    prov.channel_liveness = boom
+    try:
+        brief = v.situation(on="2030-05-01")
+    finally:
+        prov.channel_liveness = saved
+    assert brief["unresolved"]["channels"] == {}
+    assert any("channels" in str(u) for u in brief["unresolved"]["unavailable"]), \
+        brief["unresolved"]["unavailable"]

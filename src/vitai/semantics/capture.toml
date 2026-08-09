@@ -103,6 +103,7 @@
 # which turns a schema gap into a statement about the athlete - the exact
 # inversion G82 forbids. Absence of a stated channel is not absence of the
 # channel.
+
 # 2: every mode declares its `initiative` (#146).
 version = 2
 

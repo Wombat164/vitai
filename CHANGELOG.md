@@ -16,12 +16,13 @@ adds accessors over what the engine already knew.
   person had to do anything for it to arrive at all - the active-versus-passive
   split digital phenotyping and mHealth have drawn for years, where the point
   is that the two fail differently and the active side stops first. `situation`
-  now carries `unresolved.channels`: when each side last spoke, how long it has
-  been quiet, and the gap between them.
+  now carries `unresolved.channels`: when each side last reached the record and
+  how long it has been quiet. No contrast field - both numbers are there, and
+  emitting the difference only when the active side is the quieter would be the
+  engine choosing which shape is worth naming.
 - On the corpus that filed it, at the viewpoint its own expectation names, that
-  reads: active silent since 2030-03-07, passive current, 34 days apart. Two
-  dates and a gap - no verdict, no threshold, and no word for what the gap
-  means. The record cannot tell a bereavement from a holiday from a phone in a
+  reads: active silent since 2030-03-07, passive current. Two dates - no
+  verdict, no threshold, and no word for what the gap means. The record cannot tell a bereavement from a holiday from a phone in a
   drawer, and a persona exists in this corpus to prove that guessing is wrong
   even when the guess is right.
 

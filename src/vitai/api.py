@@ -2162,8 +2162,16 @@ class Vitai:
         # to a device line would take the athlete's own voice out of the count
         # - the silence would be the ladder's, not his.
         from .provenance import channel_liveness
-        channels = channel_liveness(
-            [r for rows in self.datasets().values() for r in rows], horizon)
+        # THE DATASET MAPPING, not a flat list: `journal` and `checks` have no
+        # `capture` column, and their initiative is a property of the dataset.
+        # Flattened, the one dataset that is nothing but the athlete writing
+        # sentences was invisible to the axis that asks whether he wrote.
+        #
+        # GUARDED like every other derived section (see this method's own rule
+        # above), so a failure here is named in `unavailable` rather than
+        # taking down a brief whose whole job is to still answer.
+        channels = section("channels", lambda: channel_liveness(
+            self.datasets(), horizon), {})
 
         return {
             # A consumer gates on these before trusting anything below.
