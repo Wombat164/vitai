@@ -241,10 +241,17 @@ adds accessors over what the engine already knew.
   `protocol_seam` compared the raw strings, so `Fasted-Post-Void` and
   `fasted-post-void` were two protocols and a weight rate was declined as NOT
   COMPARABLE for an athlete who weighed the same way both times. The comparison
-  now folds through `vocab._normalise` - the same fold every registry lookup
-  uses - while the reported name stays the athlete's own spelling. The
-  validator still reports the slug fault; a refusal that fires on a typo is one
-  readers learn to skip past.
+  now folds the way `vocab.resolve` does - normalise AND decamel, so the
+  vendor token shape `FastedPostVoid` matches too - while the reported name
+  stays the athlete's own spelling and the ordering comes from `order_key`
+  rather than file position. A separator folds to a word boundary and never to
+  nothing, so `post-void` and `postvoid` stay two protocols. A refusal that
+  fires on a typo is one readers learn to skip past.
+- **`SLUG_RE` accepted a trailing newline**, because `$` matches before one in
+  Python - so `"hop-test\n"` passed all six slug checks in `schema.py` and a
+  value that is a slug plus an invisible character validated clean. Found
+  through `protocol`, where the fold then merged it onto the real slug with the
+  validator saying nothing, so the fault had no witness anywhere.
 
 - **A rate across a protocol change is declined** (#174, proposal 4).
   `fasted-post-void` and `fed-evening-clothed` differ by breakfast, a day's
