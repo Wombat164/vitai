@@ -130,9 +130,32 @@ def _channel(rec: dict) -> str | None:
     strength of what they BOTH failed to say, which is the collapse
     `shares_origin` refuses one function below - the engine does not get to
     assume two anonymous rows are the same reading.
+
+    A PERSON IS ONE WITNESS HOWEVER THEY WROTE IT DOWN (#94). This used to
+    return the raw string, so the athlete saying one thing four ways - `me`,
+    `self`, `manual`, `spreadsheet`, all declared aliases of one another -
+    counted as FOUR independent witnesses for a value nobody but them had
+    observed. Measured before the change: four.
+
+    The rule the issue settles is that the athlete is one ORIGIN when they are
+    the source, and the instrument is the origin when they are only a conduit.
+    The discriminator is already in the record and needs no new field: a
+    conduit claim NAMES the instrument it transcribes, so it never reaches
+    here - `is_independent` has already counted it by that instrument. What
+    arrives here is a claim with no instrument behind it, and for a person
+    that means the observation is theirs.
+
+    Folded to the CATALOGUED person rather than to "any person", because two
+    different people are two witnesses: the athlete saying they felt tired and
+    a clinician recording the same is corroboration, and collapsing those
+    would be the mirror error.
     """
     source = rec.get("source")
-    return str(source) if source not in (None, "") else None
+    if source in (None, ""):
+        return None
+    if source_kind(source) == PERSON:
+        return resolve_source(source)
+    return str(source)
 
 
 def distinct_origins(recs: list[dict]) -> set[str]:
@@ -516,6 +539,12 @@ def capture_problems(rec: dict) -> list[str]:
 # --- the source catalog (#79) ---------------------------------------------------
 
 CATALOG_OTHER = "other"
+
+# The `kinds` entry that means a human wrote it rather than an instrument
+# recording it. Named here rather than spelled at the use site, because it
+# is the discriminator #94 turns on: a claim from a PERSON with no
+# instrument behind it is that person's own observation.
+PERSON = "person"
 
 # Words that name how a value ARRIVED rather than what observed it. They
 # belong to `capture`, and a source string ending in one is still naming the
