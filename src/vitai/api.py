@@ -1061,8 +1061,15 @@ class Vitai:
         """
         when = on.isoformat() if isinstance(on, date) else str(on)
         tol = self.config.check_tolerance if tolerance is None else tolerance
-        return query.check(self.canonical(), when, metric, float(says),
-                           type=type, tolerance=tol)
+        # THE MAPS, PASSED FORWARD (#325). Contract 40 and 42 derived which
+        # feed and which instrument supplied each field of a merged row, and
+        # nothing read them - so the per-value `source` this returns was the
+        # whole row's label, which on a merged row is true of none of its
+        # fields. One resolution pass already computes both.
+        resolved = self.resolution()
+        return query.check(resolved["canonical"], when, metric, float(says),
+                           type=type, tolerance=tol,
+                           provenance=resolved["provenance"])
 
     def day(self, on: date | str) -> dict:
         """Everything the record holds for one date, merged claims included."""
