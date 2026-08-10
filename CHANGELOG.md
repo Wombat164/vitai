@@ -11,6 +11,27 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **Every milestone a goal has, not only the ones it crossed** (#330, contract
+  43). A `milestones` table already carried date, goal, period, fraction,
+  value, target and label - what nothing could say was how many rungs a goal
+  HAS, which are still ahead, and which is next. `Vitai.milestone_ladder`,
+  `vitai milestones` and an MCP tool say it; a client slicing a target into
+  quarters itself would be copying a rule this engine owns.
+- **THIS BUCKET, not all of history**, and measuring settled it. A weekly floor
+  goal crosses 25% most weeks - the shipped corpus has one with 33 crossings
+  against four fractions - so a lifetime ladder would collapse 33 real events
+  into four rungs and call the goal three quarters done forever. The rungs
+  carry their period so a consumer never infers it.
+- **`goal_progress` gains `milestones_total`.** The existing `milestones`
+  column counts the CURRENT bucket and its name never said so: on that same
+  goal it reads 0 beside 33 crossings, and the CLI printed nothing at all
+  because 0 is falsy. The old column keeps its exact meaning - a consumer
+  reading it today is reading a per-bucket figure, and widening it would
+  change every one of those readings invisibly.
+- **One predicate decides which goals have a ladder**, shared by the ladder and
+  the minting, so a surface cannot promise four rungs to a goal that can never
+  reach one. A cap, an approach with no baseline, a daily bucket and a
+  completed goal each get an empty ladder for reasons the minting records.
 - **One published display name per field** (#331). A client had `aliases` and
   `units` and still had nothing to PRINT, so it softened the field name's
   underscores and showed "kcal in". `aliases` is for RECOGNITION - it is what

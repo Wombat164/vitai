@@ -675,7 +675,25 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     `unknown` because a claim always arrived somehow; a claim that does not
 #     say which instrument observed it contributes no entry, rather than
 #     making `unknown` a device that can be attributed to.
-CONTRACT_VERSION = "42"
+# 43: `goal_progress` gains `milestones_total` (#330).
+#
+#     `milestones` on that row counts THIS BUCKET's crossings and its name
+#     never said so. Measured on the `marcus` persona: `weekly-volume` has 33
+#     crossed milestones and the column reads 0, because every one was crossed
+#     in an earlier week. A consumer showing "0 milestones" beside a goal with
+#     33 of them is not thin, it is wrong.
+#
+#     KEPT RATHER THAN REDEFINED. A consumer reading `milestones` today is
+#     reading a per-bucket figure, and silently widening it would change every
+#     one of those readings without anything saying so - the correction would
+#     be invisible, which is the shape this engine refuses everywhere else. So
+#     the lifetime number arrives beside it under a name that says what it is.
+#
+#     The rest of #330 needed no column: a `milestones` TABLE already carried
+#     date, goal, period, fraction, value, target and label, and what was
+#     missing was the ladder of rungs NOT yet crossed. That is derived, not
+#     stored - `Vitai.milestone_ladder`.
+CONTRACT_VERSION = "43"
 
 _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity would
               # A JSON map (#325), and every container column is TEXT for
@@ -808,7 +826,12 @@ PROGRESS_KEYS = ["slug", "title", "metric", "policy", "status", "period",
                  # rather than on a sum, so it carries `observed` where a flow
                  # goal carries `counted`, and which side holds the number is
                  # how a consumer tells the two shapes apart.
-                 "observed"]
+                 "observed",
+                 # Appended (#330), same reason again. `milestones` above is
+                 # THIS BUCKET's count and stays exactly that; `milestones_total`
+                 # is every milestone the goal has crossed, which is what a
+                 # consumer reading the shorter name believed it was getting.
+                 "milestones_total"]
 
 # Increment 2: the adjudication trail. Primary dataset tables hold CANONICAL
 # rows; these say where those rows came from and what was overruled.

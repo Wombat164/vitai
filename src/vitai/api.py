@@ -1469,6 +1469,98 @@ class Vitai:
         return compute_contributions(d["goals"], d["thresholds"], d["daily"],
                                      d["sessions"])[1]
 
+    def milestone_ladder(self, slug: str | None = None,
+                         today: date | None = None) -> list[dict]:
+        """Every milestone a goal has THIS BUCKET, passed or not (#330).
+
+        `milestones()` returns a row per milestone crossed, which answers what
+        was passed and when. A client drawing a milestone surface needs the
+        rest too: how many rungs there are, which are still ahead, and which
+        is next. Without that it can only say "3 milestones", and a bare count
+        on a screen is worse than silence because it advertises detail the
+        surface cannot reach.
+
+        THIS BUCKET, NOT ALL OF HISTORY, and measuring is what settled it. A
+        weekly floor goal crosses 25% most weeks: `marcus`'s `weekly-volume`
+        has 33 crossings against four fractions, so a lifetime ladder would
+        collapse 33 real events into four rungs and call the goal three
+        quarters done forever. Milestones key on (slug, bucket, fraction)
+        because the achievement is "a quarter of the way through THIS week",
+        and the ladder has to mean the same thing the minting does.
+
+        The bucket is on every row, so a consumer never has to infer which
+        period it is looking at. A goal with no bucket-scoped period - one
+        scored over all of time - gets its whole ladder here, which is the
+        same rule with one bucket.
+
+        DERIVED, NEVER STORED, and nothing is asked of the athlete: the ladder
+        is `MILESTONE_FRACTIONS` against a target the goal already declares.
+        Published rather than left to the consumer for the reason `units` and
+        `aliases` are - a client slicing a target into quarters itself is
+        copying a rule this engine owns, and the copy is wrong the day the
+        tuple changes.
+
+        Per rung: `fraction`, the `value` it sits at, whether it is `passed`,
+        `passed_on` where it is, and `next` for the lowest unpassed one.
+        Ordered by fraction, so drawing it is a loop.
+
+        `value` COMES FROM THE TARGET IN FORCE NOW, and `passed_target` says
+        what the crossing was measured against, because those come apart: this
+        athlete's target moved 95 to 90, so a rung sitting at 22.5 today was
+        crossed at 23.75. Reporting only one of them would make a client
+        render a date against a number that never applied on it.
+
+        ONLY GOALS THAT MINT. A goal the engine refuses to mint for - an
+        approach with no baseline, a cap, a daily bucket, a completed goal -
+        gets an EMPTY ladder rather than an invented one, for the reasons
+        `_milestones` records. An empty list says "this goal has no milestone
+        surface"; a ladder of quarters would say something the engine has
+        deliberately declined to say.
+        """
+        from .contributions import MILESTONE_FRACTIONS, mints_milestones
+
+        on = today or self.on
+        #  IS the progress table, so one call gives both the goals
+        # in force and the bucket each is being scored in.
+        standing = self.goals(on)
+        buckets = {str(r["slug"]): r.get("bucket") for r in standing}
+        crossed: dict[tuple[str, object, float], dict] = {}
+        for m in self.milestones():
+            key = (str(m["goal"]), m["period"], float(m["fraction"]))
+            if key not in crossed or str(m["date"]) < str(crossed[key]["date"]):
+                crossed[key] = m
+
+        out: list[dict] = []
+        for goal in standing:
+            name = str(goal.get("slug") or "")
+            if slug is not None and name != slug:
+                continue
+            if not mints_milestones(goal):
+                continue
+            target = float(goal["target"])
+            bucket = buckets.get(name)
+            rungs = []
+            for frac in MILESTONE_FRACTIONS:
+                hit = crossed.get((name, bucket, frac))
+                rungs.append({
+                    "goal": name,
+                    "period": bucket,
+                    "fraction": frac,
+                    "value": round(target * frac, 3),
+                    "target": target,
+                    "passed": hit is not None,
+                    "passed_on": hit["date"] if hit else None,
+                    "passed_target": hit["target"] if hit else None,
+                    "label": hit["label"] if hit else None,
+                    "next": False,
+                })
+            for rung in rungs:
+                if not rung["passed"]:
+                    rung["next"] = True
+                    break
+            out += rungs
+        return out
+
     def churn(self, today: date | None = None) -> list[dict]:
         """Policy edits, with the loosening-after-a-miss flag (G20)."""
         d = self.datasets()
