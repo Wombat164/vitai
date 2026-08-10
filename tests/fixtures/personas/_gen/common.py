@@ -224,8 +224,20 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # derived-column re-pins above it moves no data line, and the only change in a
 # persona is the contract stamp in its `persona.toml`. Verified by
 # regenerating and diffing rather than asserted.
-AUTHORED_AGAINST_CONTRACT = "43"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #171's `capabilities` dataset (contract 44), and the review
+# the gate demands is recorded rather than implied: no builder writes a
+# capability row - the only mention across all ten is a sentence of prose in
+# `yasmin.py` - so every persona gets an empty `capabilities.jsonl` and nothing
+# else moves. A NEW DATASET rather than a new column, which is the first of
+# those here; the shape is the same as the derived-column re-pins above,
+# because a dataset no builder writes contributes no lines to diff.
+AUTHORED_AGAINST_CONTRACT = "44"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
+    # #171: a new dataset, empty for every persona. Generation 3 rather than 1
+    # because every dataset gets the blanket `recorded_at` and `device`
+    # blocks; a key registered above the founding generation can only ever
+    # exempt more lines, and there are none here to exempt.
+    "capabilities": 3,
     # #221: a new dataset, empty for every persona.
     "plans": 1,
     "achievements": 5,

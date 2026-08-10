@@ -724,7 +724,45 @@ def _build(target: Path) -> None:
          "device": "demo", "_gen": CURRENT_GENERATION["emissions"]},
     ]
 
+    # WHAT THE INSTRUMENTS ARE COMPETENT AT (#171). Three statements, chosen
+    # because each is a different one of the four competences and the fourth -
+    # `unknown` - is what everything unstated resolves to, so writing it here
+    # would be writing the default the engine refuses to keep in a file.
+    capabilities = [
+        # The live example the issue is built on: a vendor resting-heart-rate
+        # figure that is a proxy statistic, observed running far above the
+        # continuous nightly minimum by more than any instrument error in the
+        # validation literature. No uncertainty number would ever catch it,
+        # because every one of them assumes the right quantity is measured.
+        {"date": "2030-04-20", "origin": "scale", "measures": "rhr",
+         "competence": "proxy",
+         "construct": "a daytime spot statistic, not the nightly minimum",
+         "condition": None, "basis": "observed", "set_by": "athlete",
+         "note": "runs well above the overnight low on every night both were "
+                 "recorded",
+         "supersedes": None, "recorded_at": "2030-04-20T20:10:00+02:00",
+         "device": "demo", "_gen": CURRENT_GENERATION["capabilities"]},
+        # A plain competence, earned the only way this engine will accept one:
+        # simultaneous dual recording.
+        {"date": "2030-04-20", "origin": "scale", "measures": "kg",
+         "competence": "measures", "construct": None, "condition": None,
+         "basis": "overlap", "set_by": "athlete",
+         "note": "agrees with the clinic scale across a fortnight of same-day "
+                 "readings",
+         "supersedes": None, "recorded_at": "2030-04-20T20:11:00+02:00",
+         "device": "demo", "_gen": CURRENT_GENERATION["capabilities"]},
+        # CONDITION-SCOPED, which is why the identity carries one: the same
+        # instrument, the same measurand, a different answer under load.
+        {"date": "2030-04-20", "origin": "scale", "measures": "body_fat_pct",
+         "competence": "absent", "construct": None, "condition": "hydrated",
+         "basis": "stated", "set_by": "athlete",
+         "note": "the impedance reading is not reported by this model",
+         "supersedes": None, "recorded_at": "2030-04-20T20:12:00+02:00",
+         "device": "demo", "_gen": CURRENT_GENERATION["capabilities"]},
+    ]
+
     for name, rows in (("weight", weight), ("daily", daily),
+                       ("capabilities", capabilities),
                        ("sessions", sessions), ("inferences", inferences),
                        ("goals", goals), ("thresholds", thresholds),
                        ("achievements", achievements), ("context", context),

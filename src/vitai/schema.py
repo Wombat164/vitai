@@ -167,6 +167,29 @@ KEYS: dict[str, list[str]] = {
     # former is churn, and only the former can be suspiciously timed.
     "thresholds": ["date", "key", "value", "change_kind", "set_by", "reason",
                    "note", "recorded_at", "device"],
+    # What an INSTRUMENT can and cannot measure, dated (#171).
+    #
+    # An instrument change is a confound that looks exactly like a
+    # physiological one, and #33 shows the shape: a resting heart rate that
+    # steps from 54 to 49 is either a training adaptation or a new optical
+    # sensor. `origin` says which instrument observed a value and nothing said
+    # what that instrument is competent at.
+    #
+    # CATEGORICAL, NEVER A NUMBER, which is this issue's own finding after
+    # surveying what vendors publish: only power meters publish anything, those
+    # cover the random term alone, field observation contradicts them by up to
+    # twenty percent, and one vendor's marketed tolerance is half its own
+    # service tolerance. A borrowed figure would be a confident wrong number
+    # about confidence.
+    #
+    # KEYED ON `origin`, the identity the engine already uses for an
+    # instrument - 27 call sites across `provenance`, `resolution`, `db` and
+    # `query`. A device REGISTER (#311) later gives that string an entity with
+    # an interval; this enriches the same identity rather than inventing a
+    # second one.
+    "capabilities": ["date", "origin", "measures", "competence", "construct",
+                     "condition", "basis", "set_by", "note", "supersedes",
+                     "recorded_at", "device"],
     # A recorded accomplishment worth keeping. Distinct from a MILESTONE, which
     # the engine derives; `source` carries authorship (G31) so a hand-logged
     # race finish is never confused with an engine-derived crossing.
@@ -359,6 +382,45 @@ COVERAGES = {"full", "partial", "manual"}
 # (#186) and a literal in a comparison is how a vocabulary quietly grows a
 # second spelling.
 PARTIAL = "partial"
+
+# WHAT AN INSTRUMENT IS COMPETENT AT (#171). Four values, and the issue is
+# explicit that zero, unknown and wide are three different things and only one
+# of them is a quantity:
+#
+#   measures  it observes this quantity, and the record has grounds to say so
+#   proxy     it reports a DIFFERENT quantity under this name. A vendor's
+#             resting heart rate observed running far above the continuous
+#             nightly minimum is the live example: no uncertainty figure would
+#             ever catch it, because every one of them assumes the right
+#             quantity is being measured.
+#   absent    it does not observe this at all, and a value under this name
+#             came from somewhere else
+#   unknown   nobody has said - and this is what SILENCE resolves to, which is
+#             the whole of the #148 lesson. Baselines lived in a mutable file
+#             outside the record, so a week with no dated row was judged by
+#             whatever that file said today. A capability default in
+#             `semantics/` would be the same defect one dataset over:
+#             effective-dating that a default escapes is not effective-dating.
+#             So there is no default. Silence resolves to a value IN the
+#             vocabulary, which a consumer can see and act on.
+COMPETENCES = {"measures", "proxy", "absent", "unknown"}
+PROXY = "proxy"
+UNKNOWN_COMPETENCE = "unknown"
+
+# WHERE A CAPABILITY STATEMENT COMES FROM. Not a confidence score - a statement
+# about how the claim was arrived at, so a reader can weigh it themselves.
+#
+# `overlap` is the one this engine can EARN: simultaneous dual recording, the
+# established norm in the power-meter community. `stated` is the athlete or a
+# manufacturer saying so, which is evidence and not measurement. `observed` is
+# a pattern in this record short of a controlled overlap - the proxy case above
+# was found that way.
+#
+# NO VENDOR FIGURES ANYWHERE, which this issue settled after surveying what is
+# published: only power meters publish anything, those cover the random term
+# alone, field observation contradicts them by up to twenty percent, and one
+# vendor's marketed tolerance is half its own service tolerance.
+CAPABILITY_BASES = {"overlap", "observed", "stated"}
 # Sourced from semantics/settings.toml (#53): WHERE an activity happened, as
 # its own axis, so `other` + `outdoor` expresses the catchall a vendor would
 # pre-coordinate into `OTHER_OUTDOOR`. Retired values stay legal.
@@ -389,7 +451,13 @@ CONTEXT_MODES = {"normal", "vacation", "work", "conference", "weekend",
 IDENTITY_KEY: dict[str, str | tuple[str, ...]] = {
     "goals": "slug", "thresholds": "key", "medical": "slug", "events": "slug",
     "sets": ("session_start", "exercise", "block", "round", "set_index"),
-    "meals": ("meal", "item")}
+    "meals": ("meal", "item"),
+    # A capability statement is about one instrument measuring one thing under
+    # one condition. All three are the identity: a watch can be competent at
+    # steps and a proxy for sleep, and competent at heart rate seated while
+    # only a proxy for it at threshold - so keying on the instrument alone
+    # would make each new statement retire the last.
+    "capabilities": ("origin", "measures", "condition")}
 
 # --- the medical layer (increment 3) -----------------------------------------
 # `state` (G57) is a physiological condition rather than an illness -
@@ -1500,7 +1568,8 @@ for _cls, _names in {
     "provenance": """source device origin path origin_evidence activity_id
         activity_source read_by capture derived_by derived_build derived_from
         derived_op modelled type_source model confidence evidence surface
-        machine equipment tracker food_table protocol""",
+        machine equipment tracker food_table protocol
+        competence construct basis""",
     "narrative": """note text title statement about reason""",
     "reference": """slug key dataset field session_ref anchored_by goal event
         metric basis_claims depends_on supersedes contract sha256 media_type
@@ -1510,7 +1579,7 @@ for _cls, _names in {
         on_success on_period_end priority immovable removed result mode
         planned load_type load_unit set_type failure angle_class side
         rpe_scale mood_scale pain_scale activity
-        seq supersedes_seq""",
+        seq supersedes_seq measures condition""",
     "measurement": """avg_power steps distance_km active_min kcal_out kcal_in
         protein_g
         sleep_h rhr kg body_fat_pct kg_lo kg_hi body_fat_lo body_fat_hi avg_hr
@@ -1605,6 +1674,10 @@ def aliases_for(field: str) -> list[str]:
 # Being long is the point rather than a cost: every entry is a word somebody
 # decided a person would read, and the list only grows by that decision.
 PLAIN_WORDS = frozenset({
+    # #171's dataset. Four ordinary words a person reads as themselves, added
+    # deliberately because this is an ALLOWLIST: a new field fails the gate
+    # until somebody says what it looks like at a reader.
+    "competence", "condition", "construct", "measures",
     "about", "accountability", "activity", "alcohol", "anchored",
     "angle", "artifact", "at", "attempted", "basis", "block", "body",
     "build", "by", "bytes", "cadence", "capture", "captured", "change",
@@ -2012,6 +2085,55 @@ def _protocol_problems(rec: dict) -> list[str]:
     return out
 
 
+def _capability_problems(rec: dict) -> list[str]:
+    """What an instrument can measure, and what a claim about that owes (#171).
+
+    A PROXY MUST NAME WHAT IT ACTUALLY MEASURES, which is the rule that makes
+    this class of statement useful rather than a label. "This is a proxy" tells
+    a consumer to distrust the number; "this is a proxy FOR the continuous
+    nightly minimum" tells them what it is, and two sources reporting one field
+    name with different constructs are not comparable regardless of their
+    precision.
+
+    And a construct is FORBIDDEN on the others, for the reason `derived_build`
+    is forbidden beside `by-hand`: a field that is sometimes an answer and
+    sometimes decoration is one a reader learns to skip.
+    """
+    out: list[str] = []
+    origin = rec.get("origin")
+    if not isinstance(origin, str) or not origin.strip():
+        out.append("'origin' names the instrument this is about, got "
+                   f"{origin!r}")
+
+    measures = rec.get("measures")
+    known = {f for ds in KEYS for f in KEYS[ds]}
+    if measures not in known:
+        out.append(f"'measures' names a field this record has, got "
+                   f"{measures!r}")
+
+    competence = rec.get("competence")
+    if competence not in COMPETENCES:
+        out.append(f"'competence' is one of {', '.join(sorted(COMPETENCES))}, "
+                   f"got {competence!r}")
+
+    construct = rec.get("construct")
+    if competence == PROXY and not (isinstance(construct, str)
+                                    and construct.strip()):
+        out.append("a 'proxy' competence reports a DIFFERENT quantity under "
+                   "this name, and 'construct' has to say which one: an "
+                   "uncertainty figure cannot catch a wrong measurand, "
+                   "because every one of them assumes the right one")
+    if competence != PROXY and construct not in (None, ""):
+        out.append(f"'construct' says what a PROXY actually measures and has "
+                   f"no meaning beside {competence!r}, got {construct!r}")
+
+    basis = rec.get("basis")
+    if basis is not None and basis not in CAPABILITY_BASES:
+        out.append(f"'basis' is one of {', '.join(sorted(CAPABILITY_BASES))}, "
+                   f"got {basis!r}")
+    return out
+
+
 def _regime_problems(rec: dict) -> list[str]:
     """A regime is a bounded interval, and the bounds are the whole point."""
     out = []
@@ -2125,6 +2247,8 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
         problems += _protocol_problems(rec)
     if dataset == "regimes":
         problems += _regime_problems(rec)
+    if dataset == "capabilities":
+        problems += _capability_problems(rec)
     if dataset == "emissions":
         problems += _emission_problems(rec)
     problems += _scale_problems(dataset, rec)

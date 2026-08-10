@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 from .clocks import order_key
-from .schema import IDENTITY_KEY
+from .schema import IDENTITY_KEY, UNKNOWN_COMPETENCE
 
 HARD, SOFT = "hard", "soft"
 
@@ -144,6 +144,53 @@ def lifecycle_of(goal: dict) -> str | None:
     return LIFECYCLE_FORWARD.get(str(old), str(old)) if old else None
 
 
+def capability(rows: list[dict], origin: str, measures: str,
+               on: str | date, condition: str | None = None) -> dict:
+    """What this instrument was competent at, as of `on` (#171).
+
+    Returns the capability row in force, or a synthesised `unknown` one. Never
+    None: a consumer asking "can this device measure sleep" gets an answer with
+    a competence in the vocabulary rather than a null it has to interpret.
+
+    NO DEFAULT OUTSIDE THE RECORD, and this is the whole of the #148 lesson
+    carried one dataset over. There, baselines lived in a mutable file outside
+    the append-only record and dated rows overlaid it, so any week with no
+    dated row was judged by whatever that file said TODAY - a reconstruction of
+    March returning March's data under September's policy. A capability default
+    in `semantics/` would be the identical defect: effective-dating that a
+    default escapes is not effective-dating.
+
+    So silence resolves to `unknown`, which is a value IN the vocabulary and
+    distinct from `absent`. "Nobody has said" and "it does not measure this"
+    are different facts and a consumer can act on both.
+
+    DATED THROUGH `_in_force`, the same machinery policy already uses: last
+    line per identity whose date is on or before `on`, ordered by valid time
+    with transaction time breaking ties. Shared because getting effective
+    dating right twice is how the two implementations drift; the identity and
+    the storage are NOT shared, for the reason #335 gives.
+
+    `condition` scopes the question. A wrist sensor can measure heart rate
+    seated and be a proxy for it at threshold, so a statement is about one
+    instrument measuring one thing under one condition - and asking without a
+    condition asks about the unconditioned statement rather than about all of
+    them.
+    """
+    on_s = on.isoformat() if isinstance(on, date) else str(on)
+    want = (str(origin), str(measures), condition)
+    for row in _in_force(rows, "capabilities", on_s).values():
+        if (str(row.get("origin")), str(row.get("measures")),
+                row.get("condition")) == want:
+            return row
+    return {"origin": str(origin), "measures": str(measures),
+            "condition": condition, "competence": UNKNOWN_COMPETENCE,
+            "construct": None, "basis": None, "date": None,
+            # SAID RATHER THAN INFERRED FROM A NULL DATE. A consumer that has
+            # to work out whether a row was stated is a consumer that will get
+            # it wrong on the row where it matters.
+            "stated": False}
+
+
 def _in_force(records: list[dict], dataset: str, on: str) -> dict[str, dict]:
     """Last line per identity whose date is on or before `on`.
 
@@ -152,13 +199,29 @@ def _in_force(records: list[dict], dataset: str, on: str) -> dict[str, dict]:
     by FILE POSITION, and a sort, a reformat or a merge could silently change
     which one won. `sorted` is stable and the key is constant across unstamped
     rows, so a legacy file still resolves exactly as it did.
+
+    A TUPLE IDENTITY IS AN IDENTITY. This read `r.get(ident)` with whatever
+    `IDENTITY_KEY` declared, which returns None for the tuple-keyed datasets -
+    `sets`, `meals` and now `capabilities` - so every one of their rows was
+    silently skipped and the function returned nothing. It has only ever been
+    called with scalar-keyed datasets, so the gap cost nothing and was
+    invisible; it is the shape that stops the machinery being reusable, which
+    is the one thing #171 wanted from it.
+
+    A row is skipped when its identity is ABSENT. For a tuple that means every
+    component is None: a partly-stated identity is a validation problem rather
+    than a row to drop here, and `capabilities.condition` is legitimately null
+    - an unconditioned statement is a statement.
     """
     ident = IDENTITY_KEY[dataset]
+    parts = ident if isinstance(ident, tuple) else (ident,)
     out: dict[str, dict] = {}
     for r in sorted((r for r in records if r.get("date") and r["date"] <= on),
                     key=order_key):
-        if (slug := r.get(ident)) is not None:
-            out[str(slug)] = r
+        values = tuple(r.get(k) for k in parts)
+        if all(v is None for v in values):
+            continue
+        out[str(values[0]) if len(values) == 1 else str(values)] = r
     return out
 
 

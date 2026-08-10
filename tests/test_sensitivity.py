@@ -37,6 +37,25 @@ from vitai.schema import (KEYS, SENSITIVITY_CLASSES, SENSITIVITY_OVERRIDE,
 DEMO = Path(__file__).resolve().parents[1] / "examples" / "demo"
 
 PINNED = {
+    # #171: what an instrument is competent at. `measures` and `condition` are
+    # REFERENCE - they name a field and a closed scope, and neither says
+    # anything about the athlete. `competence`, `construct` and `basis` are
+    # PROVENANCE: they are statements about what produced a value, which is
+    # the class's own definition.
+    "capabilities": {
+        "date": "temporal",
+        "origin": "provenance",
+        "measures": "reference",
+        "competence": "provenance",
+        "construct": "provenance",
+        "condition": "reference",
+        "basis": "provenance",
+        "set_by": "reference",
+        "note": "narrative",
+        "supersedes": "reference",
+        "recorded_at": "temporal",
+        "device": "provenance",
+    },
     "achievements": {
         "date": "temporal", "title": "narrative", "goal": "reference",
         "source": "provenance", "note": "narrative", "occurred_date":

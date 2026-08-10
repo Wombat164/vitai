@@ -97,6 +97,13 @@ TOOLS: dict[str, dict] = {
     # `milestones` derived table carries the crossings; neither can say how
     # many rungs a goal has or which is next, and an agent asked "how am I
     # doing" would have to slice the target into quarters itself.
+    # What an instrument is competent at (#171). An agent reading a value
+    # cannot otherwise tell a measurement from a proxy statistic reported
+    # under the same field name, which no uncertainty figure would catch.
+    "capabilities": {
+        "method": "capabilities",
+        "properties": {},
+    },
     "milestone_ladder": {
         "method": "milestone_ladder",
         "properties": {"slug": {"type": "string",

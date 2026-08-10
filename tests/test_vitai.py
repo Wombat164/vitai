@@ -1566,7 +1566,11 @@ def test_it_speaks_the_protocol(tmp_path):
          # `milestone_ladder` joined at #330: `goals` carries a count and the
          # `milestones` table carries the crossings, and neither can say which
          # rung is next.
-         "milestone_ladder"}
+         "milestone_ladder",
+         # #171: what an instrument is competent at. An agent reading a value
+         # cannot otherwise tell a measurement from a proxy statistic reported
+         # under the same field name.
+         "capabilities"}
     payload = json.loads(replies[2]["result"]["content"][0]["text"])
     assert payload["contract"]
 
