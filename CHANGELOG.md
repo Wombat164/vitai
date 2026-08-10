@@ -9,6 +9,28 @@ Contract 35. `place_precise` arrives on `sessions` and `context`, and has no
 column: the coarse tier is the default egress form, and everything else here
 adds accessors over what the engine already knew.
 
+### Fixed
+
+- **A person is one witness however they wrote it down** (#94). The athlete
+  saying one thing four ways - `me`, `self`, `manual`, `spreadsheet`, all
+  declared aliases of one another - counted as FOUR independent witnesses for
+  a value nobody but them had observed. The witness fallback returned the raw
+  source string, so it never folded a channel onto the person behind it.
+- **And the instrument still wins where there is one.** A console figure
+  photographed by the athlete is the console's observation, not theirs, and
+  collapsing those would under-count real corroboration. The discriminator
+  needed no new field - contract 40 already drew the line between the channel
+  a value arrived by and the instrument that observed it - so a claim naming
+  an instrument never reaches the person rule. That half already worked and is
+  now pinned.
+- **Two different people stay two witnesses.** The athlete saying they felt
+  tired and a clinician recording the same is corroboration.
+- Latent rather than live, and the reason is narrower than it first looked.
+  Three fixtures DO write under two spellings of one person, but no two
+  spellings contend for the same field on the same date - zero collisions - so
+  every count the corpus publishes is unchanged. It is one date collision away
+  from live, which is also why nothing caught it.
+
 ### Added
 
 - **Every milestone a goal has, not only the ones it crossed** (#330, contract
