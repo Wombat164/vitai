@@ -156,6 +156,57 @@ def order_key(rec: dict) -> tuple:
             stamp_instant(stamp) or _NO_INSTANT)
 
 
+# THE COMPARATOR, AS DATA (#308). A client that persists claims outside the
+# engine has to order them, and today it can only re-derive the rule from prose
+# or hand-port the Python. One did the first and got it wrong: two readers took
+# the ends of an append-only log as its date range, which is ARRIVAL order, and
+# a third sorted - so one screen described one log two ways.
+#
+# WHY THE FAILURE IS QUIET, and why publishing beats documenting. Position and
+# date agree on every log appended once, in order, on one device, which is
+# every log anyone has today. They stop agreeing exactly when a log is restored
+# from backup or merged across devices - the moment someone is already having a
+# bad day and is least able to notice that their record now reports wrong
+# dates.
+#
+# EVERY VALUE HERE NAMES A FIELD OR AN ANSWER, never a sentence to parse. A
+# consumer builds a comparator from it; it is not documentation with a version
+# number on it.
+ORDERING_RULE = {
+    # Sort on VALID time first: what day the row is about.
+    "sort_on": "date",
+    # Then on TRANSACTION time: when the row was written.
+    "then_on": "recorded_at",
+    # An unstamped row sorts BEFORE a stamped one on the same date, so a
+    # legacy row yields to one that says when it was written, and a file of
+    # entirely unstamped rows keeps file order under a stable sort.
+    "absent_transaction_time_sorts": "before",
+    # The stamp is compared as an INSTANT. As text, two rows written either
+    # side of a timezone change order by wall clock rather than by when they
+    # were written.
+    "transaction_time_compared_as": "instant",
+    # Arrival order is never the answer. This is the sentence the client that
+    # filed the issue needed.
+    "position_in_file_is_not_order": True,
+}
+
+
+def ordering_rule() -> dict:
+    """How to order claims, as data rather than as code (#308).
+
+    Published because the alternative is a client re-deriving it. The rule is
+    short; it was only ever invisible.
+
+    NOT A PORT and not a promise to run in the client: it names the fields to
+    sort on and what absence means, which is what a comparator needs.
+    `test_ordering_rule_is_the_comparator` runs `order_key` against every
+    clause, so this cannot drift from the function it describes - a published
+    rule that disagrees with the engine would be worse than none, because a
+    client would conform to it and diverge.
+    """
+    return dict(ORDERING_RULE)
+
+
 def _minutes(hhmm: object) -> int | None:
     if not isinstance(hhmm, str):
         return None
