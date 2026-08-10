@@ -29,7 +29,7 @@ from .config import Config, load_config, policy_digest
 from .contributions import (_standing, compute_contributions,
                             goal_progress)
 from .db import CONTRACT_VERSION, DERIVED_TABLES, build_db
-from .clocks import is_aware
+from .clocks import is_aware, ordering_rule
 from .jsonl import EVENT_DATASETS, append, append_many, load
 from . import query
 from .policy import (State, context_on, days_between, events_on, plan_churn,
@@ -2969,4 +2969,16 @@ def schema() -> dict:
         # --json` serialises this dict, and the MCP `schema` tool returns it.
         # A separate surface would have been a new place for parity to fail.
         "fields": field_types(),
+        # HOW TO ORDER CLAIMS (#308), for the same reason and by the same
+        # route. A client that persists claims outside the engine has to sort
+        # them, and one re-derived the rule and got it wrong: it read an
+        # append-only log's ends as its date range, which is ARRIVAL order.
+        #
+        # The rule was settled here across several contract versions and
+        # expressed only in Python, so a consumer's options were to guess it,
+        # hand-port it, or not hold claims at all. The third is the honest
+        # answer and is where that client is heading, but it is not reachable
+        # while the engine does not stamp client-held claims - so between now
+        # and then, every client orders logs itself.
+        "ordering": ordering_rule(),
     }
