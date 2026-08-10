@@ -52,6 +52,26 @@ adds accessors over what the engine already knew.
   failure being fixed, one level up.
 - No contract bump: an accessor over what the engine already knew, like
   `fields`, `units` and `aliases` before it.
+- **A merged row's per-value source is the one that supplied THAT field**
+  (#325). Contract 40 derived `field_sources` and contract 42 derived
+  `field_origins`, and nothing read them - so the fact pack a consumer
+  receives still carried the row's single `source`, which on a merged row is
+  the joined label. Measured: a session merged from a watch and a rowing
+  console reported `matrix-console+polar` for both the heart rate and the
+  distance, a string true of neither. That is the issue's own complaint one
+  layer downstream of where it was filed, with the map that fixes it sitting
+  unread in the same build.
+- **The instrument travels with it.** Each value now carries `origin` beside
+  `source`, null where the claims named no device - `field_origins` never
+  invents one, and neither does this.
+- **And it declines where it cannot tell.** A provenance row is keyed by
+  (dataset, date) and nothing more, so a date holding two sessions has two
+  maps and no way to say which is which. Where more than one could apply the
+  row keeps its own label: per-field attribution taken from the wrong row
+  would be worse than the joined one it replaced.
+- Nothing changes for a single-writer row, which is the 99% the issue asks not
+  to burden: its own `source` was already the whole truth.
+
 - **Every milestone a goal has, not only the ones it crossed** (#330, contract
   43). A `milestones` table already carried date, goal, period, fraction,
   value, target and label - what nothing could say was how many rungs a goal

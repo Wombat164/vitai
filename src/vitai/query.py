@@ -66,10 +66,51 @@ def _close(a: float, b: float, tolerance: float) -> bool:
     return abs(a - b) <= tolerance * scale if scale else a == b
 
 
+def _per_field(provenance: list[dict] | None, dataset: str, on: str,
+               metric: str) -> tuple[str | None, str | None]:
+    """(source, origin) for one field of a merged row, or (None, None).
+
+    THE HALF OF #325 THE MAPS DID NOT FINISH. Contract 40 and 42 derived
+    `field_sources` and `field_origins` - which instrument and which feed
+    supplied each field of a merged row - and nothing read them. So the fact
+    pack a consumer receives still carried the row's single `source`, which on
+    a merged row is the `+`-joined label: `matrix-console+polar` reported for
+    BOTH the heart rate and the distance, true of neither.
+
+    That is the issue's own complaint, one layer downstream of where it was
+    filed: "the emitted per-value `source` is uniformly wrong for half the
+    fields", with the map that fixes it sitting unread in the same build.
+
+    ONLY WHERE THE ROW IS UNAMBIGUOUS. A provenance row is keyed by (dataset,
+    date) and nothing more, so a date holding two sessions has two maps and no
+    way to say which is which - a gap #326's contract note already records.
+    Where more than one map could apply, this returns nothing and the caller
+    keeps the row's own `source`, which is the answer that guesses least.
+    """
+    if not provenance:
+        return None, None
+    rows = [r for r in provenance
+            if r.get("dataset") == dataset and str(r.get("date")) == on]
+    if len(rows) != 1:
+        return None, None
+    sources = rows[0].get("field_sources") or {}
+    origins = rows[0].get("field_origins") or {}
+    return sources.get(metric), origins.get(metric)
+
+
 def collect(datasets: dict[str, list[dict]], on: str, metric: str,
-            type: str | None = None) -> list[dict]:
-    """Every recorded value of `metric` on `on`, with where it came from."""
+            type: str | None = None,
+            provenance: list[dict] | None = None) -> list[dict]:
+    """Every recorded value of `metric` on `on`, with where it came from.
+
+    `provenance` is optional and additive: without it every row reports its
+    own `source`, exactly as before. With it, a MERGED row reports the source
+    and instrument that supplied THIS field rather than the label for the
+    whole row (#325).
+    """
     out: list[dict] = []
+    field_source, field_origin = _per_field(provenance, "sessions", on, metric)
+    daily_source, daily_origin = _per_field(provenance, "daily", on, metric)
     if metric in SESSION_METRICS:
         for rec in datasets.get("sessions") or []:
             if str(rec.get("date")) != on or not _numeric(rec.get(metric)):
@@ -77,14 +118,19 @@ def collect(datasets: dict[str, list[dict]], on: str, metric: str,
             if type and rec.get("type") != type:
                 continue
             out.append({"dataset": "sessions", "type": rec.get("type"),
-                        "source": rec.get("source"),
+                        "source": field_source or rec.get("source"),
+                        # The INSTRUMENT, where the merge knows it. Null on a
+                        # single-writer row and on any row whose claims named
+                        # no device - `field_origins` never invents one.
+                        "origin": field_origin or rec.get("origin"),
                         "modelled": is_modelled(rec, metric),
                         "value": float(rec[metric])})
     if metric in DAILY_METRICS and not type:
         for rec in datasets.get("daily") or []:
             if str(rec.get("date")) == on and _numeric(rec.get(metric)):
                 out.append({"dataset": "daily", "type": None,
-                            "source": rec.get("source"),
+                            "source": daily_source or rec.get("source"),
+                            "origin": daily_origin or rec.get("origin"),
                             # Carried, not filtered (#49). A caller asking
                             # what the record holds should SEE the estimate
                             # and be told it is one; silently dropping it
@@ -95,7 +141,8 @@ def collect(datasets: dict[str, list[dict]], on: str, metric: str,
 
 
 def check(datasets: dict[str, list[dict]], on: str, metric: str, says: float,
-          type: str | None = None, tolerance: float = 0.02) -> dict:
+          type: str | None = None, tolerance: float = 0.02,
+          provenance: list[dict] | None = None) -> dict:
     """Adjudicate a stated value against the record.
 
     Checks the claim against BOTH the day's total and each individual row,
@@ -108,7 +155,7 @@ def check(datasets: dict[str, list[dict]], on: str, metric: str, says: float,
     did not happen, and saying "REFUTED" there would be the engine
     overreaching in exactly the way it accuses the model of.
     """
-    values = collect(datasets, on, metric, type)
+    values = collect(datasets, on, metric, type, provenance=provenance)
     if not values:
         return {"verdict": NOT_IN_RECORD, "date": on, "metric": metric,
                 "type": type, "says": says, "values": [], "sum": None,
