@@ -201,9 +201,11 @@ def cmd_milestones(args: argparse.Namespace) -> None:
             print(json.dumps(row))
         return
     if not rows:
-        print("no goal has a milestone ladder - the engine mints them for "
-              "floor goals with a target, and not for caps, approaches, "
-              "daily buckets or completed goals")
+        print("no goal has a milestone ladder - one needs a live floor goal "
+              "with a target, scored by this engine. Caps, approaches, daily "
+              "buckets, finished or abandoned goals, and anything the engine "
+              "does not score (weight-based, or verified somewhere else) have "
+              "no rungs")
         return
     for goal in sorted({r["goal"] for r in rows}):
         rungs = [r for r in rows if r["goal"] == goal]

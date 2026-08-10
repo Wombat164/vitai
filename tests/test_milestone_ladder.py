@@ -143,36 +143,76 @@ def test_a_goal_the_engine_will_not_mint_for_gets_no_ladder():
     assert ladder("derek") == []         # no goals at all
 
 
-def test_the_ladder_and_the_minting_agree_about_which_goals_have_one():
-    """ONE PREDICATE, two readers. Two copies would drift, and the visible
-    symptom would be a surface promising four rungs to a goal that can never
-    reach one."""
+def test_no_goal_gets_a_ladder_it_could_never_climb():
+    """THE DEFECT THE FIRST CUT SHIPPED, and the test that replaced the one
+    that could not see it.
+
+    The old check compared the ladder against `mints_milestones`, which is the
+    predicate the ladder itself uses - circular, and it passed while the
+    engine published "next milestone: 16.5 kg" against a body-weight goal
+    whose own progress row carries a null `progress_pct` because
+    `goal_progress` deliberately refuses to score it.
+
+    Seven of eleven ladders were for goals that have never minted a milestone,
+    and four for goals that never can: weight-scoped, externally verified,
+    cancelled, or proposed. The rule now: a ladder needs a number the engine
+    actually scored, and a goal that is being pursued.
+
+    Checked against the OUTCOME - has this goal ever minted, or could it -
+    rather than against the gate."""
     for path in sorted(PERSONAS.iterdir()):
         if not (path / "vitai.toml").exists():
             continue
         v = Vitai(path)
-        with_ladder = {r["goal"] for r in v.milestone_ladder()}
+        prog = {str(g["slug"]): g for g in v.goals()}
+        for goal in {r["goal"] for r in v.milestone_ladder()}:
+            row = prog[goal]
+            assert row.get("counted") is not None, (path.name, goal)
+            assert row.get("lifecycle_status") == "active", (path.name, goal)
+            assert mints_milestones(row), (path.name, goal)
+
+
+def test_the_corpus_ladders_are_the_four_live_scoreable_goals():
+    """Pinned by name, because "seven of eleven were wrong" is only a fact if
+    the four that remain are the right four."""
+    got = set()
+    for path in sorted(PERSONAS.iterdir()):
+        if not (path / "vitai.toml").exists():
+            continue
+        got |= {f"{path.name}/{r['goal']}"
+                for r in Vitai(path).milestone_ladder()}
+    assert got == {"marcus/weekly-volume", "nora/weekly-training-volume",
+                   "priya/show-up-3x-week", "yasmin/attempt3-consistency"}, got
+
+
+def test_an_abandoned_attempt_does_not_render_beside_the_live_one():
+    """`yasmin` has three consistency attempts, two cancelled. All three had a
+    ladder and they read identically."""
+    got = {r["goal"] for r in ladder("yasmin")}
+    assert got == {"attempt3-consistency"}, got
+    slugs = {str(g["slug"]) for g in Vitai(PERSONAS / "yasmin").goals()}
+    assert {"attempt1-consistency", "attempt2-consistency"} <= slugs
+
+
+def test_nothing_mints_for_a_goal_the_predicate_refuses():
+    """The other direction, and it subtracts completed goals: one can mint and
+    LATER complete, so its historical rows outlive its eligibility. That is
+    correct - the crossing happened."""
+    for path in sorted(PERSONAS.iterdir()):
+        if not (path / "vitai.toml").exists():
+            continue
+        v = Vitai(path)
         eligible = {str(g["slug"]) for g in v.goals() if mints_milestones(g)}
-        assert with_ladder == eligible, path.name
-        # And nothing mints for a goal the predicate refuses.
-        minted = {m["goal"] for m in v.milestones()}
-        assert not (minted - eligible - _completed_since(v)), path.name
-
-
-def _completed_since(v: Vitai) -> set[str]:
-    """A goal can mint and LATER complete, so its historical rows outlive its
-    eligibility. That is correct - the crossing happened - and it is why the
-    check above subtracts them rather than asserting equality."""
-    return {str(g["slug"]) for g in v.goals()
-            if str(g.get("lifecycle_status")) == "completed"}
+        done = {str(g["slug"]) for g in v.goals()
+                if str(g.get("lifecycle_status")) == "completed"}
+        assert not ({m["goal"] for m in v.milestones()} - eligible - done), path.name
 
 
 def test_one_goal_can_be_asked_for():
-    got = ladder("yasmin")
-    slug = got[0]["goal"]
-    only = ladder("yasmin", slug=slug)
-    assert only and all(r["goal"] == slug for r in only)
-    assert len(only) < len(got), "yasmin has more than one goal with a ladder"
+    got = ladder("marcus")
+    only = ladder("marcus", slug="weekly-volume")
+    assert only == got
+    assert ladder("marcus", slug="marathon-time") == [], "and an ineligible one"
 
 
 # --- the count that was wrong ---------------------------------------------------
@@ -359,7 +399,9 @@ def test_the_rule_holds_across_the_whole_corpus():
         for r in Vitai(path).milestone_ladder():
             checked += 1
             assert r["passed"] == (r["reached"] >= r["value"]), (path.name, r)
-    assert checked >= 40, checked
+    # Four live scoreable goals, four rungs each. The floor is what stops the
+    # test quietly checking nothing if the gate tightens again.
+    assert checked == 16, checked
 
 
 # --- the surfaces the first cut left unwitnessed --------------------------------
@@ -382,4 +424,63 @@ def test_the_cli_says_so_when_no_goal_has_a_ladder():
         main(["milestones", "--root", str(PERSONAS / "rachel")])
     out = buf.getvalue()
     assert "no goal has a milestone ladder" in out, out
-    assert "caps, approaches" in out, "and it says which shapes those are"
+    for shape in ("Caps, approaches", "abandoned", "weight-based"):
+        assert shape in out, (shape, out)
+
+
+def test_a_raised_target_does_not_date_a_rung_the_athlete_is_below(tmp_path):
+    """The mirror of the reviewed defect, which survived its fix.
+
+    A target RAISED mid-bucket leaves a crossing at a fraction whose value the
+    athlete is now below. `passed` was corrected to read the value, but
+    `passed_on`, `label` and `passed_target` were still populated from the
+    crossing unconditionally - so the row said unpassed, dated, and next, all
+    at once. Only the CLI hid it; JSON and MCP consumers got it raw."""
+    got = mid_bucket_change(tmp_path, 40, 100).milestone_ladder()
+    first = got[0]
+    assert first["value"] == 25.0 and first["reached"] == 35.0
+    assert first["passed"] is True, "35 is past 25"
+
+    # And a rung the raise put out of reach carries no crossing detail.
+    ahead = [r for r in got if not r["passed"]]
+    assert ahead, got
+    for r in ahead:
+        assert r["passed_on"] is None, r
+        assert r["label"] is None and r["passed_target"] is None, r
+
+
+def test_no_rung_is_ever_unpassed_and_dated():
+    """The invariant behind it, over the corpus and both constructed cases."""
+    for path in sorted(PERSONAS.iterdir()):
+        if not (path / "vitai.toml").exists():
+            continue
+        for r in Vitai(path).milestone_ladder():
+            if not r["passed"]:
+                assert r["passed_on"] is None, (path.name, r)
+                assert r["label"] is None, (path.name, r)
+
+
+def test_a_level_goal_gets_no_ladder_of_fractions(tmp_path):
+    """Fractions of a LEVEL are meaningless without a baseline - the athlete
+    did not climb to 61 kg from zero - which is the same reason `_milestones`
+    refuses approach goals outright.
+
+    The commit before this kept an `observed` fallback for level goals while
+    admitting it was untested. Review made it fire: a "stay above 60 kg" goal
+    reported all four rungs - 15, 30, 45, 60 kg - permanently passed."""
+    root = tmp_path / "content"
+    (root / "data").mkdir(parents=True)
+    (root / "vitai.toml").write_text('[athlete]\nname = "T"\n', encoding="utf-8")
+    (root / "data" / "goals.jsonl").write_text(json.dumps(
+        {**{k: None for k in KEYS["goals"]}, "date": "2030-06-01",
+         "slug": "stay-above", "title": "Stay above 60 kg", "metric": "kg",
+         "dataset": "weight", "target": 60, "polarity": "floor",
+         "period": "none", "status": "active", "set_by": "athlete",
+         "recorded_at": "2030-06-01T08:00:00Z"}) + "\n", encoding="utf-8")
+    (root / "data" / "weight.jsonl").write_text(json.dumps(
+        {**{k: None for k in KEYS["weight"]}, "date": "2030-06-20",
+         "kg": 61.2, "source": "scale"}) + "\n", encoding="utf-8")
+
+    v = Vitai(root, on="2030-06-28")
+    assert v.goals(), "the goal is in force"
+    assert v.milestone_ladder() == [], v.milestone_ladder()

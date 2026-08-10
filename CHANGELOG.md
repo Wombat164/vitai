@@ -36,10 +36,13 @@ adds accessors over what the engine already knew.
   milestone is 10 km - which they passed on day two. A rung can therefore be
   passed with no date, which is honest where a date against a number nobody
   reached is not.
-- **One predicate decides which goals have a ladder**, shared by the ladder and
-  the minting, so a surface cannot promise four rungs to a goal that can never
-  reach one. A cap, an approach with no baseline, a daily bucket and a
-  completed goal each get an empty ladder for reasons the minting records.
+- **A ladder needs a number the engine actually scored, and a goal being
+  pursued.** A null `counted` is the progress table saying it did not score
+  this goal - weight-scoped, verified somewhere else, or fed by a dataset the
+  contribution engine does not read - and a ladder over a number that does not
+  exist is an invented surface. Caps, approaches with no baseline, daily
+  buckets, finished and abandoned goals get an empty ladder, for the reasons
+  the minting already records.
 - **One published display name per field** (#331). A client had `aliases` and
   `units` and still had nothing to PRINT, so it softened the field name's
   underscores and showed "kcal in". `aliases` is for RECOGNITION - it is what

@@ -1469,8 +1469,7 @@ class Vitai:
         return compute_contributions(d["goals"], d["thresholds"], d["daily"],
                                      d["sessions"])[1]
 
-    def milestone_ladder(self, slug: str | None = None,
-                         today: date | None = None) -> list[dict]:
+    def milestone_ladder(self, slug: str | None = None) -> list[dict]:
         """Every milestone a goal has THIS BUCKET, passed or not (#330).
 
         `milestones()` returns a row per milestone crossed, which answers what
@@ -1544,7 +1543,32 @@ class Vitai:
             name = str(goal.get("slug") or "")
             if slug is not None and name != slug:
                 continue
+            # TWO GATES, because `mints_milestones` is fed two different
+            # shapes and only answers about one. The minter passes it a goal
+            # DECLARATION; here it gets a progress ROW, so the lifecycle key
+            # it reads is absent and every cancelled and proposed goal walked
+            # through. Measured on the corpus: seven of eleven ladders were
+            # for goals that have never minted a milestone and four for goals
+            # that never can.
+            #
+            # The engine published "next milestone: 16.5 kg" against a
+            # body-weight goal whose own progress row carries a NULL
+            # `progress_pct`, because `goal_progress` deliberately refuses to
+            # score it. A derived surface may not answer a question the table
+            # it derives from has declined.
             if not mints_milestones(goal):
+                continue
+            # SCOREABLE AND LIVE. A null `counted` is the progress table
+            # saying it did not score this goal - weight-scoped, externally
+            # verified, or fed by a dataset the contribution engine does not
+            # read - and a ladder over a number that does not exist is an
+            # invented surface. A cancelled or proposed goal is not being
+            # pursued, and rendering its rungs beside a live goal's is how
+            # `yasmin`'s two abandoned attempts read exactly like her current
+            # one.
+            if goal.get("counted") is None:
+                continue
+            if str(goal.get("lifecycle_status") or "") != "active":
                 continue
             target = float(goal["target"])
             bucket = goal.get("bucket")
@@ -1554,18 +1578,16 @@ class Vitai:
             # question - has progress reached this value - is the same either
             # way.
             #
-            # THE `observed` HALF IS UNWITNESSED and I could not make it fire.
-            # Four goals in the corpus mint milestones with a null `counted`,
-            # and all four have a null `observed` too, so removing the
-            # fallback passes every test. Kept rather than deleted because the
-            # shape is real - #273 added that column for exactly these goals -
-            # and reading `counted` alone would score a level goal at zero and
-            # call every rung unpassed. What I will not do is claim it is
-            # tested.
-            reached = goal.get("counted")
-            if reached is None:
-                reached = goal.get("observed")
-            reached = float(reached or 0.0)
+            # NO `observed` FALLBACK, and the commit before this one kept one
+            # while admitting it was untested. Review made it fire, and what
+            # it did was absurd: a "stay above 60 kg" goal reported all four
+            # rungs - 15, 30, 45, 60 kg - permanently passed, because the
+            # athlete did not climb to 61 kg from zero. Fractions of a LEVEL
+            # are meaningless without a baseline, which is the same reason
+            # `_milestones` refuses approach goals outright. The scoreability
+            # gate above already excludes every level goal in the corpus; this
+            # removes the branch that would have invented a ladder for one.
+            reached = float(goal["counted"])
             rungs = []
             for frac in MILESTONE_FRACTIONS:
                 hit = crossed.get((name, bucket, frac))
@@ -1578,9 +1600,16 @@ class Vitai:
                     "target": target,
                     "reached": reached,
                     "passed": reached >= value,
-                    "passed_on": hit["date"] if hit else None,
-                    "passed_target": hit["target"] if hit else None,
-                    "label": hit["label"] if hit else None,
+                    # ONLY ON A PASSED RUNG. A target raised mid-bucket
+                    # leaves a crossing at a fraction whose value the athlete
+                    # is now BELOW, and reporting its date beside
+                    # `passed: false` shipped a row that was simultaneously
+                    # unpassed, dated and next.
+                    "passed_on": hit["date"] if (hit and reached >= value)
+                    else None,
+                    "passed_target": hit["target"] if (hit and reached >= value)
+                    else None,
+                    "label": hit["label"] if (hit and reached >= value) else None,
                     "next": False,
                 })
             for rung in rungs:

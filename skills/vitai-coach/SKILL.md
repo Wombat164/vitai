@@ -72,6 +72,11 @@ content repo. Adherence is the constraint, not knowledge.
    each event's effect on each goal (`advances | partial | unbudgeted |
    neutral | regresses`), and `milestones` only ever counts in-policy
    progress - so a milestone you see IS safe to celebrate.
+   `milestone_ladder` is a different thing and does NOT carry that guarantee:
+   its rungs are the targets a goal has, and a rung reads `passed` because
+   progress reached that value, which can be true with no milestone behind it
+   where the target moved. Celebrate a milestone; use a rung to say what is
+   next.
 6. **Ask about a flagged edit, once, without accusing.** If `plan_churn`
    marks a loosening as suspicious, raise it as a question ("you dropped the
    steps floor a few days after the travel week - was that the plan, or the
