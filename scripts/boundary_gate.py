@@ -221,28 +221,11 @@ EXEMPT: dict[tuple[str, str], str] = {
      "38e2021bcc1c802e562a6ae14a7cee6f0811503a8f4a745d2415beb1bf043b05"):
         "the doctrine's worked rewrite pair, quoting the non-compliant form",
 
-    # --- DEBT, not decisions. Every one describes routing that #110 REMOVED,
-    # so these sentences are now false as well as over the line. They belong
-    # to #116 and to the session that owns `docs/`, not to this gate. Listed
-    # individually so the lint can gate CI today and the debt stays visible -
-    # excluding the directory would hide it, and hide whatever is written
-    # there next.
-    ("docs/cross-metric-inference.md",
-     "3e7c94c637d54fb9dd1b0570d2b47427a1649d31bec96123e34fa78d34a643fd"):
-        "stale: pre-#110 routing; #116 owns the rewrite",
-    ("docs/model.md",
-     "02191f8391725b3cf85b64088009be39528ce3811dde836e2236e65192535a72"):
-        "stale: pre-#110 routing; #116 owns the rewrite",
-    ("docs/model.md",
-     "b8190e1ddd8503ed50c5e78acfbc0e84c29572e82df82e78cc239e4c5b7de515"):
-        "stale: pre-#110 routing; #116 owns the rewrite",
-    ("docs/plan-v3.md",
-     "93d1e27fbfff46e31a1bfe6295fd797ebce90fed5dcf759bc9969b3ad7f424e7"):
-        "stale: pre-#110 routing; #116 owns the rewrite",
-    ("docs/the-loop.md",
-     "27b32823f12553739406ea3026d590e37346261652dca6fb87f374e4d580d1bf"):
-        "stale: pre-#110 routing, surfaced by hyphen normalisation; "
-        "#116 owns the rewrite",
+    # The pre-#110 routing debt that used to sit here is GONE, cleared by
+    # #116 rather than re-pointed: five sentences across four documents were
+    # exempted because they described a clinician-review exit that #110 had
+    # already removed, which made them false as well as over the line. They
+    # are reworded now, so there is nothing left to spare.
 }
 
 

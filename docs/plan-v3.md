@@ -1,5 +1,12 @@
 # v3 build plan (restructured 2026-07-28)
 
+> **Design history.** Wording predates [medical-boundary.md](medical-boundary.md); where they conflict, the
+> boundary document governs. Superseded phrasings are left visible with a
+> note rather than erased: a document that quietly rewrites its own past
+> cannot be audited, and the reasoning that produced the wrong wording is
+> worth more than its absence.
+
+
 Execution plan for the gap list in [the-loop.md](the-loop.md), organized by
 the principles in [model.md](model.md). Written to hold two disciplines at
 once: a structurally solid base (tests land, CI green, versioned contract)
@@ -289,9 +296,9 @@ DETERMINISTIC tripwire, not LLM prose.
   `severity` field the ENGINE reads (not just the LLM).
 - **Safety escalation (G28)**: a symptom CLASS beyond musculoskeletal
   (cardiac/chest-pain and other red flags), ABSOLUTE-danger thresholds
-  (RHR outside a physiological range, not only baseline+5), a RED-S /
-  low-energy-availability composite detector over deficit + rate-of-loss +
-  load (the syndrome this tool's own coaching can cause), a `severity=
+  (RHR outside a physiological range, not only baseline+5), a
+  low-energy-availability composite over deficit + rate-of-loss + load, when
+  it fires no plan or progression is issued, a `severity=
   red_flag` engine branch that fires a hardcoded non-LLM message, and a
   FAST PATH (`vitai build --now` / an escalation surface) that bypasses the
   weekly cadence for a same-day dangerous entry.
@@ -301,10 +308,10 @@ DETERMINISTIC tripwire, not LLM prose.
   respect gates. Coach: gate rules become data-backed checks.
 - Tests: episode window math; gate firing; supersedes within a slug; a
   chest-pain entry produces an URGENT message not a hip-substitution; an
-  absolute-danger RHR fires without relative drift; RED-S composite fires
+  absolute-danger RHR fires without relative drift; the low-energy-availability composite fires
   on a deep-deficit + high-load synthetic; the fast path surfaces same-day.
 - NOT: FHIR import, document attachments, medication interactions,
-  diagnosis (route to clinician).
+  diagnosis (no claim, and no plan issued against it).
 - **G68 SAFETY FIRES FROM DEFAULTS (added 2026-07-29 by persona validation -
   now the increment's most important requirement).** The engine was run on a
   synthetic nursing mother eating ~1200 kcal, losing ~1 kg/week, with a
@@ -328,7 +335,7 @@ DETERMINISTIC tripwire, not LLM prose.
   is a contraindication mechanism, not a convenience.
 - **G58 goal safety+feasibility at declaration**: rate bounds, life-stage
   contraindication, deadline sanity -> a NEGOTIATION, never silent compliance.
-- Cut-first: lab/medication kinds; the RED-S composite (ship the red-flag
+- Cut-first: lab/medication kinds; the low-energy-availability composite (ship the red-flag
   branch + absolute thresholds + fast path first). NOT cuttable: the
   deterministic severity->action mapping, and G68 defaults-protect - those are
   the point of the increment.
@@ -638,7 +645,7 @@ Last, because it stands on features (4), forecasting (7), and resolution (2).
   tie-break (G31)**: when no anchor arbitrates, backtested accuracy decides,
   NOT home-team "SSoT wins" - that default was self-favoring.
 - Coach: the causal-language firewall (enumerate co-factors, no single-day
-  cause, "for you so far" ceiling, medical->clinician).
+  cause, "for you so far" ceiling, medical->no claim and no interpretation).
 - Tests: a pair that vanishes after detrending is discarded; effective-N
   shrinks a naive p-value; the pattern budget caps nightly proposals; a
   single-incident causal claim is structurally impossible to emit; a

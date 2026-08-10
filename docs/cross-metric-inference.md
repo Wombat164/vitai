@@ -47,7 +47,7 @@ The hedge is re-asserted at every coach utterance that cites it.
 - **Expectation-vs-actual** (lost 2kg, pace didn't improve): a tier-1/2
   PREDICTION (G21 weight->pace model) that didn't materialize. First-class
   signal, not disappointment: route to the candidate explanations (water not
-  fat lost, muscle loss, deficit fatigue/RED-S, near the body-fat floor, or
+  fat lost, muscle loss, deficit fatigue, near the body-fat floor, or
   just noise over too short a window) - never assert the formula "failed".
 - **Behavioral-contextual** (only 3 sessions in 2 weeks / busy work): link an
   adherence dip to life context. Tier 2, and the never-shame case - a
@@ -93,9 +93,10 @@ confidence is attached to a mined pair:
   ENUMERATES candidate co-factors, never names one culprit.
 - Hard n-of-1 ceiling: no pattern, however well backtested, is worded
   stronger than "for you, so far, under conditions X".
-- Medical topics route to "see a clinician", never to inference - cross-metric
+- Medical topics are excluded from inference entirely - cross-metric
   fatigue/HR/energy patterns must not drift into thyroid/cardiac/hormonal
-  diagnosis-adjacent claims.
+  diagnosis-adjacent claims. They get no causal claim and no interpretation;
+  the engine's fixed text is the only output.
 - Never-moralise at the generation layer: "you drank wine, that's why you
   failed" reads as judgment of a choice - banned even when statistically
   weak.
@@ -165,10 +166,10 @@ extrapolation the coach must hedge.
   diminishing returns past 2-3kg, and normalize by % bodyweight not absolute
   kg.
 - Only credit it when fat-loss is plausible AND rate <=~0.5-1%/week; else
-  low-confidence (deficit/RED-S zone). Reverses near the body-fat floor
+  low-confidence (deep-deficit zone). Reverses near the body-fat floor
   (~10-12% men / 18-22% women).
 - Expectation-vs-actual: if the predicted gain isn't seen in 2-4 weeks, route
-  to candidates (water/glycogen not fat, muscle loss, fatigue/RED-S, noise) -
+  to candidates (water/glycogen not fat, muscle loss, fatigue, noise) -
   never assert failure from one comparison.
 
 ### adherence -> context (tier 2, never-shame)

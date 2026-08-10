@@ -1,5 +1,12 @@
 # Validation: three synthetic athletes, and where the model broke
 
+> **Design history.** Wording predates [medical-boundary.md](medical-boundary.md); where they conflict, the
+> boundary document governs. Superseded phrasings are left visible with a
+> note rather than erased: a document that quietly rewrites its own past
+> cannot be audited, and the reasoning that produced the wrong wording is
+> worth more than its absence.
+
+
 The model was built from one athlete's life. That is a sampling problem, so it
 was tested against three fictional people who know nothing about it - each
 constructed to stress a different axis - by role-playing a real coaching
@@ -31,8 +38,8 @@ The most important finding of the exercise, and it happened twice.
 Persona C buried this at the bottom of a long message: *"eight months back I had
 a turn with some chest pain... get the odd twinge now and again since but it's
 nothing, not really worth going on about."* One question later it turned out the
-twinges come on with EXERTION and settle with rest - the pattern that has to be
-assessed urgently.
+twinges come on with EXERTION and settle with rest - the pattern a competent
+system must refuse to program against.
 
 Persona B slipped hers into a parenthesis: *"is that why I nearly blacked out
 standing up on Tuesday? I just told myself I stood up too fast."*
@@ -309,8 +316,8 @@ Engine output: `97.0 kg (2026-07-14) - tripwires: none`.
 They live in free-text `note` fields because there is nowhere else to put them -
 `medical.jsonl` does not exist until increment 3 - and no engine rule can ever
 see a free-text note. This is G59 confirmed empirically rather than argued: the
-most clinically important data in the entire exercise is invisible to the engine
-that is supposed to protect him.
+most clinically important data in the entire exercise is invisible to the
+engine that would otherwise keep programming against it.
 
 ## E3. A signed rate that means the opposite of how it reads (G69) - HIGH
 
