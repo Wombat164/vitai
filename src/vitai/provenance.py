@@ -47,6 +47,8 @@ manufacture corroboration out of missing data.
 
 from __future__ import annotations
 
+from functools import lru_cache
+
 from .vocab import meta, registry, resolve
 
 # How hops are written in `path`: an ordered, arrow-separated list of names.
@@ -139,23 +141,60 @@ def _channel(rec: dict) -> str | None:
 
     The rule the issue settles is that the athlete is one ORIGIN when they are
     the source, and the instrument is the origin when they are only a conduit.
-    The discriminator is already in the record and needs no new field: a
-    conduit claim NAMES the instrument it transcribes, so it never reaches
-    here - `is_independent` has already counted it by that instrument. What
-    arrives here is a claim with no instrument behind it, and for a person
-    that means the observation is theirs.
+    The discriminator is already in the record and needs no new field.
+
+    APPLIED WHETHER OR NOT THE ROW NAMES AN INSTRUMENT, and the first version
+    of this docstring said the opposite: that a conduit claim "never reaches
+    here". It does. This is called for rows that DO name an instrument too -
+    to build the set of channels already represented, and to decide whether
+    two rows are the same witness.
+
+    So a conduit row from a person DOES occupy that person's channel, and the
+    athlete's own unattributed figure beside it adds no witness. That reads
+    like an under-count and it is the rule #211 exists to enforce: an
+    anonymous row on a channel already represented by an annotated one is the
+    same delivery, and counting it again is how correcting a row used to
+    INFLATE the evidence for the value being corrected.
+
+    It is also what the issue asks for. Where a transcription cannot name what
+    it transcribed, independence may not be asserted - so the anonymous row
+    cannot become a second witness, whatever else is true of it.
+
+    I tried the other way first, restricting the fold to rows with no
+    instrument, and it broke exactly the guardrail above: two `stated-in-chat`
+    rows for one measurement, one of them annotated with an origin, went back
+    to reporting two independent sources. WHETHER THAT PAIR SHOULD INSTEAD CAP
+    COMBINED CONFIDENCE rather than contribute nothing is a real question the
+    issue raises and this does not answer.
 
     Folded to the CATALOGUED person rather than to "any person", because two
     different people are two witnesses: the athlete saying they felt tired and
-    a clinician recording the same is corroboration, and collapsing those
-    would be the mirror error.
+    a clinician recording the same is corroboration.
     """
     source = rec.get("source")
     if source in (None, ""):
         return None
-    if source_kind(source) == PERSON:
-        return resolve_source(source)
-    return str(source)
+    return _person_or(source)
+
+
+def _person_or(source: object) -> str:
+    """The catalogued person behind this source name, or the name itself.
+
+    NEVER `other`. `[kinds.person]` declares aliases the SOURCE catalogue does
+    not - `human`, `person` - so an uncatalogued source spelled that way has a
+    person KIND while resolving to the `other` sentinel. Folding to `other`
+    merged two unrelated strangers with each other and with the catalogue's
+    real catchall, which is a different thing again: `other` is
+    `kind = unknown`, not a person at all.
+
+    Two uncatalogued sources are not evidence of one another. That rule was
+    already written in a test here and the fold walked around it.
+    """
+    key = str(source)
+    if _kind_of(key) != PERSON:
+        return key
+    named = resolve_source(key)
+    return key if named == CATALOG_OTHER else named
 
 
 def distinct_origins(recs: list[dict]) -> set[str]:
@@ -209,7 +248,8 @@ def independent_witnesses(recs: list[dict]) -> int:
     named, unparsed = set(), 0
     for group in clusters:
         refs = {str(x) for row in group for x in (row.get("derived_from") or [])}
-        sources = {p[2] for p in (r.split(":") for r in refs) if len(p) >= 3}
+        sources = {_person_or(p[2]) for p in (r.split(":") for r in refs)
+                   if len(p) >= 3}
         if sources:
             named |= sources
         else:
@@ -218,7 +258,15 @@ def independent_witnesses(recs: list[dict]) -> int:
     # An input that is ALSO one of the rows here is already counted below, by
     # its own origin. Counting it again as something the derivation names
     # would corroborate an observation with a restatement of itself.
-    here = {str(r.get("source")) for r in plain if r.get("source")}
+    # THROUGH THE SAME FOLD as the rows themselves (#94). This compares
+    # `derived_from` references - which embed a source - against the plain
+    # rows' sources, and both sides used the RAW string. So a derivation whose
+    # lineage names `me` beside a plain row written `self` counted two
+    # witnesses for one person: the issue's own bug, surviving on the lineage
+    # path after the plain path was fixed. A reference carries no origin, so
+    # the person rule is all there is to apply, and applying it to one side
+    # only would be worse than neither.
+    here = {_person_or(r["source"]) for r in plain if r.get("source")}
     from_lineage = len(named - here) + unparsed
 
     # SOURCES, NOT ROWS (#211). A row whose origin is unstated used to count as
@@ -576,6 +624,19 @@ def resolve_source(written: object) -> str:
         if (found := resolve("sources", "sources", base[0])) is not None:
             return found
     return CATALOG_OTHER
+
+
+@lru_cache(maxsize=None)
+def _kind_of(written: str) -> str:
+    """`source_kind` for a hashable name, memoised.
+
+    The registry loaders are already cached; what is not is `_normalise` and
+    the MISSES, and the miss is the common path - every instrument source pays
+    the whole failed lookup chain to learn it is not a person. Measured after
+    #94 started calling this per row: 200k calls went from 0.039s to 0.851s on
+    the non-person path, and a persona build slowed 11%.
+    """
+    return source_kind(written)
 
 
 def source_kind(written: object) -> str:

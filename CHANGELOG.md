@@ -25,9 +25,11 @@ adds accessors over what the engine already knew.
   now pinned.
 - **Two different people stay two witnesses.** The athlete saying they felt
   tired and a clinician recording the same is corroboration.
-- Latent rather than live: no persona writes under two spellings of one name,
-  so every count the corpus publishes is unchanged. That is also why nothing
-  caught it.
+- Latent rather than live, and the reason is narrower than it first looked.
+  Three fixtures DO write under two spellings of one person, but no two
+  spellings contend for the same field on the same date - zero collisions - so
+  every count the corpus publishes is unchanged. It is one date collision away
+  from live, which is also why nothing caught it.
 
 ### Added
 

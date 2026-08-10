@@ -123,3 +123,57 @@ def test_two_uncatalogued_channels_stay_two():
 
 def test_instruments_are_untouched():
     assert independent_witnesses([rec("polar-api"), rec("garmin-connect")]) == 2
+
+
+# --- what review found the first fold walked around --------------------------
+
+def test_an_uncatalogued_person_name_does_not_collapse_onto_the_catchall():
+    """`[kinds.person]` declares aliases the SOURCE catalogue does not, so a
+    source spelled `human` or `person` has a person KIND while resolving to
+    the `other` sentinel. The first fold sent it there, merging two unrelated
+    strangers with each other AND with the catalogue's real catchall - which
+    is `kind = unknown`, not a person at all.
+
+    `test_two_uncatalogued_channels_stay_two` above states the rule and the
+    fold walked around it, because the two strings it picks happen not to trip
+    the kind fallback."""
+    from vitai.provenance import CATALOG_OTHER, resolve_source, source_kind
+
+    for spelling in ("human", "person"):
+        assert source_kind(spelling) == PERSON, spelling
+        assert resolve_source(spelling) == CATALOG_OTHER, spelling
+
+    assert independent_witnesses([rec("human"), rec("person")]) == 2
+    assert independent_witnesses([rec("human"), rec("other")]) == 2
+
+
+def test_a_derivation_naming_one_person_by_another_spelling_is_one_witness(tmp_path):
+    """The lineage path, which the first fix missed entirely.
+
+    `independent_witnesses` compares `derived_from` references - which embed a
+    source - against the plain rows' sources, and BOTH sides used the raw
+    string. So the issue's own bug survived here after the plain path was
+    fixed: a derivation whose lineage names `me`, beside a plain row written
+    `self`, counted two witnesses for one person."""
+    lineage = rec("derived", derived_from=["weight:2030-05-01:me"])
+    plain = rec("self")
+    assert independent_witnesses([lineage, plain]) == 1
+    # And a derivation naming a real instrument still corroborates.
+    other = rec("derived", derived_from=["weight:2030-05-01:polar-api"])
+    assert independent_witnesses([other, plain]) == 2
+
+
+def test_a_conduit_row_occupies_the_person_s_channel(tmp_path):
+    """The behaviour review called an under-count, pinned as deliberate.
+
+    A person's conduit row DOES occupy that person's channel, so their own
+    unattributed figure beside it adds no witness. That is #211's rule - an
+    anonymous row on a channel already represented is the same delivery - and
+    it is what the issue asks for where a transcription cannot name what it
+    transcribed. Restricting the fold to rows with no instrument breaks
+    `test_source_counting.test_a_correction_does_not_inflate_the_evidence`."""
+    assert independent_witnesses(
+        [rec("stated-in-chat", origin="withings-scale"), rec("me")]) == 1
+    # A DIFFERENT person's claim is still a second witness.
+    assert independent_witnesses(
+        [rec("stated-in-chat", origin="withings-scale"), rec("gp")]) == 2
