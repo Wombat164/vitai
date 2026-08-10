@@ -667,7 +667,12 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   models situational mode (vacation, heatwave) - a different axis entirely. A
   physiological state alters energy requirements, safe rate bounds, and which
   of vitai's own outputs are issued. Without it the engine will cheerfully help
-  an athlete run a dangerous deficit. See [validation-personas.md](validation-personas.md) F3. CRITICAL.
+  an athlete run a dangerous deficit.
+  > **RECONCILED with the medical boundary (#116), 2026-08-10.** The last
+  > clause read "which interventions are permitted at all", which describes
+  > the engine governing care rather than governing itself. The mechanism is
+  > unchanged: a state still alters what the numbers mean and which rules
+  > fire. See [validation-personas.md](validation-personas.md) F3. CRITICAL.
   > **SPECIALISED by #220 (state model), 2026-08-03.** Implemented, with live
   > rows, and retained. The general state shape specialises to this rather than
   > replacing it.
@@ -812,29 +817,36 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   interventions**, and no field distinguishes them. See
   [validation-personas.md](validation-personas.md) sweep 2.
 - **G73 A CLINICAL HOLD tier above "flag"** (P4/P7/G28). CRITICAL, sweep 2. The
-  RED-S persona showed a severity that no existing tier expresses: recurrent
+  most severe persona of sweep 2 showed a severity no existing tier expresses:
+  recurrent
   bone stress injury + amenorrhea + energy availability far below the clinical
   threshold is not a tripwire to surface alongside the week's rate line. The
   correct system behaviour is a **hold**: suspend algorithmic load progression,
   and BLOCK the coach from issuing training advice on the case at all. G28 as
   written escalates a message; this escalates by DISABLING the product's own
-  advice.
+  advice. A system that logs "tripwire: nutrition" here is still
+  under-classifying the severity.
+
   > **RECONCILED with the medical boundary (#116), 2026-08-10.** A third
   > clause required the engine to surface a mandatory referral. The hold and
   > the advice-disabling are the correct and keepable parts and are untouched;
   > the removed clause specified the clinician-review exit #110 took out, and
-  > directing care is a violation class in its own right. A system that logs
-  "tripwire: nutrition" here is still under-detecting.
+  > directing care is a violation class in its own right.
 - **G74 The athlete's benign self-explanation is not evidence** (P1/P3/G59).
   HIGH, and the sharpest cross-cutting finding of sweep 2 - it appeared in FOUR
   of eight personas. Each supplied an innocent cause for a concerning sign:
   "it's the reflux" (exertional chest pain), "that's just what happens when you
   train hard" (five months of amenorrhea), "my legs aren't used to carrying the
   lighter me" (weakness on stairs during rapid loss on a GLP-1), "I stood up
-  too fast" (near-syncope while under-eating). The
-  athlete's causal attribution is a CLAIM like any other (P1) and must never
-  suppress the pattern it explains away. The engine reads the sign; the
-  explanation is recorded, not deferred to.
+  too fast" (near-syncope while under-eating). The athlete's causal
+  attribution is a CLAIM like any other (P1) and must never suppress the
+  pattern it explains away. The engine reads the sign; the explanation is
+  recorded, not deferred to.
+  > **RECONCILED with the medical boundary (#116), 2026-08-10.** The third
+  > example carried a parenthesis naming what the presentation probably was.
+  > That is class (c) - a condition as the engine's own conclusion - and the
+  > example works without it: the sign is the weakness, and the point of the
+  > row is that the athlete's explanation must not bury it.
 - **G75 Subjective and objective measures are different quantities** (P1/P3).
   MEDIUM. A device reported 6.1 h of sleep and the athlete reported "felt like
   5", every night, systematically. These are not competing claims to resolve

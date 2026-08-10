@@ -1,11 +1,12 @@
 # v3 build plan (restructured 2026-07-28)
 
 > **Design history.** Wording predates [medical-boundary.md](medical-boundary.md); where they conflict, the
-> boundary document governs. Superseded phrasings are left visible with a
-> note rather than erased: a document that quietly rewrites its own past
-> cannot be audited, and the reasoning that produced the wrong wording is
-> worth more than its absence.
-
+> boundary document governs. Phrasings reconciled with it under #116 are
+> recorded in git history rather than annotated here - this document is
+> read as a record of how the design was reasoned, and interleaving audit
+> notes through it would obscure that. The living gap map in
+> [model.md](model.md) carries its notes inline, because it is still
+> steering work.
 
 Execution plan for the gap list in [the-loop.md](the-loop.md), organized by
 the principles in [model.md](model.md). Written to hold two disciplines at

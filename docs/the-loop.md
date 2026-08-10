@@ -1,11 +1,12 @@
 # The loop: one day, fully traced
 
 > **Design history.** Wording predates [medical-boundary.md](medical-boundary.md); where they conflict, the
-> boundary document governs. Superseded phrasings are left visible with a
-> note rather than erased: a document that quietly rewrites its own past
-> cannot be audited, and the reasoning that produced the wrong wording is
-> worth more than its absence.
-
+> boundary document governs. Phrasings reconciled with it under #116 are
+> recorded in git history rather than annotated here - this document is
+> read as a record of how the design was reasoned, and interleaving audit
+> notes through it would obscure that. The living gap map in
+> [model.md](model.md) carries its notes inline, because it is still
+> steering work.
 
 Design document, July 2026. Takes ONE ordinary event - **"I walked 10,000
 steps today"** - and traces it through the entire system: capture, history,

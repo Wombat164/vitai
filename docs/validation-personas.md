@@ -1,11 +1,12 @@
 # Validation: three synthetic athletes, and where the model broke
 
 > **Design history.** Wording predates [medical-boundary.md](medical-boundary.md); where they conflict, the
-> boundary document governs. Superseded phrasings are left visible with a
-> note rather than erased: a document that quietly rewrites its own past
-> cannot be audited, and the reasoning that produced the wrong wording is
-> worth more than its absence.
-
+> boundary document governs. Phrasings reconciled with it under #116 are
+> recorded in git history rather than annotated here - this document is
+> read as a record of how the design was reasoned, and interleaving audit
+> notes through it would obscure that. The living gap map in
+> [model.md](model.md) carries its notes inline, because it is still
+> steering work.
 
 The model was built from one athlete's life. That is a sampling problem, so it
 was tested against three fictional people who know nothing about it - each

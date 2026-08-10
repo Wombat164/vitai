@@ -1,5 +1,14 @@
 # Cross-metric inference & knowledge extraction (G22)
 
+> **Reconciled with [medical-boundary.md](medical-boundary.md) under #116,
+> 2026-08-10.** Four phrasings were corrected: the medical-topic rule routed
+> the reader to care rather than stating the exclusion, and three candidate
+> enumerations named a syndrome the engine would be concluding. The
+> exclusions themselves - the load-bearing half - are unchanged. This
+> document was not on the issue's banner list; the note is here because the
+> edits are its own, and a reader comparing it to the design history around
+> it should know which way the correction went.
+
 How vitai relates ONE metric to another - sleep to performance, weight to
 pace, HR to calories, context to adherence - without manufacturing false
 insight from one person's sparse, autocorrelated, confounded data. Design +
