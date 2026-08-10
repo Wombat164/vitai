@@ -48,8 +48,8 @@ adds accessors over what the engine already knew.
   another saw, is the swap.
 - **A person is not an instrument** (#94, one issue over) and **silence is not
   an instrument** (as for `protocol`). Counting either would have declined a
-  rate because somebody typed a number in, or seamed the 45% of rows that name
-  a channel and no device.
+  rate because somebody typed a number in, or seamed the 45% of rows naming a
+  source or origin at all that name only a channel.
 - **No size estimate**, exactly as for the protocol seam: how much an Aria
   reads over a Withings is a per-instrument accuracy claim, and #171 has
   settled that no vendor figures are imported. And **not a split** - #315 split

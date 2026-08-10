@@ -53,11 +53,79 @@ def row(when: str, kg: float, origin: str | None, source: str = "scale") -> dict
 # --- what counts as a seam ------------------------------------------------------
 
 def test_two_scales_across_a_window_are_a_seam():
-    got = instrument_seam([row("2030-05-01", 82.0, "aria-scale"),
+    """CATALOGUED NAMES ON BOTH SIDES. The first version of this used
+    `aria-scale`, which the registry has never seen, so it seamed only because
+    the OTHER name happened to be catalogued - the control did not prove the
+    rule for the device family the issue is named after."""
+    got = instrument_seam([row("2030-05-01", 82.0, "fitbit-scale"),
                            row("2030-05-10", 79.0, "withings-scale")])
     assert got["seam"] is True
-    assert got["instruments"] == ["aria-scale", "withings-scale"]
+    assert got["instruments"] == ["fitbit-scale", "withings-scale"]
     assert (got["stated"], got["silent"]) == (2, 0)
+
+
+def test_two_uncatalogued_scales_are_still_two_scales():
+    """THE HOLE REVIEW FOUND, and it defeated the guardrail for exactly the
+    import this issue exists for.
+
+    `resolve_source` maps any name the catalogue has never seen to a single
+    `other` key, deliberately. Folding through it made every uncatalogued
+    device the SAME device, so two genuinely different scales intersected on
+    `{other}` and produced no seam. Takeout and Apple Health carry arbitrary
+    `sourceName` strings, which is the whole point of the sequencing note.
+
+    It is in shipped data already: `bathroom-scale` and `gym-scale` both
+    resolve to `other`."""
+    got = instrument_seam([row("2030-05-01", 82.0, "eufy-scale"),
+                           row("2030-05-10", 79.0, "salter-scale")])
+    assert got["seam"] is True, got
+
+    ines = instrument_seam([row("2030-05-01", 64.0, "bathroom-scale"),
+                            row("2030-05-10", 65.8, "gym-scale")])
+    assert ines["seam"] is True, ines
+
+
+def test_an_unnamed_spelling_of_a_named_device_seams_and_that_is_the_safe_way():
+    """`aria` is catalogued and `aria-scale` is not, so they read as two.
+    Nothing in the record says they are one scale; the fix is an alias in the
+    registry, which is data. The alternative is fuzzy matching on names, which
+    is the line `protocol_seam` draws in as many words."""
+    got = instrument_seam([row("2030-05-01", 82.0, "aria"),
+                           row("2030-05-10", 81.0, "aria-scale")])
+    assert got["seam"] is True, got
+
+
+def test_a_placeholder_is_not_an_instrument():
+    """The rule `protocol_seam` states thirty lines up and pins with its own
+    test. Letting a dash through manufactured a refusal out of punctuation,
+    and the report would have printed "- then withings-scale"."""
+    for junk in ("-", " ", "___"):
+        got = instrument_seam([row("2030-05-01", 82.0, junk),
+                               row("2030-05-10", 79.0, "withings-scale")])
+        assert got["seam"] is False, (junk, got)
+        assert got["instruments"] == ["withings-scale"], junk
+
+
+def test_the_reported_order_is_the_record_s_not_the_file_s():
+    """"An ordering a formatter can change is not an ordering" - this module's
+    own acceptance criterion, which `protocol_seam` pins with reversed rows
+    and this did not. The report joins these with "then"."""
+    rows = [row("2030-05-10", 79.0, "withings-scale"),
+            row("2030-05-01", 82.0, "fitbit-scale")]
+    assert instrument_seam(rows)["instruments"] == ["fitbit-scale",
+                                                    "withings-scale"]
+    assert instrument_seam(list(reversed(rows)))["instruments"] == [
+        "fitbit-scale", "withings-scale"]
+
+
+def test_the_first_spelling_is_the_one_reported():
+    """The athlete's own words are what a reader should see, and only the
+    COMPARISON folds - `protocol_seam`'s rule again. Which spelling survives
+    was unwitnessed."""
+    got = instrument_seam([row("2030-05-01", 82.0, "Withings-Scale"),
+                           row("2030-05-10", 81.0, "withings-scale")])
+    assert got["instruments"] == ["Withings-Scale"], got
+    assert got["seam"] is False
 
 
 def test_one_instrument_throughout_is_not_a_seam():
@@ -90,8 +158,9 @@ def test_a_reading_only_one_device_saw_after_readings_only_another_saw():
 
 def test_silence_is_not_an_instrument():
     """A record that has never used the field must not acquire a seam the day
-    it starts. 45% of the corpus's origin-bearing rows name a channel and no
-    instrument, so the alternative would seam almost everything."""
+    it starts. 45% of the corpus's rows that name a source or an origin at
+    all name only a channel, so the alternative would seam almost
+    everything."""
     got = instrument_seam([row("2030-05-01", 82.0, None),
                            row("2030-05-10", 79.0, None)])
     assert got["seam"] is False
@@ -194,15 +263,25 @@ def test_it_does_not_tell_the_athlete_to_be_consistent(tmp_path):
     assert "shares one instrument" in out
 
 
-def test_the_corpus_is_unchanged():
-    """No persona has a genuine swap inside a rate window, so this ships with
-    every existing weight verdict intact - checked rather than assumed."""
-    seams = 0
+def test_no_corpus_window_seams():
+    """No persona has a genuine swap inside ANY rate window, so this ships
+    with every existing weight verdict intact.
+
+    EVERY WINDOW, not the trailing one. The first version checked
+    `rows[-14:]` - fourteen READINGS rather than a fortnight, and only the
+    last of them - so a swap in an older window would have slipped it, which
+    is exactly where `ines` has two multi-scale windows."""
+    checked = 0
     for path in sorted(PERSONAS.iterdir()):
         if not (path / "vitai.toml").exists():
             continue
         rows = sorted(Vitai(path).canonical("weight"),
                       key=lambda r: str(r.get("date")))
-        if rows and instrument_seam(rows[-14:])["seam"]:
-            seams += 1
-    assert seams == 0, f"{seams} persona window(s) now seam"
+        for start in range(len(rows)):
+            window = rows[start:start + 14]
+            if len(window) < 2:
+                continue
+            checked += 1
+            got = instrument_seam(window)
+            assert not got["seam"], (path.name, window[0]["date"], got)
+    assert checked > 300, checked
