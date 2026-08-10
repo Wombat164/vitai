@@ -28,6 +28,14 @@ adds accessors over what the engine already knew.
   because 0 is falsy. The old column keeps its exact meaning - a consumer
   reading it today is reading a per-bucket figure, and widening it would
   change every one of those readings invisibly.
+- **A rung is passed when progress REACHED ITS VALUE**, not when a fraction
+  was minted. Crossings are recorded against the target in force at the time,
+  so a target that moves mid-bucket leaves crossings that no longer line up
+  with the rungs: on a goal lowered from 100 to 40 with 35 km logged, exactly
+  one crossing exists, and reading it as the answer says the athlete's next
+  milestone is 10 km - which they passed on day two. A rung can therefore be
+  passed with no date, which is honest where a date against a number nobody
+  reached is not.
 - **One predicate decides which goals have a ladder**, shared by the ladder and
   the minting, so a surface cannot promise four rungs to a goal that can never
   reach one. A cap, an approach with no baseline, a daily bucket and a

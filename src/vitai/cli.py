@@ -182,8 +182,8 @@ def _fmt_goal(row: dict) -> str:
     # printed nothing here - 0 is falsy - and a goal with 3 printed "3
     # milestone(s)" as if that were the total (#330).
     if row.get("milestones_total"):
-        bits.append(f"{row['milestones']} of {row['milestones_total']} "
-                    "milestone(s) this period")
+        bits.append(f"{row['milestones']} milestone(s) this period, "
+                    f"{row['milestones_total']} in all")
     if phrase := _fmt_deadline(row):
         bits.append(phrase)
     dates = f"set {row.get('declared')}"
@@ -195,9 +195,7 @@ def _fmt_goal(row: dict) -> str:
 
 def cmd_milestones(args: argparse.Namespace) -> None:
     """Every milestone rung a goal has this period, passed or not."""
-    v = Vitai(_root(args))
-    today = date.fromisoformat(args.on) if args.on else None
-    rows = v.milestone_ladder(slug=args.slug, today=today)
+    rows = Vitai(_root(args)).milestone_ladder(slug=args.slug)
     if args.json:
         for row in rows:
             print(json.dumps(row))
@@ -1622,8 +1620,6 @@ def main(argv: list[str] | None = None) -> None:
             p.add_argument("--slug", help="only this goal")
             p.add_argument("--json", action="store_true",
                            help="emit rungs as JSONL instead of prose")
-            p.add_argument("--on", metavar="YYYY-MM-DD",
-                           help="which period to read the ladder for")
         if name == "append":
             p.add_argument("dataset", help="which dataset to append to")
         if name == "key":

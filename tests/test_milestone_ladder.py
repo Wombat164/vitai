@@ -29,11 +29,13 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import sqlite3
 from pathlib import Path
 
 from vitai.api import Vitai
 from vitai.contributions import MILESTONE_FRACTIONS, mints_milestones
+from vitai.schema import KEYS
 
 PERSONAS = Path(__file__).resolve().parent / "fixtures" / "personas"
 
@@ -205,7 +207,13 @@ def test_the_column_is_appended_rather_than_inserted():
 
 
 def test_it_reaches_the_read_model(tmp_path):
-    con = sqlite3.connect(Vitai(PERSONAS / "marcus").build())
+    # A COPY. Building in the persona directory writes `derived/` into shared
+    # fixture state at test time, which every other test in the suite avoids.
+    import shutil
+
+    root = tmp_path / "marcus"
+    shutil.copytree(PERSONAS / "marcus", root)
+    con = sqlite3.connect(Vitai(root).build())
     try:
         cols = [r[1] for r in con.execute("PRAGMA table_info(goal_progress)")]
         assert "milestones_total" in cols
@@ -271,4 +279,107 @@ def test_the_goals_line_no_longer_hides_a_goal_with_crossings():
     with contextlib.redirect_stdout(buf):
         main(["goals", "--root", str(PERSONAS / "marcus")])
     out = buf.getvalue()
-    assert "0 of 33 milestone(s) this period" in out, out
+    assert "0 milestone(s) this period, 33 in all" in out, out
+
+
+# --- passed is about the VALUE, not the fraction -------------------------------
+
+def mid_bucket_change(tmp_path: Path, first: float, second: float) -> Vitai:
+    """A goal whose target moves partway through the bucket it is scored in.
+
+    Crossings are minted event by event against the target in force AT THAT
+    EVENT, so a mid-bucket change leaves a bucket whose crossings do not line
+    up with the rungs the current target defines. That is the shape that tells
+    "was this fraction ever crossed" apart from "has progress reached this
+    value", and nothing in the shipped corpus does it - measured: zero rungs
+    across ten personas disagree under the two rules.
+    """
+    root = tmp_path / "content"
+    (root / "data").mkdir(parents=True)
+    (root / "vitai.toml").write_text('[athlete]\nname = "T"\n', encoding="utf-8")
+
+    def goal(date_: str, target: float) -> dict:
+        return {**{k: None for k in KEYS["goals"]}, "date": date_, "slug": "vol",
+                "title": "volume", "metric": "distance_km", "dataset": "sessions",
+                "session_type": "run", "target": target, "policy": "open",
+                "period": "weekly", "on_period_end": "reset", "status": "active",
+                "set_by": "athlete", "recorded_at": f"{date_}T08:00:00Z"}
+
+    (root / "data" / "goals.jsonl").write_text(
+        json.dumps(goal("2030-06-01", first)) + "\n"
+        + json.dumps(goal("2030-06-27", second)) + "\n", encoding="utf-8")
+    (root / "data" / "sessions.jsonl").write_text("".join(
+        json.dumps({**{k: None for k in KEYS["sessions"]},
+                    "date": f"2030-06-{d:02d}", "type": "run",
+                    "distance_km": 7.0, "duration_s": 2400,
+                    "source": "watch"}) + "\n" for d in (24, 25, 26, 27, 28)),
+        encoding="utf-8")
+    return Vitai(root, on="2030-06-28")
+
+
+def test_a_rung_is_passed_when_progress_reached_it_not_when_a_fraction_minted(tmp_path):
+    """THE DEFECT REVIEW FOUND, and it is the one this method's bucket scoping
+    exists to prevent, arriving through the other door.
+
+    Target 100 lowered to 40 partway through the week, 35 km logged. ONE
+    crossing minted - 75% of 40 - because the earlier events were measured
+    against marks of 25/50/75/100 and the later ones found `before` already
+    past the new lower marks. So "was this fraction crossed" says the athlete
+    has passed one rung and their NEXT is 10 km, which they went past on day
+    two. "Has progress reached this value" says three of four, next is 40."""
+    v = mid_bucket_change(tmp_path, 100, 40)
+    assert [m["fraction"] for m in v.milestones()] == [0.75], v.milestones()
+
+    got = v.milestone_ladder()
+    assert [r["value"] for r in got] == [10.0, 20.0, 30.0, 40.0]
+    assert [r["passed"] for r in got] == [True, True, True, False]
+    assert [r["next"] for r in got] == [False, False, False, True]
+    assert all(r["reached"] == 35.0 for r in got)
+
+
+def test_a_rung_can_be_passed_with_no_date(tmp_path):
+    """The honest consequence of the rule above: where the target moved past a
+    rung, there is no crossing to date it. Saying "passed" without a date is
+    true; a date against a number nobody reached would not be."""
+    got = mid_bucket_change(tmp_path, 100, 40).milestone_ladder()
+    dateless = [r for r in got if r["passed"] and r["passed_on"] is None]
+    assert len(dateless) == 2, got
+    assert all(r["label"] is None and r["passed_target"] is None
+               for r in dateless)
+
+
+def test_the_rule_holds_across_the_whole_corpus():
+    """The invariant, over real records: `passed` is exactly "reached the
+    value". Stated as a property so a future change to either side has to keep
+    them in step."""
+    checked = 0
+    for path in sorted(PERSONAS.iterdir()):
+        if not (path / "vitai.toml").exists():
+            continue
+        for r in Vitai(path).milestone_ladder():
+            checked += 1
+            assert r["passed"] == (r["reached"] >= r["value"]), (path.name, r)
+    assert checked >= 40, checked
+
+
+# --- the surfaces the first cut left unwitnessed --------------------------------
+
+def test_the_cli_emits_rungs_as_jsonl():
+    from vitai.cli import main
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        main(["milestones", "--root", str(PERSONAS / "nora"), "--json"])
+    rows = [json.loads(ln) for ln in buf.getvalue().splitlines() if ln]
+    assert rows == Vitai(PERSONAS / "nora").milestone_ladder()
+
+
+def test_the_cli_says_so_when_no_goal_has_a_ladder():
+    from vitai.cli import main
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        main(["milestones", "--root", str(PERSONAS / "rachel")])
+    out = buf.getvalue()
+    assert "no goal has a milestone ladder" in out, out
+    assert "caps, approaches" in out, "and it says which shapes those are"

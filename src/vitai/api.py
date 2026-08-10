@@ -1519,16 +1519,25 @@ class Vitai:
         """
         from .contributions import MILESTONE_FRACTIONS, mints_milestones
 
-        on = today or self.on
-        #  IS the progress table, so one call gives both the goals
-        # in force and the bucket each is being scored in.
-        standing = self.goals(on)
-        buckets = {str(r["slug"]): r.get("bucket") for r in standing}
+        # NO `today` PARAMETER, and the first cut shipped one. It was
+        # unwitnessed - removing it passed the whole suite - and worse, it
+        # could not work: `goals(on)` reconstructs as of a date while
+        # `milestones()` is full history, so asking for a Monday returned
+        # crossings from the Tuesday after. A mixed-epoch row in an engine
+        # whose whole point is keeping the two clocks apart. The ladder reads
+        # this instance's viewpoint, which `Vitai(on=...)` already sets.
+        #
+        # `goals()` IS the progress table, so one call gives the goals in
+        # force, the bucket each is scored in, and how far each has got.
+        standing = self.goals()
         crossed: dict[tuple[str, object, float], dict] = {}
         for m in self.milestones():
-            key = (str(m["goal"]), m["period"], float(m["fraction"]))
-            if key not in crossed or str(m["date"]) < str(crossed[key]["date"]):
-                crossed[key] = m
+            # ONE ROW PER KEY, so there is nothing to tie-break: `_milestones`
+            # dedupes on exactly (slug, bucket, fraction) through its `minted`
+            # set. The first cut kept the earliest of several, which looked
+            # careful and was unreachable - flipping it to the latest passed
+            # every test, because the case cannot arise.
+            crossed[(str(m["goal"]), m["period"], float(m["fraction"]))] = m
 
         out: list[dict] = []
         for goal in standing:
@@ -1538,17 +1547,37 @@ class Vitai:
             if not mints_milestones(goal):
                 continue
             target = float(goal["target"])
-            bucket = buckets.get(name)
+            bucket = goal.get("bucket")
+            # A FLOW goal accumulates into `counted`; a LEVEL goal reports its
+            # latest observation in `observed` (#273). Whichever side holds
+            # the number is how the two shapes are told apart, and the rung
+            # question - has progress reached this value - is the same either
+            # way.
+            #
+            # THE `observed` HALF IS UNWITNESSED and I could not make it fire.
+            # Four goals in the corpus mint milestones with a null `counted`,
+            # and all four have a null `observed` too, so removing the
+            # fallback passes every test. Kept rather than deleted because the
+            # shape is real - #273 added that column for exactly these goals -
+            # and reading `counted` alone would score a level goal at zero and
+            # call every rung unpassed. What I will not do is claim it is
+            # tested.
+            reached = goal.get("counted")
+            if reached is None:
+                reached = goal.get("observed")
+            reached = float(reached or 0.0)
             rungs = []
             for frac in MILESTONE_FRACTIONS:
                 hit = crossed.get((name, bucket, frac))
+                value = round(target * frac, 3)
                 rungs.append({
                     "goal": name,
                     "period": bucket,
                     "fraction": frac,
-                    "value": round(target * frac, 3),
+                    "value": value,
                     "target": target,
-                    "passed": hit is not None,
+                    "reached": reached,
+                    "passed": reached >= value,
                     "passed_on": hit["date"] if hit else None,
                     "passed_target": hit["target"] if hit else None,
                     "label": hit["label"] if hit else None,
