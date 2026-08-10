@@ -304,6 +304,97 @@ def protocol_seam(rows: list[dict]) -> dict:
             "stated": len(named), "silent": len(rows) - len(named)}
 
 
+def instrument_seam(rows: list[dict]) -> dict:
+    """Did the INSTRUMENT change under this rate? (#33, item 3)
+
+    Returns `{instruments, seam, stated, silent}` - the distinct instruments
+    named in the window, whether more than one was, and how many rows said and
+    did not say. Deliberately the same shape as `protocol_seam`, because it is
+    the same argument one axis over and a consumer should not have to learn
+    two.
+
+    THE CALIBRATION SEAM, WHICH IS THE ONE #33 IS ABOUT. Two weight readings
+    from two scales are not two samples of one series: consumer scales carry
+    offsets of a kilo or more, and concatenating them puts a step at the seam
+    that is arithmetically indistinguishable from real weight change. Worse,
+    it lands exactly where a long gap makes a jump look plausible, so the
+    engine would confirm a change that is an instrument swap.
+
+    Measured before building: the shipped demo's recent weight window spans
+    `athlete`, `scale` and a `dexa+scale` merge, and `weight_rate` scored it
+    `ahead` / `behind` / `on_target` with nothing anywhere saying the readings
+    came from different devices. `origin` was written for exactly this and no
+    derivation read it - the same "specified, validated, never read" shape as
+    `protocol` before #174 and `coverage` before #186.
+
+    NO SIZE ESTIMATE, and the absence is the point, exactly as for `protocol`.
+    Holding a table of how many kilograms an Aria reads over a Withings would
+    be a per-instrument accuracy claim about equipment this engine has never
+    seen, and #171 has already settled that no vendor figures are imported.
+    What is knowable from the record is that the instrument changed, which is
+    enough to decline the comparison.
+
+    SILENCE IS NOT AN INSTRUMENT. Rows naming no origin are counted and
+    otherwise ignored: a record that has never used the field must not acquire
+    a seam the day it starts. 45% of the corpus's origin-bearing rows name a
+    channel and no instrument, so the alternative would seam almost everything.
+
+    A SEAM IS NO COMMON INSTRUMENT, not "more than one name". This is where
+    the analogy with `protocol` stops, and measuring made the difference
+    obvious: a canonical row can read `dexa+scale`, meaning two devices
+    observed ONE reading. Counting names, the shipped demo seamed on a window
+    of `scale, scale, dexa+scale, scale` - where every reading includes a
+    scale observation and the series is perfectly comparable.
+
+    So the question is whether ANY ONE instrument is behind every reading in
+    the window. A corroborated reading is compatible with either series; a
+    reading only one device saw, following readings only a different device
+    saw, is the swap. That is the hazard #33 describes and nothing wider.
+
+    NOT A SPLIT, and that is the lesson of #315. Splitting `weight` by
+    protocol made `safety._loss_pct_per_week` pick endpoints protocol-blind
+    and a RED-S hold silently stopped firing. This reports a seam and moves
+    nothing.
+    """
+    from .provenance import PERSON, resolve_source, source_kind
+
+    # THE REGISTRY FOLD, so one instrument spelled two ways is not two.
+    # `resolve_source` is the same canonicaliser `origin_of` consumers use,
+    # and borrowing half of it is what #174 already paid for here.
+    #
+    # A PERSON IS NOT AN INSTRUMENT, which #94 settled one issue over. A row
+    # whose origin is `athlete` is the athlete writing down what they read;
+    # counting that as a device seamed the shipped demo against its own
+    # hand-entered rows and would have declined a rate because somebody typed
+    # a number in. The transcription hazard is real and it is not a
+    # calibration offset, which is what this function is about.
+    def instruments(rec: dict) -> list[str]:
+        raw = rec.get("origin")
+        if raw in (None, ""):
+            return []
+        return [part for part in str(raw).split("+")
+                if part.strip() and source_kind(part) != PERSON]
+
+    dated = sorted((r for r in rows if instruments(r)), key=order_key)
+    seen: dict[str, str] = {}
+    per_row: list[set[str]] = []
+    for rec in dated:
+        folded = set()
+        for spelling in instruments(rec):
+            key = resolve_source(spelling)
+            seen.setdefault(key, spelling)
+            folded.add(key)
+        per_row.append(folded)
+    # The intersection across readings: empty means no single instrument was
+    # behind all of them.
+    common: set[str] = set(per_row[0]) if per_row else set()
+    for folded in per_row[1:]:
+        common &= folded
+    return {"instruments": list(seen.values()),
+            "seam": bool(per_row) and not common,
+            "stated": len(per_row), "silent": len(rows) - len(per_row)}
+
+
 def weigh_in_timing(rows: list[dict]) -> dict:
     """How consistent were the weigh-in times behind a rate? (#37)
 

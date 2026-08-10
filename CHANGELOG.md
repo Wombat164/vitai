@@ -33,6 +33,32 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **A rate across a scale change is declined** (#33, item 3). Two weight
+  readings from two scales are not two samples of one series: consumer scales
+  carry offsets of a kilo or more, so concatenating them puts a step at the
+  seam that is arithmetically indistinguishable from real weight change - and
+  it lands exactly where a long gap makes a jump look plausible. `origin` was
+  written for this and no derivation read it, the same "specified, validated,
+  never read" shape as `protocol` before #174 and `coverage` before #186.
+- **A seam is NO COMMON INSTRUMENT, not "more than one name."** Measuring
+  changed the rule: a canonical row can read `dexa+scale`, meaning two devices
+  observed ONE reading, and counting names seamed the shipped demo on a window
+  where every reading included a scale. A corroborated reading is compatible
+  with either series; a reading only one device saw, following readings only
+  another saw, is the swap.
+- **A person is not an instrument** (#94, one issue over) and **silence is not
+  an instrument** (as for `protocol`). Counting either would have declined a
+  rate because somebody typed a number in, or seamed the 45% of rows that name
+  a channel and no device.
+- **No size estimate**, exactly as for the protocol seam: how much an Aria
+  reads over a Withings is a per-instrument accuracy claim, and #171 has
+  settled that no vendor figures are imported. And **not a split** - #315 split
+  `weight` by protocol, made a RED-S hold silently stop firing, and was
+  withdrawn. This reports and moves nothing.
+- Every existing weight verdict in the corpus is unchanged, checked: no
+  persona has a genuine swap inside a rate window. That is the issue's own
+  argument for building it before the second source lands rather than after.
+
 - **The ordering rule is published as data** (#308). `clocks.order_key` orders
   on valid time and keeps transaction time separate, and that doctrine - taken
   across several contract versions - was expressed only in Python. A client
