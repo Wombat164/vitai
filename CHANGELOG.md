@@ -11,6 +11,26 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **The ordering rule is published as data** (#308). `clocks.order_key` orders
+  on valid time and keeps transaction time separate, and that doctrine - taken
+  across several contract versions - was expressed only in Python. A client
+  keeping its own append-only claim logs re-derived it and got it wrong: two
+  readers answered "over what span was this sent" from a log's first and last
+  elements, which is ARRIVAL order, and a third sorted, so one screen described
+  one log two ways. `api.schema()` gains `ordering`, reaching
+  `vitai schema --json` and the MCP `schema` tool by the route `fields` uses.
+- **It names fields and answers, never sentences.** A consumer builds a
+  comparator from it: what to sort on, what breaks ties, that an absent
+  transaction time sorts BEFORE a present one, that the stamp is compared as an
+  instant rather than as text, and that position in the file is not order.
+- **And it is tested BY the comparator, not beside it.** Every clause is
+  executed against `order_key`, so the published rule cannot drift from the
+  function it describes. A rule that disagreed with the engine would be worse
+  than none, because a client would conform to it and diverge - which is the
+  failure being fixed, one level up.
+- No contract bump: an accessor over what the engine already knew, like
+  `fields`, `units` and `aliases` before it.
+
 - **One published display name per field** (#331). A client had `aliases` and
   `units` and still had nothing to PRINT, so it softened the field name's
   underscores and showed "kcal in". `aliases` is for RECOGNITION - it is what
