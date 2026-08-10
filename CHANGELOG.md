@@ -11,6 +11,38 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **Every milestone a goal has, not only the ones it crossed** (#330, contract
+  43). A `milestones` table already carried date, goal, period, fraction,
+  value, target and label - what nothing could say was how many rungs a goal
+  HAS, which are still ahead, and which is next. `Vitai.milestone_ladder`,
+  `vitai milestones` and an MCP tool say it; a client slicing a target into
+  quarters itself would be copying a rule this engine owns.
+- **THIS BUCKET, not all of history**, and measuring settled it. A weekly floor
+  goal crosses 25% most weeks - the shipped corpus has one with 33 crossings
+  against four fractions - so a lifetime ladder would collapse 33 real events
+  into four rungs and call the goal three quarters done forever. The rungs
+  carry their period so a consumer never infers it.
+- **`goal_progress` gains `milestones_total`.** The existing `milestones`
+  column counts the CURRENT bucket and its name never said so: on that same
+  goal it reads 0 beside 33 crossings, and the CLI printed nothing at all
+  because 0 is falsy. The old column keeps its exact meaning - a consumer
+  reading it today is reading a per-bucket figure, and widening it would
+  change every one of those readings invisibly.
+- **A rung is passed when progress REACHED ITS VALUE**, not when a fraction
+  was minted. Crossings are recorded against the target in force at the time,
+  so a target that moves mid-bucket leaves crossings that no longer line up
+  with the rungs: on a goal lowered from 100 to 40 with 35 km logged, exactly
+  one crossing exists, and reading it as the answer says the athlete's next
+  milestone is 10 km - which they passed on day two. A rung can therefore be
+  passed with no date, which is honest where a date against a number nobody
+  reached is not.
+- **A ladder needs a number the engine actually scored, and a goal being
+  pursued.** A null `counted` is the progress table saying it did not score
+  this goal - weight-scoped, verified somewhere else, or fed by a dataset the
+  contribution engine does not read - and a ladder over a number that does not
+  exist is an invented surface. Caps, approaches with no baseline, daily
+  buckets, finished and abandoned goals get an empty ladder, for the reasons
+  the minting already records.
 - **One published display name per field** (#331). A client had `aliases` and
   `units` and still had nothing to PRINT, so it softened the field name's
   underscores and showed "kcal in". `aliases` is for RECOGNITION - it is what

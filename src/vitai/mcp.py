@@ -93,6 +93,15 @@ TOOLS: dict[str, dict] = {
         "method": "goals",
         "properties": {},
     },
+    # The rungs NOT yet crossed (#330). `goals` carries a count and the
+    # `milestones` derived table carries the crossings; neither can say how
+    # many rungs a goal has or which is next, and an agent asked "how am I
+    # doing" would have to slice the target into quarters itself.
+    "milestone_ladder": {
+        "method": "milestone_ladder",
+        "properties": {"slug": {"type": "string",
+                                "description": "only this goal"}},
+    },
     # The read path an agent would otherwise re-derive. Without it the only
     # way to see a dataset through this adapter was to read the JSONL and
     # apply `supersedes` by hand, which is the nine lines that deleted a row

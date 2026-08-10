@@ -41,6 +41,14 @@ ADVANCES, PARTIAL, UNBUDGETED, NEUTRAL, REGRESSES = (
     "advances", "partial", "unbudgeted", "neutral", "regresses")
 
 # Milestone fractions of a goal's target, as a share of counted progress.
+#
+# PUBLISHED (#330), via `api.milestone_ladder`, and it is the one thing the
+# `milestones` table cannot say. That table holds a row per milestone CROSSED,
+# which answers what was passed and when - but a client drawing a milestone
+# surface needs the ones NOT yet passed too, to mark how many there are and
+# which is next. Without the ladder it would have to slice a target into
+# quarters itself, which is inventing engine semantics and would be wrong the
+# day this tuple changes.
 MILESTONE_FRACTIONS = (0.25, 0.5, 0.75, 1.0)
 
 # Calendar weeks of history used as the ramp baseline for a guarded goal.
@@ -293,6 +301,31 @@ def _judge(goal: dict, slug: str, when: str, value: float, done: float,
             "contribution": PARTIAL, "headroom": headroom}
 
 
+def mints_milestones(goal: dict) -> bool:
+    """Does this goal have a milestone ladder at all? (#330)
+
+    EXTRACTED FROM `_milestones` rather than restated beside it, because the
+    ladder a client draws and the rows the engine mints have to agree about
+    which goals HAVE milestones. Two copies of this predicate would drift, and
+    the visible symptom would be a surface promising four rungs to a goal that
+    can never reach one.
+
+    Each refusal has its own reason, recorded in `_milestones` where the
+    minting happens: a completed goal is measured rather than scored again, a
+    daily bucket would mint 1460 rows a year, a cap has no achievement to
+    fraction, and an approach needs a baseline the goal row does not carry.
+    """
+    if lifecycle_of(goal) == "completed":
+        return False
+    if goal.get("period") == "daily":
+        return False
+    if polarity_of(goal) != "floor":
+        return False
+    target = goal.get("target")
+    return (target is not None and not isinstance(target, bool)
+            and isinstance(target, (int, float)) and target > 0)
+
+
 def _milestones(goal: dict, slug: str, when: str, bucket: str,
                 before: float, after: float,
                 minted: set[tuple[str, str, float]]) -> list[dict]:
@@ -314,22 +347,21 @@ def _milestones(goal: dict, slug: str, when: str, bucket: str,
     # achievement can be read, not scored again: passing a quarter of a target
     # already completed is not an achievement, and re-minting on every rebuild
     # is the celebratory defect this engine has taken out once already.
-    if lifecycle_of(goal) == "completed":
-        return []
+    #
     # A DAILY BUCKET MINTS NOTHING (#191). Milestones key on
     # (slug, bucket, fraction) with four fractions, so a daily period mints
     # four a day - 1460 a year for one goal, measured. A quarter of the way
     # through today is not an achievement, and burying the real ones under
     # thousands of them is the alarm-fatigue failure this engine keeps taking
     # out of other surfaces.
-    if goal.get("period") == "daily":
+    #
+    # ALL FOUR REFUSALS NOW LIVE IN `mints_milestones` (#330), because the
+    # ladder a client draws has to agree with what this mints about which
+    # goals have milestones at all. The reasons stay here, where the minting
+    # is; the predicate is one function so it cannot be half-changed.
+    if not mints_milestones(goal):
         return []
     target = goal.get("target")
-    if polarity_of(goal) != "floor":
-        return []
-    if target is None or isinstance(target, bool) or not isinstance(
-            target, (int, float)) or target <= 0:
-        return []
     out: list[dict] = []
     for frac in MILESTONE_FRACTIONS:
         mark = float(target) * frac
@@ -610,8 +642,18 @@ def goal_progress(goals: list[dict], thresholds: list[dict], daily: list[dict],
             "verification": verification_of(goal),
             "motivator": goal.get("motivator"),
             "tracker": goal.get("tracker"),
+            # THIS BUCKET'S, and the name never said so. On the `marcus`
+            # persona `weekly-volume` has 33 crossed milestones and this read
+            # 0, because every one was crossed in an earlier week - a
+            # consumer showing "0 milestones" beside a goal with 33 of them.
+            #
+            # Kept rather than redefined, because a consumer reading it today
+            # is reading a per-bucket figure and silently widening it would
+            # change every one of those readings. `milestones_total` below is
+            # the number that answers the question the name suggests.
             "milestones": sum(1 for m in milestones
                               if m["goal"] == slug and m["period"] == bucket),
+            "milestones_total": sum(1 for m in milestones if m["goal"] == slug),
         })
     return rows
 

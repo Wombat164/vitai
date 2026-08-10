@@ -56,6 +56,25 @@ loosened within a week of a week that metric was missed, shown with whatever
 reason the athlete recorded. It is a prompt for the coach, not a judgment -
 nothing is blocked, and an explained deload is meant to read as one.
 
+## vitai milestones
+
+The milestone rungs a goal has for the period it is being scored in - passed
+and not - with the next one marked. `milestones` in the read model lists what
+was CROSSED; this adds the ones still ahead, so a client can say how many
+there are and which comes next without slicing the target into quarters
+itself.
+
+    vitai milestones                 # every goal with a ladder
+    vitai milestones --slug lean     # one goal
+    vitai milestones --json          # one JSON object per rung, for scripts
+
+A rung reads passed when counted progress REACHED ITS VALUE, which stays true
+when a target moves; where a crossing exists it carries the date it was minted
+on. Not every goal has a ladder: it needs a live floor goal with a target that
+this engine scores. Caps, approaches, daily buckets, finished or abandoned
+goals, and anything scored elsewhere have no rungs, and the command says so
+rather than inventing quarters.
+
 ## vitai resolve
 
 Where the record's numbers came from when more than one source claimed the

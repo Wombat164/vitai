@@ -177,8 +177,13 @@ def _fmt_goal(row: dict) -> str:
     bits = [f"{row['slug']}: {head}"]
     if row.get("policy") == "guarded" and row.get("unbudgeted"):
         bits.append(f"{row['unbudgeted']:g} unbudgeted")
-    if row.get("milestones"):
-        bits.append(f"{row['milestones']} milestone(s)")
+    # BOTH NUMBERS, and the bucket one no longer decides whether either shows.
+    # `milestones` counts THIS bucket, so a goal with 33 crossed milestones
+    # printed nothing here - 0 is falsy - and a goal with 3 printed "3
+    # milestone(s)" as if that were the total (#330).
+    if row.get("milestones_total"):
+        bits.append(f"{row['milestones']} milestone(s) this period, "
+                    f"{row['milestones_total']} in all")
     if phrase := _fmt_deadline(row):
         bits.append(phrase)
     dates = f"set {row.get('declared')}"
@@ -186,6 +191,30 @@ def _fmt_goal(row: dict) -> str:
         dates += f", last moved {row['last_edited']}"
     return f"{' - '.join(bits)}\n    {dates}" + (
         f"\n    why: {row['motivator']}" if row.get("motivator") else "")
+
+
+def cmd_milestones(args: argparse.Namespace) -> None:
+    """Every milestone rung a goal has this period, passed or not."""
+    rows = Vitai(_root(args)).milestone_ladder(slug=args.slug)
+    if args.json:
+        for row in rows:
+            print(json.dumps(row))
+        return
+    if not rows:
+        print("no goal has a milestone ladder - one needs a live floor goal "
+              "with a target, scored by this engine. Caps, approaches, daily "
+              "buckets, finished or abandoned goals, and anything the engine "
+              "does not score (weight-based, or verified somewhere else) have "
+              "no rungs")
+        return
+    for goal in sorted({r["goal"] for r in rows}):
+        rungs = [r for r in rows if r["goal"] == goal]
+        print(f"{goal}  (period {rungs[0]['period']})")
+        for r in rungs:
+            mark = "x" if r["passed"] else (">" if r["next"] else " ")
+            when = f"  passed {r['passed_on']}" if r["passed"] else ""
+            print(f"  [{mark}] {r['fraction']:.0%} of {r['target']:g}"
+                  f" = {r['value']:g}{when}")
 
 
 def cmd_goals(args: argparse.Namespace) -> None:
@@ -1478,6 +1507,8 @@ def main(argv: list[str] | None = None) -> None:
          "append what the athlete stated, with provenance the engine stamps"),
         ("verdicts", cmd_verdicts, "weekly goal-attainment rows as JSONL (the platform contract)"),
         ("goals", cmd_goals, "active goals: progress, dates, contributions, flagged edits"),
+        ("milestones", cmd_milestones,
+         "the milestone rungs a goal has this period, passed and not (#330)"),
         ("append", cmd_append,
          "append JSONL rows from stdin, stamping recorded_at and _gen"),
         ("pin-policy", cmd_pin_policy,
@@ -1587,6 +1618,10 @@ def main(argv: list[str] | None = None) -> None:
                            help="reconstruct goals as they stood on this date")
             p.add_argument("--recent", type=int, default=10, metavar="N",
                            help="show the last N per-goal contributions (0 = none)")
+        if name == "milestones":
+            p.add_argument("--slug", help="only this goal")
+            p.add_argument("--json", action="store_true",
+                           help="emit rungs as JSONL instead of prose")
         if name == "append":
             p.add_argument("dataset", help="which dataset to append to")
         if name == "key":

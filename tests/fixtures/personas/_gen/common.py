@@ -217,7 +217,14 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # the nine mentions across four builders are all prose. The map is derived
 # from `origin` on raw claims the builders already write, so no line shape
 # moves, no generation stamps, and no persona value changes.
-AUTHORED_AGAINST_CONTRACT = "42"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #330's `milestones_total` (contract 43), and the gate's review
+# recorded rather than implied: no builder writes a `goal_progress` row or a
+# milestone - the only mention across all ten is a comment. A DERIVED column
+# computed from goals and events the personas already ship, so like the
+# derived-column re-pins above it moves no data line, and the only change in a
+# persona is the contract stamp in its `persona.toml`. Verified by
+# regenerating and diffing rather than asserted.
+AUTHORED_AGAINST_CONTRACT = "43"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     # #221: a new dataset, empty for every persona.
     "plans": 1,
