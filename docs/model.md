@@ -47,8 +47,16 @@ rolling average, a verdict, a forecast, or a correlation p-value; it proposes
 and explains. Graduation from LLM-proposed to trusted requires an out-of-sample
 backtest or human merge, never model say-so. **The redteam's hardest finding
 (G28):** the one decision currently OUTSIDE this firewall is the highest-stakes
-one - "see a clinician" lives as LLM prose in CLAUDE.md. Safety escalation must
-be a deterministic tripwire-severity-to-action mapping like every other number.
+one - whether to keep programming - and it lived as LLM prose in CLAUDE.md.
+Safety escalation must be a deterministic severity-to-action mapping like
+every other number, and the action it maps to is declining to program.
+> **RECONCILED with the medical boundary (#116), 2026-08-10.** The decision
+> was written as a care directive naming a professional to go and see, which
+> is the second of the three violation classes. The deterministic-mapping
+> requirement is unchanged and is the load-bearing half; only what the mapping
+> OUTPUTS is corrected. The retired phrasing is described rather than quoted:
+> `scripts/boundary_gate.py` reads these files, and reproducing a directive to
+> record that it was removed puts it back in the repo.
 
 **P5. The curated registry is a third artifact class (neither data nor code).**
 `semantics/` (meaning) and `models/` (forecast formulas) are versioned,
@@ -142,10 +150,17 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   days, not 7 entries spanning three weeks). HIGH, foundations + increment 4.
 - **G28 Safety escalation** (P4/P7). Deterministic severity->action: a symptom
   class beyond musculoskeletal (cardiac/chest-pain red flags), absolute-danger
-  thresholds (not only relative-to-baseline RHR), a RED-S/low-energy-
-  availability composite detector (a tool that coaches deficits must watch for
-  the syndrome it can cause), a fast-path that bypasses the weekly cadence, and
+  thresholds (not only relative-to-baseline RHR), a low-energy-availability
+  composite over numbers the athlete already logs - when it fires, no plan or
+  progression is issued - a fast-path that bypasses the weekly cadence, and
   the written never-shame carve-out. CRITICAL, into increment 3.
+  > **RECONCILED with the medical boundary (#116), 2026-08-10.** The row named
+  > a syndrome and cast the composite as a thing that finds it, with a
+  > parenthesis about what the tool's own coaching can cause. That is class
+  > (c) and class (e) together. The composite and its threshold are unchanged;
+  > what it is said to produce is now the engine's own output being withheld.
+  > Described rather than quoted, for the reason given at P4 above - the gate
+  > reads these files, and it is right to.
 - **G29 Correction cascade & unified provenance** (P6). `vitai explain <metric>
   <date>` composing claims -> resolution decision -> derivation -> registry
   meaning -> verdict into one trace; a correction that retracts/annotates the
@@ -651,8 +666,13 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   likewise change what the numbers MEAN and what is SAFE. `context.jsonl` (G34)
   models situational mode (vacation, heatwave) - a different axis entirely. A
   physiological state alters energy requirements, safe rate bounds, and which
-  interventions are permitted at all. Without it the engine will cheerfully help
-  an athlete run a dangerous deficit. See [validation-personas.md](validation-personas.md) F3. CRITICAL.
+  of vitai's own outputs are issued. Without it the engine will cheerfully help
+  an athlete run a dangerous deficit.
+  > **RECONCILED with the medical boundary (#116), 2026-08-10.** The last
+  > clause read "which interventions are permitted at all", which describes
+  > the engine governing care rather than governing itself. The mechanism is
+  > unchanged: a state still alters what the numbers mean and which rules
+  > fire. See [validation-personas.md](validation-personas.md) F3. CRITICAL.
   > **SPECIALISED by #220 (state model), 2026-08-03.** Implemented, with live
   > rows, and retained. The general state shape specialises to this rather than
   > replacing it.
@@ -797,24 +817,36 @@ Each folds several redteam findings and fills a symmetry hole in a principle.
   interventions**, and no field distinguishes them. See
   [validation-personas.md](validation-personas.md) sweep 2.
 - **G73 A CLINICAL HOLD tier above "flag"** (P4/P7/G28). CRITICAL, sweep 2. The
-  RED-S persona showed a severity that no existing tier expresses: recurrent
+  most severe persona of sweep 2 showed a severity no existing tier expresses:
+  recurrent
   bone stress injury + amenorrhea + energy availability far below the clinical
   threshold is not a tripwire to surface alongside the week's rate line. The
   correct system behaviour is a **hold**: suspend algorithmic load progression,
-  BLOCK the coach from issuing training advice on the case at all, and surface a
-  mandatory clinical referral. G28 as written escalates a message; this
-  escalates by DISABLING the product's own advice. A system that logs
-  "tripwire: nutrition" here is still under-detecting.
+  and BLOCK the coach from issuing training advice on the case at all. G28 as
+  written escalates a message; this escalates by DISABLING the product's own
+  advice. A system that logs "tripwire: nutrition" here is still
+  under-classifying the severity.
+
+  > **RECONCILED with the medical boundary (#116), 2026-08-10.** A third
+  > clause required the engine to surface a mandatory referral. The hold and
+  > the advice-disabling are the correct and keepable parts and are untouched;
+  > the removed clause specified the clinician-review exit #110 took out, and
+  > directing care is a violation class in its own right.
 - **G74 The athlete's benign self-explanation is not evidence** (P1/P3/G59).
   HIGH, and the sharpest cross-cutting finding of sweep 2 - it appeared in FOUR
   of eight personas. Each supplied an innocent cause for a concerning sign:
   "it's the reflux" (exertional chest pain), "that's just what happens when you
   train hard" (five months of amenorrhea), "my legs aren't used to carrying the
-  lighter me" (weakness on stairs during rapid loss on a GLP-1 - i.e. probable
-  sarcopenia), "I stood up too fast" (near-syncope while under-eating). The
-  athlete's causal attribution is a CLAIM like any other (P1) and must never
-  suppress the pattern it explains away. The engine reads the sign; the
-  explanation is recorded, not deferred to.
+  lighter me" (weakness on stairs during rapid loss on a GLP-1), "I stood up
+  too fast" (near-syncope while under-eating). The athlete's causal
+  attribution is a CLAIM like any other (P1) and must never suppress the
+  pattern it explains away. The engine reads the sign; the explanation is
+  recorded, not deferred to.
+  > **RECONCILED with the medical boundary (#116), 2026-08-10.** The third
+  > example carried a parenthesis naming what the presentation probably was.
+  > That is class (c) - a condition as the engine's own conclusion - and the
+  > example works without it: the sign is the weakness, and the point of the
+  > row is that the athlete's explanation must not bury it.
 - **G75 Subjective and objective measures are different quantities** (P1/P3).
   MEDIUM. A device reported 6.1 h of sleep and the athlete reported "felt like
   5", every night, systematically. These are not competing claims to resolve
