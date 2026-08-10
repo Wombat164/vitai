@@ -180,10 +180,10 @@ def test_the_ambiguity_guard_declines_whichever_row_holds_the_map():
             "field_sources": None, "field_origins": None}
 
     assert _per_field([mapped], "sessions", "2030-05-01", "avg_hr") == (
-        "polar", "polar-watch"), "one row: the map is usable"
+        "polar", "polar-watch", True), "one row: the map is usable"
     for order in ([mapped, bare], [bare, mapped]):
         assert _per_field(order, "sessions", "2030-05-01", "avg_hr") == (
-            None, None), "two rows: no way to say which, so neither"
+            None, None, False), "two rows: no way to say which, so neither"
 
 
 def test_a_date_the_provenance_does_not_cover_declines():
@@ -191,6 +191,61 @@ def test_a_date_the_provenance_does_not_cover_declines():
 
     rows = [{"dataset": "sessions", "date": "2030-05-01",
              "field_sources": {"avg_hr": "polar"}, "field_origins": {}}]
-    assert _per_field(rows, "sessions", "2030-05-02", "avg_hr") == (None, None)
-    assert _per_field(rows, "daily", "2030-05-01", "avg_hr") == (None, None)
-    assert _per_field(None, "sessions", "2030-05-01", "avg_hr") == (None, None)
+    for args in (("sessions", "2030-05-02"), ("daily", "2030-05-01")):
+        assert _per_field(rows, *args, "avg_hr") == (None, None, False), args
+    assert _per_field(None, "sessions", "2030-05-01", "avg_hr") == (
+        None, None, False)
+
+
+def test_a_declining_map_does_not_borrow_the_rows_instrument(tmp_path):
+    """THE DEFECT THE `or` FALLBACK SHIPPED, and it is this issue's own
+    opening sentence turned against it.
+
+    A map can apply to the row and still decline a FIELD: `field_origins`
+    omits any field whose winning claim named no device, deliberately, so
+    silence does not become an attribution. The fallback read that silence as
+    the row's one named instrument - so on a watch-plus-console merge where
+    only the watch names a device, the DISTANCE was attributed to the wrist
+    watch that could not know it.
+
+    Null is the honest answer. The source side is unaffected because a map
+    only exists where sources differ, so its row fallback is the joined label:
+    a visible decline rather than a false bare name."""
+    v = record(tmp_path, [session(19, source="polar", origin="polar-watch",
+                                  avg_hr=142),
+                          session(20, source="matrix-console", distance_km=8.1)])
+    assert v.canonical("sessions")[0]["origin"] == "polar-watch", (
+        "one named instrument, so the row's own origin is a bare name")
+
+    hr = values(v, "avg_hr")[0]
+    assert (hr["source"], hr["origin"]) == ("polar", "polar-watch")
+
+    km = values(v, "distance_km")[0]
+    assert km["source"] == "matrix-console"
+    assert km["origin"] is None, "the console named none, so neither do we"
+
+
+def test_daily_rows_carry_the_instrument_too(tmp_path):
+    """The sessions branch had a control and the daily branch did not, so
+    dropping the daily origin read left all 2389 tests green - the same
+    half-witnessed shape this file has already caught twice."""
+    rows = [{**{k: None for k in KEYS["daily"]}, "date": "2030-05-01",
+             "steps": 9000, "source": "watch", "origin": "polar-watch",
+             "recorded_at": "2030-05-01T19:00:00Z"},
+            {**{k: None for k in KEYS["daily"]}, "date": "2030-05-01",
+             "kcal_in": 2100, "source": "app", "origin": "mfp-phone",
+             "recorded_at": "2030-05-01T20:00:00Z"}]
+    v = record(tmp_path, rows, dataset="daily")
+    assert [r["origin"] for r in values(v, "steps")] == ["polar-watch"]
+    assert [r["origin"] for r in values(v, "kcal_in")] == ["mfp-phone"]
+
+
+def test_a_map_that_covers_nothing_is_not_a_map():
+    """`_per_field` reports a map applies only when one carries entries. An
+    empty pair would make every field 'declined' and blank every instrument on
+    the row, which is the mirror of the defect above."""
+    from vitai.query import _per_field
+
+    empty = [{"dataset": "daily", "date": "2030-05-01",
+              "field_sources": None, "field_origins": None}]
+    assert _per_field(empty, "daily", "2030-05-01", "steps") == (None, None, False)

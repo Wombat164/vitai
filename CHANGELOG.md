@@ -43,8 +43,11 @@ adds accessors over what the engine already knew.
   layer downstream of where it was filed, with the map that fixes it sitting
   unread in the same build.
 - **The instrument travels with it.** Each value now carries `origin` beside
-  `source`, null where the claims named no device - `field_origins` never
-  invents one, and neither does this.
+  `source`, and NULL rather than the row's where the map applies but declines
+  that field. `field_origins` omits a field whose winning claim named no
+  device, deliberately, and reading that silence as the row's one named
+  instrument attributed a rowing console's distance to the wrist watch that
+  could not know it - this issue's own opening sentence, turned against it.
 - **And it declines where it cannot tell.** A provenance row is keyed by
   (dataset, date) and nothing more, so a date holding two sessions has two
   maps and no way to say which is which. Where more than one could apply the

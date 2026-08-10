@@ -67,8 +67,23 @@ def _close(a: float, b: float, tolerance: float) -> bool:
 
 
 def _per_field(provenance: list[dict] | None, dataset: str, on: str,
-               metric: str) -> tuple[str | None, str | None]:
-    """(source, origin) for one field of a merged row, or (None, None).
+               metric: str) -> tuple[str | None, str | None, bool]:
+    """(source, origin, a-map-applies) for one field of a merged row.
+
+    THE THIRD ELEMENT EXISTS BECAUSE `or` INVENTED AN INSTRUMENT. A map can
+    apply to the row and still decline THIS field: `field_origins` omits any
+    field whose winning claim named no device, deliberately, so that silence
+    does not become an attribution. Falling back to the row's `origin` there
+    reads that silence as the row's one named instrument - and on the merge
+    this issue opens with, that attributed the DISTANCE to the wrist watch
+    that could not know it.
+
+    So "no map applies" and "the map declines this field" are different
+    answers and the caller has to tell them apart. The source side is safe
+    either way, because a map only exists where sources differ, so its row
+    fallback is always the joined label - a visible decline rather than a
+    false bare name. The origin side is not, and that asymmetry is the reason
+    this returns a flag instead of relying on falsiness.
 
     THE HALF OF #325 THE MAPS DID NOT FINISH. Contract 40 and 42 derived
     `field_sources` and `field_origins` - which instrument and which feed
@@ -88,14 +103,16 @@ def _per_field(provenance: list[dict] | None, dataset: str, on: str,
     keeps the row's own `source`, which is the answer that guesses least.
     """
     if not provenance:
-        return None, None
+        return None, None, False
     rows = [r for r in provenance
             if r.get("dataset") == dataset and str(r.get("date")) == on]
     if len(rows) != 1:
-        return None, None
+        return None, None, False
     sources = rows[0].get("field_sources") or {}
     origins = rows[0].get("field_origins") or {}
-    return sources.get(metric), origins.get(metric)
+    if not sources and not origins:
+        return None, None, False
+    return sources.get(metric), origins.get(metric), True
 
 
 def collect(datasets: dict[str, list[dict]], on: str, metric: str,
@@ -107,10 +124,16 @@ def collect(datasets: dict[str, list[dict]], on: str, metric: str,
     own `source`, exactly as before. With it, a MERGED row reports the source
     and instrument that supplied THIS field rather than the label for the
     whole row (#325).
+
+    PASS THE PROVENANCE FROM THE SAME RESOLUTION AS `datasets`. The maps
+    describe canonical rows, so handing them raw claims instead pairs one map
+    against several rows and labels the losing claim's value with the winner's
+    source. `Vitai.check` takes both from one `resolution()` call for exactly
+    that reason.
     """
     out: list[dict] = []
-    field_source, field_origin = _per_field(provenance, "sessions", on, metric)
-    daily_source, daily_origin = _per_field(provenance, "daily", on, metric)
+    s_source, s_origin, s_mapped = _per_field(provenance, "sessions", on, metric)
+    d_source, d_origin, d_mapped = _per_field(provenance, "daily", on, metric)
     if metric in SESSION_METRICS:
         for rec in datasets.get("sessions") or []:
             if str(rec.get("date")) != on or not _numeric(rec.get(metric)):
@@ -118,19 +141,20 @@ def collect(datasets: dict[str, list[dict]], on: str, metric: str,
             if type and rec.get("type") != type:
                 continue
             out.append({"dataset": "sessions", "type": rec.get("type"),
-                        "source": field_source or rec.get("source"),
-                        # The INSTRUMENT, where the merge knows it. Null on a
-                        # single-writer row and on any row whose claims named
-                        # no device - `field_origins` never invents one.
-                        "origin": field_origin or rec.get("origin"),
+                        "source": s_source or rec.get("source"),
+                        # The INSTRUMENT, and NULL rather than the row's where
+                        # a map applies and declines this field. See
+                        # `_per_field`: falling back there attributed a rowing
+                        # console's distance to a wrist watch.
+                        "origin": s_origin if s_mapped else rec.get("origin"),
                         "modelled": is_modelled(rec, metric),
                         "value": float(rec[metric])})
     if metric in DAILY_METRICS and not type:
         for rec in datasets.get("daily") or []:
             if str(rec.get("date")) == on and _numeric(rec.get(metric)):
                 out.append({"dataset": "daily", "type": None,
-                            "source": daily_source or rec.get("source"),
-                            "origin": daily_origin or rec.get("origin"),
+                            "source": d_source or rec.get("source"),
+                            "origin": d_origin if d_mapped else rec.get("origin"),
                             # Carried, not filtered (#49). A caller asking
                             # what the record holds should SEE the estimate
                             # and be told it is one; silently dropping it
