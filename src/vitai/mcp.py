@@ -32,6 +32,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from . import api as _api
 from .api import Vitai, schema
 from .db import DERIVED_TABLES
 from .schema import KEYS
@@ -56,6 +57,34 @@ TOOLS: dict[str, dict] = {
     "schema": {
         "method": None,
         "properties": {},
+    },
+    "can_emit": {
+        "method": None,
+        "properties": {
+            "field": {"type": "string",
+                      "description": "the field being asked about"},
+            "build": {"type": "string",
+                      "description": "the build that WROTE the row; omit to "
+                                     "ask about the install doing the reading"},
+        },
+        "required": ["field"],
+    },
+    # BOTH QUESTIONS, because the CLI answers both and a capability the CLI can
+    # reach an agent must be able to reach. `build` is required here and
+    # optional on `can_emit`, which is the difference between the two: this one
+    # is about a row somebody else wrote, and defaulting it to the install
+    # doing the asking is the wrong inference the whole issue exists to
+    # prevent. Pass null to say the writer is unknown and get `unknown` back.
+    "absence": {
+        "method": None,
+        "properties": {
+            "field": {"type": "string",
+                      "description": "the absent field"},
+            "build": {"type": ["string", "null"],
+                      "description": "the build that WROTE the row, or null "
+                                     "if that is not known"},
+        },
+        "required": ["field", "build"],
     },
     "validate": {
         "method": "validate",
@@ -260,7 +289,12 @@ def call(root: Path, name: str, arguments: dict) -> object:
             f"{unknown}. If a capability belongs on this tool it is added to "
             f"TOOLS where it can be seen, never reached through the call")
     if spec["method"] is None:
-        return schema()
+        # A MODULE-LEVEL FUNCTION OF THE SAME NAME, which is what the comment
+        # on TOOLS has always said and what this line did not do: it returned
+        # `schema()` whatever the tool was called. That cost nothing while
+        # `schema` was the only rootless tool and would have made the second
+        # one silently answer as the first (#335).
+        return getattr(_api, name)(**args)
     # The VIEWPOINT goes to the constructor as well as the call, or a brief
     # answers as today inside a document labelled with another date.
     on = args.pop("on", None) if name in ("situation", "status") else None

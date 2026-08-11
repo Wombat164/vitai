@@ -29,6 +29,15 @@ from .config import Config, load_config, policy_digest
 from .contributions import (_standing, compute_contributions,
                             goal_progress)
 from .db import CONTRACT_VERSION, DERIVED_TABLES, build_db
+from . import builds as _builds
+# Re-exported deliberately: the CLI reads them from here and the MCP adapter
+# reaches a rootless tool by `getattr` on this module, so the API surface is
+# where they have to live. Written as redundant aliases to say that is
+# intentional rather than a stray import.
+from .builds import ABSENCE_MEANINGS
+from .builds import absence as absence
+from .builds import can_emit as can_emit
+from .builds import this_build as this_build
 from .clocks import is_aware, ordering_rule
 from .jsonl import EVENT_DATASETS, append, append_many, load
 from . import query
@@ -3064,4 +3073,14 @@ def schema() -> dict:
         # while the engine does not stamp client-held claims - so between now
         # and then, every client orders logs itself.
         "ordering": ordering_rule(),
+        # WHAT THIS BUILD CAN EMIT (#335), by the same route and for the same
+        # reason `cmd_schema` gives for taking no `--root`: it is a property
+        # of the installed ENGINE rather than of anyone's record, so a
+        # different content repo could not answer it differently.
+        "builds": {
+            "this": _builds.this_build(),
+            "extras": _builds.extras(),
+            "released": _builds.builds(),
+            "absence_meanings": list(ABSENCE_MEANINGS),
+        },
     }
