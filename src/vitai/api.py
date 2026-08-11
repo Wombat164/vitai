@@ -3018,6 +3018,64 @@ def field_types(dataset: str | None = None) -> dict:
     return out
 
 
+def session_types() -> dict:
+    """Every session type, and what a person calls it (#350).
+
+    The activity half of the vocabulary a client otherwise reinvents. The
+    metric half already comes from `aliases`: a client hand-maintaining `rhr`
+    and `resting` missed "pulse", which this engine publishes, so an athlete
+    typing "pulse 52" matched nothing from a client holding the answer in
+    another module. The set of session types was known - `vocab.session_types`
+    exists - but no surface published it and the inflections were not
+    published at all.
+
+    Per type: `label` for display, `aliases` for recognition, and the vendor
+    tokens under the vendor's own name.
+
+    RECOGNITION IS NOT AN OFFER LIST, which #331 settled one vocabulary over
+    and this repeats. `aliases` is what the engine will MATCH, and a client
+    showing a person the names for an activity wants the ones a person says.
+    Eight MyFitnessPal export strings were sitting in `aliases` - "running
+    (jogging), 9 mph (6.5 min mile)" and its siblings - so a client offering
+    suggestions from that list would have offered those. They now sit under
+    `myfitnesspal`, which is where every other vendor's tokens already lived:
+    `strava` and `healthkit` have had their own fields all along, and the
+    registry declares them in `alias_fields` so the resolver still matches
+    them. The distinction is DATA rather than a regex over a suffix.
+
+    THE INFLECTIONS ARE PUBLISHED, which is the half the issue said was worth
+    arguing about. They are a fact about English rather than about the record,
+    which is an argument for leaving them to a client - except that every
+    client needs the same ones, the set is closed, and getting them wrong
+    files a session under the wrong type. No type carried a past-tense form
+    before this: "running" resolved and "ran" did not, so the issue's own
+    headline example was the one that failed. They are published for the 24
+    types that name an activity a person does rather than a game they play -
+    `ran`, `swam`, `rode` - and the ambiguous ones are left out on purpose,
+    since a bare "skated" cannot choose between ice and inline.
+
+    NOT ENGLISH-ONLY, and it would be wrong to say so: the registry already
+    carries `schaatsen`, `voetbal`, `velomobiel`, `randonnee` and `langlauf`,
+    added where someone had a use for them. That is five words rather than a
+    policy, so a client working in another language still supplies most of its
+    own, and there is no rule here about which languages belong.
+    """
+    from .vocab import registry
+
+    data = registry("session_types")
+    vendors = [f for f in (data.get("alias_fields") or [])]
+    out: dict[str, dict] = {}
+    for slug, meta in sorted((data.get("types") or {}).items()):
+        entry = {"label": (meta or {}).get("label") or slug,
+                 "aliases": list((meta or {}).get("aliases") or [])}
+        for field in vendors:
+            value = (meta or {}).get(field)
+            if value:
+                entry[field] = value if isinstance(value, list) else [value]
+        out[slug] = entry
+    return out
+
+
 def schema() -> dict:
     """The SHAPE this engine emits: contract version and dataset generations.
 
@@ -3064,4 +3122,12 @@ def schema() -> dict:
         # while the engine does not stamp client-held claims - so between now
         # and then, every client orders logs itself.
         "ordering": ordering_rule(),
+        # THE ACTIVITY HALF OF THE VOCABULARY (#350), by the same route as
+        # `fields` and for the same reason #257 gave: a separate accessor is a
+        # new place for parity to fail. A client wiring its correction
+        # vocabulary to the engine's could take the metric half from `aliases`
+        # and had to invent the activity half - so "I swam 2k" was parsed
+        # against a list every client reinvents slightly differently, and a
+        # session type added here reached none of them.
+        "session_types": session_types(),
     }

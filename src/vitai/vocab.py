@@ -81,8 +81,16 @@ def _index(name: str, section: str) -> dict[str, str]:
         for alias in (meta or {}).get("aliases", []):
             out.setdefault(_normalise(alias), slug)
         for field in alias_fields:
-            if spelling := (meta or {}).get(field):
-                out.setdefault(_normalise(_decamel(str(spelling))), slug)
+            # ONE SPELLING OR SEVERAL. This read a single value, which was
+            # enough while every alias field held one vendor token - `strava`
+            # and `healthkit` do. A vendor that ships several strings for one
+            # activity (MyFitnessPal ships three for `run`, by effort) had
+            # nowhere to put them but `aliases`, which is the list published
+            # as "what a person calls this" (#350).
+            spelling = (meta or {}).get(field)
+            for one in (spelling if isinstance(spelling, list) else [spelling]):
+                if one:
+                    out.setdefault(_normalise(_decamel(str(one))), slug)
     for old, meta in (data.get("retired") or {}).items():
         target = (meta or {}).get("maps_to")
         if target not in (data.get(section) or {}):

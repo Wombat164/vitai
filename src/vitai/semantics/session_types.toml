@@ -46,7 +46,7 @@
 version = 2
 
 # Fields whose values are also accepted spellings (see vocab._index).
-alias_fields = ["strava", "healthkit"]
+alias_fields = ["strava", "healthkit", "myfitnesspal"]
 
 
 # --- the adopted Strava SportType axis ---------------------------------------
@@ -57,7 +57,8 @@ strava = "Run"
 healthkit = "HKWorkoutActivityTypeRunning"
 compendium = 12
 classes = ["run", "impact", "cardio", "lower_body"]
-aliases = ["running", "jog", "jogging", "running (jogging), 9 mph (6.5 min mile) (myfitnesspal)", "running (jogging), 5 mph (12 min mile) (myfitnesspal)", "running (jogging), 6 mph (10 min mile) (myfitnesspal)"]
+aliases = ["running", "jog", "jogging", "ran", "jogged"]
+myfitnesspal = ["running (jogging), 9 mph (6.5 min mile)", "running (jogging), 5 mph (12 min mile)", "running (jogging), 6 mph (10 min mile)"]
 
 [types.trail_run]
 label = "Trail run"
@@ -65,7 +66,7 @@ strava = "TrailRun"
 healthkit = "HKWorkoutActivityTypeRunning"
 compendium = 12
 classes = ["run", "impact", "cardio", "lower_body"]
-aliases = ["trail running", "fell run"]
+aliases = ["trail running", "fell run", "trail ran"]
 
 [types.walk]
 label = "Walk"
@@ -73,7 +74,8 @@ strava = "Walk"
 healthkit = "HKWorkoutActivityTypeWalking"
 compendium = 17
 classes = ["walk", "cardio", "lower_body"]
-aliases = ["walking", "ramble", "stroll", "walking, general (myfitnesspal)"]
+aliases = ["walking", "ramble", "stroll", "walked"]
+myfitnesspal = ["walking, general"]
 
 [types.hike]
 label = "Hike"
@@ -81,7 +83,7 @@ strava = "Hike"
 healthkit = "HKWorkoutActivityTypeHiking"
 compendium = 17
 classes = ["walk", "cardio", "lower_body"]
-aliases = ["hiking", "trek", "trekking"]
+aliases = ["hiking", "trek", "trekking", "hiked", "trekked"]
 
 [types.cycle]
 label = "Cycle"
@@ -89,7 +91,8 @@ strava = "Ride"
 healthkit = "HKWorkoutActivityTypeCycling"
 compendium = 1
 classes = ["cycle", "cardio", "lower_body"]
-aliases = ["bike", "biking", "cycling", "ride", "spin", "turbo", "outdoor bike", "road cycling", "bicycling, 12-14 mph, moderate (cycling, biking, bike riding) (myfitnesspal)", "stationary bike, moderate effort (bicycling, cycling, biking) (myfitnesspal)"]
+aliases = ["bike", "biking", "cycling", "ride", "spin", "turbo", "outdoor bike", "road cycling", "cycled", "rode", "biked"]
+myfitnesspal = ["bicycling, 12-14 mph, moderate (cycling, biking, bike riding)", "stationary bike, moderate effort (bicycling, cycling, biking)"]
 
 [types.mountain_bike_ride]
 label = "Mountain bike"
@@ -149,7 +152,8 @@ strava = "Swim"
 healthkit = "HKWorkoutActivityTypeSwimming"
 compendium = 18
 classes = ["swim", "cardio", "upper_body", "lower_body"]
-aliases = ["swimming", "lengths", "lane swim", "swimming laps, freestyle, light/moderate effort (myfitnesspal)"]
+aliases = ["swimming", "lengths", "lane swim", "swam", "swum"]
+myfitnesspal = ["swimming laps, freestyle, light/moderate effort"]
 
 [types.row]
 label = "Row"
@@ -157,7 +161,7 @@ strava = "Rowing"
 healthkit = "HKWorkoutActivityTypeRowing"
 compendium = 15
 classes = ["row", "cardio", "upper_body", "lower_body"]
-aliases = ["rowing", "erg", "ergo", "concept2"]
+aliases = ["rowing", "erg", "ergo", "concept2", "rowed"]
 
 [types.canoeing]
 label = "Canoeing"
@@ -165,7 +169,7 @@ strava = "Canoeing"
 healthkit = "HKWorkoutActivityTypePaddleSports"
 compendium = 18
 classes = ["paddle", "cardio", "upper_body"]
-aliases = ["canoe"]
+aliases = ["canoe", "canoed"]
 
 [types.kayaking]
 label = "Kayaking"
@@ -173,7 +177,7 @@ strava = "Kayaking"
 healthkit = "HKWorkoutActivityTypePaddleSports"
 compendium = 18
 classes = ["paddle", "cardio", "upper_body"]
-aliases = ["kayak"]
+aliases = ["kayak", "kayaked"]
 
 [types.stand_up_paddling]
 label = "Stand-up paddling"
@@ -189,7 +193,7 @@ strava = "Surfing"
 healthkit = "HKWorkoutActivityTypeSurfingSports"
 compendium = 18
 classes = ["sport", "upper_body"]
-aliases = ["surf"]
+aliases = ["surf", "surfed"]
 
 [types.kitesurf]
 label = "Kitesurf"
@@ -197,7 +201,7 @@ strava = "Kitesurf"
 healthkit = "HKWorkoutActivityTypeSurfingSports"
 compendium = 18
 classes = ["sport", "upper_body"]
-aliases = ["kiteboarding", "kite surfing"]
+aliases = ["kiteboarding", "kite surfing", "kitesurfed"]
 
 [types.windsurf]
 label = "Windsurf"
@@ -205,7 +209,7 @@ strava = "Windsurf"
 healthkit = "HKWorkoutActivityTypeSurfingSports"
 compendium = 18
 classes = ["sport", "upper_body"]
-aliases = ["windsurfing"]
+aliases = ["windsurfing", "windsurfed"]
 
 [types.sail]
 label = "Sail"
@@ -213,7 +217,7 @@ strava = "Sail"
 healthkit = "HKWorkoutActivityTypeSailing"
 compendium = 18
 classes = ["sport", "upper_body"]
-aliases = ["sailing"]
+aliases = ["sailing", "sailed"]
 
 [types.alpine_ski]
 label = "Alpine ski"
@@ -252,7 +256,7 @@ strava = "Snowboard"
 healthkit = "HKWorkoutActivityTypeSnowboarding"
 compendium = 19
 classes = ["wintersport", "lower_body"]
-aliases = ["boarding", "snowboarding"]
+aliases = ["boarding", "snowboarding", "snowboarded"]
 
 [types.snowshoe]
 label = "Snowshoe"
@@ -260,7 +264,7 @@ strava = "Snowshoe"
 healthkit = "HKWorkoutActivityTypeSnowSports"
 compendium = 19
 classes = ["walk", "wintersport", "cardio", "lower_body"]
-aliases = ["snowshoeing"]
+aliases = ["snowshoeing", "snowshoed"]
 
 [types.ice_skate]
 label = "Ice skate"
@@ -268,21 +272,21 @@ strava = "IceSkate"
 healthkit = "HKWorkoutActivityTypeSkatingSports"
 compendium = 19
 classes = ["wintersport", "cardio", "lower_body"]
-aliases = ["ice skating", "schaatsen"]
+aliases = ["ice skating", "schaatsen", "ice skated"]
 
 [types.inline_skate]
 label = "Inline skate"
 strava = "InlineSkate"
 healthkit = "HKWorkoutActivityTypeSkatingSports"
 classes = ["cardio", "lower_body"]
-aliases = ["rollerblade", "inline skating"]
+aliases = ["rollerblade", "inline skating", "rollerbladed"]
 
 [types.skateboard]
 label = "Skateboard"
 strava = "Skateboard"
 healthkit = "HKWorkoutActivityTypeSkatingSports"
 classes = ["cardio", "lower_body"]
-aliases = ["skateboarding"]
+aliases = ["skateboarding", "skateboarded"]
 
 [types.climb]
 label = "Climb"
@@ -290,7 +294,7 @@ strava = "RockClimbing"
 healthkit = "HKWorkoutActivityTypeClimbing"
 compendium = 5
 classes = ["climb", "upper_body", "strength"]
-aliases = ["climbing", "bouldering", "rock climbing"]
+aliases = ["climbing", "bouldering", "rock climbing", "climbed"]
 
 [types.strength]
 label = "Strength"
@@ -298,7 +302,8 @@ strava = "WeightTraining"
 healthkit = "HKWorkoutActivityTypeTraditionalStrengthTraining"
 compendium = 2
 classes = ["strength", "upper_body", "lower_body"]
-aliases = ["weights", "lifting", "gym", "weight training", "resistance", "strength training (weight lifting, weight training) (myfitnesspal)"]
+aliases = ["weights", "lifting", "gym", "weight training", "resistance", "lifted"]
+myfitnesspal = ["strength training (weight lifting, weight training)"]
 
 [types.crossfit]
 label = "CrossFit"
@@ -354,7 +359,7 @@ strava = "Golf"
 healthkit = "HKWorkoutActivityTypeGolf"
 compendium = 15
 classes = ["sport"]
-aliases = ["golfing", "nine holes"]
+aliases = ["golfing", "nine holes", "golfed"]
 
 [types.soccer]
 label = "Football"
@@ -425,7 +430,7 @@ aliases = ["workout", "training", "activity", "session"]
 [types.wintersport]
 label = "Winter sport (unspecified)"
 classes = ["wintersport", "cardio", "lower_body"]
-aliases = ["snow sports", "ski or board", "ski", "skiing", "skating"]
+aliases = ["snow sports", "ski or board", "ski", "skiing", "skating", "skied"]
 coarse = true
 
 [types.sport]
@@ -437,13 +442,13 @@ coarse = true
 [types.paddle]
 label = "Paddle sport (unspecified)"
 classes = ["paddle", "cardio", "upper_body"]
-aliases = ["paddling"]
+aliases = ["paddling", "paddled"]
 coarse = true
 
 [types.mobility]
 label = "Mobility"
 classes = ["mobility"]
-aliases = ["stretch", "stretching", "foam rolling", "rehab"]
+aliases = ["stretch", "stretching", "foam rolling", "rehab", "stretched"]
 coarse = true
 
 [types.test]
