@@ -1683,6 +1683,36 @@ class Vitai:
                                      str(r.get("measures") or "")),
                       reverse=True)
 
+    def instrument(self, origin: str,
+                   on: date | str | None = None) -> dict | None:
+        """The instrument reporting as `origin` on `on`, or None (#311).
+
+        None means unregistered, and a caller should render what it renders
+        today. The register adds a name and a provenance to an identity that
+        already works without one, so an empty register must not read as a
+        populated one.
+        """
+        from .policy import instrument as resolve_instrument
+
+        return resolve_instrument(self.dataset("instruments"), origin,
+                                  on or self.on)
+
+    def instruments(self, on: date | str | None = None) -> list[dict]:
+        """Every instrument reporting on `on`, by origin.
+
+        DATED, not the whole register. Asking for "my instruments" on a date
+        in 2027 must not list the watch bought in 2030 - which is the same
+        rule the resolver enforces, and listing them undated would be the way
+        round it.
+        """
+        from .policy import instrument as resolve_instrument
+
+        rows = self.dataset("instruments")
+        seen = sorted({str(r.get("origin")) for r in rows if r.get("origin")})
+        found = [resolve_instrument(rows, origin, on or self.on)
+                 for origin in seen]
+        return [r for r in found if r is not None]
+
     def churn(self, today: date | None = None) -> list[dict]:
         """Policy edits, with the loosening-after-a-miss flag (G20)."""
         d = self.datasets()

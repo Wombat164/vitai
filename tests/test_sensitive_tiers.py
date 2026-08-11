@@ -317,7 +317,11 @@ def test_the_sweep_would_notice(tmp_path):
 # which is the per-caller defect this whole change exists to abolish, moved
 # into the test file.
 ARG_TAKING_COVERED = {"dataset", "day", "derived", "precise", "append",
-                      "append_many", "claim", "said"}
+                      "append_many", "claim", "said",
+                      # #311 returns a STORED ROW - the register line itself -
+                      # rather than a vocabulary answer the way `capability`
+                      # does, so it is covered here rather than excused below.
+                      "instrument"}
 ARG_TAKING_OUT_OF_SCOPE = {
     # Writes and administration. None return a record row they read back.
     "init", "build", "conform", "implementation", "infer",
@@ -401,6 +405,10 @@ def test_the_argument_taking_readers_are_covered_too():
     assert LEAK not in json.dumps(v.dataset("context"))
     assert LEAK not in json.dumps(v.day("2030-06-18"), default=str)
     assert LEAK not in json.dumps(v.derived("session_weeks"), default=str)
+    assert LEAK not in json.dumps(v.instrument("scale"), default=str)
+    # And it really does return a row, so the line above is not passing on an
+    # empty answer - which is how a redaction check goes quietly vacuous.
+    assert v.instrument("scale")["name"]
 
 
 def test_a_write_echoes_back_the_coarse_row(tmp_path):

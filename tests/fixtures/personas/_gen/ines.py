@@ -332,6 +332,45 @@ def _expectations() -> list[dict]:
     ]
 
 
+def _instruments() -> list[dict]:
+    """The kit behind ines\'s origins (#311).
+
+    THE FIRST PERSONA TO REGISTER ANY, and it is here rather than anywhere
+    because her record already contains the confound the register exists for.
+    On 2030-05-30 she weighs at the gym: 65.80 kg, against 64.14 kg at home
+    that same morning and 64.06 kg four days later. A 1.66 kg step and a
+    1.74 kg step back, entirely instrumental, and until now nothing in the
+    record said the two numbers came off different scales - which is exactly
+    what a reader has to know before treating either as a change in her.
+
+    Every field optional but the identity and the start, so `maker` and
+    `model` are null here: she does not know them, and a register that only
+    works when it is complete is one that decays to nothing.
+    """
+    stamp = common.Stamper(base_hour=9)
+    from datetime import date as _date
+    return [
+        common.record(
+            "instruments", date="2030-04-22", origin="bathroom-scale",
+            from_date="2030-04-22", to_date=None,
+            name="the scale at home", source="athlete",
+            note="every weigh-in except the one at the gym",
+            recorded_at=stamp.stamp(_date(2030, 4, 22))),
+        common.record(
+            "instruments", date="2030-05-30", origin="gym-scale",
+            from_date="2030-05-30", to_date="2030-05-30",
+            name="the scale at the gym", source="athlete",
+            note="used once, and it read 1.66 kg above the home scale the "
+                 "same morning",
+            recorded_at=stamp.stamp(_date(2030, 5, 30))),
+        common.record(
+            "instruments", date="2030-04-21", origin="running-watch",
+            from_date="2030-04-21", to_date=None,
+            name="the running watch", source="athlete",
+            recorded_at=stamp.stamp(_date(2030, 4, 21))),
+    ]
+
+
 def build(end: date = DEFAULT_END) -> dict[str, str]:
     rng = random.Random(SEED)
 
@@ -350,6 +389,8 @@ def build(end: date = DEFAULT_END) -> dict[str, str]:
         "data/sets.jsonl": common.jsonl_text(common.sort_rows(sets)),
         "data/goals.jsonl": common.jsonl_text(common.sort_rows(goals)),
         "data/journal.jsonl": common.jsonl_text(common.sort_rows(journal)),
+        "data/instruments.jsonl": common.jsonl_text(
+            common.sort_rows(_instruments())),
         "expectations.jsonl": common.jsonl_text(_expectations()),
         "persona.toml": common.persona_toml(
             "ines", PERSONA_VERSION, SEED,

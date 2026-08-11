@@ -129,6 +129,23 @@ TOOLS: dict[str, dict] = {
     # What an instrument is competent at (#171). An agent reading a value
     # cannot otherwise tell a measurement from a proxy statistic reported
     # under the same field name, which no uncertainty figure would catch.
+    "instruments": {
+        "method": "instruments",
+        "properties": {
+            "on": {"type": "string",
+                   "description": "valid-time viewpoint, ISO date"},
+        },
+    },
+    "instrument": {
+        "method": "instrument",
+        "properties": {
+            "origin": {"type": "string",
+                       "description": "the instrument identity on a row"},
+            "on": {"type": "string",
+                   "description": "valid-time viewpoint, ISO date"},
+        },
+        "required": ["origin"],
+    },
     "capabilities": {
         "method": "capabilities",
         "properties": {},

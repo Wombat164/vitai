@@ -9,7 +9,7 @@ seed = 104
 span = ["2027-07-01", "2030-06-30"]
 
 [schema]
-contract = "44"
+contract = "45"
 
 [schema.generations]
 achievements = 5
@@ -22,6 +22,7 @@ emissions = 1
 events = 4
 goals = 6
 inferences = 5
+instruments = 3
 journal = 4
 meals = 6
 measurements = 11

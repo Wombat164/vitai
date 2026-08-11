@@ -56,6 +56,23 @@ PINNED = {
         "recorded_at": "temporal",
         "device": "provenance",
     },
+    # #311. The register says WHAT observed a value, which is the provenance
+    # class's own definition - `name` and `maker` sit beside `origin` and
+    # `model` rather than describing the athlete. The interval is temporal.
+    "instruments": {
+        "date": "temporal",
+        "origin": "provenance",
+        "from_date": "temporal",
+        "to_date": "temporal",
+        "name": "provenance",
+        "maker": "provenance",
+        "model": "provenance",
+        "source": "provenance",
+        "note": "narrative",
+        "supersedes": "reference",
+        "recorded_at": "temporal",
+        "device": "provenance",
+    },
     "achievements": {
         "date": "temporal", "title": "narrative", "goal": "reference",
         "source": "provenance", "note": "narrative", "occurred_date":

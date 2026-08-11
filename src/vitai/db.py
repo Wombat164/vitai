@@ -724,7 +724,36 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     `semantics/` would be identical. Silence resolves to `unknown`, a value
 #     IN the vocabulary and distinct from `absent`: "nobody said" and "it does
 #     not measure this" are different facts.
-CONTRACT_VERSION = "44"
+# 45: an `instruments` dataset - the ENTITY behind the identity `origin`
+#     already names, over an interval (#311).
+#
+#     Contract 44 gave that string capabilities and said a register would
+#     later give it an entity. This is that register, and the join it answers
+#     is `(origin, date)` rather than `origin`: "my watch" in 2026 and "my
+#     watch" in 2030 are different objects, and a lookup on the identity alone
+#     attributes every historical reading to whatever is on the wrist now.
+#     Overlapping intervals for one origin are refused at validation, or a
+#     reading falls into two instruments at once.
+#
+#     NOT `devices`, which the issue proposed and the schema had already
+#     spent: `device` is on every dataset and names the MACHINE THAT WROTE THE
+#     LINE DOWN (#105), the axis kept deliberately apart from the instrument
+#     that observed the value. A `devices` dataset holding instruments would
+#     manufacture the confound this one exists to remove.
+#
+#     RESOLVED ON `origin` ALONE. The issue proposed `(source or origin,
+#     date)`; measured across the corpus, 4331 of 9673 origin-bearing rows
+#     name a channel and no instrument, so under that key the register would
+#     have answered "which instrument recorded this" for all of them - and a
+#     re-export, which is a CHANNEL change, would have read as an instrument
+#     change. That is the confound, manufactured by the register.
+#
+#     NOTHING INFERRED, and every field optional but the identity and the
+#     start. An unregistered origin resolves to nothing and reads exactly as
+#     it does today, because a register that demands nine fields per
+#     instrument decays to nothing in a year and then its coverage is patchy
+#     in a way nobody can see.
+CONTRACT_VERSION = "45"
 
 _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity would
               # A JSON map (#325), and every container column is TEXT for

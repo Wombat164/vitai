@@ -49,6 +49,12 @@ PINNED = {
         "device": 3,
         "recorded_at": 2,
     },
+    # #311. Both come from the blanket blocks every dataset gets, not from
+    # anything this register declares.
+    "instruments": {
+        "device": 3,
+        "recorded_at": 2,
+    },
     "achievements": {
         "device": 4,
         "occurred_date": 2,
@@ -256,6 +262,11 @@ PINNED_FOUNDING = {
     "capabilities": [
         "basis", "competence", "condition", "construct", "date", "measures",
         "note", "origin", "set_by", "supersedes",
+    ],
+    # #311. Every field the register was born with.
+    "instruments": [
+        "date", "from_date", "maker", "model", "name", "note", "origin",
+        "source", "supersedes", "to_date",
     ],
     "artifacts": [
         "bytes", "captured_at", "date", "kind", "media_type", "note",

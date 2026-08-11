@@ -191,6 +191,50 @@ def capability(rows: list[dict], origin: str, measures: str,
             "stated": False}
 
 
+def instrument(rows: list[dict], origin: str, on: str | date) -> dict | None:
+    """The instrument reporting as `origin` on `on`, or None (#311).
+
+    NONE IS AN ANSWER HERE, and this is where it parts company with
+    `capability` one dataset over. A capability question always gets a row
+    back, synthesised as `unknown` if nobody has spoken, because "nobody said
+    this watch measures sleep" is a fact a consumer must be able to act on. An
+    unregistered instrument is different: the register adds a NAME and a
+    provenance to an identity that already works without it. Returning a
+    hollow row would dress up an empty register as a populated one, and the
+    issue's requirement is that an unregistered origin still renders, just
+    with less - which is what a caller does with None.
+
+    RESOLVED ON `origin` ALONE, never on `source`. The issue proposed `source
+    or origin`, and that `or` crosses the line contract 40 drew: `source` is
+    the CHANNEL a value arrived by, `origin` is the INSTRUMENT that observed
+    it. 4331 of 9673 origin-bearing rows in the corpus name a channel and no
+    instrument, so the fallback would have answered for all of them - and a
+    re-export or a new app, which is a channel change, would have resolved to
+    a different instrument and read as an instrument change. That is the
+    confound this register exists to remove, manufactured by the register.
+
+    NOT `_in_force`, deliberately, though the dataset is dated. That machinery
+    answers "the last statement on or before this date", which is right for a
+    policy that stays in force until replaced. An instrument is an INTERVAL
+    with an end: the watch sold in 2029 did not keep reporting into 2030
+    merely because no line replaced it. Reading a closed interval as
+    last-one-wins is exactly the silently-confident error the issue names.
+    """
+    on_s = on.isoformat() if isinstance(on, date) else str(on)
+    want = str(origin)
+    for row in rows:
+        if str(row.get("origin")) != want:
+            continue
+        first, last = row.get("from_date"), row.get("to_date")
+        if not isinstance(first, str) or first > on_s:
+            continue
+        # An open interval has not ended. `to_date` absent means the
+        # instrument is still in use, which is why it is not defaulted.
+        if last is None or str(last) >= on_s:
+            return row
+    return None
+
+
 def _in_force(records: list[dict], dataset: str, on: str) -> dict[str, dict]:
     """Last line per identity whose date is on or before `on`.
 
