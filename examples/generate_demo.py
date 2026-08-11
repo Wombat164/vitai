@@ -761,16 +761,24 @@ def _build(target: Path) -> None:
          "device": "demo", "_gen": CURRENT_GENERATION["capabilities"]},
     ]
 
-    for name, rows in (("weight", weight), ("daily", daily),
-                       ("capabilities", capabilities),
-                       ("sessions", sessions), ("inferences", inferences),
-                       ("goals", goals), ("thresholds", thresholds),
-                       ("achievements", achievements), ("context", context),
-                       ("measurements", measurements), ("medical", medical),
-                       ("checks", checks), ("events", events),
-                       ("sets", sets), ("meals", meals),
-                       ("journal", journal), ("plans", plans),
-                       ("emissions", emissions)):
+    written = (("weight", weight), ("daily", daily),
+               ("capabilities", capabilities),
+               ("sessions", sessions), ("inferences", inferences),
+               ("goals", goals), ("thresholds", thresholds),
+               ("achievements", achievements), ("context", context),
+               ("measurements", measurements), ("medical", medical),
+               ("checks", checks), ("events", events),
+               ("sets", sets), ("meals", meals),
+               ("journal", journal), ("plans", plans),
+               ("emissions", emissions))
+    # THE REGISTER AND THE LOOP CANNOT DISAGREE, because this is where both
+    # come from. `WRITES` is what a reader outside this file is held to (#359);
+    # checking it here means a dataset added to one and not the other fails in
+    # the generator rather than somewhere downstream reasoning about it.
+    assert {name for name, _ in written} == WRITES, (
+        "the writer loop and WRITES disagree: "
+        f"{sorted({n for n, _ in written} ^ WRITES)}")
+    for name, rows in written:
         # `seq` the way `append` stamps it (#239). This file writes rows
         # directly rather than through the append path, so without this the
         # shipped example would be the one record in the world whose rows
@@ -1767,6 +1775,25 @@ def _read_all(root: Path) -> dict[str, str]:
             # generator's own output, and that grounds is only true if they
             # are actually compared. They were not.
             and p.suffix in (".jsonl", ".toml", ".gpx", ".tcx")}
+
+
+# WHICH DATASETS THE SHIPPED EXAMPLE CARRIES, declared rather than discovered.
+#
+# A reader needs to know this without executing the file, and the first attempt
+# to give them one substring-matched this module's own source text - which
+# reported a dataset as written if its name appeared in a COMMENT, and already
+# had `("equipment",` sitting in an unrelated tuple of set-configuration keys
+# waiting for the day something called `equipment` became a dataset. A check
+# derived from the material it polices, which is the shape this repo keeps
+# refusing.
+#
+# So it is a register, `main` asserts the writer loop matches it, and
+# `tests/test_fixture_coverage.py` holds it against the schema.
+WRITES = frozenset({
+    "achievements", "capabilities", "checks", "context", "daily", "emissions",
+    "events", "goals", "inferences", "journal", "meals", "measurements",
+    "medical", "plans", "sessions", "sets", "thresholds", "weight",
+})
 
 
 def main() -> int:
