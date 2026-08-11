@@ -28,7 +28,8 @@ own output; it never assesses her.
 
 3. **Duration present, timing absent, on about a third of her days.** The
    watch is off for the twelve hours of a shift, so `sleep_h` is her own
-   estimate and both boundaries are null. Expected: a day with no interval is
+   estimate and both boundaries are null - 76 of 301 days, a quarter of the
+   record. Expected: a day with no interval is
    reported as having no timing rather than silently anchored to midnight.
    This is the only shape in which that fallback can hide: a record with the
    field everywhere never exercises it, and a record without it anywhere never
@@ -37,7 +38,10 @@ own output; it never assesses her.
 4. **Steps inside a declared regime.** Across a block of nights her step count
    is a fact about a ward floor rather than about training, and reading it as
    activity flatters the week. The record says so in a `regimes` row -
-   `unanchored`, 2029-11-19 to 2029-11-22. Expected: the interval is not read
+   `unanchored`, 2029-09-15 to 2029-09-18, which is the first four-night
+   block the roster actually produces. The dates are derived from it rather
+   than written down beside it: the first version named four dates by hand and
+   the roster made two of them days off. Expected: the interval is not read
    as training volume, and the regime is visible in any output that reports
    the period.
 

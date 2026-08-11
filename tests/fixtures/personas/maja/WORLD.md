@@ -10,14 +10,18 @@ The gym announced a refurbishment for April and then postponed it to the
 autumn. The event row records the cancellation and its reason, so a reader can
 tell a plan that was dropped from one that was never made.
 
-One Thursday in February the gym shut early for a burst pipe. The plan for
-that day exists, and its outcome says it was skipped and why.
+One Thursday in November the gym shut early for a burst pipe. The plan for
+that day exists and its outcome says it was skipped and why - and the week is
+chosen by reading the record for a Tuesday she trained and a Thursday she did
+not, rather than named in advance and asserted.
 
 ## The leg curl
 
 She works it one leg at a time after an old imbalance that predates this
 record and is not otherwise in it. That is why laterality is a real fact on
-her sets rather than an unused column.
+her sets rather than an unused column. The two legs get equal volume over the
+record - 102 sets each - because a fixture that warns about double-counting
+per-side work should not itself ship a two-to-one asymmetry nobody declared.
 
 ## The labels
 

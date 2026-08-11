@@ -34,4 +34,6 @@ block:
 - 4 nights, 4 off, 3 days, 2 off
 - 3 nights, 4 off, 5 days, 2 off
 
-Everything else in her record is downstream of that label.
+Everything else in her record is downstream of that label - including the
+regimes rows, whose intervals are read off the roster rather than written
+beside it, so the narrative and the numbers cannot drift apart.
