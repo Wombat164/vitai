@@ -344,6 +344,14 @@ which would say running down a cliff releases energy. A gradient beyond this
 is refused rather than clamped, because clamping quietly reports a 60% slope
 as a 45% one."""
 
+MIN_GRADE_RUN_BARO_M = 5.0
+"""The same floor where elevation comes from a barometer. The module already
+carries the published pair for sustained climb - 10 m GPS against 2 m
+barometric - and this keeps their ratio: a barometric profile is roughly five
+times quieter in the vertical, so a gradient is believable over a fifth of the
+run. Derived from the thresholds above rather than measured separately, which
+is worth saying because it is an inference and not a citation."""
+
 MIN_GRADE_RUN_M = 25.0
 """Horizontal distance a segment must cover before its gradient is believed.
 Consumer GNSS vertical error is roughly +/-15 m, so a gradient taken over a
@@ -394,30 +402,44 @@ def grade_adjusted_distance_m(points: list[Fix],
     usable = [p for p in points if p.ele is not None]
     if len(usable) < 2:
         return None
-    eles = _smooth_elevation([p.ele for p in usable])
+    # Smoothed over the elevation-bearing points, then mapped back onto the
+    # full track so the walk below can see where elevation stops and starts.
+    smoothed = dict(zip((id(p) for p in usable),
+                        _smooth_elevation([p.ele for p in usable])))
 
     flat_cost = grade_cost(0.0)
+    floor = MIN_GRADE_RUN_BARO_M if barometric else MIN_GRADE_RUN_M
     weighted = 0.0
     covered = 0.0
-    total = 0.0
+    walked = 0.0
     refused = 0.0
-    # `previous` walks the track and `anchor_ele` holds where the current
-    # segment began. The first cut measured every step from the ANCHOR rather
-    # than from the point before it, so `run` accumulated 5 + 10 + 15 + ...
-    # instead of 5 + 5 + 5, closing each segment early with a run several
-    # times its true length. Gradients came out a fraction of what they were:
-    # a steady 10% climb scored 1.29 against the curve's own 1.66, and a 60%
-    # cliff read as 30% and was accepted instead of refused. Caught by testing
-    # against a gradient whose answer can be worked out by hand, which a real
-    # track cannot give you.
-    previous, anchor_ele = usable[0], eles[0]
+
+    # WALKED COUNTS EVERY METRE, INCLUDING THE ONES WITH NO ELEVATION. The
+    # first version filtered those points out before measuring anything, so
+    # the coverage fraction was a share of the elevation-bearing part rather
+    # than of the route - and a track whose first kilometre has no elevation
+    # reported 98% covered when half of it had been judged. A device that
+    # loses barometric lock at the start, a tunnel, a merged file: all
+    # ordinary, and all silently extrapolated. It is the same defect this
+    # function already refuses for gradients beyond the curve, arriving
+    # through a different door.
+    previous, anchor_ele = points[0], None
     run = 0.0
-    for point, ele in zip(usable[1:], eles[1:]):
+    for point in points[1:]:
         step = haversine_m(previous, point)
         previous = point
+        walked += step
+        ele = smoothed.get(id(point))
+        if ele is None:
+            # The elevation stops here; whatever was accruing is abandoned
+            # rather than measured across the gap.
+            anchor_ele, run = None, 0.0
+            continue
+        if anchor_ele is None:
+            anchor_ele, run = ele, 0.0
+            continue
         run += step
-        total += step
-        if run < MIN_GRADE_RUN_M:
+        if run < floor:
             continue
         cost = grade_cost((ele - anchor_ele) / run)
         if cost is None:
@@ -438,29 +460,32 @@ def grade_adjusted_distance_m(points: list[Fix],
     # every other length in this module comes from.
     #
     # The demo tracks cannot show the difference - they are synthetic and
-    # smooth, so their raw and simplified lengths agree to a metre. A test
-    # supplies a horizontally jittery track instead, because a parameter whose
-    # justification no fixture exercises is a parameter nobody can check.
+    # smooth, so their raw and simplified lengths agree within a metre and a
+    # half. A test supplies a horizontally jittery track instead, because a
+    # parameter whose justification no fixture exercises is a parameter nobody
+    # can check.
+    #
+    # A TAIL SHORTER THAN THE FLOOR IS NEVER JUDGED, so `covered_pct` is up to
+    # `floor` metres pessimistic and a track shorter than it gets no answer at
+    # all. Bounded and stated rather than papered over: on anything of
+    # kilometre scale it is under a percent, and judging a 5 m tail would be
+    # reading noise.
     multiplier = weighted / covered
     measured = path_length_m(simplify(points))
-    # THE ADJUSTED FIGURE DESCRIBES THE PART THAT COULD BE JUDGED, which for
-    # an ordinary route is all of it. A track that spends most of its length
-    # steeper than the study measured would otherwise get a route-level number
-    # extrapolated from whatever fraction stayed inside the curve: a 60% slope
-    # reported a confident 3.49x for the whole climb, computed from the 5% of
-    # it that was not a cliff. Scaling by coverage says what it is about
-    # without inventing a threshold below which the answer is withheld - a
-    # consumer reads `covered_pct` and decides.
-    fraction = covered / total if total else 0.0
+    fraction = covered / walked if walked else 0.0
     return {
         "adjusted_m": measured * fraction * multiplier,
         "measured_m": measured,
         "multiplier": multiplier,
         "covered_m": covered,
-        "covered_pct": 100.0 * covered / total if total else 0.0,
+        "covered_pct": 100.0 * fraction,
         "beyond_the_curve_m": refused,
         "basis": "minetti-2002",
-        "smoothing": "barometric" if barometric else "gps",
+        # WHAT THE FLOOR WAS SET FOR, not a label about smoothing. The first
+        # version wrote "barometric" or "gps" into a `smoothing` key while
+        # every number in the dict was bit-identical either way - a provenance
+        # distinction asserted with no mechanism behind it.
+        "gradient_floor_m": floor,
     }
 
 

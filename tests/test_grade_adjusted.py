@@ -90,10 +90,19 @@ def test_a_steady_gradient_reproduces_the_curve(slope):
     assert got["multiplier"] == pytest.approx(want, rel=0.05), (slope, got)
 
 
-def test_flat_ground_adjusts_to_itself():
+def test_flat_ground_adjusts_to_itself_bar_the_unjudged_ends():
+    """The multiplier is exactly one. The adjusted DISTANCE is a little short,
+    and the shortfall is bounded rather than tolerated: the first step has no
+    gradient behind it and a tail shorter than the floor is never judged, so a
+    track loses at most the floor plus one sample spacing. On a kilometre that
+    is under 3%; on a 20 km run it is a tenth of a percent."""
     got = grade_adjusted_distance_m(ramp(0.0))
     assert got["multiplier"] == pytest.approx(1.0, abs=1e-9)
-    assert got["adjusted_m"] == pytest.approx(got["measured_m"], rel=0.01)
+    shortfall = got["measured_m"] - got["adjusted_m"]
+    assert 0 <= shortfall < route.MIN_GRADE_RUN_M + 10
+
+    longer = grade_adjusted_distance_m(ramp(0.0, metres=20000))
+    assert longer["adjusted_m"] == pytest.approx(longer["measured_m"], rel=0.005)
 
 
 def test_a_climb_is_longer_and_a_descent_is_shorter():
@@ -151,6 +160,8 @@ def test_the_demo_tracks_adjust_by_a_believable_amount():
             continue
         seen += 1
         assert 1.0 <= got["multiplier"] < 1.10, (path.name, got["multiplier"])
+        # Raw and simplified agree within a metre and a half on these tracks.
+        assert abs(route.path_length_m(points) - got["measured_m"]) < 2.0
         assert got["covered_pct"] > 95, (path.name, got["covered_pct"])
     assert seen >= 3
 
@@ -158,7 +169,9 @@ def test_the_demo_tracks_adjust_by_a_believable_amount():
 def test_a_gradient_floor_keeps_flat_ground_flat():
     """WHAT THE 25 m FLOOR IS FOR, and no committed track can show it: the demo
     tracks are synthetic and their elevation is smooth, so shortening the floor
-    to a metre changes their answers by nothing at all.
+    to a metre moves their multipliers by under a tenth of a percent. Not
+    "nothing at all", which is what the first version of this said and is a
+    checkable claim that was false.
 
     Consumer GNSS vertical error is roughly 5 m one sigma. Over a 5 m step
     that is a gradient of +/-100%; over 25 m it is +/-20%, and the cost curve
@@ -199,6 +212,55 @@ def test_the_baseline_is_the_derived_distance_not_the_jitter_sum():
     assert raw > 1.05 * got["measured_m"], (raw, got["measured_m"])
     assert got["measured_m"] == pytest.approx(
         route.path_length_m(route.simplify(jittery)), rel=1e-9)
+
+
+def test_a_stretch_with_no_elevation_is_not_judged_by_the_rest():
+    """The defect this function already refused for gradients beyond the
+    curve, arriving through a different door. Points with no elevation were
+    filtered out before anything was measured, so the coverage fraction was a
+    share of the elevation-bearing part rather than of the route: a 2 km track
+    whose first kilometre carries no elevation reported 98% covered, and 1 km
+    of refused cliff plus 1 km of nothing reported a confident adjustment
+    computed from neither.
+
+    A device losing barometric lock at the start, a tunnel, a merged file -
+    all ordinary."""
+    half = [Fix(lat=50.0 + i * 9.0e-6, lon=4.0) for i in range(0, 1001, 5)]
+    half += [Fix(lat=50.0 + i * 9.0e-6, lon=4.0, ele=100.0)
+             for i in range(1005, 2001, 5)]
+    got = grade_adjusted_distance_m(half)
+    assert 45 < got["covered_pct"] < 55, got["covered_pct"]
+    assert got["adjusted_m"] == pytest.approx(got["measured_m"] / 2, rel=0.05)
+
+
+def test_elevation_is_not_carried_across_a_gap():
+    """The two ends of a gap are not a gradient. Reading them as one would
+    invent a climb out of the distance between the last fix before a tunnel
+    and the first one after it."""
+    pts = [Fix(lat=50.0 + i * 9.0e-6, lon=4.0, ele=100.0)
+           for i in range(0, 501, 5)]
+    pts += [Fix(lat=50.0 + i * 9.0e-6, lon=4.0) for i in range(505, 1501, 5)]
+    pts += [Fix(lat=50.0 + i * 9.0e-6, lon=4.0, ele=200.0)
+            for i in range(1505, 2001, 5)]
+    got = grade_adjusted_distance_m(pts)
+    # Both lit stretches are dead flat; only the unseen middle rose.
+    assert got["multiplier"] == pytest.approx(1.0, abs=0.01), got
+
+
+def test_the_barometric_floor_is_a_behaviour_and_not_a_label():
+    """The first version wrote "barometric" or "gps" into the output while
+    every number in the dict was identical either way - a provenance
+    distinction asserted with no mechanism behind it."""
+    import random
+
+    rng = random.Random(3)
+    noisy = [Fix(lat=50.0 + i * 9.0e-6, lon=4.0, ele=100.0 + rng.gauss(0, 1.0))
+             for i in range(0, 2001, 5)]
+    gps = grade_adjusted_distance_m(noisy, barometric=False)
+    baro = grade_adjusted_distance_m(noisy, barometric=True)
+    assert gps["gradient_floor_m"] != baro["gradient_floor_m"]
+    assert gps["multiplier"] != baro["multiplier"]
+    assert baro["covered_pct"] >= gps["covered_pct"]
 
 
 def test_a_net_flat_loop_is_not_adjusted_away():
