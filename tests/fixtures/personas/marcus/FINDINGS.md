@@ -1,6 +1,6 @@
 # marcus: what this corpus is designed to break
 
-Findings below were exposed by marcus@1 (see persona.toml; docs/persona-doctrine.md requires findings to record the persona version that exposed them).
+Findings below were exposed by marcus@1 and marcus@2 (see persona.toml; docs/persona-doctrine.md requires findings to record the persona version that exposed them).
 
 A persona whose record is clean and consistent tests almost nothing. Each
 item below names the machinery under test and the expected behaviour, in
@@ -97,3 +97,47 @@ its own output; it never assesses him.
 - The achilles is never named in any `expectations.jsonl` "expect" string
   as a condition; it is named freely in the athlete's own journal, goals
   and medical rows, which is his self-report, not an engine conclusion.
+
+## Added at marcus@2
+
+10. **The night has an interval, not just a length (`marcus@2`).** Every
+    `daily` row now carries `sleep_start` and `sleep_end` beside `sleep_h`. It
+    was the length alone before, in this corpus and in every other: across the
+    ten personas and the demo, `sleep_h` was 61.8% populated and both
+    boundaries were 0%. A design that has to say when a day begins, or what
+    part of the day a session fell in, cannot be confirmed against a corpus
+    with no sleep timing in it at all - which is how the gap surfaced.
+
+    The interval is DERIVED FROM THE WORK PATTERN rather than sampled from
+    nothing. He teaches, so the night before a school day is the constrained
+    one and runs about an hour earlier than the night before a Saturday, a
+    Sunday or a school holiday; `HOLIDAYS` already encodes his terms. Expected:
+    an engine reading these must not assume a fixed bedtime, and must not read
+    the holiday shift as disturbance.
+
+    `sleep_end` is `sleep_start` plus the `sleep_h` already on the row, to the
+    second. Two fields describing one night that disagree would teach a reader
+    to trust neither.
+
+11. **The night bounds the day it is dated to (`marcus@2`).** No session and
+    no weigh-in falls before that morning's wake. It is worth stating because
+    the first cut did not hold it: the bedtime rule knows his weekday and his
+    school terms and nothing about what he logged, so 73 of 441 sessions and
+    33 of 260 weigh-ins landed inside the recorded night. Expected: a consumer
+    confirming an athlete-proposed time against sleep (#212) meets no
+    contradiction here that was not put there deliberately.
+
+12. **Five nights cross a clock change (`marcus@2`).** 2028-03-26, 2028-10-29,
+    2029-03-25, 2029-10-28 and 2030-03-31 begin at one UTC offset and end at
+    another, because British Summer Time starts or ends while he is asleep.
+    The wall clock moves an hour; the elapsed time does not. Expected: a reader
+    that subtracts local times gets an hour wrong on exactly these five rows,
+    and one that compares instants does not - the naive-versus-aware
+    distinction the engine already refuses to guess at, now present in a
+    fixture rather than only in a rule.
+
+    2029-10-28 is the one that catches a lazy implementation. He goes to bed
+    at 00:30, which is BST: the changeover is at 02:00 local, so the clock
+    does not go back until after he is asleep. Deciding the offset from the
+    DATE rather than the instant stamps it GMT and the crossing disappears,
+    which is what the generator did until this was measured.
