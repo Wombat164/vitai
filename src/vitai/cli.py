@@ -15,7 +15,8 @@ from datetime import date, datetime
 from pathlib import Path
 
 from . import __version__
-from .api import Vitai, absence, can_emit, init, schema, this_build
+from .api import (Vitai, absence, can_emit, init, parse_time, schema,
+                  this_build)
 from .jsonl import DataError
 from .schema import KEYS
 from .db import DERIVED_TABLES
@@ -221,6 +222,33 @@ def cmd_instruments(args: argparse.Namespace) -> None:
         label = row.get("name") or row.get("origin")
         print(f"{str(row.get('origin')):<18} {label}"
               f"{'  (' + made + ')' if made else ''}  [{span}]")
+
+
+def cmd_phases(args: argparse.Namespace) -> None:
+    """A harness over `Vitai.phases` (#212)."""
+    v = Vitai(_root(args))
+    rows = v.phases(dataset=args.dataset, on=args.on)
+    if args.json:
+        for row in rows:
+            print(json.dumps(row))
+        return
+    if not rows:
+        print("no row in this record carries a time to place in a day")
+        return
+    unanchored = [r for r in rows if r["phase"] is None]
+    for row in rows:
+        # PARSED, NOT SLICED. Taking characters off the end of an
+        # offset-aware stamp prints "00+00" rather than a time.
+        when = parse_time(row["at"]) if len(str(row["at"])) > 5 else None
+        at = f"{when.hour:02d}:{when.minute:02d}" if when else row["at"]
+        phase = row["phase"] or "-"
+        print(f"{row['date']}  {row['dataset']:<9} {at}  {phase}")
+    if unanchored:
+        # SAID, NOT LEFT TO BE COUNTED. A consumer that has to notice the
+        # dashes is one that will read them as a small number.
+        print(f"\n{len(unanchored)} of {len(rows)} have no phase: nothing in "
+              f"the record says when the athlete woke on those days, and the "
+              f"clock is not an answer to that")
 
 
 def cmd_capabilities(args: argparse.Namespace) -> None:
@@ -1616,6 +1644,8 @@ def main(argv: list[str] | None = None) -> None:
          "append what the athlete stated, with provenance the engine stamps"),
         ("verdicts", cmd_verdicts, "weekly goal-attainment rows as JSONL (the platform contract)"),
         ("goals", cmd_goals, "active goals: progress, dates, contributions, flagged edits"),
+        ("phases", cmd_phases,
+         "which part of the athlete's own day each timed row fell in (#212)"),
         ("capabilities", cmd_capabilities,
          "what each instrument is competent at, as the record states it (#171)"),
         ("instruments", cmd_instruments,
@@ -1733,6 +1763,11 @@ def main(argv: list[str] | None = None) -> None:
                            help="show the last N per-goal contributions (0 = none)")
         if name == "instruments":
             p.add_argument("--origin", help="ask about one origin")
+            p.add_argument("--json", action="store_true",
+                           help="emit rows as JSONL instead of prose")
+        if name == "phases":
+            p.add_argument("--dataset", help="only weight, or only sessions")
+            p.add_argument("--on", help="only this date")
             p.add_argument("--json", action="store_true",
                            help="emit rows as JSONL instead of prose")
         if name == "capabilities":

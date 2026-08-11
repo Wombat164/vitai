@@ -107,14 +107,20 @@ UNWRITTEN = (
 
 UNREAD = (
     # WRITTEN AND NOT YET READ, which is the worse of the two gaps and is
-    # recorded rather than hidden. TWO personas write these now and neither
-    # reason replaces the other: `marcus` logs the interval of every night,
-    # and `bea` logs one on the days her watch is on - a night worker whose
-    # sleep sits in the middle of the calendar day, and who has no interval at
-    # all on the days she is working. Nothing in `src/` reads either boundary
-    # yet; the reader is #203, anchoring the day to the athlete's sleep rather
-    # than to midnight. This leaves the register the day that lands.
-    "daily.sleep_end",
+    # recorded rather than hidden. TWO personas write the sleep interval and
+    # neither reason replaces the other: `marcus` logs it every night, and
+    # `bea` logs one on the days her watch is on - a night worker whose sleep
+    # sits in the middle of the calendar day, and who has none at all on the
+    # days she is working.
+    #
+    # `sleep_end` LEFT THIS REGISTER when #212's coarse tier landed: it is the
+    # anchor `Vitai.phases` places a timed row against, so the record's own
+    # account of when the athlete woke is what decides whose morning a weigh-in
+    # happened in. That is the register working - an entry that gains a reader
+    # has to go.
+    #
+    # `sleep_start` still has none. When the athlete went to BED is not what
+    # the day is anchored on, and its reader is #203.
     "daily.sleep_start",
     # WRITTEN AND NOT YET READ. `otto` photographs the club ergometer's
     # console, so every artifact row says when the shutter went - which is a

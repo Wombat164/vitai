@@ -574,3 +574,78 @@ def comparable(a: datetime | None, b: datetime | None) -> tuple[
     if a is None or b is None:
         return a, b, False
     return a, b, is_aware(a) == is_aware(b)
+
+
+# --- what part of the athlete's day a time falls in (#212) ---------------------
+#
+# THE CLOCK IS NOT THE DAY. Quarters of the day are clock-defined right up
+# until the athlete works nights, at which point "morning" and 07:00 come
+# apart - and every persona in this corpus except one sleeps at night, so a
+# clock-derived phase and an athlete-derived one agree on almost all of them.
+# That is the shape that lets a wrong default survive review.
+#
+# So the anchor is when they WOKE. The decision on #212: the athlete's own
+# timestamps propose, and sleep confirms. A session start and a weigh-in time
+# are the measured data that exists; a sleep interval is what says which part
+# of whose day they fall in.
+#
+# The boundaries are hours since waking rather than hours on a clock. For an
+# ordinary riser they land almost exactly where the clock would put them - up
+# at 07:00 gives morning until noon, afternoon until 17:00, evening until
+# 22:00 - which is the check that the rule is not merely different.
+PHASE_AFTER_WAKING = ((5, "morning"), (10, "afternoon"), (15, "evening"))
+NIGHT = "night"
+
+
+def day_phase(at: object, woke: object) -> str | None:
+    """Which part of the athlete's own day `at` fell in, or None.
+
+    NONE WHEN THE ANCHOR IS UNKNOWN, and that is the whole discipline. A
+    weigh-in with no sleep row behind it is not "probably morning" because
+    most of them are: absent stays absent, or the phase becomes exactly the
+    fabrication a two-tier identity exists to prevent.
+
+    Never derived from anything but a time and a waking. Not from the dataset,
+    not from what the athlete usually does, not from the other rows that day.
+
+    A time BEFORE the waking it is measured against is `night` - the small
+    hours of a day that has not started yet, which is where a 03:00 reading
+    belongs and is not the same fact as 03:00 sixteen hours after getting up.
+    """
+    when, up = parse_time(at), parse_time(woke)
+    if when is None or up is None:
+        return None
+    when, up, ok = comparable(when, up)
+    if not ok:
+        # Naive against aware. Two timestamps that cannot be compared are an
+        # outcome to report rather than an exception, and never a guessed
+        # instant (#38) - so a phase is unavailable rather than approximated.
+        return None
+    hours = (when - up).total_seconds() / 3600
+    if hours < 0:
+        return NIGHT
+    for edge, name in PHASE_AFTER_WAKING:
+        if hours < edge:
+            return name
+    return NIGHT
+
+
+def phase_rule() -> dict:
+    """The rule as data, so a client stops re-deriving it (#308's shape).
+
+    Published because a consumer that has to reimplement "which part of the
+    day" will anchor it on the clock, which is right for everybody who sleeps
+    at night and wrong for the athlete this exists for.
+    """
+    return {
+        "anchor": "sleep_end",
+        "unit": "hours since waking",
+        "boundaries": [{"under": edge, "phase": name}
+                       for edge, name in PHASE_AFTER_WAKING],
+        "beyond": NIGHT,
+        "before_waking": NIGHT,
+        "unanchored": None,
+        "note": "A time with no sleep row behind it has no phase. It is not "
+                "inferred from the clock, from the dataset, or from what the "
+                "athlete usually does.",
+    }

@@ -38,7 +38,11 @@ from .builds import ABSENCE_MEANINGS
 from .builds import absence as absence
 from .builds import can_emit as can_emit
 from .builds import this_build as this_build
-from .clocks import is_aware, ordering_rule
+from .clocks import day_phase, is_aware, ordering_rule, phase_rule
+# Re-exported for the CLI, which must reach the engine only through this
+# module: `cmd_phases` prints a wall-clock time and slicing characters
+# off an offset-aware stamp prints "00+00" instead of one.
+from .clocks import parse_time as parse_time
 from .jsonl import EVENT_DATASETS, append, append_many, load
 from . import query
 from .policy import (State, capability, context_on, days_between, events_on,
@@ -1713,6 +1717,74 @@ class Vitai:
                  for origin in seen]
         return [r for r in found if r is not None]
 
+    def phases(self, dataset: str | None = None,
+               on: date | str | None = None) -> list[dict]:
+        """What part of the athlete's own day each timed row fell in (#212).
+
+        THE COARSE TIER, derived from the precise one and from nothing else.
+        `weight.measured_at` and `sessions.start_time` are the measured data
+        that exists - 97% and 99% populated in the shipped corpus - and the
+        athlete's sleep is what says which part of whose day they are in.
+
+        `phase` is None wherever the anchor is missing, and the row still
+        comes back so a consumer can see how much of the record is
+        unanchored rather than reading an absence as a small number. That is
+        the half a returned list of only-the-answerable rows would hide.
+
+        NOT STORED, deliberately and for now. The issue argues for deriving at
+        write and storing, on the grounds that a value computed on the way out
+        can be computed wrongly on the way out - which is right, and the
+        decision that governs this says the athlete's timestamps PROPOSE and
+        sleep CONFIRMS, so an unconfirmed phase is not a fact to write down.
+        Storing the confirmed ones needs a channel for the athlete to confirm
+        the rest, which is #224's work. Until then this computes and says what
+        it is anchored on, and nothing in the record claims a phase it cannot
+        support.
+        """
+        woke = {r["date"]: r.get("sleep_end")
+                for r in self.dataset("daily") if r.get("sleep_end")}
+        wanted = ("weight", "sessions") if dataset is None else (dataset,)
+        when = on if on is not None else None
+        when_s = (when.isoformat() if isinstance(when, date)
+                  else str(when) if when is not None else None)
+        out: list[dict] = []
+        for name in wanted:
+            field = {"weight": "measured_at",
+                     "sessions": "start_time"}.get(name)
+            if field is None:
+                continue
+            for row in self.dataset(name):
+                at = row.get(field)
+                if not at or (when_s is not None and row["date"] != when_s):
+                    continue
+                # `measured_at` is HH:MM local and `start_time` is a full
+                # stamp. Both are the athlete's wall clock, so a bare time is
+                # read against its own row's date.
+                bare = len(str(at)) <= 5
+                stamp = at if not bare else f"{row['date']}T{at}:00"
+                anchor = woke.get(row["date"])
+                # A BARE LOCAL TIME IS COMPARED AGAINST THE ANCHOR'S LOCAL
+                # WALL CLOCK, not against its instant. `comparable` refuses
+                # naive against aware, correctly: it will not invent the
+                # missing offset. But a weigh-in written "07:06" and a waking
+                # written "05:59+00:00" are the SAME athlete's clock on the
+                # same morning, and reading the anchor's wall clock puts both
+                # in one frame by construction - which is the case `comparable`
+                # already sanctions for two naive stamps. Without this every
+                # weigh-in in the corpus is unanchored, which is 260 of the
+                # 700 timed rows in one persona and the whole dataset the
+                # issue was raised about.
+                if bare and anchor:
+                    up = parse_time(anchor)
+                    if up is not None and up.tzinfo is not None:
+                        anchor = up.replace(tzinfo=None).isoformat()
+                out.append({
+                    "dataset": name, "date": row["date"], "at": at,
+                    "phase": day_phase(stamp, anchor),
+                    "anchored_on": anchor,
+                })
+        return sorted(out, key=lambda r: (r["date"], r["dataset"], str(r["at"])))
+
     def churn(self, today: date | None = None) -> list[dict]:
         """Policy edits, with the loosening-after-a-miss flag (G20)."""
         d = self.datasets()
@@ -3186,6 +3258,11 @@ def schema() -> dict:
         # while the engine does not stamp client-held claims - so between now
         # and then, every client orders logs itself.
         "ordering": ordering_rule(),
+        # WHICH PART OF WHOSE DAY (#212), published for the reason #308 was:
+        # a client that has to reimplement this will anchor it on the clock,
+        # which is right for everybody who sleeps at night and wrong for the
+        # athlete it exists for.
+        "phase_rule": phase_rule(),
         # THE ACTIVITY HALF OF THE VOCABULARY (#350), by the same route as
         # `fields` and for the same reason #257 gave: a separate accessor is a
         # new place for parity to fail. A client wiring its correction

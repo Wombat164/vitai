@@ -146,6 +146,14 @@ TOOLS: dict[str, dict] = {
         },
         "required": ["origin"],
     },
+    "phases": {
+        "method": "phases",
+        "properties": {
+            "dataset": {"type": "string",
+                        "description": "only weight, or only sessions"},
+            "on": {"type": "string", "description": "only this date"},
+        },
+    },
     "capabilities": {
         "method": "capabilities",
         "properties": {},
