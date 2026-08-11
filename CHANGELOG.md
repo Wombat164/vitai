@@ -103,6 +103,23 @@ adds accessors over what the engine already knew.
   every row of a tuple-keyed dataset was silently skipped. It had only ever
   been called with scalar-keyed ones, so the gap cost nothing and was
   invisible.
+- **A correction is compared against the line it retires** (#342). A line
+  superseding another could disagree with it about which instrument observed a
+  value, and both survived - the shape #325 narrates, where a hand-merged
+  console row keeps a watch's heart rate and stamps the console's `origin` on
+  it, and the record ends up asserting that a rowing console observed a pulse.
+- **Reported, not refused.** A correction that changes a field's origin is
+  either the athlete fixing an attribution or two instruments being laundered
+  into one, and nothing in the record distinguishes them. Refusing would block
+  the legitimate case; the engine says what it sees and declines the inference.
+- **Measurements only, and the cut is the engine's own.** #299 classifies every
+  field, and an instrument observes a measurement rather than a date, a slug or
+  a note. A hand-written skip list would have been a second classification
+  drifting from the first.
+- Silent where either line names no instrument, where the value changed, and
+  where the reference is ambiguous - that last one already has an advisory
+  saying the engine picked a line and may have picked wrong, and comparing
+  against a row the author did not mean would be a second guess on a first.
 
 - **The ordering rule is published as data** (#308). `clocks.order_key` orders
   on valid time and keeps transaction time separate, and that doctrine - taken

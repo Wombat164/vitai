@@ -3406,7 +3406,60 @@ def supersedes_problems(dataset: str, rows: list[tuple[int, dict]]) -> list[str]
                 f"{dataset}.jsonl line {n}: 'supersedes' {ref!r} matches no "
                 "line - nothing is being corrected, and the reference is "
                 "probably mistyped")
+        elif (moved := _relabelled_values(dataset, dict(rows)[hit[0]], r)):
+            # A CORRECTION IS COMPARED AGAINST THE LINE IT RETIRES (#342).
+            # Only where the reference is unambiguous: where it matches
+            # several lines the advisory above already says the engine picked
+            # one and may have picked wrong, and comparing against a row the
+            # author did not mean would be a second guess on top of a first.
+            problems.append(
+                f"{dataset}.jsonl line {n}: this correction keeps "
+                f"{', '.join(moved)} unchanged from the line it retires and "
+                f"attributes them to a different instrument "
+                f"({dict(rows)[hit[0]].get('origin')!r} -> "
+                f"{r.get('origin')!r}). That is either an attribution being "
+                "fixed or two instruments being laundered into one, and the "
+                "record cannot tell them apart - so it is reported rather "
+                "than decided. If the values really came from the earlier "
+                "instrument, write them as their own line rather than "
+                "carrying them forward")
     return problems
+
+
+def _relabelled_values(dataset: str, retired: dict, correction: dict) -> list[str]:
+    """Fields a correction carries forward unchanged under a NEW instrument.
+
+    The laundering shape #325 narrates and #342 names: a hand-merged row that
+    supersedes a watch's line, keeping its heart rate and energy figures and
+    stamping the console's `origin` on them. Both lines are well-formed, the
+    merge works as designed, and the record ends up asserting that a rowing
+    console observed a heart rate.
+
+    A value that CHANGED is a correction of the value and says nothing about
+    attribution. A value that is identical and has changed instrument is the
+    case with no innocent reading available to the engine: either the athlete
+    is fixing an attribution, or two instruments have been folded into one.
+
+    NOT AN ORIGIN THE ROW NEVER HAD. Where either line names no instrument
+    there is no disagreement to report - silence is not a competing claim,
+    which is the rule `instrument_seam` and `is_independent` already keep.
+
+    MEASUREMENTS ONLY, and the cut is the engine's own rather than a list
+    written here. #299 classifies every field, and an instrument OBSERVES a
+    measurement - it does not observe a date, a slug, a note or a source. The
+    first version of this had a hand-written skip list, which is a second
+    classification that drifts from the first; filtering on the published
+    class drops `type`, `date`, `origin`, `supersedes` and the rest without
+    naming any of them.
+    """
+    before, after = retired.get("origin"), correction.get("origin")
+    if before in (None, "") or after in (None, "") or before == after:
+        return []
+    return sorted(
+        field for field, value in correction.items()
+        if value is not None and retired.get(field) == value
+        and field in KEYS.get(dataset, ())
+        and sensitivity(dataset, field) == "measurement")
 
 
 def _unnameable(dataset: str, rows: list[tuple[int, dict]]) -> list[str]:
