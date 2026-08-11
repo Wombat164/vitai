@@ -60,6 +60,15 @@ SEED = 111
 # moving every step count behind it. Not `SEED + 1`, which is the next
 # persona's seed in a directory of consecutive numbers.
 ROSTER_SEED = 10111
+# The watch dies here and its replacement reports under the same name. The
+# replacement scores a daytime sleep as a nap, so for the fortnight she is
+# getting used to it the hours it reports after a night shift are short. The
+# window is a constant because both the DATA and the regimes row that declares
+# it are built from it - the first version hardcoded a window in the prose and
+# the numbers never moved, so the record described an event it did not contain.
+WATCH_REPLACED = date(2030, 2, 15)
+NAP_SCORING = (WATCH_REPLACED + timedelta(days=1), date(2030, 4, 15))
+NAP_SCORING_FACTOR = 0.78
 PERSONA_VERSION: int = 1
 
 START = date(2029, 9, 3)
@@ -202,6 +211,11 @@ def _daily(rng: random.Random, stamp: common.Stamper, roster: dict[date, str],
         elif yesterday == NIGHT:
             # Came off a night at 08:00 and slept through the day.
             hours = round(max(4.0, min(8.5, rng.gauss(6.6, 0.8))), 1)
+            if NAP_SCORING[0] <= d <= NAP_SCORING[1]:
+                # The replacement watch scores this as napping and reports
+                # short. Her hours did not change; the scoring did, and the
+                # regimes row says so.
+                hours = round(hours * NAP_SCORING_FACTOR, 1)
             began = datetime.combine(d, dtime(hour=9)) + timedelta(
                 minutes=rng.randrange(0, 70, 5))
             start, endstamp = _interval(began, hours)
@@ -219,8 +233,23 @@ def _daily(rng: random.Random, stamp: common.Stamper, roster: dict[date, str],
     return rows
 
 
+def _woke_at(daily: list[dict]) -> dict[str, datetime]:
+    """When she got up on each day that has an interval.
+
+    THE DAY HAS TO START AFTER THE NIGHT ENDS. Session and weigh-in times were
+    drawn without reference to the sleep draw, so eleven sessions and five
+    weigh-ins landed inside her own recorded sleep - including a weigh-in
+    fifty-six minutes before waking, under a protocol whose text is "after
+    waking and before eating". A contradiction that arrives from two
+    independent draws reads to a consumer as signal.
+    """
+    return {r["date"]: datetime.fromisoformat(r["sleep_end"])
+            for r in daily if r.get("sleep_end")}
+
+
 def _sessions(rng: random.Random, stamp: common.Stamper,
-              roster: dict[date, str], end: date) -> list[dict]:
+              roster: dict[date, str], end: date,
+              woke: dict[str, datetime]) -> list[dict]:
     """Swims and lifts, placed by her waking day rather than by the clock.
 
     THE 18:30 SESSION IS THE FIXTURE. On a day after a night shift she wakes
@@ -240,6 +269,13 @@ def _sessions(rng: random.Random, stamp: common.Stamper,
         hour = 18 if after_night else (7 if shift == DAY else 10)
         began = datetime.combine(d, dtime(hour=hour)) + timedelta(
             minutes=rng.randrange(0, 55, 5))
+        # NEVER BEFORE SHE IS UP. A day-shift session drawn at 07:15 against a
+        # wake at 09:10 is not an early start, it is a contradiction.
+        up = woke.get(d.isoformat())
+        if up is not None:
+            floor = up.replace(tzinfo=None) + timedelta(minutes=20)
+            if began < floor:
+                began = floor
         minutes = rng.randrange(35, 75, 5)
         fields = {
             "date": d.isoformat(), "type": kind,
@@ -261,7 +297,8 @@ def _sessions(rng: random.Random, stamp: common.Stamper,
 
 
 def _weight(rng: random.Random, stamp: common.Stamper,
-            roster: dict[date, str], end: date) -> list[dict]:
+            roster: dict[date, str], end: date,
+            woke: dict[str, datetime]) -> list[dict]:
     """Weighs on days off, because the procedure is not available otherwise.
 
     A weigh-in after a twelve-hour night is not the same measurement as one
@@ -276,12 +313,24 @@ def _weight(rng: random.Random, stamp: common.Stamper,
         rows.append(common.record(
             "weight", date=d.isoformat(),
             kg=round(base + rng.gauss(0, 0.45), 1),
-            measured_at="16:40" if roster.get(
-                d - timedelta(days=1)) == NIGHT else "08:10",
+            measured_at=_after_waking(woke.get(d.isoformat())),
             source="scale", capture="ble", origin="bathroom-scale",
             protocol="fasted-post-waking",
             recorded_at=stamp.stamp(d)))
     return rows
+
+
+def _after_waking(up: datetime | None) -> str:
+    """Twenty minutes after she got up, as HH:MM.
+
+    The protocol says after waking and before eating. It is a checkable claim
+    and the first version broke it five times, weighing her before the sleep
+    row on the same day had ended.
+    """
+    if up is None:
+        return "08:10"
+    at = up.replace(tzinfo=None) + timedelta(minutes=20)
+    return f"{at.hour:02d}:{at.minute:02d}"
 
 
 def _instruments(stamp: common.Stamper) -> list[dict]:
@@ -336,31 +385,58 @@ def _capabilities(stamp: common.Stamper) -> list[dict]:
     ]
 
 
-def _regimes(stamp: common.Stamper) -> list[dict]:
+def _night_blocks(roster: dict[date, str]) -> list[list[date]]:
+    blocks, run = [], []
+    for d in sorted(roster):
+        if roster[d] == NIGHT:
+            run.append(d)
+        elif run:
+            blocks.append(run)
+            run = []
+    if run:
+        blocks.append(run)
+    return blocks
+
+
+def _regimes(stamp: common.Stamper, roster: dict[date, str]) -> list[dict]:
     """A bounded interval in which a figure means something else.
 
-    THE FIRST REGIMES ROWS IN THE CORPUS, and a rotating roster is the honest
-    case for one: across a block of nights her step count is a fact about a
-    ward floor rather than about training, and her sleep total is a sum of
-    fragments rather than a night. Both are real numbers and neither answers
-    the question the goal is asking.
+    DERIVED FROM THE ROSTER, and the first version was not. It named four
+    dates by hand and the roster made two of them days off and one a day
+    shift, so the record declared "four nights on the unit" over a stretch
+    containing a morning strength session. A fixture whose narrative and whose
+    numbers are drawn from different places is internally valid and jointly
+    false, which is the corpus version of a wrong reading.
+
+    So the ward-steps regime is the FIRST four-night block the roster actually
+    produced, and the nap-scoring regime is exactly the window the daily rows
+    were reduced over.
     """
-    return [
-        common.record(
-            "regimes", date="2029-11-19", from_date="2029-11-19",
-            to_date="2029-11-22", dataset="daily", field="steps",
-            kind="unanchored", source="athlete",
-            text="four nights on the unit. The steps are the ward, not "
-                 "training, and reading them as activity flatters the week",
-            recorded_at=stamp.stamp(date(2029, 11, 19))),
-        common.record(
-            "regimes", date="2030-03-04", from_date="2030-03-04",
-            to_date="2030-03-10", dataset="daily", field="sleep_h",
-            kind="unanchored", source="athlete",
-            text="the new watch scored every daytime sleep as a nap and the "
-                 "totals are short; the hours are hers, the scoring is not",
-            recorded_at=stamp.stamp(date(2030, 3, 4))),
-    ]
+    out = []
+    long_blocks = [b for b in _night_blocks(roster) if len(b) >= 4]
+    if long_blocks:
+        block = long_blocks[0]
+        out.append(common.record(
+            "regimes", date=block[0].isoformat(),
+            from_date=block[0].isoformat(), to_date=block[-1].isoformat(),
+            dataset="daily", field="steps", kind="unanchored", source="athlete",
+            text=f"{len(block)} nights on the unit. The steps are the ward, "
+                 f"not training, and reading them as activity flatters the "
+                 f"week",
+            anchored_by=None, note=None,
+            recorded_at=stamp.stamp(block[0])))
+    out.append(common.record(
+        "regimes", date=NAP_SCORING[0].isoformat(),
+        from_date=NAP_SCORING[0].isoformat(),
+        to_date=NAP_SCORING[1].isoformat(),
+        dataset="daily", field="sleep_h", kind="unanchored", source="athlete",
+        text="the new watch scores every daytime sleep as a nap and the "
+             "totals are short; the hours are hers, the scoring is not",
+        anchored_by=None,
+        note="only the days it scored - the shift days in here are her own "
+             "estimate and are untouched",
+        recorded_at=stamp.stamp(NAP_SCORING[0])))
+    return out
 
 
 def _protocols(stamp: common.Stamper) -> list[dict]:
@@ -464,9 +540,9 @@ def _expectations() -> list[dict]:
         {"id": "bea-B-02", "kind": "behavior",
          "expect": "A day whose sleep interval is absent is reported as having "
                    "no timing, never silently anchored to midnight.",
-         "truth": "On the 128 shift days the watch is off and only her own "
-                  "estimate of the total exists. `sleep_h` is present and both "
-                  "boundaries are absent."},
+         "truth": "On the 76 shift days the watch is off and only her own "
+                  "estimate of the total exists - a quarter of her record. "
+                  "`sleep_h` is present and both boundaries are absent."},
         {"id": "bea-G-01", "kind": "gap",
          "expect": "A sleep interval lying wholly inside the calendar day of "
                    "its row is handled without special-casing.",
@@ -485,8 +561,8 @@ def _expectations() -> list[dict]:
                    "it. Two athlete statements disagreeing is an observation.",
          "truth": "Her journal claim of 2029-10-15 that she sleeps fine on "
                   "nights is contradicted by her own numbers: the shift-day "
-                  "mean is 5.4 h against 7.4 h on ordinary days, and her own "
-                  "stated floor is 6.0."},
+                  "mean is 5.28 h against 7.44 h on ordinary days, and her "
+                  "own stated floor is 6.0."},
     ]
 
 
@@ -495,8 +571,11 @@ def build(end: date = DEFAULT_END) -> dict[str, str]:
     roster = _roster(end)
 
     daily = _daily(rng, common.Stamper(base_hour=20), roster, end)
-    sessions = _sessions(rng, common.Stamper(base_hour=19), roster, end)
-    weight = _weight(rng, common.Stamper(base_hour=9), roster, end)
+    # AFTER the night exists, because the day has to start when it ends.
+    # Neither draws a random number from `woke`, so no stream moves.
+    woke = _woke_at(daily)
+    sessions = _sessions(rng, common.Stamper(base_hour=19), roster, end, woke)
+    weight = _weight(rng, common.Stamper(base_hour=9), roster, end, woke)
 
     return {
         "vitai.toml": _TOML,
@@ -508,7 +587,7 @@ def build(end: date = DEFAULT_END) -> dict[str, str]:
         "data/capabilities.jsonl": common.jsonl_text(common.sort_rows(
             _capabilities(common.Stamper(base_hour=10)))),
         "data/regimes.jsonl": common.jsonl_text(common.sort_rows(
-            _regimes(common.Stamper(base_hour=11)))),
+            _regimes(common.Stamper(base_hour=11), roster))),
         "data/protocols.jsonl": common.jsonl_text(common.sort_rows(
             _protocols(common.Stamper(base_hour=10)))),
         "data/thresholds.jsonl": common.jsonl_text(common.sort_rows(

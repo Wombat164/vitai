@@ -193,16 +193,28 @@ def _sessions(rng: random.Random, stamp: common.Stamper,
     return rows, artifacts
 
 
-def _weight(rng: random.Random, stamp: common.Stamper, end: date) -> list[dict]:
+def _weight(rng: random.Random, stamp: common.Stamper, end: date,
+            woke: dict[str, datetime]) -> list[dict]:
+    """Sunday mornings, fasted - and after he is actually up.
+
+    A FIXED TIME CONTRADICTS THE SLEEP ROW. This stamped every weigh-in at
+    07:20 while the sleep draw put some Sunday wakes after 08:00, so the record
+    had him on the scale before he woke, under a protocol whose text is
+    "first thing, after the bathroom, before anything to drink". The same
+    defect bea had; found here by the check written for hers.
+    """
     rows = []
     for d in common.daterange(START, end):
         if d.weekday() != 6:
             continue
         base = 84.0 - 0.0035 * (d - START).days
+        up = woke.get(d.isoformat())
+        at = (up.replace(tzinfo=None) + timedelta(minutes=15)) if up else None
         rows.append(common.record(
             "weight", date=d.isoformat(),
             kg=round(base + rng.gauss(0, 0.5), 1),
-            measured_at="07:20", source="scale", capture="ble",
+            measured_at=(f"{at.hour:02d}:{at.minute:02d}" if at else "07:20"),
+            source="scale", capture="ble",
             origin="bathroom-scale", protocol="fasted-post-void",
             recorded_at=stamp.stamp(d)))
     return rows
@@ -275,7 +287,12 @@ def _capabilities(stamp: common.Stamper) -> list[dict]:
             note="a shared machine nobody calibrates",
             recorded_at=stamp.stamp(START)),
         common.record(
-            "capabilities", date=d0, origin="tape-measure", measures="value",
+            # `measures` NAMES A FIELD, which is what the validator checks.
+            # A measurements row's quantity lives in `value`, so that is what
+            # the tape measures - `waist_cm` is a KIND of measurement rather
+            # than a column.
+            "capabilities", date=d0,
+            origin="tape-measure", measures="value",
             competence="measures", construct=None,
             condition="taken to the stated protocol", basis="stated",
             set_by="athlete", note=None, recorded_at=stamp.stamp(START)),
@@ -397,7 +414,9 @@ def build(end: date = DEFAULT_END) -> dict[str, str]:
 
     daily = _daily(rng, common.Stamper(base_hour=21), end)
     sessions, artifacts = _sessions(rng, common.Stamper(base_hour=20), end)
-    weight = _weight(rng, common.Stamper(base_hour=8), end)
+    woke = {r["date"]: datetime.fromisoformat(r["sleep_end"])
+            for r in daily if r.get("sleep_end")}
+    weight = _weight(rng, common.Stamper(base_hour=8), end, woke)
     artifacts = artifacts + _artifact_removal(common.Stamper(base_hour=22))
 
     return {

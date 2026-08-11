@@ -16,7 +16,7 @@ exposed them).
 2. **A removal is not data loss.** The photo of 2030-04-16 was deleted because
    a bystander was in it. The row survives, `removed` is true, and `reason`
    says why. Expected: reported as removed with its reason, never as missing,
-   and never silently absent.
+   and never silently absent. 77 live rows and one removed.
 
 3. **A shared instrument nobody calibrates.** The club ergometer is used by
    several people and its drag factor is wherever the last person left it. Its

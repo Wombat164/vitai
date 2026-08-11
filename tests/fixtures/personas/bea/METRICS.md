@@ -1,41 +1,51 @@
 # bea: what the numbers do
 
-Shapes an engine should reproduce, so a reader can tell a real finding from a
-generator artefact.
+Every figure here is measured off the committed corpus, not taken from the
+generator's parameters. The two are not the same number and the first version
+of this file quoted the second.
 
 ## Steps
 
-Three populations, by roster label:
-
-| label | mean | note |
+| label | mean | days |
 | --- | --- | --- |
-| night | ~11500 | a ward floor, not training |
-| day | ~10500 | a day shift, also mostly the ward |
-| off | ~7200 | the only days that say anything about her activity |
+| night | 11638 | 76 |
+| day | 10523 | 96 |
+| off | 7046 | 129 |
 
 Reading her step count as an activity signal without the roster gets the week
 backwards: her busiest recorded days are the ones she was at work.
 
 ## Sleep
 
-| when | mean | timing |
-| --- | --- | --- |
-| working a night | ~5.4 h | absent - the watch is off |
-| the day after a night | ~6.6 h | 09:00 to 16:00, inside one calendar day |
-| otherwise | ~7.4 h | about 23:00 to 06:30, the ordinary shape |
+| when | mean | days | timing |
+| --- | --- | --- | --- |
+| working a night | 5.28 h | 76 | absent - the watch is off |
+| the day after a night | 6.34 h | 23 | 09:00 to 16:00, inside one calendar day |
+| otherwise | 7.44 h | 202 | about 23:00 to 06:30, the ordinary shape |
 
-Roughly a third of her days carry a duration with no interval. That is the
-mixed case: a record with sleep timing everywhere never exercises a fallback
-to the clock, and a record without it anywhere never reaches the code.
+76 of 301 days - a quarter, not a third - carry a duration with no interval.
+That is the mixed case: a record with sleep timing everywhere never exercises
+a fallback to the clock, and a record without it anywhere never reaches the
+code.
+
+The after-night mean is pulled down by the nap-scoring window. Inside
+2030-02-16 to 2030-04-15 those days average 5.48 h against 6.58 h outside it,
+which is the regime, not her.
 
 ## Sessions
 
-Swim or strength, never on a night. On the day after a night the session
-starts at 18:30 and is the first thing she does. On a day shift it is 07:00,
-before work. On an ordinary day off it is around 10:00.
+131 in total. Never on a night. On the day after a night the session starts at
+18:30 or later and is the first thing she does; on a day shift it is early
+morning; on an ordinary day off it is mid-morning. No session begins before
+that day's recorded wake.
 
 ## Weight
 
-Twice a week, Mondays and Fridays, and only on days off. A drift of about
--0.7 kg over the ten months, which is slower than the noise on any single
-weigh-in and is only visible over the whole span.
+37 weigh-ins, only on days off that fall on a Monday or a Friday - which is
+37 in 43 weeks rather than twice a week, because most Mondays and Fridays are
+not days off. The regression slope is -0.89 kg over the record, slower than
+the noise on any single weigh-in.
+
+`measured_at` is twenty minutes after that day's recorded wake, so it ranges
+from 05:22 to 16:50 across the record. A fixed weigh-in time would have
+contradicted her own sleep rows.
