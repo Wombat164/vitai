@@ -403,6 +403,21 @@ PARTIAL = "partial"
 #             effective-dating that a default escapes is not effective-dating.
 #             So there is no default. Silence resolves to a value IN the
 #             vocabulary, which a consumer can see and act on.
+# The coarse tier of a measurement's time (#212), from `semantics/day_phase.toml`.
+# Adopted from Open mHealth's `part-of-day` rather than invented (G85).
+#
+# READ FROM THE REGISTRY rather than restated here, because `plans.for_phase`
+# had the vocabulary HARDCODED INLINE in `api.py` as a sort key - three values,
+# no registry entry, no validation, and a fourth value nobody could add without
+# finding that line. A vocabulary that lives in one consumer is a vocabulary
+# the next consumer invents again.
+def day_phases() -> dict[str, dict]:
+    """The part-of-day vocabulary, by slug."""
+    from .vocab import registry
+
+    return dict(registry("day_phase")["phase"])
+
+
 COMPETENCES = {"measures", "proxy", "absent", "unknown"}
 PROXY = "proxy"
 UNKNOWN_COMPETENCE = "unknown"
@@ -2249,6 +2264,15 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
         problems += _regime_problems(rec)
     if dataset == "capabilities":
         problems += _capability_problems(rec)
+    # THE FIELD THAT ALREADY HAD THE VOCABULARY AND NO VALIDATION (#212).
+    # `for_phase` was checked by nothing, so a typo or a vendor's own spelling
+    # sorted last and silently, and the sort key in `api.py` was the only place
+    # the legal values were written down.
+    if rec.get("for_phase") is not None and rec["for_phase"] not in day_phases():
+        problems.append(
+            f"'for_phase' is one of {', '.join(sorted(day_phases()))}, got "
+            f"{rec['for_phase']!r} - the part-of-day vocabulary is Open "
+            "mHealth's, in semantics/day_phase.toml")
     if dataset == "emissions":
         problems += _emission_problems(rec)
     problems += _scale_problems(dataset, rec)
