@@ -81,8 +81,6 @@ UNWRITTEN = (
     "daily.fat_g",
     "daily.fibre_g",
     "daily.path",
-    "daily.sleep_end",
-    "daily.sleep_start",
     "daily.sodium_mg",
     "daily.sugar_g",
     "events.reason",
@@ -152,6 +150,15 @@ UNWRITTEN = (
 )
 
 UNREAD = (
+    # WRITTEN AND NOT YET READ, which is the worse of the two gaps and is
+    # recorded rather than hidden. `marcus` logs the interval of every night
+    # (#212 needs it: the two-tier day-phase cannot be confirmed against a
+    # corpus where sleep timing is 0% populated, which it was). Nothing in
+    # `src/` reads either field yet - the reader is #203, anchoring the day to
+    # the athlete\'s sleep rather than to midnight. This leaves the register
+    # the day that lands.
+    "daily.sleep_end",
+    "daily.sleep_start",
     # NOT A GAP, and this is the one entry here that records a decision
     # rather than a backlog item (#205). The register measures "read" as the
     # key's name appearing in a consumer, and by that measure the precise tier

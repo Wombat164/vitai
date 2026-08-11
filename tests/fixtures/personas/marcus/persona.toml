@@ -4,7 +4,7 @@
 
 [persona]
 slug = "marcus"
-version = 1
+version = 2
 seed = 105
 span = ["2027-12-31", "2030-06-30"]
 

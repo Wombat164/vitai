@@ -30,14 +30,15 @@ what the ENGINE may conclude, not what the athlete says about himself.
 from __future__ import annotations
 
 import random
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
+from datetime import time as dtime
 
 from . import common
 
 SEED = 105
 # Bumped only when the history could change an engine output
 # (docs/persona-doctrine.md); never for prose, typos, or findings.
-PERSONA_VERSION: int = 1
+PERSONA_VERSION: int = 2
 
 START = date(2028, 1, 3)
 DEFAULT_END = date(2030, 6, 30)
@@ -297,16 +298,82 @@ def _weight(rng: random.Random, stamper: common.Stamper, end: date) -> list[dict
 # --- daily -----------------------------------------------------------------
 
 
+def _uk_offset(d: date) -> str:
+    """`+01:00` under British Summer Time, `+00:00` otherwise.
+
+    Written out rather than taken from a tz database, because the engine is
+    stdlib-only and `zoneinfo` needs system data this build cannot assume. BST
+    runs from the last Sunday in March to the last Sunday in October; the
+    01:00 UTC changeover instant is not modelled, since no night here starts
+    inside that hour.
+    """
+    def last_sunday(year: int, month: int) -> date:
+        d = date(year, month, 31) if month == 3 else date(year, month, 31)
+        return d - timedelta(days=(d.weekday() + 1) % 7)
+
+    return ("+01:00" if last_sunday(d.year, 3) <= d < last_sunday(d.year, 10)
+            else "+00:00")
+
+
+def _uk_delta(d: date) -> timedelta:
+    return timedelta(hours=1) if _uk_offset(d) == "+01:00" else timedelta(0)
+
+
+def _sleep_interval(clock: random.Random, d: date,
+                    sleep_h: float) -> tuple[str, str]:
+    """When the night that ENDED on `d` began and ended.
+
+    DERIVED FROM THE WORK PATTERN, not sampled from nothing. He teaches, so
+    the night before a school day is the constrained one: he is up for a
+    07:20 start whatever time he got in. The night before a Saturday, a Sunday
+    or a school holiday has nothing pulling it forward, and it runs about an
+    hour later.
+
+    A SEPARATE CLOCK from the caller's `rng`, deliberately. Drawing these from
+    the same generator would shift every subsequent number in the sequence -
+    every step count, every sleep duration, three years of them - and the
+    whole corpus would change to add a field. The night is a new fact about
+    the same days, so it gets its own stream.
+
+    `sleep_end` is `sleep_start` plus the duration already in the row, exactly.
+    The interval and the duration are two statements about one night, and a
+    fixture whose own two fields disagree teaches a reader to trust neither.
+    """
+    school_night = d.weekday() < 5 and not is_holiday(d)
+    centre = 22.85 if school_night else 23.85
+    spread = 0.28 if school_night else 0.55
+    start_h = min(max(centre + clock.gauss(0, spread), 21.5), 25.5)
+    local = (datetime.combine(d, dtime()) - timedelta(days=1)
+             + timedelta(hours=start_h))
+    local = local.replace(second=0, microsecond=0, minute=(local.minute // 5) * 5)
+
+    # AWARE ARITHMETIC, and the naive version was wrong on exactly four nights
+    # in three years. Adding the duration to a naive clock and stamping each
+    # end with its own date's offset made the two fields disagree by an hour
+    # across a DST changeover - the interval saying one thing and `sleep_h`
+    # another, on the four nights a reader would most want to trust them.
+    # Adding to an INSTANT and then expressing the result in the offset in
+    # force when he woke keeps them consistent, and the hour really does move
+    # on the wall clock, which is a fact about the night rather than an error.
+    began = local.replace(tzinfo=timezone(_uk_delta(local.date())))
+    instant = began + timedelta(hours=sleep_h)
+    ended = instant.astimezone(timezone(_uk_delta(instant.date())))
+    return began.isoformat(), ended.isoformat()
+
+
 def _daily(rng: random.Random, stamper: common.Stamper, end: date) -> list[dict]:
     """Steps and sleep from the watch, most days. The M1 window additionally
     carries a low `pain` scalar on eight specific dates - see M1_DATES."""
     rows = []
+    clock = random.Random(SEED + 1)
     for d in common.daterange(START, end):
         base_steps = 13500 if is_holiday(d) else 10500
         steps = max(3000, int(rng.gauss(base_steps, 2200)))
         sleep_h = round(max(4.5, min(9.0, rng.gauss(7.0, 0.8))), 1)
+        began, ended = _sleep_interval(clock, d, sleep_h)
         fields = {
             "date": d.isoformat(), "steps": steps, "sleep_h": sleep_h,
+            "sleep_start": began, "sleep_end": ended,
             "source": "garmin-watch", "capture": "connector",
             "coverage": "full",
             "recorded_at": stamper.stamp(_recorded_date_for(d)),
