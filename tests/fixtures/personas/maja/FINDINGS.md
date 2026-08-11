@@ -20,7 +20,8 @@ exposed them).
    stack, and this is the first record that exercises both sides of that rule.
 
 3. **Laterality that is a real fact.** The leg curl is worked one leg at a
-   time, so `side` alternates left and right across her sets. Everything else
+   time, so `side` alternates left and right across her sets - 102 each,
+   balanced over the record. Everything else
    is `bilateral`. Expected: per-side work is not double-counted as volume,
    and the two sides are not silently merged.
 
@@ -45,8 +46,10 @@ exposed them).
    because the works moved to the autumn. Expected: distinguishable from an
    event that simply passed, and from one that was never entered.
 
-8. **A plan that did not survive the week.** Two plans for the week of 24
-   February: one completed, one skipped because the gym shut early for a burst
-   pipe, with the reason typed as `opportunity_physical`. Expected: the miss
+8. **A plan that did not survive the week.** Two plans for the week of 18
+   November: one completed, one skipped because the gym shut early for a burst
+   pipe, with the reason typed as `opportunity_physical`. The outcomes are read
+   off the sessions rather than declared - the first version asserted a skip on
+   a day the record has a full session with six sets behind it. Expected: the miss
    is attributed to the circumstance the record states rather than to
    motivation, which is the distinction the reason vocabulary exists for.

@@ -19,9 +19,10 @@ chair was.
 ## Two machines, two kinds of number
 
 The leg press is a plate-loaded sled and takes discs she can weigh, so its
-number is kilograms. The other three are selectorised: the number is where a
-pin sits in a column. Those two numbers cannot be added together, and her
-record does not let them be.
+number is kilograms and quantises to 2.5. The other three are selectorised:
+the number is where a pin sits in a column, so it is a whole number with no
+unit. Those two numbers cannot be added together, and her record does not let
+them be.
 
 ## Food off a packet
 

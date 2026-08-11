@@ -124,6 +124,44 @@ def _interval(local_start: datetime, hours: float) -> tuple[str, str]:
 
 # --- data ----------------------------------------------------------------------
 
+def _reconcile(daily: list[dict], meals: list[dict]) -> None:
+    """Make the day she itemised agree with the items.
+
+    ONE DAY IS LOGGED TWICE IN THIS RECORD, once as a total and once as seven
+    things off packets, and the first version drew them independently: the
+    meals summed to 132 g of protein and the daily row said 103. A consumer
+    cross-checking a total against its parts would have found a discrepancy
+    that is an artefact of two generators rather than anything about her.
+
+    The total is recomputed FROM the items, which is also the honest direction:
+    the items are what she recorded and the total is what her app added up.
+    Energy follows at 4/4/9, the same way every other day of hers is built.
+    """
+    day = meals[0]["date"]
+    tot = {k: 0.0 for k in ("protein", "carb", "fat", "fibre", "sugar", "sodium")}
+    for m in meals:
+        share = m["grams"] / 100
+        tot["protein"] += m["protein_100g"] * share
+        tot["carb"] += m["carb_100g"] * share
+        tot["fat"] += m["fat_100g"] * share
+        tot["fibre"] += m["fibre_100g"] * share
+        tot["sugar"] += m["sugar_100g"] * share
+        tot["sodium"] += m["sodium_mg_100g"] * share
+    for row in daily:
+        if row["date"] != day:
+            continue
+        row["protein_g"] = round(tot["protein"])
+        row["carb_g"] = round(tot["carb"])
+        row["fat_g"] = round(tot["fat"])
+        row["fibre_g"] = round(tot["fibre"])
+        row["sugar_g"] = round(tot["sugar"])
+        row["sodium_mg"] = round(tot["sodium"])
+        row["kcal_in"] = round(row["protein_g"] * 4 + row["carb_g"] * 4
+                               + row["fat_g"] * 9)
+        return
+    raise AssertionError(f"no daily row for {day}, which the meals itemise")
+
+
 def _daily(rng: random.Random, stamp: common.Stamper, end: date) -> list[dict]:
     """Steps, sleep and the whole macro row.
 
@@ -175,6 +213,13 @@ def _sessions(rng: random.Random, stamp: common.Stamper,
     return rows
 
 
+def _alternate(counter: list[int]) -> str:
+    """Left, right, left, right over every unilateral set in the record."""
+    side = "left" if counter[0] % 2 == 0 else "right"
+    counter[0] += 1
+    return side
+
+
 def _sets(rng: random.Random, stamp: common.Stamper,
           sessions: list[dict]) -> list[dict]:
     """Three working sets per machine, with the settings that identify them.
@@ -190,6 +235,7 @@ def _sets(rng: random.Random, stamp: common.Stamper,
     where laterality is a real fact rather than an unused column.
     """
     rows = []
+    unilateral = [0]
     for i, session in enumerate(sessions):
         d = date.fromisoformat(session["date"])
         for slot, key in enumerate(ROTATION[i % 2]):
@@ -198,7 +244,15 @@ def _sets(rng: random.Random, stamp: common.Stamper,
                     "leg-curl": 38}[key]
             drift = base * 0.0006 * (d - START).days
             for index in range(3):
-                load = round((base + drift) * (1 - 0.05 * index) / 2.5) * 2.5
+                raw = (base + drift) * (1 - 0.05 * index)
+                # A PIN IS A WHOLE NUMBER. The first version computed every
+                # machine with the same kilogram formula and quantised to
+                # 2.5, so the selectorised stacks carried 37.5 and 42.5 -
+                # values that cannot be a pin position, under a comment
+                # asserting they were one. The claim and the data have to
+                # agree or the fixture teaches the opposite of its point.
+                load = (round(raw / 2.5) * 2.5
+                        if m["machine"] == "plate-loaded sled" else round(raw))
                 reps = rng.randrange(8, 13)
                 rows.append(common.record(
                     "sets", date=d.isoformat(),
@@ -221,8 +275,18 @@ def _sets(rng: random.Random, stamp: common.Stamper,
                     failure=None, rir=rng.randrange(1, 4),
                     rest_s=rng.choice([90, 120, 150]),
                     tempo="3-1-1-0", duration_s=reps * 5,
-                    side="left" if key == "leg-curl" and index % 2 == 0
-                         else ("right" if key == "leg-curl" else "bilateral"),
+                    # EVEN OVER THE RECORD. Alternating on the set index
+                    # gave left-right-left every session: a two-to-one volume
+                    # asymmetry running for nine months, in a fixture that
+                    # warns against double-counting per-side work. Alternating
+                    # on the session index did not fix it either, because the
+                    # leg curl only falls in one half of the rotation, so the
+                    # parity never flipped. A running count over the unilateral
+                    # sets themselves is the only thing that balances - which
+                    # is what the athlete does, and what the first two versions
+                    # each assumed rather than checked.
+                    side=(_alternate(unilateral) if key == "leg-curl"
+                          else "bilateral"),
                     equipment="machine", angle_class=m["angle_class"],
                     angle_deg=m["angle_deg"], resistance_level=None,
                     seat_pos=m["seat_pos"], pad_pos=m["pad_pos"],
@@ -295,26 +359,44 @@ def _goals(stamp: common.Stamper) -> list[dict]:
     ]
 
 
-def _plans(stamp: common.Stamper) -> list[dict]:
-    """A plan made, and one that did not survive contact with the week."""
-    return [
-        common.record(
-            "plans", date="2030-02-24", slug="week-of-24-feb",
-            for_date="2030-02-26", activity="strength", setting="indoor",
+def _plans(stamp: common.Stamper, sessions: list[dict]) -> list[dict]:
+    """A plan made, and one that did not survive the week.
+
+    DERIVED FROM THE SESSIONS, and the first version was not: it declared
+    Thursday 2030-02-28 skipped for a burst pipe and the sessions draw had put
+    a full session on that evening, six sets behind it. The one exemplar built
+    to teach the difference between a miss and a circumstance contradicted
+    itself.
+
+    So the outcome is read off the record. The plan is written on the Sunday
+    for the Tuesday and the Thursday, and what it says happened is what did.
+    """
+    trained = {r["date"] for r in sessions}
+    # THE WEEK IS CHOSEN BY THE RECORD, not by me. Naming a week and then
+    # asserting what happened in it is how the first version came to declare a
+    # Thursday skipped that has a full session on it. This takes the first
+    # Sunday whose Tuesday was trained and whose Thursday was not, so the
+    # exemplar of a completed plan and the exemplar of a missed one are both
+    # true by construction.
+    made = next(d for d in (date(2029, 10, 7) + timedelta(days=7 * w)
+                            for w in range(40))
+                if (d + timedelta(days=2)).isoformat() in trained
+                and (d + timedelta(days=4)).isoformat() not in trained)
+    out = []
+    for day, slug in ((made + timedelta(days=2), "week-tue"),
+                      (made + timedelta(days=4), "week-thu")):
+        did = day.isoformat() in trained
+        out.append(common.record(
+            "plans", date=made.isoformat(), slug=slug,
+            for_date=day.isoformat(), activity="strength", setting="indoor",
             tier="programme", serves="four-sessions", set_by="athlete",
-            requires="gym", outcome="completed", reason=None,
-            session_ref=None, note=None,
-            recorded_at=stamp.stamp(date(2030, 2, 24))),
-        common.record(
-            "plans", date="2030-02-24", slug="week-of-24-feb-thu",
-            for_date="2030-02-28", activity="strength", setting="indoor",
-            tier="programme", serves="four-sessions", set_by="athlete",
-            requires="gym", outcome="skipped",
-            reason="opportunity_physical",
+            requires="gym",
+            outcome="completed" if did else "skipped",
+            reason=None if did else "opportunity_physical",
             session_ref=None,
-            note="the gym shut early for a burst pipe",
-            recorded_at=stamp.stamp(date(2030, 2, 24))),
-    ]
+            note=None if did else "the gym shut early for a burst pipe",
+            recorded_at=stamp.stamp(made)))
+    return out
 
 
 def _events(stamp: common.Stamper) -> list[dict]:
@@ -401,18 +483,21 @@ def build(end: date = DEFAULT_END) -> dict[str, str]:
     daily = _daily(rng, common.Stamper(base_hour=22), end)
     sessions = _sessions(rng, common.Stamper(base_hour=19), end)
     sets = _sets(rng, common.Stamper(base_hour=19), sessions)
+    meals = _meals(common.Stamper(base_hour=21))
+    # AFTER both exist, because one of them is the sum of the other. Draws no
+    # random numbers, so no stream moves.
+    _reconcile(daily, meals)
 
     return {
         "vitai.toml": _TOML,
         "data/daily.jsonl": common.jsonl_text(common.sort_rows(daily)),
         "data/sessions.jsonl": common.jsonl_text(common.sort_rows(sessions)),
         "data/sets.jsonl": common.jsonl_text(common.sort_rows(sets)),
-        "data/meals.jsonl": common.jsonl_text(common.sort_rows(
-            _meals(common.Stamper(base_hour=21)))),
+        "data/meals.jsonl": common.jsonl_text(common.sort_rows(meals)),
         "data/goals.jsonl": common.jsonl_text(common.sort_rows(
             _goals(common.Stamper(base_hour=10)))),
         "data/plans.jsonl": common.jsonl_text(common.sort_rows(
-            _plans(common.Stamper(base_hour=9)))),
+            _plans(common.Stamper(base_hour=9), sessions))),
         "data/events.jsonl": common.jsonl_text(common.sort_rows(
             _events(common.Stamper(base_hour=9)))),
         "data/thresholds.jsonl": common.jsonl_text(common.sort_rows(

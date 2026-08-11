@@ -4,7 +4,8 @@
 
 Closed from November to March, which is why the winter goal is about the
 ergometer rather than the water. He rows on the club erg on Tuesdays and
-Thursdays and rides at the weekend when it is dry.
+Thursdays - 77 pieces over the record - and rides at the weekend, often on
+both days: 22 of his 42 weekends carry two rides.
 
 ## The photographs
 
