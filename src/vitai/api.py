@@ -38,7 +38,7 @@ from .builds import ABSENCE_MEANINGS
 from .builds import absence as absence
 from .builds import can_emit as can_emit
 from .builds import this_build as this_build
-from .clocks import day_phase, is_aware, ordering_rule, phase_rule
+from .clocks import comparable, day_phase, is_aware, ordering_rule, phase_rule
 # Re-exported for the CLI, which must reach the engine only through this
 # module: `cmd_phases` prints a wall-clock time and slicing characters
 # off an offset-aware stamp prints "00+00" instead of one.
@@ -58,6 +58,54 @@ from .schema import (CURRENT_GENERATION, KEYS, aliases_for, coarse,
 from .verdicts import compute_verdicts
 from .questions import open_questions
 from .weeks import session_weeks
+
+
+# WHERE A PRECISE TIME LIVES, per dataset. Only these two have one; a dataset
+# with no time in it has no phase, which is a different answer from an empty
+# result and is why asking about one raises rather than returning nothing.
+PHASE_FIELD = {"weight": "measured_at", "sessions": "start_time"}
+
+
+def _last_waking(wakings: list, at) -> object:
+    """The most recent waking at or before `at`, or None.
+
+    NOT THE ONE SHARING A CALENDAR DATE. A night worker who wakes at 16:00 and
+    trains at 02:00 has that session dated to the next day, so a date lookup
+    anchors it to a waking that has not happened yet.
+
+    Mixed naive and aware wakings cannot be ordered against each other, so
+    each is compared to `at` individually and the comparison that cannot be
+    made is skipped rather than guessed (#38).
+    """
+    if at is None:
+        return None
+    # A NAIVE TIME IS READ AGAINST THE WAKING'S WALL CLOCK. `comparable`
+    # refuses naive against aware and is right to: it will not invent the
+    # missing offset. But a weigh-in written "07:06" and a waking written
+    # "05:59+00:00" are the same athlete's clock on the same morning, and
+    # reading the waking's wall clock puts both in one frame by construction -
+    # the case `comparable` already sanctions for two naive stamps.
+    #
+    # Applied to ANY naive time, not just a bare HH:MM. The first cut keyed on
+    # the string being five characters long, so "07:06" was placed and
+    # "2030-05-01T18:30:00" - the same clock in the same epistemic position -
+    # was refused. Same fact, opposite answers, on a formatting detail.
+    #
+    # What it assumes, stated because nothing checks it: that the waking's
+    # recorded offset is the one the naive time was written in. True of an
+    # athlete in one place; false for one who travelled between waking and
+    # weighing, and a connector writing sleep_end in UTC for an athlete who
+    # is not shifts every boundary by their offset.
+    local = at.tzinfo is None
+    best = None
+    for up in wakings:
+        candidate = up.replace(tzinfo=None) if local else up
+        _, _, ok = comparable(candidate, at)
+        if not ok or candidate > at:
+            continue
+        if best is None or candidate > best:
+            best = candidate
+    return best
 
 
 class Vitai:
@@ -1741,18 +1789,29 @@ class Vitai:
         it is anchored on, and nothing in the record claims a phase it cannot
         support.
         """
-        woke = {r["date"]: r.get("sleep_end")
-                for r in self.dataset("daily") if r.get("sleep_end")}
-        wanted = ("weight", "sessions") if dataset is None else (dataset,)
+        # EVERY WAKING, IN ORDER, because the anchor is not "the sleep row
+        # sharing this calendar date". That is a midnight-anchored lookup
+        # under an athlete-anchored rule, and it fails the one athlete the
+        # rule exists for: a night worker who wakes at 16:00 and trains at
+        # 02:00 has that session dated to the NEXT day, so keying on the date
+        # anchors it to a waking that has not happened yet and calls ten hours
+        # into her day "night".
+        wakings = sorted(
+            filter(None, (parse_time(r.get("sleep_end"))
+                          for r in self.dataset("daily"))))
+        if dataset is not None and dataset not in PHASE_FIELD:
+            raise KeyError(
+                f"no timed field on {dataset!r}; phases are derived for "
+                f"{sorted(PHASE_FIELD)}. A dataset with no time in it has no "
+                f"phase, and returning nothing would say this record has no "
+                f"timed rows at all")
+        wanted = tuple(PHASE_FIELD) if dataset is None else (dataset,)
         when = on if on is not None else None
         when_s = (when.isoformat() if isinstance(when, date)
                   else str(when) if when is not None else None)
         out: list[dict] = []
         for name in wanted:
-            field = {"weight": "measured_at",
-                     "sessions": "start_time"}.get(name)
-            if field is None:
-                continue
+            field = PHASE_FIELD[name]
             for row in self.dataset(name):
                 at = row.get(field)
                 if not at or (when_s is not None and row["date"] != when_s):
@@ -1760,9 +1819,8 @@ class Vitai:
                 # `measured_at` is HH:MM local and `start_time` is a full
                 # stamp. Both are the athlete's wall clock, so a bare time is
                 # read against its own row's date.
-                bare = len(str(at)) <= 5
-                stamp = at if not bare else f"{row['date']}T{at}:00"
-                anchor = woke.get(row["date"])
+                stamp = at if len(str(at)) > 5 else f"{row['date']}T{at}:00"
+                anchor = _last_waking(wakings, parse_time(stamp))
                 # A BARE LOCAL TIME IS COMPARED AGAINST THE ANCHOR'S LOCAL
                 # WALL CLOCK, not against its instant. `comparable` refuses
                 # naive against aware, correctly: it will not invent the
@@ -1774,10 +1832,7 @@ class Vitai:
                 # weigh-in in the corpus is unanchored, which is 260 of the
                 # 700 timed rows in one persona and the whole dataset the
                 # issue was raised about.
-                if bare and anchor:
-                    up = parse_time(anchor)
-                    if up is not None and up.tzinfo is not None:
-                        anchor = up.replace(tzinfo=None).isoformat()
+                anchor = anchor.isoformat() if anchor is not None else None
                 out.append({
                     "dataset": name, "date": row["date"], "at": at,
                     "phase": day_phase(stamp, anchor),

@@ -15,7 +15,7 @@ import re
 
 from datetime import date, datetime
 
-from .clocks import (is_aware, is_stamp, order_key,  # noqa: F401
+from .clocks import (comparable, is_aware, is_stamp, order_key,  # noqa: F401
                      parse_time, stamp_instant)
 from .artifacts import is_reference
 from .provenance import capture_problems
@@ -2450,9 +2450,25 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
         # business saying how long a night should be, and a 3-hour night is a
         # fact about the athlete rather than a fault in the row.
         _ss, _se = rec.get("sleep_start"), rec.get("sleep_end")
-        if _ss and _se and not _bad_time(_ss) and not _bad_time(_se) \
-                and parse_time(_se) <= parse_time(_ss):
-            problems.append(f"'sleep_end' {_se!r} is not after 'sleep_start' {_ss!r}")
+        if _ss and _se and not _bad_time(_ss) and not _bad_time(_se):
+            # COMPARED THROUGH `comparable`, and this RAISED before. One naive
+            # boundary and one aware one made `<=` throw a TypeError out of
+            # `validate_record`, so a single such row took down every append,
+            # every build and `validate` itself - the whole record, rather
+            # than reporting one line. That is the #38 defect exactly: two
+            # timestamps that cannot be compared are an outcome to report,
+            # never an exception and never a guessed instant.
+            #
+            # Unreported rather than reported, deliberately. "These two cannot
+            # be compared" is true of the pair and says nothing about whether
+            # the night is backwards, which is what this check is for. The
+            # mixed-stamp condition is already an advisory the record raises
+            # elsewhere, and saying it twice in different words would make one
+            # row look like two faults.
+            _a, _b, _ok = comparable(parse_time(_se), parse_time(_ss))
+            if _ok and _a <= _b:
+                problems.append(
+                    f"'sleep_end' {_se!r} is not after 'sleep_start' {_ss!r}")
         # A site without a score says nothing, and a NON-ZERO score without a
         # site is the ambiguity `pain_site` exists to remove. Zero needs no
         # body part: "nothing hurt today" is a complete statement, and it is

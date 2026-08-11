@@ -246,9 +246,16 @@ def cmd_phases(args: argparse.Namespace) -> None:
     if unanchored:
         # SAID, NOT LEFT TO BE COUNTED. A consumer that has to notice the
         # dashes is one that will read them as a small number.
-        print(f"\n{len(unanchored)} of {len(rows)} have no phase: nothing in "
-              f"the record says when the athlete woke on those days, and the "
-              f"clock is not an answer to that")
+        #
+        # ONE SENTENCE, because there is one case. A row whose waking cannot
+        # be compared with its own time never gets an anchor in the first
+        # place - `phases` only reports one it could use - so "no phase" and
+        # "no usable waking" are the same set. A second message for the
+        # refused case would be a branch nothing can reach, which is worse
+        # than a message that is slightly coarse.
+        print(f"\n{len(unanchored)} of {len(rows)} have no phase: nothing the "
+              f"engine can compare with those times says when the athlete "
+              f"woke, and the clock is not an answer to that")
 
 
 def cmd_capabilities(args: argparse.Namespace) -> None:
