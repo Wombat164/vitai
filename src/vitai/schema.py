@@ -190,6 +190,36 @@ KEYS: dict[str, list[str]] = {
     "capabilities": ["date", "origin", "measures", "competence", "construct",
                      "condition", "basis", "set_by", "note", "supersedes",
                      "recorded_at", "device"],
+    # The ENTITY behind that identity (#311). `capabilities` says what an
+    # instrument is competent at; this says what the instrument IS, and for
+    # which stretch of time.
+    #
+    # NAMED FOR WHAT IT REGISTERS, and the issue's own word for it could not
+    # be used. `device` is taken: it is on every dataset and names the MACHINE
+    # THAT WROTE THE LINE DOWN (#105), which is the axis `source` and `origin`
+    # are deliberately kept apart from - see the block below, which says that
+    # conflating them "would make a phone and a laptop look like two
+    # instruments". A `devices` dataset holding observing instruments would
+    # manufacture exactly the confound this one exists to remove, under a name
+    # promising the opposite.
+    #
+    # AN INTERVAL, NOT A ROW, which is the part most likely to be built wrong.
+    # The join is not `origin -> instrument`, it is `(origin, date) ->
+    # the instrument as it was then`. "My watch" in 2026 and "my watch" in
+    # 2030 are different objects, and a lookup on the identity alone
+    # attributes every historical reading to whatever is on the wrist now -
+    # silently confident, wrong at the edges, invisible until someone checks
+    # an old figure. `to_date` is open, because an instrument still in use has
+    # no end date and inventing one would date its retirement to today.
+    #
+    # EVERYTHING OPTIONAL BUT THE IDENTITY AND THE START. A register that
+    # demands nine fields per instrument decays to nothing within a year, and
+    # then its coverage is patchy in a way nobody can see. One line is a
+    # useful register; an unregistered origin resolves to nothing and reads
+    # exactly as it does today.
+    "instruments": ["date", "origin", "from_date", "to_date", "name", "maker",
+                    "model", "source", "note", "supersedes", "recorded_at",
+                    "device"],
     # A recorded accomplishment worth keeping. Distinct from a MILESTONE, which
     # the engine derives; `source` carries authorship (G31) so a hand-logged
     # race finish is never confused with an engine-derived crossing.
@@ -472,7 +502,11 @@ IDENTITY_KEY: dict[str, str | tuple[str, ...]] = {
     # steps and a proxy for sleep, and competent at heart rate seated while
     # only a proxy for it at threshold - so keying on the instrument alone
     # would make each new statement retire the last.
-    "capabilities": ("origin", "measures", "condition")}
+    "capabilities": ("origin", "measures", "condition"),
+    # An instrument is one thing over one stretch of time, so the interval is
+    # part of the identity: two watches that both reported as `garmin-watch`
+    # are two rows, and neither retires the other.
+    "instruments": ("origin", "from_date")}
 
 # --- the medical layer (increment 3) -----------------------------------------
 # `state` (G57) is a physiological condition rather than an illness -
@@ -1618,6 +1652,13 @@ SENSITIVITY_OVERRIDE: dict[str, dict[str, str]] = {
     # a route, and neither is the closed vocabulary that says which injury.
     "medical": {"title": "clinical", "note": "clinical", "kind": "clinical",
                 "status": "clinical"},
+    # What a thing IS that observed a value, which is provenance - the same
+    # class `origin`, `device` and `model` already carry. Scoped here rather
+    # than added to the shared name map: `name` is the ambiguous one, since a
+    # dataset naming a PERSON would want a different answer entirely, and a
+    # global entry would hand that dataset a wrong class silently instead of
+    # stopping it at this gate the way it stopped this one.
+    "instruments": {"name": "provenance", "maker": "provenance"},
 }
 
 
@@ -1693,6 +1734,9 @@ PLAIN_WORDS = frozenset({
     # deliberately because this is an ALLOWLIST: a new field fails the gate
     # until somebody says what it looks like at a reader.
     "competence", "condition", "construct", "measures",
+    # #311's register. `model` and `origin` were already here; these two are
+    # the rest of what a person calls a piece of kit.
+    "maker", "name",
     "about", "accountability", "activity", "alcohol", "anchored",
     "angle", "artifact", "at", "attempted", "basis", "block", "body",
     "build", "by", "bytes", "cadence", "capture", "captured", "change",
@@ -2176,6 +2220,82 @@ def _regime_problems(rec: dict) -> list[str]:
     return out
 
 
+def _instrument_problems(rec: dict) -> list[str]:
+    """An instrument is an identity over an interval, and both are required.
+
+    `to_date` is the one that may be absent, and its absence MEANS something:
+    the instrument is still in use. That is why it is not defaulted to today -
+    a register that stamps an end date on everything still in service reads,
+    a year later, as a shelf of retired equipment.
+    """
+    out = []
+    if not str(rec.get("origin") or "").strip():
+        out.append("'origin' names the instrument this describes, and is the "
+                   "identity 27 call sites already key on. Without it the row "
+                   "registers nothing")
+    first, last = rec.get("from_date"), rec.get("to_date")
+    dated = isinstance(first, str) and bool(DATE_RE.match(first))
+    if not dated:
+        out.append(f"'from_date' is an ISO date - when this instrument started "
+                   f"reporting under this origin - got {first!r}")
+    if last is not None:
+        if not isinstance(last, str) or not DATE_RE.match(last):
+            out.append(f"'to_date' is an ISO date or absent for an instrument "
+                       f"still in use, got {last!r}")
+        # Only against a `from_date` that IS one. Comparing an end date to a
+        # start date already reported as malformed adds a second complaint
+        # about the first one's consequences, which reads as two defects.
+        elif dated and last < first:
+            out.append(f"'to_date' {last} is before 'from_date' {first}; an "
+                       f"instrument that stopped reporting before it started "
+                       f"covers no readings at all")
+    return out
+
+
+def overlapping_instrument_problems(rows: list[dict]) -> list[str]:
+    """Two instruments claiming one origin on one day (#311).
+
+    CROSS-ROW, which is why it is not in `validate_record`: a row is only
+    wrong here in the company of another. Left unchecked, a reading falls into
+    two instruments at once and the register answers ambiguously - which is
+    worse than not answering, because the whole point is to say which physical
+    thing produced a number.
+
+    A retired line does not overlap its replacement. `supersedes` withdraws a
+    statement rather than adding a second one, so a corrected interval is
+    compared as one interval, not two.
+    """
+    from .jsonl import line_key, target_of
+
+    out = []
+    # RETIREMENT THROUGH THE EXISTING MACHINERY rather than a second copy of
+    # it. `target_of` unpacks what a `supersedes` names and `line_key` says
+    # what a row answers to, so a correction here is read exactly as it is
+    # everywhere else - which is the point, since a register with its own
+    # private idea of what counts as retired is one that disagrees with the
+    # rest of the record about which lines are live.
+    retired = {t[0] for r in rows
+               if (t := target_of(r)) is not None}
+    live = [r for r in rows
+            if line_key("instruments", r) not in retired
+            and isinstance(r.get("from_date"), str)]
+    by_origin: dict[str, list[dict]] = {}
+    for row in live:
+        by_origin.setdefault(str(row.get("origin")), []).append(row)
+    for origin, group in sorted(by_origin.items()):
+        ordered = sorted(group, key=lambda r: r["from_date"])
+        for earlier, later in zip(ordered, ordered[1:]):
+            end = earlier.get("to_date")
+            if end is None or end >= later["from_date"]:
+                out.append(
+                    f"instruments: {origin!r} is claimed by two intervals at "
+                    f"once - {earlier['from_date']} to {end or 'open'} and "
+                    f"{later['from_date']} to {later.get('to_date') or 'open'}. "
+                    f"A reading in the overlap belongs to both, so the register "
+                    f"cannot say which instrument produced it")
+    return out
+
+
 def validate_record(dataset: str, rec: dict) -> list[str]:
     """Problems with one record; empty list means valid."""
     problems: list[str] = []
@@ -2262,6 +2382,8 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
         problems += _protocol_problems(rec)
     if dataset == "regimes":
         problems += _regime_problems(rec)
+    if dataset == "instruments":
+        problems += _instrument_problems(rec)
     if dataset == "capabilities":
         problems += _capability_problems(rec)
     # THE FIELD THAT ALREADY HAD THE VOCABULARY AND NO VALIDATION (#212).
