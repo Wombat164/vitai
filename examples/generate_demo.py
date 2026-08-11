@@ -724,6 +724,40 @@ def _build(target: Path) -> None:
          "device": "demo", "_gen": CURRENT_GENERATION["emissions"]},
     ]
 
+    # WHICH PHYSICAL THING REPORTED AS EACH ORIGIN (#311). The register that
+    # gives the identity beside it an entity: `capabilities` says what an
+    # instrument is competent at, and this says what it IS and over which
+    # stretch. Written HERE rather than by hand into `demo/data/`, which is
+    # what the first cut did - the generator never knew the file existed, so
+    # `--check` reported drift on a file nothing could regenerate.
+    instruments = [
+        {"date": "2030-04-20", "origin": "scale", "from_date": "2030-04-20",
+         "to_date": None, "name": "the bathroom scale", "maker": "Withings",
+         "model": "Body+", "source": "athlete",
+         "note": "bought new; the only scale in the house",
+         "supersedes": None, "recorded_at": "2030-04-20T20:05:00+02:00",
+         "device": "demo", "_gen": CURRENT_GENERATION["instruments"]},
+        {"date": "2030-05-20", "origin": "dexa", "from_date": "2030-05-20",
+         "to_date": None, "name": "the clinic DEXA", "maker": "Hologic",
+         "model": "Horizon A", "source": "athlete",
+         "note": "same clinic both scans, which is why they are comparable to "
+                 "each other and to nothing else",
+         "supersedes": None, "recorded_at": "2030-05-20T20:05:00+02:00",
+         "device": "demo", "_gen": CURRENT_GENERATION["instruments"]},
+        {"date": "2030-06-14", "origin": "watch", "from_date": "2030-06-14",
+         "to_date": None, "name": "the running watch", "maker": "Garmin",
+         "model": "Forerunner 265", "source": "athlete", "note": None,
+         "supersedes": None, "recorded_at": "2030-06-14T20:05:00+02:00",
+         "device": "demo", "_gen": CURRENT_GENERATION["instruments"]},
+        {"date": "2030-06-21", "origin": "gym-console",
+         "from_date": "2030-06-21", "to_date": None,
+         "name": "the rowing machine console", "maker": "Concept2",
+         "model": "PM5", "source": "athlete",
+         "note": "a shared machine; the console is not calibrated to anything",
+         "supersedes": None, "recorded_at": "2030-06-21T20:05:00+02:00",
+         "device": "demo", "_gen": CURRENT_GENERATION["instruments"]},
+    ]
+
     # WHAT THE INSTRUMENTS ARE COMPETENT AT (#171). Three statements, chosen
     # because each is a different one of the four competences and the fourth -
     # `unknown` - is what everything unstated resolves to, so writing it here
@@ -762,6 +796,7 @@ def _build(target: Path) -> None:
     ]
 
     for name, rows in (("weight", weight), ("daily", daily),
+                       ("instruments", instruments),
                        ("capabilities", capabilities),
                        ("sessions", sessions), ("inferences", inferences),
                        ("goals", goals), ("thresholds", thresholds),
