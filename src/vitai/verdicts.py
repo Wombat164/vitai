@@ -22,7 +22,7 @@ from datetime import date, datetime, timedelta
 from statistics import mean
 
 from .weeks import week_of
-from .clocks import protocol_seam, weigh_in_timing
+from .clocks import instrument_seam, protocol_seam, weigh_in_timing
 from .config import Config, overlay, phase_rate_for
 from .policy import state
 from .schema import EXTERNAL_METRIC, PARTIAL
@@ -562,6 +562,20 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
         # how much a clothed evening weigh-in adds would be a per-protocol
         # accuracy claim the engine has no basis for.
         if protocol_seam(window)["seam"]:
+            rows.append(_row(wk, "weight_rate", rate, target, NODATA, goal,
+                             reason=NOT_SUPPORTED, statistic=PERIOD_CHANGE))
+            continue
+        # AN INSTRUMENT CHANGE UNDER THE RATE (#33, item 3). The same refusal
+        # again, one axis over: two scales are not two samples of one series,
+        # and the step at the seam is arithmetically indistinguishable from
+        # real weight change. Declined without a size for the same reason -
+        # how much an Aria reads over a Withings is a per-instrument accuracy
+        # claim, and #171 has settled that no vendor figures are imported.
+        #
+        # PER WINDOW, not permanent. Once the old instrument's readings fall
+        # out of the fortnight the rate resumes on its own, so replacing a
+        # scale costs two weeks of rate rather than the metric.
+        if instrument_seam(window)["seam"]:
             rows.append(_row(wk, "weight_rate", rate, target, NODATA, goal,
                              reason=NOT_SUPPORTED, statistic=PERIOD_CHANGE))
             continue

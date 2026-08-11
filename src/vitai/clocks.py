@@ -304,6 +304,139 @@ def protocol_seam(rows: list[dict]) -> dict:
             "stated": len(named), "silent": len(rows) - len(named)}
 
 
+def instrument_seam(rows: list[dict]) -> dict:
+    """Did the INSTRUMENT change under this rate? (#33, item 3)
+
+    Returns `{instruments, seam, stated, silent}` - the distinct instruments
+    named in the window, whether more than one was, and how many rows said and
+    did not say. Deliberately the same shape as `protocol_seam`, because it is
+    the same argument one axis over and a consumer should not have to learn
+    two.
+
+    THE CALIBRATION SEAM, WHICH IS THE ONE #33 IS ABOUT. Two weight readings
+    from two scales are not two samples of one series: consumer scales carry
+    offsets of a kilo or more, and concatenating them puts a step at the seam
+    that is arithmetically indistinguishable from real weight change. Worse,
+    it lands exactly where a long gap makes a jump look plausible, so the
+    engine would confirm a change that is an instrument swap.
+
+    Measured before building: the shipped demo's recent weight window spans
+    `athlete`, `scale` and a `dexa+scale` merge, and `weight_rate` scored it
+    `ahead` / `behind` / `on_target` with nothing anywhere saying the readings
+    came from different devices. `origin` was written for exactly this and no
+    derivation read it - the same "specified, validated, never read" shape as
+    `protocol` before #174 and `coverage` before #186.
+
+    NO SIZE ESTIMATE, and the absence is the point, exactly as for `protocol`.
+    Holding a table of how many kilograms an Aria reads over a Withings would
+    be a per-instrument accuracy claim about equipment this engine has never
+    seen, and #171 has already settled that no vendor figures are imported.
+    What is knowable from the record is that the instrument changed, which is
+    enough to decline the comparison.
+
+    SILENCE IS NOT AN INSTRUMENT. Rows naming no origin are counted and
+    otherwise ignored: a record that has never used the field must not acquire
+    a seam the day it starts. 45% of the corpus's rows that name a source or
+    an origin at all name only a channel, so the alternative would seam almost
+    everything. (That sentence first said "origin-bearing rows", which is
+    self-contradictory: a row naming no instrument is not origin-bearing. The
+    figure was measured against the right set and described against the wrong
+    one.)
+
+    A SEAM IS NO COMMON INSTRUMENT, not "more than one name". This is where
+    the analogy with `protocol` stops, and measuring made the difference
+    obvious: a canonical row can read `dexa+scale`, meaning two devices
+    observed ONE reading. Counting names, the shipped demo seamed on a window
+    of `scale, scale, dexa+scale, scale` - where every reading includes a
+    scale observation and the series is perfectly comparable.
+
+    So the question is whether ANY ONE instrument is behind every reading in
+    the window. A corroborated reading is compatible with either series; a
+    reading only one device saw, following readings only a different device
+    saw, is the swap. That is the hazard #33 describes and nothing wider.
+
+    NOT A SPLIT, and that is the lesson of #315. Splitting `weight` by
+    protocol made `safety._loss_pct_per_week` pick endpoints protocol-blind
+    and a RED-S hold silently stopped firing. This reports a seam and moves
+    nothing.
+    """
+    from .provenance import CATALOG_OTHER, PERSON, resolve_source
+    from .provenance import _kind_of as kind_of
+    from .vocab import _normalise
+
+    # A PERSON IS NOT AN INSTRUMENT, which #94 settled one issue over. A row
+    # whose origin is `athlete` is the athlete writing down what they read;
+    # counting that as a device seamed the shipped demo against its own
+    # hand-entered rows and would have declined a rate because somebody typed
+    # a number in. The transcription hazard is real and it is not a
+    # calibration offset, which is what this function is about.
+    #
+    # A PLACEHOLDER IS NOT AN INSTRUMENT either, the same rule `protocol_seam`
+    # states thirty lines up and pins with a test: `" "`, `"-"` and `"___"`
+    # all normalise to nothing, and letting them through manufactured a
+    # refusal out of a dash.
+    def instruments(rec: dict) -> list[str]:
+        raw = rec.get("origin")
+        if raw in (None, ""):
+            return []
+        return [part for part in str(raw).split("+")
+                if _normalise(part) and kind_of(part) != PERSON]
+
+    # THE REGISTRY FOLD, so one instrument spelled two ways is not two - and
+    # NEVER ONTO `other`, which is the hole review found and the reason this
+    # is not a bare `resolve_source`.
+    #
+    # `resolve_source` maps any name the catalogue has never seen to a single
+    # `other` key, deliberately ("NEVER an error"). Folding through it made
+    # every uncatalogued device the SAME device, so two genuinely different
+    # scales intersected on `{other}` and produced no seam - blind in exactly
+    # the Takeout and Apple Health case this issue is about, where a
+    # `sourceName` is an arbitrary string. It is in shipped data already:
+    # `bathroom-scale` and `gym-scale` both resolve to `other`.
+    #
+    # The mirror was as bad: `aria` is catalogued and `aria-scale` is not, so
+    # one physical scale spelled two ways seamed. This PR's own flagship
+    # fixture was `aria-scale` and only seamed because the OTHER name in it
+    # happened to be catalogued.
+    #
+    # So an uncatalogued spelling keeps its own normalised name as its
+    # identity. The same shape as `_person_or` in `provenance` (#94), for the
+    # same reason: a canonicaliser with a catch-all bucket must not be used
+    # where the question is whether two things are the same thing.
+    # TWO SPELLINGS OF ONE UNCATALOGUED DEVICE STILL SEAM, and that is the
+    # safe direction rather than an oversight. `aria` is catalogued and
+    # `aria-scale` is not, so they read as two instruments and the rate is
+    # declined. Nothing in the record says they are the same scale; the fix is
+    # an alias in `semantics/sources.toml`, which is data, and the alternative
+    # is a fuzzy match on names - the exact line `protocol_seam` draws thirty
+    # lines up ("not fuzzy matching: a spelling rule applied to an exact
+    # declared value"). Declining a rate the athlete can restore by naming
+    # their scale beats scoring one across two devices.
+    def identity(spelling: str) -> str:
+        folded = resolve_source(spelling)
+        return _normalise(spelling) if folded == CATALOG_OTHER else folded
+
+    named = [(rec, parts) for rec in rows if (parts := instruments(rec))]
+    dated = sorted(named, key=lambda pair: order_key(pair[0]))
+    seen: dict[str, str] = {}
+    per_row: list[set[str]] = []
+    for _rec, parts in dated:
+        folded = set()
+        for spelling in parts:
+            key = identity(spelling)
+            seen.setdefault(key, spelling)
+            folded.add(key)
+        per_row.append(folded)
+    # The intersection across readings: empty means no single instrument was
+    # behind all of them.
+    common: set[str] = set(per_row[0]) if per_row else set()
+    for folded in per_row[1:]:
+        common &= folded
+    return {"instruments": list(seen.values()),
+            "seam": bool(per_row) and not common,
+            "stated": len(per_row), "silent": len(rows) - len(per_row)}
+
+
 def weigh_in_timing(rows: list[dict]) -> dict:
     """How consistent were the weigh-in times behind a rate? (#37)
 

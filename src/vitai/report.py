@@ -13,7 +13,8 @@ from datetime import date, datetime, timedelta
 from statistics import mean
 
 from .weeks import week_of
-from .clocks import protocol_seam, timing_caveat, weigh_in_timing
+from .clocks import (instrument_seam, protocol_seam, timing_caveat,
+                     weigh_in_timing)
 from .composition import decompose, endpoints
 from .config import Config, phase_rate_for
 from .verdicts import open_day_in
@@ -260,6 +261,13 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                 # rate simply does not cross, and telling somebody to weigh
                 # more consistently would be advice about the wrong thing.
                 seam = protocol_seam(window)
+                # AND THE INSTRUMENT (#33, item 3), checked after the protocol
+                # for the same reason the protocol is checked before the
+                # timing drift: they say different things to a reader. "You
+                # weighed differently" is a habit; "you weighed on a different
+                # scale" is not something the athlete can undo, and telling
+                # them to be consistent would be advice about the wrong thing.
+                device = instrument_seam(window)
                 # G27: a thin sample owes doubt. `ramp` already caveats its
                 # base size; the rate line - the number actually read every
                 # week - did not.
@@ -284,6 +292,19 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                               "two ends measure different things.",
                           "", "> Weigh in the same way for a fortnight and "
                               "this line comes back."]
+                elif device["seam"]:
+                    # NO "WEIGH THE SAME WAY" LINE, because the athlete
+                    # cannot. A scale is replaced once and the old readings
+                    # are permanent; the rate returns when the fortnight no
+                    # longer spans both, which is a fact rather than an
+                    # instruction.
+                    L += ["", "**Rate:** NOT COMPARABLE - the readings behind "
+                              "this window came from different instruments "
+                              f"({' then '.join(device['instruments'])}), and "
+                              "the step between two devices is not a change "
+                              "in the athlete.",
+                          "", "> This line comes back once a fortnight of "
+                              "readings shares one instrument."]
                 elif target is not None:
                     verdict = ("NOT READABLE - weigh-in times vary too much"
                                if unreadable
