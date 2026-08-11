@@ -1,0 +1,50 @@
+# The coarse tier of a measurement's time: WHICH PART OF THE DAY (#212).
+#
+# A measurement event needs a temporal identifier, and because of the
+# no-invention rule it needs two tiers: a coarse one any source can state, and
+# a precise one where a device supplies it. The precise tier is built and well
+# populated - `weight.measured_at` on 2066 rows, `sessions.start_time` on 2767.
+# The coarse tier had nowhere to live, so "morning weigh-in, after voiding, in
+# underwear" went into a note as prose - the same "prose is where data goes
+# when the schema has no room" pattern the macros and the sleep instants show.
+#
+# ADOPTED FROM OPEN mHEALTH, not invented (G85). `part-of-day` is a four-value
+# enum in that library, one of the few schemas there still on 1.0 and not
+# deprecated, which suggests nobody has found it wanting. Each value is bound
+# to a SNOMED concept and the enum itself to "Temporal periods of day
+# (qualifier value)".
+#
+# THE BINDINGS ARE NAMED, NOT NUMBERED. Open mHealth states that each value
+# carries a SNOMED concept; this file does not reproduce concept IDs, because
+# a code written here from memory is a code nobody checked - and #263's whole
+# point is that claiming conformance without a check is conformance by
+# assertion. `term` carries the standard's own string verbatim so the mapping
+# can be verified when the enum is fetched, the way `statistics.toml` is.
+#
+# FOUR VALUES IS FEWER THAN AN INVENTED VOCABULARY WOULD HAVE - no "midday",
+# no "early morning" - and that is information rather than a shortfall. The
+# coarse tier exists so any source can state it, and a vocabulary a source
+# cannot map onto confidently defeats the purpose.
+#
+# WHOSE MORNING IS NOT SETTLED HERE. These are the NAMES of the phases. Which
+# clock times they correspond to for a given athlete is the anchor question,
+# and the decision on #212 is explicit that it is derived from the athlete's
+# own data rather than fixed - so a night worker's `morning` is not 06:00
+# because a table said so. Nothing in this file implies a clock range.
+version = 1
+
+[phase.morning]
+term = "morning"
+label = "Morning"
+
+[phase.afternoon]
+term = "afternoon"
+label = "Afternoon"
+
+[phase.evening]
+term = "evening"
+label = "Evening"
+
+[phase.night]
+term = "night"
+label = "Night"

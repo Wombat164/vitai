@@ -33,6 +33,23 @@ adds accessors over what the engine already knew.
 
 ### Added
 
+- **The day-phase vocabulary, adopted rather than invented** (#212). Open
+  mHealth's `part-of-day` - `morning | afternoon | evening | night`, one of
+  the few schemas in that library still on 1.0 and not deprecated. Four is
+  fewer than an invented vocabulary would have, and that is information: the
+  coarse tier exists so any source can state it, and a vocabulary a source
+  cannot map onto confidently defeats the purpose.
+- **`plans.for_phase` had that vocabulary hardcoded in `api.py`** as a sort
+  key - three values, no registry entry, no validation, and `night` unaddable
+  without finding that line. A plan for a night shift fell to the same bucket
+  as a plan with no phase at all. It reads the registry now and the field is
+  validated.
+- **No clock range and no SNOMED code.** "Whose morning" is the anchor
+  question and is derived from the athlete's own data, so nothing here implies
+  a time. Open mHealth binds each value to a SNOMED concept; this file does
+  not reproduce concept IDs, because a code written from memory is a code
+  nobody checked.
+
 - **A rate across a scale change is declined** (#33, item 3). Two weight
   readings from two scales are not two samples of one series: consumer scales
   carry offsets of a kilo or more, so concatenating them puts a step at the

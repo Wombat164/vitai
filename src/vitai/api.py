@@ -40,7 +40,8 @@ from .safety import (
     DISCLAIMER, active_episodes, banner, escalations, gates_on, hold_gates,
     is_gated, may, urgent_now,
 )
-from .schema import CURRENT_GENERATION, KEYS, aliases_for, coarse, units
+from .schema import (CURRENT_GENERATION, KEYS, aliases_for, coarse,
+                     day_phases, units)
 from .verdicts import compute_verdicts
 from .questions import open_questions
 from .weeks import session_weeks
@@ -1428,7 +1429,13 @@ class Vitai:
             rows.append(dict(plan, overdue=bool(
                 for_date and for_date < when.isoformat()
                 and plan.get("outcome") in (None, "unresolved"))))
-        phases = {"morning": 0, "afternoon": 1, "evening": 2}
+        # FROM THE REGISTRY, not from a dict written here (#212). This was
+        # three values inline - `morning`, `afternoon`, `evening` - which is
+        # a vocabulary living inside one consumer: no entry in `semantics/`,
+        # no validation on the field, and `night` unaddable without finding
+        # this line. Open mHealth's `part-of-day` has four, and a plan for a
+        # night shift sorted alongside one with no phase at all.
+        phases = {slug: n for n, slug in enumerate(day_phases())}
         return sorted(rows, key=lambda r: (
             str(r.get("for_date") or ""),
             phases.get(str(r.get("for_phase") or ""), 9),
