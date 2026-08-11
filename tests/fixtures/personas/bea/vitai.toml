@@ -1,0 +1,13 @@
+# bea - Ghent. An intensive-care nurse on a rotating night roster.
+[athlete]
+timezone = "Europe/Brussels"
+
+[targets]
+phases = [[68.0, 66.0, 0.15]]
+
+[tripwires]
+steps_floor = 5000
+sleep_floor_h = 6.0
+
+[resolution]
+source_order = ["scale", "watch", "app", "hand"]
