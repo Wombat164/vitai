@@ -1,0 +1,13 @@
+# maja - Ljubljana. Machines, labels, and a protein band.
+[athlete]
+timezone = "Europe/Ljubljana"
+
+[targets]
+phases = [[61.0, 62.5, 0.15]]
+
+[tripwires]
+steps_floor = 4000
+sleep_floor_h = 7.0
+
+[resolution]
+source_order = ["scale", "app", "watch", "hand"]
