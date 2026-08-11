@@ -8,7 +8,7 @@ about how they feel and inaccurately about what happened.
 Journal, 2029-10-15, `kind: claim`.
 
 She believes it. Her own numbers disagree: on the days she is working a night
-her recorded total averages 5.4 h, against 7.4 h on ordinary days, and her own
+her recorded total averages 5.28 h, against 7.44 h on ordinary days, and her own
 stated floor is 6.0. The claim and the counter-evidence are both hers, and
 both are in the record.
 

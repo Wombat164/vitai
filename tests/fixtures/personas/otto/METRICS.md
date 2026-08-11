@@ -1,20 +1,28 @@
 # otto: what the numbers do
 
+Measured off the committed corpus.
+
 ## Sessions
 
-| type | when | how it arrives |
-| --- | --- | --- |
-| row | Tuesday and Thursday, 18:30, about 80% of weeks | read off the console by eye, photographed, `capture: photo` |
-| cycle | Saturday or Sunday, 09:15, about 70% | off the watch, `capture: connector` |
+| type | when | how it arrives | count |
+| --- | --- | --- | --- |
+| row | Tuesday and Thursday, 18:30 | read off the console by eye, photographed, `capture: photo` | 77 |
+| cycle | Saturday and Sunday, 09:15 | off the watch, `capture: connector` | 64 |
 
-Every erg row carries an `artifact` reference. No ride does. That contrast is
-the fixture: a consumer must be able to tell a value that can be looked at
-again from one that cannot.
+The ride draw is independent per weekend day rather than one ride per weekend,
+so 22 of his 42 weekends carry two.
+
+Every erg row carries an `artifact` reference and every artifact carries a
+`captured_at` equal to the session's start plus its duration - he photographs
+the console at the end of the piece. No ride carries either. That contrast is
+the fixture.
 
 ## Weight
 
-Sundays only, 07:20, fasted. About -1.1 kg over the eleven months, which is
-slower than the noise on any single weigh-in.
+Sundays only, fasted, fifteen minutes after he gets up - so the time
+varies with the sleep row rather than being pinned, which is what stops the
+weigh-in landing before he woke. Regression slope -1.05 kg over the record, which
+is slower than the noise on any single weigh-in.
 
 ## Measurements
 
@@ -26,5 +34,9 @@ and the record says which is which.
 
 ## Artifacts
 
-One per erg session, about 78 in total, plus one removed. Sizes between
-180 kB and 620 kB. Every one is `image/jpeg` and `kind: photo`.
+77 live plus one removed, so 78 rows. Sizes between 180 kB and 620 kB. Every
+one is `image/jpeg` and `kind: photo`.
+
+The images themselves are not in this corpus. Each address is a SHA-256 of a
+label rather than of a file - a real content address in shape, stable across
+regeneration, with no bytes behind it.

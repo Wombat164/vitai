@@ -64,8 +64,6 @@ MACHINERY = {"recorded_at", "device", "supersedes", "date", "_gen"}
 
 # THE BACKLOG. Not an approval - see the module docstring.
 UNWRITTEN = (
-    # #239, and it sits with its siblings for the same reason: a dataset
-    # with no rows in any fixture has no positions to number either.
     "daily.artifact",
     "daily.path",
     "inferences.depends_on",
@@ -95,7 +93,6 @@ UNWRITTEN = (
     "measurements.origin_evidence",
     "measurements.path",
     "regimes.anchored_by",
-    "regimes.note",
     "sessions.derived_from",
     "sessions.derived_op",
     "sessions.location",

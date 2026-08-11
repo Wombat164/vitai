@@ -1,6 +1,6 @@
 # The persona corpus
 
-Ten synthetic athletes, each constructed to stress an axis the model was not
+Thirteen synthetic athletes, each constructed to stress an axis the model was not
 built for. They are fictional. The failures they found were not.
 
 They live here as PEOPLE, not as test data: a profile, their history, the data
@@ -20,6 +20,9 @@ fixture built from a person tests what you did not.
 | `rachel` | 39, BMI 45, five months on a GLP-1, knee osteoarthritis | medication effects, capacity limits, involuntary intake | 2 |
 | `stefan` | 44, harbour dispatcher, one month of degraded data with no stated cause | confabulation refusal, knowledge cutoffs, silence handling | 4 |
 | `ines` | 41, Porto, freelance translator, two small children, runs before the house wakes | **no legacy**: started after every mechanism existed, so every null means nobody said | 5 |
+| `bea` | 34, Ghent, intensive-care nurse on a rotating night roster | **the day does not start at midnight**: sleeps 09:00 to 16:00 after a shift, trains at 18:30, and has no sleep timing at all on the days the watch is off | 1 |
+| `otto` | 58, Leipzig, masters rower who photographs the club ergometer's console | **evidence**: the first artifacts in the corpus, a removal with a reason, a shared instrument nobody calibrates, and a claim his own record cannot settle | 1 |
+| `maja` | 29, Ljubljana, trains on machines and logs food off packaging | **a setting is part of the measurement**: seat, pad, lever and angle on every set; label values including fibre, sugar and sodium; a protein goal that is a band | 1 |
 
 ## The one who has no past
 
