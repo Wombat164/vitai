@@ -693,7 +693,38 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     date, goal, period, fraction, value, target and label, and what was
 #     missing was the ladder of rungs NOT yet crossed. That is derived, not
 #     stored - `Vitai.milestone_ladder`.
-CONTRACT_VERSION = "43"
+# 44: a `capabilities` dataset - what an INSTRUMENT can and cannot measure,
+#     dated (#171).
+#
+#     An instrument change is a confound that looks exactly like a
+#     physiological one: a resting heart rate stepping from 54 to 49 is either
+#     a training adaptation or a new optical sensor. `origin` said which
+#     instrument observed a value and nothing said what that instrument is
+#     competent at.
+#
+#     CATEGORICAL, NEVER A NUMBER, after the issue surveyed what vendors
+#     publish: only power meters publish anything, those cover the random term
+#     alone, field observation contradicts them by up to twenty percent, and
+#     one vendor's marketed tolerance is half its own service tolerance. A
+#     borrowed figure would be a confident wrong number about confidence. So
+#     the column set carries `competence` (measures / proxy / absent /
+#     unknown), a `construct` required beside a proxy, a `condition` scope and
+#     a `basis` - and no uncertainty, no offset and no tolerance.
+#
+#     KEYED ON `origin`, the identity 27 call sites already use for an
+#     instrument. #311's device register later gives that string an entity
+#     with an interval; this enriches the same identity rather than minting a
+#     second one, which is the disagreement about what a watch is that the
+#     reconciliation gate exists to prevent.
+#
+#     NO DEFAULT OUTSIDE THE RECORD, and this is #148 one dataset over. There,
+#     baselines lived in a mutable file and dated rows overlaid it, so a week
+#     with no dated row was judged by whatever the file said TODAY -
+#     reconstructing March under September's policy. A capability default in
+#     `semantics/` would be identical. Silence resolves to `unknown`, a value
+#     IN the vocabulary and distinct from `absent`: "nobody said" and "it does
+#     not measure this" are different facts.
+CONTRACT_VERSION = "44"
 
 _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity would
               # A JSON map (#325), and every container column is TEXT for

@@ -39,6 +39,16 @@ from vitai.schema import (CURRENT_GENERATION, KEY_GENERATION,
                           KEY_RETIREMENT, KEYS, validate_record)
 
 PINNED = {
+    # #171, a new dataset. Both entries come from the blanket generation blocks
+    # every dataset gets - `recorded_at` and `device` - which is why a dataset
+    # that has never existed lands above generation 1. That is the safe
+    # direction, and the `seq` block in `schema.py` says why: a key registered
+    # above the founding generation can only ever EXEMPT more lines, and there
+    # are no lines here to exempt.
+    "capabilities": {
+        "device": 3,
+        "recorded_at": 2,
+    },
     "achievements": {
         "device": 4,
         "occurred_date": 2,
@@ -240,6 +250,13 @@ PINNED = {
 
 PINNED_FOUNDING = {
     "achievements": ["date", "goal", "note", "source", "title"],
+    # #171. Every field the dataset was born with, so a later addition has to
+    # declare a generation rather than defaulting to 1 and being held against
+    # lines written before it existed.
+    "capabilities": [
+        "basis", "competence", "condition", "construct", "date", "measures",
+        "note", "origin", "set_by", "supersedes",
+    ],
     "artifacts": [
         "bytes", "captured_at", "date", "kind", "media_type", "note",
         "origin", "reason", "removed", "sha256"

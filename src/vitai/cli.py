@@ -193,6 +193,37 @@ def _fmt_goal(row: dict) -> str:
         f"\n    why: {row['motivator']}" if row.get("motivator") else "")
 
 
+def cmd_capabilities(args: argparse.Namespace) -> None:
+    """What each instrument is competent at, as the record states it."""
+    v = Vitai(_root(args))
+    if args.origin and args.measures:
+        rows = [v.capability(args.origin, args.measures,
+                             condition=args.condition)]
+    else:
+        rows = v.capabilities()
+    if args.json:
+        for row in rows:
+            print(json.dumps(row))
+        return
+    if not rows:
+        print("no instrument has a stated capability - every one answers "
+              "'unknown', which is not a gap in the engine but a gap in the "
+              "record, and it is the honest answer until somebody says "
+              "otherwise")
+        return
+    for row in rows:
+        scope = f" ({row['condition']})" if row.get("condition") else ""
+        line = (f"{row.get('origin')}: {row.get('measures')}{scope}"
+                f" - {row.get('competence')}")
+        if row.get("basis"):
+            line += f", by {row['basis']}"
+        print(line)
+        if row.get("construct"):
+            print(f"    actually measures: {row['construct']}")
+        if row.get("note"):
+            print(f"    {row['note']}")
+
+
 def cmd_milestones(args: argparse.Namespace) -> None:
     """Every milestone rung a goal has this period, passed or not."""
     rows = Vitai(_root(args)).milestone_ladder(slug=args.slug)
@@ -1507,6 +1538,8 @@ def main(argv: list[str] | None = None) -> None:
          "append what the athlete stated, with provenance the engine stamps"),
         ("verdicts", cmd_verdicts, "weekly goal-attainment rows as JSONL (the platform contract)"),
         ("goals", cmd_goals, "active goals: progress, dates, contributions, flagged edits"),
+        ("capabilities", cmd_capabilities,
+         "what each instrument is competent at, as the record states it (#171)"),
         ("milestones", cmd_milestones,
          "the milestone rungs a goal has this period, passed and not (#330)"),
         ("append", cmd_append,
@@ -1618,6 +1651,12 @@ def main(argv: list[str] | None = None) -> None:
                            help="reconstruct goals as they stood on this date")
             p.add_argument("--recent", type=int, default=10, metavar="N",
                            help="show the last N per-goal contributions (0 = none)")
+        if name == "capabilities":
+            p.add_argument("--origin", help="ask about one instrument")
+            p.add_argument("--measures", help="and one measurand")
+            p.add_argument("--condition", help="under one condition")
+            p.add_argument("--json", action="store_true",
+                           help="emit rows as JSONL instead of prose")
         if name == "milestones":
             p.add_argument("--slug", help="only this goal")
             p.add_argument("--json", action="store_true",

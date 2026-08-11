@@ -326,6 +326,11 @@ ARG_TAKING_OUT_OF_SCOPE = {
     # Computed scalars, strings and vocabulary answers. Where they read rows
     # at all they read them through the door above, so what they return is
     # already coarse; none passes a stored row through.
+    # `capability` answers a vocabulary value about an INSTRUMENT (#171):
+    # a competence, a construct and a basis. It reads capability rows through
+    # `dataset`, which is the door above, and returns no row from a sensitive
+    # dataset - the athlete is not in it.
+    "capability",
     "check", "window", "ramp", "may", "project", "plan_for", "urgent",
     "safety_banner", "pending_checks", "gated", "session_weeks",
     "contributions", "milestones", "churn", "field_types", "schema",

@@ -32,8 +32,8 @@ from .db import CONTRACT_VERSION, DERIVED_TABLES, build_db
 from .clocks import is_aware, ordering_rule
 from .jsonl import EVENT_DATASETS, append, append_many, load
 from . import query
-from .policy import (State, context_on, days_between, events_on, plan_churn,
-                     state)
+from .policy import (State, capability, context_on, days_between, events_on,
+                     plan_churn, state)
 from .report import build_report
 from .resolution import live_inferences, resolve, retractions
 from .safety import (
@@ -1625,6 +1625,47 @@ class Vitai:
                     break
             out += rungs
         return out
+
+    def capability(self, origin: str, measures: str,
+                   on: date | str | None = None,
+                   condition: str | None = None) -> dict:
+        """What an instrument was competent at, as of a date (#171).
+
+        Never None. An instrument nobody has written a capability row for
+        answers `unknown`, which is a value in the vocabulary rather than a
+        null a consumer has to interpret - and distinct from `absent`, which
+        says the instrument does not observe this at all.
+
+        NO DEFAULT OUTSIDE THE RECORD. A capability table shipped in
+        `semantics/` would make every unstated instrument resolve to whatever
+        this build says today, which is #148's defect exactly: there,
+        baselines lived in a mutable file, dated rows overlaid it, and a week
+        with no row was judged under today's policy.
+
+        `condition` scopes the question. A wrist sensor can measure heart rate
+        seated and be a proxy for it at threshold, so a statement is about one
+        instrument measuring one thing under one condition.
+        """
+        return capability(self.dataset("capabilities"), origin, measures,
+                          on or self.on, condition=condition)
+
+    def capabilities(self, on: date | str | None = None) -> list[dict]:
+        """Every capability statement in force, most recently dated first.
+
+        The stated ones only. Everything unstated is `unknown` and there is no
+        list of it - the set of instruments nobody has said anything about is
+        not a thing the record holds.
+        """
+        from .policy import _in_force
+
+        when = (on or self.on)
+        when_s = when.isoformat() if isinstance(when, date) else str(when)
+        rows = _in_force(self.dataset("capabilities"), "capabilities", when_s)
+        return sorted(rows.values(),
+                      key=lambda r: (str(r.get("date") or ""),
+                                     str(r.get("origin") or ""),
+                                     str(r.get("measures") or "")),
+                      reverse=True)
 
     def churn(self, today: date | None = None) -> list[dict]:
         """Policy edits, with the loosening-after-a-miss flag (G20)."""

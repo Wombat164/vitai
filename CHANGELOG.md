@@ -58,6 +58,34 @@ adds accessors over what the engine already knew.
 - Every existing weight verdict in the corpus is unchanged, checked: no
   persona has a genuine swap inside a rate window. That is the issue's own
   argument for building it before the second source lands rather than after.
+- **A `capabilities` dataset: what an INSTRUMENT can and cannot measure**
+  (#171, contract 44). An instrument change is a confound that looks exactly
+  like a physiological one - a resting heart rate stepping from 54 to 49 is
+  either a training adaptation or a new optical sensor. `origin` said which
+  instrument observed a value and nothing said what it is competent at.
+- **Categorical, never a number.** The issue surveyed what vendors publish:
+  only power meters publish anything, those cover the random term alone, field
+  observation contradicts them by up to twenty percent, and one vendor's
+  marketed tolerance is half its own service tolerance. So `competence` is
+  measures / proxy / absent / unknown, and there is nowhere in the column set
+  to put an uncertainty, a tolerance or an offset.
+- **A proxy must name what it actually measures.** "This is a proxy" says
+  distrust the number; "this is a proxy FOR the continuous nightly minimum"
+  says what it is - and no uncertainty figure would ever catch a wrong
+  measurand, because every one of them assumes the right one.
+- **Keyed on `origin`**, the identity 27 call sites already use for an
+  instrument. #311's device register later gives that string an entity with an
+  interval rather than minting a second identity.
+- **No default outside the record**, which is #148 one dataset over: there,
+  baselines lived in a mutable file and dated rows overlaid it, so a week with
+  no row was judged under today's policy. Silence resolves to `unknown` - a
+  value in the vocabulary, distinct from `absent`, because "nobody said" and
+  "it does not measure this" are different facts.
+- **`policy._in_force` now handles a tuple identity.** It read `r.get(ident)`
+  with whatever `IDENTITY_KEY` declared, which returns None for a tuple, so
+  every row of a tuple-keyed dataset was silently skipped. It had only ever
+  been called with scalar-keyed ones, so the gap cost nothing and was
+  invisible.
 
 - **The ordering rule is published as data** (#308). `clocks.order_key` orders
   on valid time and keeps transaction time separate, and that doctrine - taken
