@@ -2702,12 +2702,40 @@ class Vitai:
             d, kg = pts[-1]
             return f"{kg:.1f} kg ({d})"
 
-        steps = [(r["date"], r["steps"]) for r in self.dataset("daily")
-                 if r.get("steps") is not None]
-        if steps:
-            recent = [s for _, s in steps[-7:]]
-            return (f"{sum(recent) / len(recent):,.0f} steps/day over the last "
-                    f"{len(recent)} logged days ({steps[-1][0]})")
+        # A CALENDAR WINDOW, NOT THE LAST SEVEN ROWS (#33 item 5, G30). This
+        # took `steps[-7:]`, which means "the seven most recent rows that
+        # happen to carry steps" - and on a sparse record those can span
+        # years. Measured on a record whose steps are 1200 in 2020, 1400 in
+        # 2020, 1500 in 2021, 1800 in 2024 and ~9100 last week, this line read
+        #
+        #     4,743 steps/day over the last 7 logged days (2026-08-07)
+        #
+        # which is half the athlete's actual figure, dated three days ago so it
+        # reads as current, and dragged there by a phone they stopped using six
+        # years earlier. That is #33's own sentence - a 2020 smartphone step
+        # count must never move a 2026 figure - and G30 is the rule it breaks:
+        # "an entry-count slice is not a window".
+        #
+        # THE WINDOW IS THE ENGINE'S OWN. `within_days` is what the report's
+        # tripwires already use, and `over_days` is how it already says what
+        # fraction of the window was logged, so a mean never renders as a claim
+        # about days nobody recorded.
+        from .report import over_days, within_days
+
+        daily = self.dataset("daily")
+        window = within_days(daily, self.on, 7, "steps")
+        if window:
+            vals = [r["steps"] for r in window]
+            return (f"{sum(vals) / len(vals):,.0f} steps/day"
+                    f"{over_days(len(vals), 7)}")
+
+        # NOTHING IN THE WINDOW IS ITS OWN ANSWER, and a better one than a
+        # six-year mean. Saying when the record last held a step count is a
+        # fact; averaging across the gap would be the defect above, relabelled.
+        logged = sorted(r["date"] for r in daily if r.get("steps") is not None)
+        if logged:
+            return (f"no steps logged in the last 7 days "
+                    f"(last was {logged[-1]})")
 
         days = [r for r in self.dataset("daily") if r.get("date")]
         if days:

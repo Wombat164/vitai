@@ -31,6 +31,28 @@ adds accessors over what the engine already knew.
   every count the corpus publishes is unchanged. It is one date collision away
   from live, which is also why nothing caught it.
 
+### Fixed
+
+- **A six-year-old step count no longer moves the current figure** (#33 item 5,
+  G30). `status_line` took `steps[-7:]` - the seven most recent rows that
+  happen to carry steps - which on a sparse record spans years. Measured on a
+  record whose steps are 1200 in 2020, 1500 in 2021, 1800 in 2024 and ~9100
+  last week, it read `4,743 steps/day over the last 7 logged days
+  (2026-08-07)`: half the athlete's actual figure, dated three days ago so it
+  reads as current, and dragged there by a phone they stopped using six years
+  earlier.
+- **A calendar window, and the fraction of it that was logged.** It now reads
+  `9,100 steps/day over 3 of the last 7 days`, using `within_days` and
+  `over_days` - the window the report's tripwires already use, and the phrase
+  that already exists so a mean never renders as a claim about days nobody
+  recorded.
+- **A stale record says so** rather than averaging across the gap: `no steps
+  logged in the last 7 days (last was 2024-05-01)`. Averaging there is the
+  same defect relabelled.
+- The other half of item 5 was already satisfied and is now pinned: verdicts
+  key on the ISO week, so a retrospective 2020 import leaves a 2026 verdict
+  identical in value and word and only adds its own weeks.
+
 ### Added
 
 - **The day-phase vocabulary, adopted rather than invented** (#212). Open
