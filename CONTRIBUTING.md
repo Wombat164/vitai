@@ -46,6 +46,12 @@ needs a very good reason stated in the PR body.
 - CI must be green: hygiene (ruff + personal gate) and the test matrix
   (Linux + Windows, Python 3.11/3.13).
 - Squash-merge is the repo policy; write the PR title as the future commit.
+- **Do not edit `CHANGELOG.md`.** Add `changelog.d/<issue>.<category>.md`
+  instead - one file per change, named for the issue the PR closes. Every PR
+  used to append under the same heading, so any two open at once conflicted on
+  the same lines; it happened four times in two days. See
+  `changelog.d/README.md`. A maintainer folds the fragments in at release with
+  `python scripts/changelog_gate.py --assemble`.
 
 ## Skills and templates
 

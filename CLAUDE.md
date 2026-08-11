@@ -53,6 +53,12 @@ template ships in `src/vitai/templates/`).
 - Schema changes touch three places together: `schema.py`, the templates,
   and the skills that emit data. A schema change without a migration note in
   the README table is incomplete.
+- **Never edit `CHANGELOG.md` in a PR.** Write `changelog.d/<issue>.<category>.md`
+  - one file per change, named for the issue the PR closes, holding the entry
+  as markdown list items. Every PR used to append under the same heading, so
+  any two open at once conflicted; it happened four times in two days and every
+  resolution was "keep both". `changelog.d/README.md` has the detail, and
+  `scripts/changelog_gate.py` checks it in CI.
 
 ## Design guardrails (learned in the founding deployment)
 
