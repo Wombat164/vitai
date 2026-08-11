@@ -19,8 +19,12 @@ import json
 
 import pytest
 
+from pathlib import Path
+
 from vitai import builds as B
 from vitai.api import schema
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 # No extra exists yet, so `not_installed` is unreachable from the shipped
@@ -105,15 +109,100 @@ def test_an_unknown_writer_does_not_silently_become_the_reader():
         B.absence("rhr")
 
 
-def test_nothing_on_a_row_says_which_build_wrote_it():
-    """Including a row that carries `derived_build`. That field names the
-    build that DERIVED a value on a `derived_external` row, which is a
-    different fact from what the writer was capable of - and reading it as
-    this would be a confident wrong answer on the one row in the corpus that
-    has one."""
-    assert B.writing_build({}) is None
-    assert B.writing_build({"derived_build": "0.4.0",
-                            "derived_by": "somebody else"}) is None
+def test_no_field_in_the_schema_identifies_the_writing_build():
+    """The fact the whole design rests on, pinned rather than asserted in a
+    comment. `derived_build` is the only version-bearing field anywhere, and
+    it is owed only on a `derived_external` row - it names the build that
+    DERIVED a value, which is a different fact from what the writer was
+    capable of. If a build stamp is ever added to ordinary rows this fails,
+    which is the point: the cross-record half becomes answerable and this
+    module should stop saying it is not."""
+    from vitai.schema import KEYS
+
+    version_bearing = {f for fields in KEYS.values() for f in fields
+                       if "build" in f or "version" in f}
+    assert version_bearing == {"derived_build"}, version_bearing
+
+
+def test_the_one_stamped_row_in_the_corpus_is_a_derived_external_one():
+    """The measurement the module docstring quotes, kept honest. A count in a
+    comment is a claim, and this one justifies not reading `derived_build` as
+    a writing-build stamp."""
+    import json
+
+    lineage = ("daily", "weight", "sessions", "sets", "measurements", "meals")
+    roots = list(ROOT.glob("tests/fixtures/personas/*/data"))
+    roots.append(ROOT / "examples" / "demo" / "data")
+    total = stamped = 0
+    for folder in roots:
+        for path in folder.glob("*.jsonl"):
+            if path.stem not in lineage:
+                continue
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                total += 1
+                row = json.loads(line)
+                if row.get("derived_build"):
+                    stamped += 1
+                    assert row.get("capture") == "derived_external", row
+    assert (stamped, total) == (1, 9676), (stamped, total)
+
+
+def test_a_field_the_engine_never_heard_of_answers_unknown():
+    """FAILS CLOSED ON THE FIELD. The rule was "no extra claims it, so any
+    build can emit it" - a verdict from non-membership of the extras map, so
+    a typo got the same confident yes as the field it was a typo for."""
+    for invented in ("hrr", "utterly_invented", "", "steps "):
+        assert B.can_emit(invented) == B.UNKNOWN, invented
+        assert B.absence(invented, B.this_build()) == B.UNKNOWN, invented
+    assert B.can_emit("rhr") == "yes"
+
+
+def test_an_extras_own_fields_count_as_known(with_an_extra):
+    """They are exactly the ones the core schema does not have, so a schema
+    membership test alone would call the extra's output unheard-of."""
+    assert "named_way" not in {f for fields in
+                               __import__("vitai.schema", fromlist=["KEYS"]).KEYS.values()
+                               for f in fields}
+    assert "named_way" in B.known_fields()
+    assert B.can_emit("named_way", "1.0.0") == "yes"
+    assert B.can_emit("named_way", "0.9.0") == "no"
+
+
+# --- the registry is checked, not just claimed ------------------------------
+
+def test_the_shipped_registry_is_sound():
+    assert B.problems() == []
+
+
+@pytest.mark.parametrize("broken,expected", [
+    ({"extras": {}, "builds": {"1.0.0": {}}}, "no `ships` key"),
+    ({"extras": {}, "builds": {"1.0.0": {"ships": ["route"]}}}, "undeclared"),
+    ({"extras": {"route": {"fields": []}}, "builds": {}}, "declares no fields"),
+    ({"extras": {"a": {"fields": ["x"]}, "b": {"fields": ["x"]}}, "builds": {}},
+     "claimed by both"),
+])
+def test_it_catches_a_malformation_that_does_not_exist_yet(monkeypatch, broken,
+                                                           expected):
+    """Each of these turns into a WRONG ANSWER rather than an error if it goes
+    unchecked - an absent `ships` key manufactures a positive statement of
+    incapacity, a typo'd extra name answers `not_installed` for every field it
+    owns, and two extras claiming one field resolve by whichever sorts first.
+    None exists in the shipped file, which is what a control is for."""
+    monkeypatch.setattr(B, "_data", lambda: broken)
+    found = B.problems()
+    assert any(expected in one for one in found), found
+
+
+def test_an_absent_ships_key_would_have_manufactured_an_incapacity(monkeypatch):
+    """Not just reported: shown. Without the check this reads as a positive
+    statement that the build ships nothing."""
+    monkeypatch.setattr(B, "_data", lambda: {
+        "extras": {"route": {"fields": ["named_way"]}},
+        "builds": {"1.0.0": {}}})
+    assert B.absence("named_way", "1.0.0") == B.NOT_INSTALLED
+    assert B.problems()
 
 
 # --- the extra path, which the shipped registry cannot witness --------------
@@ -183,7 +272,26 @@ def test_the_question_reaches_the_cli():
         main(["can-emit", "rhr", "--build", B.this_build(), "--json"])
     assert json.loads(buf.getvalue()) == {
         "field": "rhr", "build": B.this_build(),
+        "reading_build": B.this_build(),
         "can_emit": "yes", "absence_means": B.NOT_MEASURED}
+
+
+def test_the_json_never_names_a_build_it_was_not_asked_about():
+    """`build or this_build()` made the two questions indistinguishable in the
+    machine-readable output: omitting --build printed the reading install
+    beside `absence_means: unknown`, which reads as a false statement about a
+    build the registry covers. The human-readable path said which question it
+    had answered; the path a script consumes did not."""
+    from vitai.cli import main
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        main(["can-emit", "rhr", "--json"])
+    got = json.loads(buf.getvalue())
+    assert got["build"] is None
+    assert got["reading_build"] == B.this_build()
+    assert got["absence_means"] == B.UNKNOWN
+    assert got["can_emit"] == "yes"
 
 
 def test_the_cli_says_unknown_rather_than_answering_about_itself():

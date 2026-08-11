@@ -24,7 +24,7 @@ TWO QUESTIONS, AND ONLY ONE OF THEM IS ANSWERABLE TODAY.
 
 The second one is the sharper half, and the honest answer is `unknown`.
 `derived_build` is the only version-bearing field in the schema; it is
-required only on a `derived_external` row, and it is set on 1 of 9673 rows in
+required only on a `derived_external` row, and it is set on 1 of 9676 rows in
 the shipped corpus. It could not be pressed into service anyway: it names the
 build that DERIVED a value, and this question is about what the writer was
 CAPABLE of - which come apart precisely here, because the field being asked
@@ -91,19 +91,42 @@ def owner(field: str) -> str | None:
     return None
 
 
+def known_fields() -> set[str]:
+    """Every field this engine can be asked about: the schema, plus whatever
+    the extras declare.
+
+    An extra's fields are included because they are exactly the ones the core
+    schema does not have - that is what makes them the extra's - so a schema
+    membership test alone would call the route extra's own output unheard-of.
+    """
+    from .schema import KEYS
+    return ({f for fields in KEYS.values() for f in fields}
+            | {f for fields in extras().values() for f in fields})
+
+
 def _verdict(field: str, build: str | None) -> bool | None:
     """Can `build` emit `field`: True, False, or None for "cannot tell".
 
     ONE COPY OF THE RULE. `absence` and `can_emit` ask the same underlying
     question in two vocabularies, and two implementations of one rule is how
     they drift into disagreeing about the case nobody tested.
+
+    IT FAILS CLOSED ON THE FIELD, and the first cut did not. The rule read
+    "no extra claims this field, therefore any build can emit it", which is a
+    verdict derived from NON-membership of the extras map - so a field that
+    does not exist got the same confident yes as `rhr`. `can_emit("hrr")`, a
+    typo for `rhr`, answered "yes". Membership of a written-down set is the
+    shape this repo uses for a control, because a rule built from the absence
+    of an entry can only ever be right about the entries it already has.
     """
+    if field not in known_fields():
+        return None
     known = builds()
     if build is None or str(build) not in known:
         return None
     holder = owner(field)
-    # No extra claims this field, so every build that could write the row at
-    # all could have written this value.
+    # No extra claims this field and the schema does have it, so every build
+    # that could write the row at all could have written this value.
     return holder is None or holder in known[str(build)]
 
 
@@ -141,15 +164,40 @@ def can_emit(field: str, build: str | None = None) -> str:
     return UNKNOWN if verdict is None else ("yes" if verdict else "no")
 
 
-def writing_build(row: dict) -> str | None:
-    """Which build wrote `row`, which is None for every ordinary row.
+def problems() -> list[str]:
+    """What is wrong with the registry, empty when it is sound.
 
-    A FUNCTION THAT ALWAYS RETURNS NONE TODAY, on purpose. The alternative was
-    to leave callers to work out for themselves that no field carries this,
-    and a consumer that has to derive an absence is a consumer that will
-    assume a presence. `derived_build` is deliberately not consulted: it names
-    the build that derived a value on a `derived_external` row, which is a
-    different fact from what the writer was capable of, and reading it as this
-    would be a confident wrong answer on the 1 row in 9673 that has one.
+    The file makes claims about itself - a listed build is a positive
+    statement, an extra names the fields it and only it can emit - and a claim
+    with nothing checking it is decoration. Each of these turns silently into
+    a WRONG ANSWER rather than an error, which is why they are worth catching
+    while the file is still small:
+
+    - a build entry with no `ships` key reads as shipping nothing, so an
+      absent key manufactures a positive statement of incapacity
+    - a build shipping an extra that is not declared answers `not_installed`
+      for every one of that extra's fields, because the lookup finds nothing
+    - two extras claiming one field resolve by whichever sorts first, so a
+      build shipping the other one is told it cannot emit what it can
     """
-    return None
+    data = _data()
+    declared = set((data.get("extras") or {}))
+    out: list[str] = []
+    for name, meta in sorted((data.get("extras") or {}).items()):
+        if not (meta or {}).get("fields"):
+            out.append(f"extra {name!r} declares no fields")
+    seen: dict[str, str] = {}
+    for name, fields in extras().items():
+        for field in fields:
+            if field in seen:
+                out.append(f"field {field!r} is claimed by both {seen[field]!r} "
+                           f"and {name!r}")
+            seen[field] = name
+    for version, meta in sorted((data.get("builds") or {}).items()):
+        if "ships" not in (meta or {}):
+            out.append(f"build {version!r} has no `ships` key, so it would "
+                       f"read as shipping nothing")
+        for extra in (meta or {}).get("ships") or []:
+            if extra not in declared:
+                out.append(f"build {version!r} ships undeclared extra {extra!r}")
+    return out

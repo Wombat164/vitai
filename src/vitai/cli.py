@@ -1506,7 +1506,16 @@ def cmd_can_emit(args: argparse.Namespace) -> None:
     verdict = can_emit(field, build)
     means = absence(field, build)
     if args.json:
-        print(json.dumps({"field": field, "build": build or this_build(),
+        # `build` IS NULL WHEN IT WAS NOT ASKED ABOUT. This printed
+        # `build or this_build()`, so omitting --build produced
+        # {"build": "0.5.0", "absence_means": "unknown"} while asking about
+        # 0.5.0 explicitly produced "not_measured" - the same pair, two
+        # answers, and the first a false statement about a build the registry
+        # covers. The human-readable path said which question it had answered
+        # and the machine-readable one, the path a script actually consumes,
+        # quietly did not.
+        print(json.dumps({"field": field, "build": build,
+                          "reading_build": this_build(),
                           "can_emit": verdict, "absence_means": means},
                          indent=2, sort_keys=True))
         return
