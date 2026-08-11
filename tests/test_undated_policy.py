@@ -294,25 +294,5 @@ def test_the_measured_gap_is_what_the_corpus_actually_holds():
     assert len(personas) >= 10
     with_gap = [p.name for p in personas if Vitai(p).never_dated_policy()]
     assert len(with_gap) >= 9, with_gap
-
-    # THE GAP IS NO LONGER TOTAL, and saying so is the point of re-measuring.
-    # This asserted that not one persona anywhere had a dated threshold row.
-    # `bea` has one - she states a sleep floor of 6.0 as a shift-week floor
-    # rather than a healthy-adult one, and dates it - so the corpus now holds
-    # both sides of the mechanism instead of only the empty one. Named
-    # explicitly rather than counted, so the next persona to date a policy has
-    # to come here and say so.
-    dated = {p.name for p in personas
-             if (p / "data" / "thresholds.jsonl").exists()}
-    assert dated == {"bea", "maja"}, dated
-
-    # AND SHE CLOSES IT FOR ONE KEY, NOT ALL OF THEM, which is the realistic
-    # shape and the more useful fixture: `sleep_floor_h` is stated and dated
-    # in her record, `steps_floor` is still only in her toml. So one persona
-    # now exercises both sides of the mechanism at once, and a consumer that
-    # reports "policy was undated" for the whole record rather than per key
-    # is wrong about her.
-    bea = Vitai(next(p for p in personas if p.name == "bea"))
-    assert set(bea.never_dated_policy()) == {"steps_floor"}
-    maja = Vitai(next(p for p in personas if p.name == "maja"))
-    assert set(maja.never_dated_policy()) == {"steps_floor"}
+    assert not any((p / "data" / "thresholds.jsonl").exists() for p in personas), \
+        "not one dated threshold row anywhere in the corpus"

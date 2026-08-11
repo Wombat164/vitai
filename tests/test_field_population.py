@@ -64,10 +64,29 @@ MACHINERY = {"recorded_at", "device", "supersedes", "date", "_gen"}
 
 # THE BACKLOG. Not an approval - see the module docstring.
 UNWRITTEN = (
+    "artifacts.bytes",
+    "artifacts.captured_at",
+    "artifacts.kind",
+    "artifacts.media_type",
+    "artifacts.note",
+    "artifacts.origin",
+    "artifacts.reason",
+    "artifacts.removed",
+    "artifacts.sha256",
     # #239, and it sits with its siblings for the same reason: a dataset
     # with no rows in any fixture has no positions to number either.
+    "artifacts.seq",
     "daily.artifact",
+    "daily.carb_g",
+    "daily.fat_g",
+    "daily.fibre_g",
     "daily.path",
+    "daily.sleep_end",
+    "daily.sleep_start",
+    "daily.sodium_mg",
+    "daily.sugar_g",
+    "events.reason",
+    "goals.target_hi",
     "inferences.depends_on",
     "inferences.note",
     # #280, and they sit beside the lineage fields they qualify: a dataset
@@ -87,61 +106,52 @@ UNWRITTEN = (
     "weight.derived_build",
     "meals.derived_from",
     "meals.derived_op",
+    "meals.fibre_100g",
     "meals.path",
+    "meals.sodium_mg_100g",
+    "meals.sugar_100g",
     "measurements.artifact",
     "measurements.derived_from",
     "measurements.derived_op",
     "measurements.modelled",
     "measurements.origin_evidence",
     "measurements.path",
+    "measurements.protocol",
+    "measurements.read_by",
+    "protocols.slug",
+    "protocols.text",
     "regimes.anchored_by",
+    "regimes.dataset",
+    "regimes.field",
+    "regimes.from_date",
+    "regimes.kind",
     "regimes.note",
+    "regimes.source",
+    "regimes.text",
+    "regimes.to_date",
+    "regimes.seq",
+    "sessions.artifact",
     "sessions.derived_from",
     "sessions.derived_op",
     "sessions.location",
     "sessions.modelled",
+    "sets.angle_deg",
     "sets.derived_from",
     "sets.derived_op",
+    "sets.duration_s",
+    "sets.lever_pos",
+    "sets.pad_pos",
     "sets.path",
     "sets.resistance_level",
+    "sets.round",
+    "sets.side",
+    "sets.tempo",
+    "thresholds.note",
     "weight.artifact",
     "weight.modelled",
 )
 
 UNREAD = (
-    # WRITTEN AND NOT YET READ, which is the worse of the two gaps and is
-    # recorded rather than hidden. `bea` logs a sleep interval on the days her
-    # watch is on - a night worker whose sleep sits in the middle of the
-    # calendar day, which is the case the corpus had no record of. Nothing in
-    # `src/` reads either boundary yet; the reader is #203, anchoring the day
-    # to the athlete's sleep rather than to midnight. This leaves the register
-    # the day that lands.
-    "daily.sleep_end",
-    "daily.sleep_start",
-    # WRITTEN AND NOT YET READ. `otto` photographs the club ergometer's
-    # console, so every artifact row says when the shutter went - which is a
-    # different instant from `recorded_at` (when the row was written) and from
-    # the session's `start_time` (when the piece began). Nothing reads it yet.
-    # It is the field that would let a consumer ask whether the evidence was
-    # captured at the time or reconstructed afterwards, which is exactly the
-    # question a photographed value invites.
-    "artifacts.captured_at",
-    # WRITTEN AND NOT YET READ, all seven from `maja`. She logs off packaging,
-    # so her rows carry what the label states: fibre, sugar and sodium, per
-    # day and per hundred grams. The engine reads energy, protein, fat and
-    # carbohydrate and stops there. `sets.tempo` is the same shape one dataset
-    # over - the record holds how long each rep took and nothing asks.
-    #
-    # These are the honest kind of gap: the record now HAS the evidence and
-    # the engine does not use it, which is worse than not having it and is why
-    # this register exists. They leave the day something reads them.
-    "daily.fibre_g",
-    "daily.sodium_mg",
-    "daily.sugar_g",
-    "meals.fibre_100g",
-    "meals.sodium_mg_100g",
-    "meals.sugar_100g",
-    "sets.tempo",
     # NOT A GAP, and this is the one entry here that records a decision
     # rather than a backlog item (#205). The register measures "read" as the
     # key's name appearing in a consumer, and by that measure the precise tier

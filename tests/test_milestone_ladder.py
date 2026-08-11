@@ -181,10 +181,8 @@ def test_the_corpus_ladders_are_the_four_live_scoreable_goals():
             continue
         got |= {f"{path.name}/{r['goal']}"
                 for r in Vitai(path).milestone_ladder()}
-    assert got == {"bea/swim-weekly", "maja/four-sessions",
-                   "marcus/weekly-volume", "nora/weekly-training-volume",
-                   "otto/erg-twice", "priya/show-up-3x-week",
-                   "yasmin/attempt3-consistency"}, got
+    assert got == {"marcus/weekly-volume", "nora/weekly-training-volume",
+                   "priya/show-up-3x-week", "yasmin/attempt3-consistency"}, got
 
 
 def test_an_abandoned_attempt_does_not_render_beside_the_live_one():
@@ -401,12 +399,9 @@ def test_the_rule_holds_across_the_whole_corpus():
         for r in Vitai(path).milestone_ladder():
             checked += 1
             assert r["passed"] == (r["reached"] >= r["value"]), (path.name, r)
-    # Seven live scoreable goals, four rungs each. The floor is what stops
-    # the test quietly checking nothing if the gate tightens again; three
-    # arrived with `bea`, `otto` and `maja`, whose weekly counts are scoreable
-    # for the same reason the original four are. `maja`'s protein BAND is not
-    # among them, which is the interesting half: a range is not a ladder.
-    assert checked == 28, checked
+    # Four live scoreable goals, four rungs each. The floor is what stops the
+    # test quietly checking nothing if the gate tightens again.
+    assert checked == 16, checked
 
 
 # --- the surfaces the first cut left unwitnessed --------------------------------

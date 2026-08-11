@@ -24,8 +24,8 @@ TWO QUESTIONS, AND ONLY ONE OF THEM IS ANSWERABLE TODAY.
 
 The second one is the sharper half, and the honest answer is `unknown`.
 `derived_build` is the only version-bearing field in the schema; it is
-required only on a `derived_external` row, and it is set on exactly one row in
-the whole shipped corpus. It could not be pressed into service anyway: it names the
+required only on a `derived_external` row, and it is set on 1 of 9676 rows in
+the shipped corpus. It could not be pressed into service anyway: it names the
 build that DERIVED a value, and this question is about what the writer was
 CAPABLE of - which come apart precisely here, because the field being asked
 about is the one that is missing, so there is no row to carry a stamp.

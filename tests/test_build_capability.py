@@ -146,13 +146,7 @@ def test_the_one_stamped_row_in_the_corpus_is_a_derived_external_one():
                 if row.get("derived_build"):
                     stamped += 1
                     assert row.get("capture") == "derived_external", row
-    # EXACTLY ONE, and no exact denominator. The numerator is the claim - one
-    # row in the whole shipped corpus carries a build stamp, and it is a
-    # `derived_external` row. The total moves every time a persona is added,
-    # so pinning it makes an unrelated change fail here and teaches the next
-    # reader to edit the number rather than check the claim.
-    assert stamped == 1, stamped
-    assert total > 9000, total
+    assert (stamped, total) == (1, 9676), (stamped, total)
 
 
 def test_a_field_the_engine_never_heard_of_answers_unknown():
