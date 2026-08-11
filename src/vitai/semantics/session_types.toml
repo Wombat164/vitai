@@ -100,7 +100,7 @@ strava = "MountainBikeRide"
 healthkit = "HKWorkoutActivityTypeCycling"
 compendium = 1
 classes = ["cycle", "cardio", "lower_body"]
-aliases = ["mtb", "mountain biking", "offroad bike"]
+aliases = ["mtb", "mountain biking", "offroad bike", "mountain biked"]
 
 [types.gravel_ride]
 label = "Gravel ride"
@@ -185,7 +185,7 @@ strava = "StandUpPaddling"
 healthkit = "HKWorkoutActivityTypePaddleSports"
 compendium = 18
 classes = ["paddle", "upper_body"]
-aliases = ["sup", "paddleboard", "paddle boarding"]
+aliases = ["sup", "paddleboard", "paddle boarding", "paddleboarded"]
 
 [types.surfing]
 label = "Surfing"
@@ -430,7 +430,7 @@ aliases = ["workout", "training", "activity", "session"]
 [types.wintersport]
 label = "Winter sport (unspecified)"
 classes = ["wintersport", "cardio", "lower_body"]
-aliases = ["snow sports", "ski or board", "ski", "skiing", "skating", "skied"]
+aliases = ["snow sports", "ski or board", "ski", "skiing", "skating", "skied", "skated"]
 coarse = true
 
 [types.sport]

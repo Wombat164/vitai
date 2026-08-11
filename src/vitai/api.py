@@ -3043,16 +3043,35 @@ def session_types() -> dict:
     registry declares them in `alias_fields` so the resolver still matches
     them. The distinction is DATA rather than a regex over a suffix.
 
+    Their accepted spelling CHANGED, which is worth saying plainly rather than
+    calling the move neutral. Those eight aliases carried a `(myfitnesspal)`
+    suffix, added by hand as a provenance annotation when they were accepted;
+    the vendor's export does not carry it and nothing here composes one. So
+    the suffixed form resolved and the string a real export actually contains
+    did not. Now it is the other way round, which fixes the import rather than
+    preserving it.
+
     THE INFLECTIONS ARE PUBLISHED, which is the half the issue said was worth
     arguing about. They are a fact about English rather than about the record,
     which is an argument for leaving them to a client - except that every
     client needs the same ones, the set is closed, and getting them wrong
     files a session under the wrong type. No type carried a past-tense form
     before this: "running" resolved and "ran" did not, so the issue's own
-    headline example was the one that failed. They are published for the 24
-    types that name an activity a person does rather than a game they play -
-    `ran`, `swam`, `rode` - and the ambiguous ones are left out on purpose,
-    since a bare "skated" cannot choose between ice and inline.
+    headline example was the one that failed.
+
+    The rule is narrow, because a vocabulary that contains a word nobody says
+    is one nobody can trust: a type gets a past tense where ORDINARY USE HAS
+    ONE. `ran`, `swam`, `golfed`. Nothing was conjugated to fill the table, so
+    the types with no natural form - `elliptical`, `yoga`, `tennis` - have
+    none, and `tennised` is not a word this engine will match. Where a form is
+    ambiguous across several types it goes wherever the registry already sends
+    its present tense: `skated` and `skied` both land on `wintersport`,
+    beside the `skating` and `ski` that were already there. That is a
+    precedent this follows rather than one it sets, and it is a coarse answer
+    - `skated` cannot tell ice from inline, and summer rollerblading landing
+    under `wintersport` is a pre-existing oddity in that mapping, not one
+    introduced here. The unambiguous spellings `ice skated` and `rollerbladed`
+    resolve precisely.
 
     NOT ENGLISH-ONLY, and it would be wrong to say so: the registry already
     carries `schaatsen`, `voetbal`, `velomobiel`, `randonnee` and `langlauf`,
@@ -3071,7 +3090,13 @@ def session_types() -> dict:
         for field in vendors:
             value = (meta or {}).get(field)
             if value:
-                entry[field] = value if isinstance(value, list) else [value]
+                # A COPY, like `aliases` above. Handing back the registry's own
+                # list let a consumer append to it and invent a session type
+                # for the rest of the process, or clear it and stop every
+                # import of that vendor resolving - silently, in the engine,
+                # from a caller that only meant to tidy a display list. The
+                # generations surface already had to learn this.
+                entry[field] = list(value) if isinstance(value, list) else [value]
         out[slug] = entry
     return out
 

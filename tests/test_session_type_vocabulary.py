@@ -21,12 +21,30 @@ from vitai.vocab import registry, resolve_session_type
 
 # --- what it publishes ----------------------------------------------------------
 
-def test_every_type_carries_a_label_and_its_names():
+def test_every_type_is_published_with_its_registry_label():
     got = session_types()
-    assert len(got) == len(registry("session_types")["types"])
+    types = registry("session_types")["types"]
+    assert set(got) == set(types)
     for slug, entry in got.items():
-        assert entry["label"], slug
-        assert isinstance(entry["aliases"], list), slug
+        assert entry["label"] == (types[slug].get("label") or slug), slug
+
+
+def test_what_it_publishes_is_a_copy_a_caller_cannot_corrupt():
+    """The published lists reach clients that normalise vocabularies in place -
+    lower-case, de-dupe, drop what they will not show. Handing back the
+    registry's own list means one such caller rewrites the engine's resolver
+    for the rest of the process, with nothing raised."""
+    got = session_types()
+    got["run"]["aliases"].append("invented by a consumer")
+    got["run"]["myfitnesspal"].append("also invented")
+    for entry in session_types().values():
+        entry.get("myfitnesspal", []).clear()
+
+    assert resolve_session_type("invented by a consumer") is None
+    assert resolve_session_type("also invented") is None
+    assert resolve_session_type("swimming laps, freestyle, light/moderate effort") == "swim"
+    assert session_types()["run"]["aliases"] == ["running", "jog", "jogging",
+                                                 "ran", "jogged"]
 
 
 # --- the inflections ------------------------------------------------------------
@@ -59,7 +77,66 @@ def test_every_spelling_the_issue_names_is_also_published():
         assert set(written) <= published, (slug, set(written) - published)
 
 
-def test_the_past_tense_is_there_at_all():
+# Every past-tense spelling this engine publishes, written out. Not derived
+# from the registry: a register built from what the registry holds passes by
+# construction and cannot notice a dropped word. 18 of the first 29 were
+# pinned by nothing, so deleting `climbed` broke no test.
+PAST_TENSE = {
+    "run": ["ran", "jogged"],
+    "walk": ["walked"],
+    "cycle": ["cycled", "rode", "biked"],
+    "swim": ["swam", "swum"],
+    "row": ["rowed"],
+    "hike": ["hiked", "trekked"],
+    "climb": ["climbed"],
+    "strength": ["lifted"],
+    "paddle": ["paddled"],
+    "sail": ["sailed"],
+    "surfing": ["surfed"],
+    "golf": ["golfed"],
+    "kayaking": ["kayaked"],
+    "canoeing": ["canoed"],
+    "snowboard": ["snowboarded"],
+    "skateboard": ["skateboarded"],
+    "windsurf": ["windsurfed"],
+    "kitesurf": ["kitesurfed"],
+    "snowshoe": ["snowshoed"],
+    "mobility": ["stretched"],
+    "ice_skate": ["ice skated"],
+    "inline_skate": ["rollerbladed"],
+    "wintersport": ["skied", "skated"],
+    "trail_run": ["trail ran"],
+    "mountain_bike_ride": ["mountain biked"],
+    "stand_up_paddling": ["paddleboarded"],
+}
+
+
+def test_every_published_past_tense_resolves_to_its_type():
+    for slug, words in PAST_TENSE.items():
+        for word in words:
+            assert resolve_session_type(word) == slug, word
+
+
+def test_every_published_past_tense_is_also_offered():
+    got = session_types()
+    for slug, words in PAST_TENSE.items():
+        assert set(words) <= set(got[slug]["aliases"]), slug
+
+
+def test_no_type_conjugates_a_verb_nobody_says():
+    """The register is the whole permitted set, so an `-ed` word added to any
+    type without being written down here fails. The earlier control listed
+    five slugs to check, three of which carry no aliases at all - so it
+    asserted nothing for those, passed with `soccered` added to `soccer`, and
+    omitted `golf`, the one type that would have failed it."""
+    allowed = {w for words in PAST_TENSE.values() for w in words}
+    for slug, entry in session_types().items():
+        for alias in entry["aliases"]:
+            if alias.endswith("ed"):
+                assert alias in allowed, (slug, alias)
+
+
+def test_the_past_tense_exists_at_all():
     """No type carried one before #350: "running" resolved, "ran" did not, so
     the issue's headline example was the one that failed."""
     assert resolve_session_type("ran") == "run"
@@ -68,21 +145,16 @@ def test_the_past_tense_is_there_at_all():
     assert resolve_session_type("lifted") == "strength"
 
 
-def test_an_ambiguous_past_tense_is_left_out_on_purpose():
-    """A bare "skated" cannot choose between ice and inline, so it resolves to
-    neither rather than silently picking whichever the index saw first."""
-    assert resolve_session_type("skated") is None
+def test_an_ambiguous_form_lands_where_its_present_tense_already_did():
+    """`skated` cannot tell ice from inline and `skied` cannot tell alpine
+    from nordic, so both go to the coarse type - which is where the registry
+    was already sending `skating` and `ski` before this. Following that
+    precedent rather than inventing a second rule for the past tense."""
+    for present, past in (("skating", "skated"), ("ski", "skied")):
+        assert resolve_session_type(past) == resolve_session_type(present)
+        assert resolve_session_type(past) == "wintersport"
     assert resolve_session_type("ice skated") == "ice_skate"
     assert resolve_session_type("rollerbladed") == "inline_skate"
-
-
-def test_a_game_you_play_gets_no_invented_verb():
-    """Past tense was added where the type names something a person DOES.
-    "tennised" is not a word, and a vocabulary that contains it is one nobody
-    can trust to be about how people speak."""
-    for slug in ("tennis", "badminton", "squash", "yoga", "pilates"):
-        for alias in session_types()[slug]["aliases"]:
-            assert not alias.endswith("ed"), (slug, alias)
 
 
 def test_the_aliases_are_not_english_only():
@@ -90,21 +162,54 @@ def test_the_aliases_are_not_english_only():
     rather than a policy - but "English-only" is a checkable claim and it was
     false."""
     for word, slug in (("schaatsen", "ice_skate"), ("voetbal", "soccer"),
-                       ("velomobiel", "velomobile"), ("langlauf", "nordic_ski")):
+                       ("velomobiel", "velomobile"), ("langlauf", "nordic_ski"),
+                       ("randonnee", "backcountry_ski")):
         assert resolve_session_type(word) == slug, word
 
 
 # --- recognition is not an offer list -------------------------------------------
 
-def test_a_vendor_export_string_is_not_something_a_person_says():
-    """#331's lesson one vocabulary over. Eight MyFitnessPal export strings sat
-    in `aliases` - the list published as "what a person calls this" - so a
-    client offering suggestions from it would have offered "running (jogging),
-    9 mph (6.5 min mile)"."""
-    for entry in session_types().values():
+# A person says a short phrase. A vendor emits a catalogue row: it qualifies,
+# punctuates, and quantifies - "swimming laps, freestyle, light/moderate
+# effort". This is a SHAPE rule, and it is written as what an alias may be
+# rather than what it may not, because the first version of this control was a
+# denylist of the three substrings present in the eight strings being moved
+# ("myfitnesspal", "mph", "min mile"). That could only ever catch the eight
+# already fixed: putting "swimming laps, freestyle, light/moderate effort" back
+# into `aliases` passed it, and it is one of the eight. A denylist drawn from
+# today's offenders is a list of what you already have.
+MAX_WORDS = 3
+FORBIDDEN_PUNCTUATION = ",()/;:"
+# Digits are out, with one witnessed exception. Back-pressure both ways: if
+# this entry loses its witness the test fails and the exception goes.
+ALIASES_THAT_MAY_CARRY_A_DIGIT = {"concept2"}
+
+
+def test_an_alias_has_the_shape_of_something_a_person_says():
+    """#331's lesson one vocabulary over: `aliases` is published as what a
+    person calls this, so a client offering suggestions from it must not be
+    offered "running (jogging), 9 mph (6.5 min mile)"."""
+    for slug, entry in session_types().items():
         for alias in entry["aliases"]:
-            assert "myfitnesspal" not in alias, entry
-            assert "mph" not in alias and "min mile" not in alias, entry
+            assert not any(c in alias for c in FORBIDDEN_PUNCTUATION), (slug, alias)
+            assert len(alias.split()) <= MAX_WORDS, (slug, alias)
+            if any(c.isdigit() for c in alias):
+                assert alias in ALIASES_THAT_MAY_CARRY_A_DIGIT, (slug, alias)
+
+
+def test_every_digit_bearing_exception_still_has_a_witness():
+    published = {a for e in session_types().values() for a in e["aliases"]}
+    assert ALIASES_THAT_MAY_CARRY_A_DIGIT <= published
+
+
+def test_the_shape_rule_rejects_a_vendor_string_it_has_never_seen():
+    """The point of a shape rule: it must catch the NEXT vendor, not the one
+    that prompted it. None of these is in the registry."""
+    for invented in ("aerobics, general",
+                     "stationary bike, moderate effort (bicycling)",
+                     "walking, 3.5 mph, level, brisk"):
+        assert (any(c in invented for c in FORBIDDEN_PUNCTUATION)
+                or len(invented.split()) > MAX_WORDS), invented
 
 
 def test_the_vendor_tokens_are_published_under_the_vendors_own_name():
