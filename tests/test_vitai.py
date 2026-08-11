@@ -1566,7 +1566,7 @@ def test_it_speaks_the_protocol(tmp_path):
     assert {t["name"] for t in replies[1]["result"]["tools"]} == \
         {"situation", "schema", "validate", "status", "day", "window",
          "goals", "safety", "claim", "said", "dataset", "derived", "may",
-         "project", "corrections", "questions", "can_emit", "absence",
+         "project", "corrections", "questions", "instruments", "instrument", "can_emit", "absence",
          # A REGISTER of what an agent can reach, pinned exactly so a tool
          # cannot arrive or vanish without this line changing.
          # `milestone_ladder` joined at #330: `goals` carries a count and the

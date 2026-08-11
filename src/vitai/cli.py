@@ -193,6 +193,36 @@ def _fmt_goal(row: dict) -> str:
         f"\n    why: {row['motivator']}" if row.get("motivator") else "")
 
 
+def cmd_instruments(args: argparse.Namespace) -> None:
+    """Which instrument reported as each origin, on a date."""
+    v = Vitai(_root(args))
+    if args.origin:
+        found = v.instrument(args.origin)
+        rows = [found] if found else []
+    else:
+        rows = v.instruments()
+    if args.json:
+        for row in rows:
+            print(json.dumps(row))
+        return
+    if not rows:
+        # NOT AN ERROR, and the wording matters. An unregistered origin still
+        # renders everywhere it did before; the register adds a name to an
+        # identity that already works without one.
+        who = f"{args.origin!r} is" if args.origin else "no origin is"
+        print(f"{who} registered on this date. Readings still carry their "
+              f"origin, so nothing is lost - the register adds a name and a "
+              f"provenance, and one line is enough to be useful")
+        return
+    for row in rows:
+        span = f"{row.get('from_date')} to {row.get('to_date') or 'now'}"
+        made = " ".join(str(row.get(k)) for k in ("maker", "model")
+                        if row.get(k))
+        label = row.get("name") or row.get("origin")
+        print(f"{str(row.get('origin')):<18} {label}"
+              f"{'  (' + made + ')' if made else ''}  [{span}]")
+
+
 def cmd_capabilities(args: argparse.Namespace) -> None:
     """What each instrument is competent at, as the record states it."""
     v = Vitai(_root(args))
@@ -1579,6 +1609,8 @@ def main(argv: list[str] | None = None) -> None:
         ("goals", cmd_goals, "active goals: progress, dates, contributions, flagged edits"),
         ("capabilities", cmd_capabilities,
          "what each instrument is competent at, as the record states it (#171)"),
+        ("instruments", cmd_instruments,
+         "which instrument reported as each origin, on a date (#311)"),
         ("milestones", cmd_milestones,
          "the milestone rungs a goal has this period, passed and not (#330)"),
         ("append", cmd_append,
@@ -1690,6 +1722,10 @@ def main(argv: list[str] | None = None) -> None:
                            help="reconstruct goals as they stood on this date")
             p.add_argument("--recent", type=int, default=10, metavar="N",
                            help="show the last N per-goal contributions (0 = none)")
+        if name == "instruments":
+            p.add_argument("--origin", help="ask about one origin")
+            p.add_argument("--json", action="store_true",
+                           help="emit rows as JSONL instead of prose")
         if name == "capabilities":
             p.add_argument("--origin", help="ask about one instrument")
             p.add_argument("--measures", help="and one measurand")

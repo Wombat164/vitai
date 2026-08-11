@@ -231,13 +231,25 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # else moves. A NEW DATASET rather than a new column, which is the first of
 # those here; the shape is the same as the derived-column re-pins above,
 # because a dataset no builder writes contributes no lines to diff.
-AUTHORED_AGAINST_CONTRACT = "44"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #311's `instruments` dataset (contract 45), and this one is
+# NOT the empty re-pin the two above were. `ines` registers her kit, because
+# her record already contains the confound the register exists for: she weighs
+# 65.80 kg at the gym on 2030-05-30, against 64.14 kg at home the same morning
+# and 64.06 kg four days later, and nothing in the record said those numbers
+# came off different scales. A dataset that ships exercised by nobody proves
+# nothing about the populated case, which is what the two re-pins above left
+# open. The other nine personas get an empty `instruments.jsonl`.
+AUTHORED_AGAINST_CONTRACT = "45"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     # #171: a new dataset, empty for every persona. Generation 3 rather than 1
     # because every dataset gets the blanket `recorded_at` and `device`
     # blocks; a key registered above the founding generation can only ever
     # exempt more lines, and there are none here to exempt.
     "capabilities": 3,
+    # #311: a new dataset. Generation 3 for the same reason as `capabilities`
+    # above - the blanket `recorded_at` and `device` blocks - and populated
+    # for `ines` rather than empty everywhere.
+    "instruments": 3,
     # #221: a new dataset, empty for every persona.
     "plans": 1,
     "achievements": 5,
