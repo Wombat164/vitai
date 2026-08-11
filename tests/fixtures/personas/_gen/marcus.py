@@ -30,12 +30,18 @@ what the ENGINE may conclude, not what the athlete says about himself.
 from __future__ import annotations
 
 import random
+from calendar import monthrange
 from datetime import date, datetime, timedelta, timezone
 from datetime import time as dtime
 
 from . import common
 
 SEED = 105
+# A SECOND STREAM FOR THE NIGHT, so adding it shifted no step count and no
+# sleep duration. Not `SEED + 1`: the seeds in this directory run
+# consecutively, so that is 106, which is yasmin's - her deviates and his
+# bedtimes would have been the same numbers scaled.
+SLEEP_SEED = 10105
 # Bumped only when the history could change an engine output
 # (docs/persona-doctrine.md); never for prose, typos, or findings.
 PERSONA_VERSION: int = 2
@@ -201,6 +207,9 @@ def build(end: date = DEFAULT_END) -> dict[str, str]:
     weight = _weight(rng, weight_stamper, end)
     daily = _daily(rng, daily_stamper, end)
     sessions, tracks = _sessions(rng, sessions_stamper, end)
+    # AFTER the day exists, because the night has to bound it. Draws no
+    # random numbers, so no stream moves.
+    _wake_no_later_than(daily, sessions, weight)
     journal = _journal(journal_stamper)
     medical = _medical(medical_stamper)
     checks = _checks(checks_stamper)
@@ -298,25 +307,52 @@ def _weight(rng: random.Random, stamper: common.Stamper, end: date) -> list[dict
 # --- daily -----------------------------------------------------------------
 
 
-def _uk_offset(d: date) -> str:
-    """`+01:00` under British Summer Time, `+00:00` otherwise.
+def _last_sunday(year: int, month: int) -> date:
+    """The last Sunday in a month.
 
-    Written out rather than taken from a tz database, because the engine is
-    stdlib-only and `zoneinfo` needs system data this build cannot assume. BST
-    runs from the last Sunday in March to the last Sunday in October; the
-    01:00 UTC changeover instant is not modelled, since no night here starts
-    inside that hour.
+    `calendar.monthrange` rather than a hardcoded 31. The first cut wrote
+    `date(year, month, 31) if month == 3 else date(year, month, 31)` - two
+    identical branches, reading as if month length were handled and delivering
+    nothing. It happens to work for March and October and raises for April.
     """
-    def last_sunday(year: int, month: int) -> date:
-        d = date(year, month, 31) if month == 3 else date(year, month, 31)
-        return d - timedelta(days=(d.weekday() + 1) % 7)
-
-    return ("+01:00" if last_sunday(d.year, 3) <= d < last_sunday(d.year, 10)
-            else "+00:00")
+    last = date(year, month, monthrange(year, month)[1])
+    return last - timedelta(days=(last.weekday() + 1) % 7)
 
 
-def _uk_delta(d: date) -> timedelta:
-    return timedelta(hours=1) if _uk_offset(d) == "+01:00" else timedelta(0)
+def _uk_offset(local: datetime) -> str:
+    """The offset in force in Britain at a LOCAL wall-clock time.
+
+    ON THE INSTANT, NOT THE DATE, and the first cut got that wrong. BST runs
+    from 01:00 UTC on the last Sunday in March to 01:00 UTC on the last Sunday
+    in October, so the changeover days are SPLIT: 00:30 on the October Sunday
+    is still BST, and the date-granularity version stamped it `+00:00`. Marcus
+    has exactly one night there - the one ending 2029-10-28 - and calling it
+    GMT erased a real clock crossing and made the fixture wrong on one of the
+    rows it exists to make trustworthy.
+
+    The ambiguous hour in October (01:00-02:00 local, which happens twice) is
+    resolved as BST, the first pass. Nothing here depends on the choice; it is
+    named because silently picking one is how the next reader gets surprised.
+
+    Hand-rolled rather than `zoneinfo` because the persona generators are held
+    to the same stdlib-only rule as the engine and a tz database is system
+    data a build cannot assume - Windows ships none. Not because `zoneinfo` is
+    absent from this interpreter: it is, and it agrees with this function on
+    every night in the span, which a test checks where the data exists.
+    """
+    march, october = _last_sunday(local.year, 3), _last_sunday(local.year, 10)
+    day = local.date()
+    if day < march or day > october:
+        return "+00:00"
+    if day == march:
+        return "+00:00" if local.hour < 1 else "+01:00"
+    if day == october:
+        return "+01:00" if local.hour < 2 else "+00:00"
+    return "+01:00"
+
+
+def _uk_delta(local: datetime) -> timedelta:
+    return timedelta(hours=1) if _uk_offset(local) == "+01:00" else timedelta(0)
 
 
 def _sleep_interval(clock: random.Random, d: date,
@@ -355,17 +391,86 @@ def _sleep_interval(clock: random.Random, d: date,
     # Adding to an INSTANT and then expressing the result in the offset in
     # force when he woke keeps them consistent, and the hour really does move
     # on the wall clock, which is a fact about the night rather than an error.
-    began = local.replace(tzinfo=timezone(_uk_delta(local.date())))
+    return _stamp_interval(local, sleep_h)
+
+
+def _stamp_interval(local: datetime, sleep_h: float) -> tuple[str, str]:
+    """A naive local lights-out plus a duration, as two aware stamps.
+
+    AWARE ARITHMETIC, and the naive version was wrong on exactly the nights
+    that cross a clock change. Adding the duration to a naive clock and
+    stamping each end with its own date's offset made the interval and
+    `sleep_h` disagree by an hour on those nights - the ones a reader would
+    most want to trust. Adding to an INSTANT and expressing the result in the
+    offset in force when he woke keeps them consistent, and the hour really
+    does move on the wall clock, which is a fact about the night.
+    """
+    began = local.replace(tzinfo=timezone(_uk_delta(local)))
     instant = began + timedelta(hours=sleep_h)
-    ended = instant.astimezone(timezone(_uk_delta(instant.date())))
+    naive_end = instant.replace(tzinfo=None) + _uk_delta(local)
+    ended = instant.astimezone(timezone(_uk_delta(naive_end)))
     return began.isoformat(), ended.isoformat()
+
+
+def _wake_no_later_than(daily: list[dict], sessions: list[dict],
+                        weight: list[dict]) -> None:
+    """Pull a night back so it ends before the morning it is supposed to bound.
+
+    THE NIGHT HAS TO AGREE WITH THE DAY, and drawing it from its own stream
+    meant it did not. The bedtime rule knows his weekday and his school terms
+    and nothing else, so on 73 of 441 sessions and 33 of 260 weigh-ins the
+    fixture had him running or standing on the scale while still asleep - a
+    contradiction no reader could take as anything but signal, produced by two
+    uncorrelated generators rather than by design.
+
+    A consumer of this fixture is asked to confirm an athlete-proposed time
+    against sleep (#212). If sleep contradicts his own timestamps on one day
+    in six, that consumer is calibrated against noise.
+
+    The WHOLE INTERVAL shifts, so `sleep_h` is untouched: the duration is
+    already in the row and moving one boundary would make the two disagree.
+    Waking a quarter of an hour before the first thing he logged is the
+    minimum that makes the ordering true; it is not a claim about how long he
+    takes to get out of the door.
+    """
+    earliest: dict[str, datetime] = {}
+    for row in sessions:
+        if not row.get("start_time"):
+            continue
+        when = datetime.fromisoformat(row["start_time"])
+        key = when.date().isoformat()
+        naive = when.replace(tzinfo=None)
+        if key not in earliest or naive < earliest[key]:
+            earliest[key] = naive
+    for row in weight:
+        hhmm = row.get("measured_at")
+        if not hhmm:
+            continue
+        key = row["date"]
+        hour, minute = (int(x) for x in str(hhmm).split(":"))
+        naive = datetime.fromisoformat(key).replace(hour=hour, minute=minute)
+        if key not in earliest or naive < earliest[key]:
+            earliest[key] = naive
+
+    for row in daily:
+        first = earliest.get(row["date"])
+        if not first or not row.get("sleep_start"):
+            continue
+        woke = datetime.fromisoformat(row["sleep_end"])
+        latest = first - timedelta(minutes=15)
+        if woke.replace(tzinfo=None) <= latest:
+            continue
+        back = woke.replace(tzinfo=None) - latest
+        began = datetime.fromisoformat(row["sleep_start"]) - back
+        row["sleep_start"], row["sleep_end"] = _stamp_interval(
+            began.replace(tzinfo=None), row["sleep_h"])
 
 
 def _daily(rng: random.Random, stamper: common.Stamper, end: date) -> list[dict]:
     """Steps and sleep from the watch, most days. The M1 window additionally
     carries a low `pain` scalar on eight specific dates - see M1_DATES."""
     rows = []
-    clock = random.Random(SEED + 1)
+    clock = random.Random(SLEEP_SEED)
     for d in common.daterange(START, end):
         base_steps = 13500 if is_holiday(d) else 10500
         steps = max(3000, int(rng.gauss(base_steps, 2200)))
@@ -447,10 +552,22 @@ def _base_fields(rng: random.Random, stamper: common.Stamper, d: date,
 
 
 def _offset(d: date) -> str:
-    """British clock offsets: BST late March to late October, else UTC."""
-    if date(d.year, 3, 25) <= d <= date(d.year, 10, 25):
-        return "+01:00"
-    return "+00:00"
+    """British clock offsets for a morning row.
+
+    ONE DEFINITION IN THIS FILE, and there were two. This said BST ran
+    2025-03-25 to 2025-10-25 - a fixed-date approximation of the real
+    last-Sunday rule - while the sleep boundaries used the real one. They
+    disagreed on twelve days per year, and five of those carried rows: on
+    2029-10-27 a run stamped `+00:00` started twelve minutes BEFORE a wake
+    stamped `+01:00` by the wall clock and forty-eight minutes AFTER it by
+    the instant. Two readers, opposite orderings, one morning - which is the
+    defect the engine refuses to guess its way through, planted in the fixture
+    meant to make it safe.
+
+    Morning rows only, so the hour is fixed at 07:00: every caller stamps a
+    session start or a weigh-in, and none of them lands in a changeover hour.
+    """
+    return _uk_offset(datetime.combine(d, dtime(hour=7)))
 
 
 def _canal_run(rng: random.Random, stamper: common.Stamper, d: date) -> dict:

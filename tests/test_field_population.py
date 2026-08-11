@@ -155,7 +155,7 @@ UNREAD = (
     # (#212 needs it: the two-tier day-phase cannot be confirmed against a
     # corpus where sleep timing is 0% populated, which it was). Nothing in
     # `src/` reads either field yet - the reader is #203, anchoring the day to
-    # the athlete\'s sleep rather than to midnight. This leaves the register
+    # the athlete's sleep rather than to midnight. This leaves the register
     # the day that lands.
     "daily.sleep_end",
     "daily.sleep_start",
