@@ -819,7 +819,13 @@ CLI_MAY_IMPORT = {
     # decision. A blanket "anything from api" would let CLI-shaped logic be
     # parked in api.py to get past this test, which is the failure one layer
     # along.
-    "api": {"Vitai", "init", "schema"},
+    # `can_emit`, `absence` and `this_build` join for the same reason
+    # `schema` did: what a build can produce is a property of the
+    # installed ENGINE rather than of a record, so it takes no root. All
+    # three are reachable by an agent - `can_emit` and `absence` are MCP
+    # tools, and `this_build` is in the `schema` payload (#335).
+    "api": {"Vitai", "init", "schema", "can_emit", "absence",
+            "this_build"},
     # `mcp` is a second HARNESS, not engine logic, which is the distinction
     # this table exists to police. It is allowed for the same reason `api` is
     # and `jsonl` is not: it structurally cannot exceed the API, because its
@@ -1560,7 +1566,7 @@ def test_it_speaks_the_protocol(tmp_path):
     assert {t["name"] for t in replies[1]["result"]["tools"]} == \
         {"situation", "schema", "validate", "status", "day", "window",
          "goals", "safety", "claim", "said", "dataset", "derived", "may",
-         "project", "corrections", "questions",
+         "project", "corrections", "questions", "can_emit", "absence",
          # A REGISTER of what an agent can reach, pinned exactly so a tool
          # cannot arrive or vanish without this line changing.
          # `milestone_ladder` joined at #330: `goals` carries a count and the

@@ -1,0 +1,61 @@
+# What each RELEASED build of this engine can emit (#335).
+#
+# THE PROBLEM THIS EXISTS FOR. The core install is dependency-free and some
+# work ships as an optional extra (#23 settled that for route work). A row
+# enriched by an extra carries fields a core install cannot produce, so a
+# consumer meeting an absent field cannot tell which of two things it means:
+# the value was not measured, or the install that wrote the record could not
+# measure it. This engine treats that distinction as load-bearing everywhere
+# else - absence and zero are different facts, `no_data` was split into four
+# reasons, `not_supported` exists so a refusal is distinguishable from a gap -
+# and an optional extra reintroduces exactly that ambiguity at the install
+# boundary unless something states it.
+#
+# KEYED ON A BUILD, NOT ON AN INSTALL. Contract 34 refused an install
+# identifier deliberately: a stable per-install id is a tracking key. What a
+# released build can emit is the same fact for every athlete on earth, so this
+# is engine data shipped with the engine rather than rows in a personal
+# record. It is a separate dataset from an instrument's capability (#171),
+# which is about a watch and belongs to the athlete who owns it.
+#
+# IT CARRIES HISTORY, and calling it static was the first mistake. True of one
+# build and false of the registry: a build's own capabilities never change,
+# but the registry has to cover every build that ever wrote into a record, and
+# an absence written by build N-3 is exactly the case a table describing only
+# the build in front of you cannot answer.
+#
+# NO DATING MACHINERY, which is where it parts company with #171. A capability
+# statement about an instrument is effective-dated - the athlete learns
+# something new about a watch they have owned for a year, and the statement
+# applies from a date. A build is not like that. Its abilities are fixed at
+# release and the axis is the VERSION, not the calendar, so `_in_force` and
+# its no-retrofit rules have nothing to do here.
+#
+# WHAT IS NOT RECORDED, deliberately. Builds older than this registry are
+# absent rather than guessed at. There is no honest way to reconstruct them
+# from inside the engine, and inventing entries would be the confident-wrong
+# answer this area keeps refusing. They resolve to `unknown`.
+
+# --- the extras ---------------------------------------------------------------
+#
+# An extra is an optional install that produces fields the core cannot. Each
+# names the fields it and only it can emit, so a question about an absent
+# field can be routed to the extra that owns it.
+#
+# EMPTY, AND THAT IS THE TRUE STATE. The route extra that raised #335 is not
+# built (#23), so today no field in this schema is owned by an extra and every
+# absence on a covered build means what it has always meant. Declaring `route`
+# here before it exists would make this file assert a capability the engine
+# does not have, which is the failure it was written to prevent.
+
+[extras]
+
+# --- the builds ---------------------------------------------------------------
+#
+# One entry per released build, `version` -> what it ships. A build present
+# here with no extras is a positive statement: this build could emit the core
+# schema and nothing beyond it. That is different from a build being absent,
+# which says only that nobody recorded what it could do.
+
+[builds."0.5.0"]
+ships = []

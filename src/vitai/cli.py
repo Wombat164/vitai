@@ -15,7 +15,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from . import __version__
-from .api import Vitai, init, schema
+from .api import Vitai, absence, can_emit, init, schema, this_build
 from .jsonl import DataError
 from .schema import KEYS
 from .db import DERIVED_TABLES
@@ -1489,6 +1489,36 @@ def cmd_status(args: argparse.Namespace) -> None:
     print(st["disclaimer"])
 
 
+def cmd_can_emit(args: argparse.Namespace) -> None:
+    """A harness over `api.can_emit` and `api.absence` (#335).
+
+    No `--root`, for `cmd_schema`'s reason: what a build can produce is a
+    property of the engine, not of a record.
+
+    It prints BOTH answers because they are different questions and the
+    difference is the whole issue. "Can this build emit it" is about an
+    install. "What does an absence mean" is about a row, and needs to know
+    which build wrote that row - which nothing records, so omitting `--build`
+    answers `unknown` rather than quietly answering about the install in front
+    of you.
+    """
+    field, build = args.field, args.build
+    verdict = can_emit(field, build)
+    means = absence(field, build)
+    if args.json:
+        print(json.dumps({"field": field, "build": build or this_build(),
+                          "can_emit": verdict, "absence_means": means},
+                         indent=2, sort_keys=True))
+        return
+    who = f"build {build}" if build else f"this build ({this_build()})"
+    print(f"{field}: {who} can emit it -> {verdict}")
+    if build:
+        print(f"an absence on a row written by {build} means -> {means}")
+    else:
+        print("an absence on a row means -> unknown, until something says "
+              "which build wrote that row. Nothing does.")
+
+
 def cmd_schema(args: argparse.Namespace) -> None:
     """A harness over `api.schema()`.
 
@@ -1807,6 +1837,17 @@ def main(argv: list[str] | None = None) -> None:
         help="the contract version and dataset generations this engine emits")
     p.add_argument("--json", action="store_true")
     p.set_defaults(fn=cmd_schema)
+
+    # Rootless for the same reason.
+    p = sub.add_parser(
+        "can-emit",
+        help="whether a build can produce a field, and what an absence means")
+    p.add_argument("field")
+    p.add_argument("--build", default=None,
+                   help="the build that WROTE the row; omit to ask about "
+                        "the install doing the reading")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(fn=cmd_can_emit)
 
     args = ap.parse_args(argv)
     args.fn(args)
