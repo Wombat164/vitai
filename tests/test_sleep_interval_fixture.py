@@ -14,13 +14,19 @@ own description would be worse than no corpus.
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-MARCUS = ROOT / "tests" / "fixtures" / "personas" / "marcus"
+PERSONAS = Path(__file__).parent / "fixtures" / "personas"
+MARCUS = PERSONAS / "marcus"
+# The generators are importable as `_gen.<slug>`, the same way
+# `test_personas_corpus` reaches them. `tests.fixtures...` works only when the
+# repo root happens to be on the path, which it is locally and is not in CI.
+sys.path.insert(0, str(PERSONAS))
 
 
 # The gap the generator is designed to produce, and a band rather than a
@@ -101,7 +107,7 @@ def test_a_school_night_runs_earlier_than_a_free_one(nights):
     before a school day is the constrained one. Checked as a POPULATION rather
     than per row - any single night can run late - because the claim is about
     a pattern and a per-row assertion would be false by design."""
-    from tests.fixtures.personas._gen.marcus import is_holiday
+    from _gen.marcus import is_holiday
 
     school, free = [], []
     for row in nights:
@@ -120,7 +126,7 @@ def test_a_holiday_weekday_is_a_free_night_not_a_school_one(nights):
     the fixture rests on, that his school terms shape his nights, was pinned
     by nothing. A weekday in the holidays has the same weekday and none of the
     constraint, which is the only comparison that isolates the calendar."""
-    from tests.fixtures.personas._gen.marcus import is_holiday
+    from _gen.marcus import is_holiday
 
     term, holiday = [], []
     for row in nights:
@@ -176,7 +182,7 @@ def test_one_definition_of_british_summer_time(nights):
     twelve days a year, and on 2029-10-27 that put a run twelve minutes before
     a wake by the wall clock and forty-eight minutes after it by the instant -
     two readers, opposite orderings, one morning."""
-    from tests.fixtures.personas._gen.marcus import _offset, _uk_offset
+    from _gen.marcus import _offset, _uk_offset
 
     for row in nights:
         day = datetime.fromisoformat(row["date"]).date()
