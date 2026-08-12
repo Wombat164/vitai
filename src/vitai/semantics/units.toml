@@ -355,6 +355,19 @@ label = "in the units of the goal's metric"
 unit_of = "metric"
 label = "in the units of the goal's metric"
 
+# A comparability row's `bias`/`spread` are in whatever unit its OWN `field`
+# column names - a `kg` row measures its bias in kilograms, a future `steps`
+# row would measure it in steps - so a constant here would be wrong exactly
+# the way one would be for `target` (#373 review: neither was registered at
+# all, which is why the numeric gate never saw them).
+[unit.bias]
+unit_of = "field"
+label = "in the units of the field being compared"
+
+[unit.spread]
+unit_of = "field"
+label = "in the units of the field being compared"
+
 # `value` means three different things in three datasets, so it is resolved
 # per dataset below rather than here.
 [unit.value]

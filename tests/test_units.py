@@ -38,7 +38,11 @@ from vitai.vocab import registry
 # Updated deliberately at #33 item 2, which curated three more: `origin_a` ->
 # "first instrument", `origin_b` -> "second instrument", `overlap_ref` ->
 # "overlap reference" (the `session_ref` precedent, one dataset over).
-PINNED_DIGEST = "0e983ffa73ee0f40"
+# Updated deliberately at #373 (review of #33 item 2): `bias` and `spread`
+# were never registered at all, so the numeric gate never saw them - both
+# are `unit_of = "field"`, in whatever unit the row's own `field` column
+# names, the same shape `target` already has for a goal's `metric`.
+PINNED_DIGEST = "3da9340661fabb8f"
 
 REGISTRY = Path(__file__).resolve().parents[1] / "src" / "vitai" / "semantics" / "units.toml"
 def _numeric_in_the_corpus() -> set[tuple[str, str]]:

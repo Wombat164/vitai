@@ -296,7 +296,22 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                               "this line comes back."]
                 elif device["seam"] and not all_comparable(
                         comparability or [], "kg", device["instruments"],
-                        today):
+                        # THE WEEK UNDER JUDGMENT, not `today` (#373 review).
+                        # `compute_verdicts` resolves this same gate as of
+                        # `wk`, the Monday of the week whose rate it is
+                        # computing - the effective-dating convention
+                        # `policy.state` documents for every dated lookup: a
+                        # judgment uses the policy in force THEN. This line
+                        # judges the same window - the week of the most
+                        # recent weigh-in - so it has to ask the same
+                        # question of the record, or a `comparable` row
+                        # dated partway through the week reads as in force
+                        # here (today is after it) while the verdicts table
+                        # for that identical week still sees it as future
+                        # (the week's Monday is before it), and the rollup
+                        # says "losing" beside a table that permanently says
+                        # `no_data`.
+                        _week_key(pts[-1][0])):
                     # NO "WEIGH THE SAME WAY" LINE, because the athlete
                     # cannot. A scale is replaced once and the old readings
                     # are permanent; the rate returns when the fortnight no

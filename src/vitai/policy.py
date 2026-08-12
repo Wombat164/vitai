@@ -37,7 +37,8 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 from .clocks import order_key
-from .schema import COMPARABLE, IDENTITY_KEY, NOT_COMPARABLE, UNKNOWN_COMPETENCE
+from .schema import (COMPARABLE, IDENTITY_KEY, NOT_COMPARABLE, OFFSET,
+                     OVERLAP_BASIS, UNKNOWN_COMPETENCE)
 
 HARD, SOFT = "hard", "soft"
 
@@ -191,6 +192,45 @@ def capability(rows: list[dict], origin: str, measures: str,
             "stated": False}
 
 
+def _earns_its_status(row: dict) -> bool:
+    """Is this row entitled to the weight `comparability` gives `comparable`
+    and `offset` - LIFTING a refusal - or is it only entitled to whatever a
+    `not_comparable` row already is, the record's default?
+
+    FAIL CLOSED (#373 review), and written here because this is the first
+    dataset in this engine where the distinction matters. `jsonl.load`
+    quarantines a line that fails to PARSE and nothing else; a line that
+    parses but fails the SCHEMA - `basis` not `overlap`, no `overlap_ref` -
+    comes through it untouched, because `build`/`verdicts` read a dataset
+    straight off `load`, not off `validate_record`. For every dataset before
+    this one that was harmless: a schema-invalid row could only be dropped
+    from a POSITIVE claim (a capability nobody can act on, a goal nobody can
+    read), never used to weaken a REFUSAL that was protecting something. This
+    dataset's whole job is to lift the instrument-seam refusal, so a row
+    that has not earned the two conditions #171 requires for that - a
+    `basis` of `overlap` and a named `overlap_ref` - must not be able to
+    lift it merely by writing `comparable` in the status column. A hand-
+    written line with `basis: "stated"` and no `overlap_ref` verified this in
+    the review that found it: it lifted the seam, and the verdict for the
+    week it spanned came back `ahead` on a difference two different scales
+    produced, not the athlete.
+
+    A gate derived from data the record itself supplies has to distrust that
+    data the same way any other input does - GATES MUST FAIL CLOSED - and a
+    row is the record's data regardless of whether a human or a script wrote
+    the line. `not_comparable` needs no such gate: it can only ADD to a
+    refusal that is already the default, never weaken one, so a row claiming
+    it is honoured regardless of `basis` - `vitai validate` still reports it
+    as malformed, which is a different question from whether the SEAM stays
+    refused.
+    """
+    if row.get("status") not in (COMPARABLE, OFFSET):
+        return True
+    overlap_ref = row.get("overlap_ref")
+    return (row.get("basis") == OVERLAP_BASIS
+           and isinstance(overlap_ref, str) and bool(overlap_ref.strip()))
+
+
 def comparability(rows: list[dict], field: str, origin_a: str, origin_b: str,
                   on: str | date) -> dict:
     """Are these two instruments on the same footing for this field? (#33 item 2)
@@ -207,6 +247,24 @@ def comparability(rows: list[dict], field: str, origin_a: str, origin_b: str,
     field name. A comparability table shipped in `semantics/` would be #148's
     defect one dataset over: effective-dating that a default escapes is not
     effective-dating, so there is no default outside the record.
+
+    A ROW THAT HAS NOT EARNED ITS STATUS IS ALSO SILENCE (`_earns_its_status`,
+    #373 review). `comparable` and `offset` LIFT a refusal, so a row claiming
+    either one is honoured only where it satisfies the conditions that make
+    the claim earned rather than asserted; anything else is treated as
+    ABSENT from this question rather than downgraded to `not_comparable` in
+    place. The filter runs AFTER `_in_force`, which has already picked the
+    one surviving row per LITERAL identity - so within one identity (one
+    order of `origin_a`/`origin_b`) an unearned row contributes nothing at
+    all, there being no earlier row of that same identity left to fall back
+    to. What it cannot shadow is the OTHER identity this question straddles:
+    `(a, b)` and `(b, a)` are stored separately, and an unearned, later-dated
+    row on one of them must not win the cross-identity tie-break in
+    `matches` over an earned row still standing on the other - a downgrade
+    in place would let it, by keeping it in the pool with a later `date`.
+    This is the one dataset here where that distinction is load-bearing:
+    every dataset before it could only lose a POSITIVE claim to a schema
+    failure, never gain a weakened REFUSAL from one.
 
     ORDER-INSENSITIVE IN THE PAIR, deliberately, though the identity stored
     on a row is not: `(field, origin_a, origin_b)` and
@@ -227,7 +285,8 @@ def comparability(rows: list[dict], field: str, origin_a: str, origin_b: str,
         row for row in _in_force(rows, "comparability", on_s).values()
         if str(row.get("field")) == str(field)
         and frozenset({str(row.get("origin_a")), str(row.get("origin_b"))})
-        == want]
+        == want
+        and _earns_its_status(row)]
     if matches:
         return max(matches, key=order_key)
     return {"field": str(field), "origin_a": str(origin_a),
@@ -252,6 +311,25 @@ def all_comparable(rows: list[dict], field: str, instruments: list[str],
     MEASURED, not that the two sides may be read as one series, and applying
     a measured offset to a reading would be fabricating a measurement (P4).
     Only `comparable` lifts the refusal.
+
+    WHAT IS NOT SHARED IS THIS FUNCTION'S OWN `on` - each caller resolves its
+    own viewpoint and hands it in, and the two used to disagree (#373 review):
+    `compute_verdicts` passed `wk`, the Monday of the week whose rate it
+    judges, and `report.build_report` passed `today`, the moment the report
+    is generated. A `comparable` row dated partway through a week is in force
+    by `today` but not yet by that week's Monday, so the rollup read it as
+    lifted while the verdicts table for the identical week still refused -
+    two surfaces giving two answers about one record, which is exactly what
+    sharing this gate was supposed to make impossible. It was never
+    impossible: sharing the PAIRWISE DEFINITION does not share the
+    VIEWPOINT, and this function has no way to enforce the second half from
+    inside itself; it can only be as consistent as its callers choose to be.
+    Both now ask as of the week under judgment, matching `policy.state`'s own
+    rule that a judgment uses the policy in force THEN rather than the policy
+    in force when someone happens to be reading - callers are responsible for
+    passing the SAME `on` for the SAME window, and a caller that judges a
+    different window (a live "as of right now" surface with no week of its
+    own) is free to pass `today`; nothing here would catch it.
 
     Vacuously true for zero or one instrument. That cannot happen where this
     is called today - `clocks.instrument_seam` only reports a seam once at

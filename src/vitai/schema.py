@@ -237,11 +237,23 @@ KEYS: dict[str, list[str]] = {
     # big it was; it is not a licence to apply that number to a reading,
     # which would be fabricating a measurement (P4) - the seam refusal (#33
     # item 3) lifts only for `comparable`, never for `offset`. `bias` and
-    # `spread` are required beside `offset` (an offset with no measured size
-    # is the assertion this dataset exists to refuse) and forbidden beside
-    # `not_comparable` (a number on a refusal is a number about nothing) -
-    # the same required-beside/forbidden-beside shape `_capability_problems`
-    # already uses for `construct`.
+    # `spread` are BOTH required beside `offset` (an offset with a measured
+    # size and no reported spread is a number with no idea how firm it is,
+    # and #171 settled that both are owed) - the same required-beside/
+    # forbidden-beside shape `_capability_problems` already uses for
+    # `construct`.
+    #
+    # THE TWO ARE NOT SYMMETRIC BESIDE `comparable`, and that is deliberate
+    # rather than an oversight the way it read before this was reasoned
+    # through (#373 review). `bias` beside `comparable` is a contradiction -
+    # a MEASURED bias means the two instruments read differently by a known
+    # amount, which is what `offset` is for, and forbidden here for the same
+    # reason it is forbidden beside `not_comparable`: a number contradicting
+    # its own status is a number about nothing. `spread` beside `comparable`
+    # is not a contradiction - it says how tightly the two agreed over the
+    # overlap, which is meaningful evidence about a pair the record has
+    # already called comparable - so it stays permitted, and forbidden only
+    # beside `not_comparable`, where nothing was measured to have a spread.
     #
     # `basis` is `overlap` and ONLY `overlap` - a closed vocabulary of one
     # value, because the whole point is that this cannot be asserted from a
@@ -1991,6 +2003,11 @@ _TYPES: dict[str, tuple[type, ...]] = {
     "target": _NUMERIC, "target_hi": _NUMERIC, "guard_pct": _NUMERIC,
     "value": _NUMERIC,
     "mood": (int,), "pain": (int,), "elevation_m": _NUMERIC,
+    # #373 review: neither was type-checked, so 'spread: "banana"' validated
+    # clean beside a required-ness check that only asked whether the key was
+    # present. Registered here rather than hand-rolled in
+    # `_comparability_problems`, the same as every other numeric field.
+    "bias": _NUMERIC, "spread": _NUMERIC,
 }
 
 # extra keys that are always legal (the supersedes mechanic + schema generation)
@@ -2281,13 +2298,28 @@ def _comparability_problems(rec: dict) -> list[str]:
     another - the same required-beside/forbidden-beside pattern `construct`
     already enforces for `proxy`. An offset with no measured size is an
     assertion wearing a measurement's clothes; a bias attached to a refusal
-    is a number about nothing.
+    is a number about nothing. TYPE-CHECKED THROUGH `_TYPES`, not by hand
+    here: both are registered there beside every other numeric field
+    (#373 review), so `spread: "banana"` fails the same generic check
+    `kg: "banana"` already does rather than validating clean because this
+    dataset rolled its own.
+
+    'FIELD' NAMES A MEASUREMENT, not any column this record happens to have
+    (#373 review - the allowlist this used to be, every key of every
+    dataset, accepted `"note"` and `"origin_a"` exactly as readily as `"kg"`).
+    `sensitivity` is the engine's own per-field classification (#299),
+    reused for the reason `_relabelled_values` already reuses it rather than
+    keeping a second list in step with the first: a comparability statement
+    is a question about whether two instruments could disagree on a
+    QUANTITY, and only a field classified `measurement` is one.
     """
     out: list[str] = []
     field = rec.get("field")
-    known = {f for ds in KEYS for f in KEYS[ds]}
-    if field not in known:
-        out.append(f"'field' names a field this record has, got {field!r}")
+    if not any(field in KEYS[ds] and sensitivity(ds, field) == "measurement"
+              for ds in KEYS):
+        out.append(f"'field' names a measurement - a quantity two "
+                   f"instruments could disagree about, not any column this "
+                   f"record has - got {field!r}")
 
     origin_a, origin_b = rec.get("origin_a"), rec.get("origin_b")
     for name, value in (("origin_a", origin_a), ("origin_b", origin_b)):
@@ -2321,11 +2353,27 @@ def _comparability_problems(rec: dict) -> list[str]:
                    "comparability earned by overlap has to name the overlap")
 
     bias, spread = rec.get("bias"), rec.get("spread")
-    if status == OFFSET and not (isinstance(bias, _NUMERIC)
-                                 and not isinstance(bias, bool)):
-        out.append("'bias' is the measured cross-instrument offset and is "
-                   "required beside 'offset' - an offset with no measured "
-                   "size is an assertion, not a measurement")
+    if status == OFFSET:
+        if bias is None:
+            out.append("'bias' is the measured cross-instrument offset and "
+                       "is required beside 'offset' - an offset with no "
+                       "measured size is an assertion, not a measurement")
+        if spread is None:
+            out.append("'spread' is how tightly the two instruments agreed "
+                       "over the overlap and is required beside 'offset', "
+                       "per #171: a measured size with no reported spread "
+                       "is a number with no idea how firm it is")
+    # 'bias' BESIDE 'comparable' IS CONTRADICTORY (#373 review): a MEASURED
+    # bias means the two instruments read differently by a known amount,
+    # which is what 'offset' is for. 'spread' beside 'comparable' is NOT
+    # flagged - it says how tightly the two agreed over the overlap, which
+    # is meaningful evidence about a pair the record has already called
+    # comparable, not a contradiction the way a bias would be.
+    if status == COMPARABLE and bias is not None:
+        out.append("'bias' is contradictory beside 'comparable' - a "
+                   "measured bias means the two instruments are OFFSET, not "
+                   f"on the same footing; write 'offset' instead, got "
+                   f"{bias!r}")
     if status == NOT_COMPARABLE:
         if bias is not None:
             out.append("'bias' has no meaning beside 'not_comparable' - a "
