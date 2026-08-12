@@ -505,8 +505,12 @@ def test_the_stamped_template_tells_a_reader_the_device_section_exists(tmp_path)
 
     This does not assert exact wording - the fix is prose and prose is free
     to be reworded - only that a reader of the stamped file, who has not read
-    `config.py` or `devices.py`, can find the section and the key. Mutating
-    the template back to having no `[device]` section at all must fail this.
+    `config.py` or `devices.py`, can find the section and three facts: what
+    the slug picks (a per-device file), what happens when it is left unset
+    (every device shares the plain file), and that it must be unique per
+    device (the same slug twice is the same collision again). Mutating the
+    template back to having no `[device]` section, or to a bare stub that
+    names the key without explaining any of the three, must fail this.
     """
     root = repo(tmp_path)
     toml = (root / "vitai.toml").read_text(encoding="utf-8")
@@ -514,5 +518,19 @@ def test_the_stamped_template_tells_a_reader_the_device_section_exists(tmp_path)
         "the stamped vitai.toml never mentions a [device] section - a reader "
         "has no way to discover the setting that keeps a second machine from "
         "colliding with the first")
-    assert "slug" in toml.split("[device]", 1)[1].split("[inference]", 1)[0], (
+    section = toml.split("[device]", 1)[1].split("[inference]", 1)[0]
+    section_lower = section.lower()
+    assert "slug" in section, (
         "the [device] section is present but does not show the `slug` key")
+    assert "jsonl" in section_lower, (
+        "the [device] section does not say what the slug actually selects - "
+        "a reader cannot tell it picks the file a device's appends land in")
+    absent_markers = ("unset", "absent", "not set", "no slug", "without a slug")
+    assert any(m in section_lower for m in absent_markers), (
+        "the [device] section does not say what happens when the slug is "
+        "left unset - a reader cannot tell every device then shares one file")
+    unique_markers = ("unique", "differ", "distinct", "same slug", "same name")
+    assert any(m in section_lower for m in unique_markers), (
+        "the [device] section does not say the slug must be unique per "
+        "device - a reader copying this file to a second machine has "
+        "nothing warning them off reusing the first device's slug")

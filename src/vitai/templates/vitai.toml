@@ -61,6 +61,10 @@
 # data/<dataset>.<slug>.jsonl, so no two devices ever write the same file -
 # see devices.py for why that makes a conflict structurally impossible
 # rather than merely resolved.
+#
+# The slug MUST be unique per device: copying this tuned file to set up a
+# second machine and leaving the slug as-is, or picking the same name again
+# out of habit, is this exact collision, renamed and just as undetectable.
 
 # [inference]            # OPT-IN intelligence layer for `vitai infer`:
                          # a model reads the record and appends validated
