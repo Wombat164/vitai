@@ -2452,6 +2452,7 @@ class Vitai:
                              corrections_that_did_not_apply,
                              impossible_claim_problems, recorded_at_problems,
                              period_advisories, polarity_advisories,
+                             protocol_pin_advisories,
                              side_advisories,
                              supersedes_problems,
                              timestamp_advisories,
@@ -2464,6 +2465,15 @@ class Vitai:
             s for ladder in cfg.precedence.values() for s in ladder}
         problems: list[str] = []
         advisories: list[str] = []
+        # Kept for `protocol_pin_advisories` below, which needs `protocols`
+        # rows while validating `weight` and `measurements` - and `protocols`
+        # is registered into `KEYS` after both of them (#171 track 2 landed
+        # long after the founding datasets), so it has not been read yet at
+        # the point in this loop where weight or measurements is reached.
+        # Deferring the call to after the loop, once every dataset has been
+        # read once, is cheaper and simpler than re-reading protocols.jsonl
+        # a second time to get it early.
+        dataset_rows: dict[str, list[tuple[int, dict]]] = {}
 
         for name in KEYS:
             # EVERY device file, not just the plain one (#105). Reading only
@@ -2511,6 +2521,7 @@ class Vitai:
                 advisories += unstamped_after_the_clock_started(path.name,
                                                                 found)
                 rows += found
+            dataset_rows[name] = rows
             # File-level: transaction time must be monotonic and tie-free
             # (#37). Neither is a property of any single line.
             problems += recorded_at_problems(name, rows)
@@ -2559,6 +2570,11 @@ class Vitai:
                         f"{name}.jsonl line {n}: track {t!r} is not in this "
                         "repo - the session stands, but its geometry cannot "
                         "be rebuilt")
+
+        protocol_rows = dataset_rows.get("protocols", [])
+        for ds in ("weight", "measurements"):
+            advisories += protocol_pin_advisories(
+                ds, dataset_rows.get(ds, []), protocol_rows)
 
         return {"problems": problems, "advisories": advisories,
                 "ok": not problems}
