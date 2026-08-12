@@ -3600,6 +3600,94 @@ def timestamp_advisories(dataset: str, rows: list[tuple[int, dict]]) -> list[str
             "02:30 it means on the night the clocks go back"]
 
 
+def protocol_pin_advisories(dataset: str, rows: list[tuple[int, dict]],
+                            protocol_rows: list[tuple[int, dict]]) -> list[str]:
+    """A weight or measurements row silent about a protocol this dataset has
+    otherwise used to name its conditions (#371).
+
+    CAUGHT, not merely surfaced - this is the sharpened ask from the issue's
+    own follow-up comment, and the shape below is built to match it exactly.
+
+    SCOPE IS DERIVED, NEVER DECLARED, and that is the whole design. A
+    `protocols` row (see `KEYS["protocols"]`) does not say which dataset it
+    governs - it is a slug, a date and some prose, nothing more - so "a
+    protocol for weight exists" cannot be read off `protocols.jsonl` alone.
+    It has to be read off `weight.jsonl` itself: whatever slugs weight rows
+    have actually named IS the evidence a protocol applies to weight, and
+    nothing else is.
+
+    THE EMPTY CASE IS SILENCE, not a lesser warning, and it is the common
+    case: of this repo's own personas, three are 100% pinned and the rest are
+    0%, and a record that has never named a protocol for a dataset has given
+    no evidence any protocol applies to it. Advising there would be the
+    engine inventing a discipline nobody adopted, which the issue's decision
+    rules out by name ("a record with no protocols declared has nothing to be
+    missing"). So: no slug ever named in this dataset -> return nothing for
+    it, full stop, before any row is even looked at for absence.
+
+    SCOPED TO ON-OR-AFTER THE DECLARATION. A row dated before the earliest
+    `protocols` row for a slug this dataset uses could not have named a
+    protocol that did not exist yet - the athlete cannot cite a procedure
+    from the future. Flagging it would be noise on exactly the readings that
+    were never wrong, which trains a reader to stop trusting the advisory for
+    the ones that are. So the cutoff is the earliest DECLARATION date among
+    the slugs this dataset actually uses, not the earliest date any row in
+    this dataset happens to carry.
+
+    ADVISORY, NEVER A REFUSAL - the issue is explicit about why. A reading
+    taken under unknown conditions is still true, and losing it (by refusing
+    the append) would be worse than holding it unpinned; 377 of 381 real
+    weight rows name no protocol today, and a validator that cannot pass on
+    a real record is one that gets switched off (#38's reasoning, again).
+    What must not happen is an unpinned reading being COMPARED as though it
+    were pinned - that is `protocol_seam`'s job at build/report time, over
+    resolved windows, and is not touched here. This function only says how
+    many rows, and which span, are silent about conditions this dataset has
+    otherwise cared enough to name.
+
+    ONE LINE PER DATASET, not one per row - `polarity_advisories` and
+    `timestamp_advisories` set the precedent: a validator that printed one
+    line per unpinned row on a 377-of-381 record would be almost the whole
+    file, and that is the validator people stop reading.
+    """
+    if dataset not in ("weight", "measurements"):
+        return []
+    # Step 1: slugs THIS DATASET has actually named. Not every slug that
+    # exists in `protocols.jsonl` - see the docstring above for why that
+    # distinction is the whole point.
+    named = {str(r["protocol"]) for _, r in rows if r.get("protocol")}
+    if not named:
+        return []
+    # Step 2: the earliest date any of those named slugs was DECLARED. A slug
+    # may be named on a row before its `protocols` row exists at all (legal
+    # and open - see the comment on `KEYS["protocols"]`); if none of the used
+    # slugs has a matching `protocols` row yet, there is no declaration date
+    # to scope against, so there is nothing yet to advise.
+    declared = [str(r["date"]) for _, r in protocol_rows
+               if str(r.get("slug")) in named and r.get("date")
+               and not _bad_date(r["date"])]
+    if not declared:
+        return []
+    since = min(date.fromisoformat(d) for d in declared)
+    # Step 3: rows in THIS dataset, dated on or after `since`, that carry no
+    # protocol. A malformed date is skipped here rather than guessed at -
+    # `_bad_date` already reports it elsewhere as its own problem.
+    unpinned = [(n, r) for n, r in rows
+               if not r.get("protocol") and r.get("date")
+               and not _bad_date(r["date"])
+               and date.fromisoformat(str(r["date"])) >= since]
+    if not unpinned:
+        return []
+    span = sorted(date.fromisoformat(str(r["date"])) for _, r in unpinned)
+    return [
+        f"{dataset}.jsonl: {len(unpinned)} row(s) dated {span[0].isoformat()} "
+        f"to {span[-1].isoformat()} carry no 'protocol', though this record "
+        f"has named {', '.join(sorted(named))!r} since {since.isoformat()} "
+        f"(first: line {unpinned[0][0]}). Legal and unrefused - an unpinned "
+        "reading is still true - but it is not comparable to one that names "
+        "its conditions until it does too"]
+
+
 def unranked_source_problems(dataset: str, rows: list[tuple[int, dict]],
                              known: set[str]) -> list[str]:
     """Source terms the precedence ladder has never heard of (#73).
