@@ -3631,11 +3631,18 @@ def protocol_pin_advisories(dataset: str, rows: list[tuple[int, dict]],
     ever lands (legal and open, see the comment on `KEYS["protocols"]`). A
     slug with no matching `protocols` row ANYWHERE in the record is not
     evidence any procedure applies, so it must not anchor the scope and must
-    not, on its own, turn the advisory on. This is a SEPARATE gate from the
-    empty-named-set one above and from the adoption-date gate below, and it
-    matters most in combination: one real slug plus one dangling one must
-    still anchor correctly on the real one (tested), not fall through to
-    "nothing is declared, scope the whole history".
+    not, on its own, turn the advisory on.
+
+    Written as its own gate for readability, and honestly it is SUBSUMED:
+    removing it changes no output any test can see, because a dataset whose
+    slugs are all dangling also has no adoption date and stops at the gate
+    below. Mutating it away leaves the suite green. It stays because the
+    three conditions are three different reasons to say nothing and reading
+    them as one would lose two of them - not because anything can catch its
+    removal. The same is true of the empty-named-set gate above. What IS
+    caught is the combination that matters: one real slug plus one dangling
+    one must anchor on the real one's adoption rather than falling through
+    to "nothing is declared, scope the whole history".
 
     THE ANCHOR IS THIS DATASET'S OWN ADOPTION, not a `protocols` declaration
     date pulled from anywhere it happens to sit. It used to be the earliest
@@ -3654,9 +3661,11 @@ def protocol_pin_advisories(dataset: str, rows: list[tuple[int, dict]],
 
     ADVISORY, NEVER A REFUSAL - the issue is explicit about why. A reading
     taken under unknown conditions is still true, and losing it (by refusing
-    the append) would be worse than holding it unpinned; 377 of 381 real
-    weight rows name no protocol today, and a validator that cannot pass on
-    a real record is one that gets switched off (#38's reasoning, again).
+    the append) would be worse than holding it unpinned. In this repo's own
+    corpus 2103 of 2209 weight rows name none, and a validator that cannot
+    pass on a real record is one that gets switched off. The issue quotes a
+    higher proportion still from a private record; that figure is not
+    checkable here, so this states the one that is.
     What must not happen is an unpinned reading being COMPARED as though it
     were pinned - that is `protocol_seam`'s job at build/report time, over
     resolved windows, and is not touched here. This function only says how
