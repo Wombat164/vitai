@@ -812,10 +812,17 @@ def test_no_prose_outside_the_migration_table_names_a_contract_number():
     number is removed from prose entirely and this asserts it stays removed:
     no `contract N` claim may appear anywhere in README.md except inside the
     migration table, which remains the one place an integrator can trust.
+
+    The pattern is case-insensitive and treats the separator between the
+    word and the number as optional, so it also catches `CONTRACT 27`,
+    `contract-27` and `contract27` - `wiki/content/explanation/platform.md`
+    already has a hyphenated "a contract-1 reader", which the space-only
+    pattern this replaced would have walked straight past had it been
+    written in README.md instead.
     """
     import re
     prose = _readme_prose_outside_migration_table()
-    hits = re.findall(r"[Cc]ontract \d+", prose)
+    hits = re.findall(r"\bcontract[ -]?\d+\b", prose, re.IGNORECASE)
     assert not hits, (
         f"README.md names a contract number outside the migration table: "
         f"{hits}. The table is the only place that number should live - "
