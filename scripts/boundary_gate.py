@@ -19,12 +19,35 @@ mistake in different grammar - one asserts an instruction the tool cannot help
 anyone carry out, and the other asserts a medical purpose. Under FDA general
 wellness and MDCG 2019-11 the trigger is the CLAIM, not the technology.
 
-## What it deliberately does not do
+CATEGORY words (#379): a small deny list of clinical banding vocabulary -
+`overweight`, `obese`, `healthy range`, and the rest catalogued beside
+`CATEGORY_WORDS` below. A category applied to a person IS the class (c)
+diagnosis; it needs no purpose verb and no medical noun beside it, which is
+why it is its own family rather than an addition to `PURPOSE_VERB`.
+
+## What it deliberately does not do, and this is the load-bearing paragraph
 
 No natural-language understanding, and no attempt to catch condition-naming
 mechanically - that is open-ended and stays a review judgement. **Start narrow
 and grow.** A lint that cries wolf gets deleted, and a deleted lint catches
 nothing at all, so a false positive here costs more than a missed string.
+
+This applies with extra force to `CATEGORY_WORDS`: it is a DENY LIST, not a
+definition of class (c). It catches the category words somebody sat down and
+thought of - the ones a lookup table would introduce in an afternoon - and
+nothing else. `docs/medical-boundary.md` class (c) forbids naming or implying
+"a disease, syndrome or diagnosis" in general; this file mechanically enforces
+only the slice of that rule which is a word on the list below plus the two
+older families above it. A novel category this list did not anticipate - a
+regional term, a newly-popular banding scheme, a translated word, a compound
+nobody has written yet - passes clean. The SHAPE that would actually close the
+gap (a bare adjective applied to the athlete beside a number the engine
+published) cannot be expressed as a pattern without also firing on ordinary
+prose that applies the same adjectives to a route, a vendor ecosystem, or an
+athlete's sleep duration - see the false positives `CATEGORY_WORDS` was
+trimmed against, below. So the rest of class (c) is enforced the way it always
+was: by a reviewer reading `docs/medical-boundary.md` and this list is a floor
+under that, not a replacement for it.
 
 ## The allowlist is hashed, not listed
 
@@ -145,6 +168,66 @@ MEDICAL_NOUN = (r"\b(?:medical conditions?|disease|illness|disorder|"
                 r"syndrome|pathology|arrhythmia|deficienc(?:y|ies)|"
                 r"injur(?:y|ies)|red[- ]s|low energy availability)\b")
 
+# #379 (#370's decided rule made this load-bearing: "the engine may compute
+# the ratio and state the boundary as a boundary; it may never name the
+# band"). A bare category word IS the class (c) diagnosis - "your BMI entered
+# the healthy range", "you are in the overweight band", "this reading is in
+# the obese category" - none of them contain a purpose verb or a
+# `MEDICAL_NOUN`, so `_PURPOSE_RE` is structurally blind to all three. No
+# proximity requirement, unlike `PURPOSE_VERB` + `MEDICAL_NOUN`: the word
+# itself is the claim, there is no engineering homograph for "overweight" the
+# way "detect" and "condition" have one, so nothing needs to stand next to it.
+#
+# Every entry here was checked against the whole repo (docs/, wiki/, README,
+# skills/, src/, tests/) before being kept - see the rejections immediately
+# below the list, which are exactly as load-bearing as the inclusions.
+#
+# `obese` is deliberately here without `morbidly` in front of it: bare
+# `obese` already matches inside `morbidly obese`, so a separate entry would
+# be a second pattern for the same match.
+#
+# Blood pressure and body fat are the same shape as BMI - a number banded
+# into a named category - so their vocabulary belongs beside it rather than
+# waiting for a #370-shaped issue of their own. Nothing in this codebase
+# tracks blood pressure yet, but the vocabulary is ordinary and a contributor
+# reaching for it will reach for exactly these words.
+CATEGORY_WORDS = (
+    r"overweight",
+    r"underweight",
+    r"obese",
+    r"healthy weight",
+    r"healthy range",
+    r"normal range",
+    r"ideal weight",
+    r"hypertensive",
+    r"prehypertension",
+)
+
+# `obesity` is NOT in `CATEGORY_WORDS`, and this is a rejection on the same
+# footing as the inclusions above, not an oversight. It fires on legitimate
+# prose in two places on the public surface today: `docs/plan-v3.md`'s and
+# `skills/vitai-validate/SKILL.md`'s persona-construction methodology, both
+# listing "severe obesity" as an axis a validation persona should span - a
+# design document describing a TEST AXIS, not the engine concluding a
+# diagnosis about a reading. Tightening the pattern to require a labelling
+# word nearby (`category`, `range`, `band`) would dodge those two sentences,
+# but it would also be exactly the proximity machinery this family exists to
+# avoid needing, for one word, on the strength of two hits - the same
+# trade-off that kept `flag`, `spot` and `catch` out of `PURPOSE_VERB` above.
+# `obese` stays on the list and catches the adjective form; the noun form
+# waits for a real violation to justify the added machinery.
+#
+# Bare `healthy` and `normal` are NOT here, and could not be: this codebase's
+# own prose calls a well-maintained OSS project "healthy", a route "normal",
+# and mid-30s resting heart rate "normal for a trained endurance athlete"
+# constantly (`docs/prior-art-schemas.md`, `docs/model.md`, `src/vitai/safety.py`).
+# Either word alone would fire dozens of times across the surface on its first
+# run, which is precisely the "cries wolf" failure mode this file's own
+# doctrine warns gets a lint deleted. Only the two-word collocations above -
+# `healthy weight`, `healthy range`, `normal range` - are specific enough to
+# survive that check, and both were confirmed absent from the repo's existing
+# prose before being added.
+
 # HYPHENS ARE WORD SPACES for matching. `stop-and-see-a-clinician` is the same
 # claim as `stop and see a clinician`, and every phrase above was blind to it -
 # the template that `vitai init` copies into every content repo carried the
@@ -159,6 +242,7 @@ _DIRECTIVE_RE = re.compile("|".join(DIRECTIVES), re.I)
 _PURPOSE_RE = re.compile(
     rf"(?:{PURPOSE_VERB}[^.!?]{{0,80}}{MEDICAL_NOUN})"
     rf"|(?:{WATCH_VERB}[^.!?]{{0,80}}{CONDITION_NOUN})", re.I)
+_CATEGORY_RE = re.compile(r"\b(?:" + "|".join(CATEGORY_WORDS) + r")\b", re.I)
 
 # Sentences, across hard line wraps. The docs here are wrapped at ~80 columns,
 # so splitting on a newline hid every directive long enough to straddle one -
@@ -280,7 +364,7 @@ def sentences(text: str) -> list[str]:
 
 
 def findings(path: Path, text: str, spared: set[str]) -> list[str]:
-    """Every care directive or purpose claim in this file."""
+    """Every care directive, purpose claim, or category claim in this file."""
     out = []
     here = path.as_posix()
     for sentence in sentences(text):
@@ -289,7 +373,8 @@ def findings(path: Path, text: str, spared: set[str]) -> list[str]:
             continue
         probe = _match_form(sentence)
         for label, pattern in (("care directive", _DIRECTIVE_RE),
-                               ("purpose claim", _PURPOSE_RE)):
+                               ("purpose claim", _PURPOSE_RE),
+                               ("category claim", _CATEGORY_RE)):
             hit = pattern.search(probe)
             if hit and not _disclaimed(probe, hit.start()):
                 out.append(f"{label}: {' '.join(sentence.split())[:80]}")
@@ -311,8 +396,9 @@ def main() -> int:
     if bad:
         print(f"FAILED: {bad} finding(s).\n"
               "vitai states what it observed and what it will therefore not "
-              "do. It does not tell the reader to obtain care, and it does "
-              "not claim to detect, screen for or monitor a condition.\n"
+              "do. It does not tell the reader to obtain care, it does not "
+              "claim to detect, screen for or monitor a condition, and it "
+              "does not name the category a reading falls into.\n"
               "See docs/medical-boundary.md. If a string is genuinely part "
               "of the acute tier, it belongs in safety.ACUTE, which this "
               "gate reads directly.")

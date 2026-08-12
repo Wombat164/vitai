@@ -59,6 +59,29 @@ def test_the_finding_names_the_sentence_so_it_can_be_found():
     assert "see a doctor" in found[0]
 
 
+# ---- #379: a category is a diagnosis in one word --------------------------------------
+
+@pytest.mark.parametrize("line", [
+    "Your BMI entered the healthy range.",
+    "You are in the overweight band.",
+    "This reading is in the obese category.",
+    "That result sits in the underweight range.",
+    "Your latest reading suggests you are morbidly obese.",
+    "Your BMI is now in the healthy weight range.",
+    "This value falls in the ideal weight zone.",
+    "Your systolic reading is hypertensive.",
+    "This value is in the prehypertension range.",
+])
+def test_a_category_word_is_caught(line):
+    """#370 decided the engine may state the ratio and the numeric boundary
+    but may never name the band - "you have entered the healthy band" is
+    class (c), a category applied to a person as the engine's own conclusion.
+    None of these contain a purpose verb or a `MEDICAL_NOUN`, so they were
+    invisible to the gate before #379."""
+    found = scan(line)
+    assert found and found[0].startswith("category claim"), line
+
+
 # ---- it does not cry wolf ---------------------------------------------------------------
 
 @pytest.mark.parametrize("line", [
@@ -84,6 +107,46 @@ def test_a_disclaimer_is_not_a_claim(line):
 def test_ordinary_engineering_words_are_left_alone(line):
     """`detect`, `screen` and `monitor` are everyday words here. They count
     only next to a medical noun, or the lint fires on half the codebase."""
+    assert scan(line) == [], line
+
+
+@pytest.mark.parametrize("line", [
+    # docs/prior-art-schemas.md, describing OSS project health, not a person.
+    "Open Food Facts is alive and healthy.",
+    "OSRM, Valhalla and GraphHopper are all healthy.",
+    "This plus a healthy vendor ecosystem.",
+    # src/vitai/safety.py's own RHR comment - "healthy" and "normal" describe
+    # a population and an athlete's physiology respectively, not a category
+    # word from the deny list.
+    "Resting heart rate outside this band is outside the range of a healthy "
+    "person at rest.",
+    "Mid-30s is normal for a trained endurance athlete and must not fire.",
+    # docs/medical-boundary.md's own worked (a) example: the SAME two words
+    # as `healthy range`, but in the opposite order, which is exactly the
+    # collocation the deny list must not fire on out of order.
+    "Your recorded resting heart rate is outside the range seen in healthy "
+    "people at rest.",
+    # docs/model.md and skills/vitai-coach/SKILL.md: "normal" as an ordinary
+    # adjective for a day, a route, or a mode - not a clinical band.
+    "Two goals may share a metric, or be pursued differently, and that is "
+    "normal.",
+    "Vacation and a deadline week are not normal weeks.",
+    # docs/plan-v3.md and skills/vitai-validate/SKILL.md: "obesity" naming a
+    # persona-construction test axis, not the engine's own conclusion about a
+    # reading. This is why `obesity` (unlike `obese`) is not on the deny
+    # list - see the rejection comment beside `CATEGORY_WORDS`.
+    "Deliberately span the axes the author does not occupy: shift work, "
+    "life-stage physiology, severe obesity, elite performance.",
+    "Body composition spectrum: elite and lean through to severe obesity.",
+])
+def test_ordinary_healthy_and_normal_are_left_alone(line):
+    """"healthy" and "normal" are ordinary English, and this codebase's own
+    prose uses them constantly for OSS projects, routes, weeks and
+    physiology. Only the specific two-word collocations on the deny list
+    (`healthy range`, `healthy weight`, `normal range`) are narrow enough to
+    survive a scan of the whole repo; bare `healthy` or `normal` is not, and
+    `obesity` bare is not either, because of the two "severe obesity"
+    sentences quoted above."""
     assert scan(line) == [], line
 
 
