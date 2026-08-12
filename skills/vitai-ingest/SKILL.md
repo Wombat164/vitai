@@ -11,9 +11,11 @@ content repo's `data/`. You are the connector; the contract is the schema.
 ## The contract
 
 1. **Emit schema-valid lines only.** Datasets and keys are defined in
-   `src/vitai/schema.py` of the vitai tool (weight / daily / sessions).
-   Every key present, `null` for unknown, units as the key name says
-   (`kg`, `_km`, `_s`, `_h`), ISO dates, session `type` from the enum.
+   `src/vitai/schema.py`; run `vitai schema` for the current list and field
+   counts rather than trusting a count here, which is exactly what went
+   stale (#366). Every key present, `null` for unknown, units as the key
+   name says (`kg`, `_km`, `_s`, `_h`), ISO dates, session `type` from the
+   enum.
 2. **Append, never edit.** A correction to an existing line is a NEW line
    with `"supersedes":"<date>/<source>"`. If the athlete says a number was
    wrong, supersede it - do not touch the original.

@@ -142,9 +142,14 @@ Three datasets record what happened:
 | File | One line per | Example keys |
 |---|---|---|
 | `data/goals.jsonl` | goal declaration or edit | `slug`, `metric`, `target`, `policy`, `motivator` |
+| `data/plans.jsonl` | what a day was meant to be, resolved later | `slug`, `for_date`, `activity`, `tier`, `outcome` |
 | `data/thresholds.jsonl` | threshold change | `key`, `value`, `change_kind`, `reason` |
+| `data/capabilities.jsonl` | what an instrument can and cannot measure, dated | `origin`, `measures`, `competence`, `construct` |
+| `data/instruments.jsonl` | the entity behind an origin, over an interval | `origin`, `from_date`, `to_date`, `maker` |
+| `data/protocols.jsonl` | a measurement's conditions, declared or corrected | `slug`, `text` |
 | `data/achievements.jsonl` | recorded accomplishment | `title`, `goal`, `source` |
 | `data/context.jsonl` | situational mode change | `mode`, `facilities`, `place` |
+| `data/regimes.jsonl` | interval a whole class of claims went unanchored | `from_date`, `to_date`, `dataset`, `field` |
 | `data/medical.jsonl` | step in one condition's lifecycle | `slug`, `kind`, `severity`, `status`, `restricts` |
 | `data/events.jsonl` | dated real-world fixture | `slug`, `kind`, `event_date`, `priority`, `immovable` |
 | `data/checks.jsonl` | a check performed and its result | `slug`, `result`, `value` |
