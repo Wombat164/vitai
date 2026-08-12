@@ -146,6 +146,7 @@ Three datasets record what happened:
 | `data/thresholds.jsonl` | threshold change | `key`, `value`, `change_kind`, `reason` |
 | `data/capabilities.jsonl` | what an instrument can and cannot measure, dated | `origin`, `measures`, `competence`, `construct` |
 | `data/instruments.jsonl` | the entity behind an origin, over an interval | `origin`, `from_date`, `to_date`, `maker` |
+| `data/comparability.jsonl` | whether two instruments are on the same footing, EARNED by overlap | `field`, `origin_a`, `origin_b`, `status`, `basis` |
 | `data/protocols.jsonl` | a measurement's conditions, declared or corrected | `slug`, `text` |
 | `data/achievements.jsonl` | recorded accomplishment | `title`, `goal`, `source` |
 | `data/context.jsonl` | situational mode change | `mode`, `facilities`, `place` |
