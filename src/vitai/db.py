@@ -753,7 +753,49 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     it does today, because a register that demands nine fields per
 #     instrument decays to nothing in a year and then its coverage is patchy
 #     in a way nobody can see.
-CONTRACT_VERSION = "45"
+# 46: a `comparability` dataset - whether two instruments' readings of one
+#     field may be read as one series, EARNED BY OVERLAP and never asserted
+#     (#33 item 2, #171 section 4.1).
+#
+#     THE DEFAULT IS NOT COMPARABLE, and this is the item's own acceptance
+#     criterion rather than an engineering choice: deriving a trend across a
+#     source change needs an explicit statement that the two sides are on the
+#     same footing, never an assumption because both are called weight.
+#     Contract 44 already drew this line once for a single instrument's own
+#     competence; this is the same argument for a PAIR, and the two datasets
+#     share the identity `origin` names rather than inventing a second one -
+#     `origin_a`/`origin_b`, not "system_a"/"system_b", which the earlier
+#     proposal used before this engine had settled what an instrument's
+#     identity is called.
+#
+#     A STATEMENT, NOT A MEASUREMENT DERIVED FROM ONE. The engine does not
+#     compute an offset from two overlapping series and stamp it in - that
+#     would be exactly the borrowed-figure defect #171 already refused one
+#     axis over, moved from "a vendor said so" to "the engine inferred it",
+#     which is still an assertion this dataset exists to refuse. A period of
+#     simultaneous measurement is evidence a HUMAN reads and reports; `basis`
+#     is `overlap` and only `overlap`, closed to one value, so the row can
+#     never claim a datasheet or a say-so as its grounds.
+#
+#     THREE STATUSES, AND `offset` DOES NOT LICENSE A DERIVATION. `offset`
+#     records that a cross-instrument difference was measured and how big it
+#     was; applying that number to a reading would be fabricating a
+#     measurement (P4), so the weight-rate seam refusal (#33 item 3) lifts
+#     only for `comparable`. This is the one place in this change easiest to
+#     get backwards - a status that HOLDS A NUMBER reads as more permissive
+#     than one that does not, and here it is not.
+#
+#     ORDER-INSENSITIVE BY RESOLUTION, NOT BY STORAGE. `origin_a`/`origin_b`
+#     are two ordinary columns and the identity is the tuple as written, so a
+#     row recorded as (scale, dexa) and one recorded as (dexa, scale) are two
+#     independent identities as far as `supersedes` is concerned. The
+#     resolver in `policy.comparability` is where the two are reconciled,
+#     matching by the unordered pair rather than the tuple: asking whether a
+#     scale and a DEXA agree is one question regardless of which one a caller
+#     names first, and the alternative - a canonical write-time ordering -
+#     would make every caller responsible for sorting two strings correctly
+#     before appending, silently wrong the day one gets it backwards.
+CONTRACT_VERSION = "46"
 
 _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity would
               # A JSON map (#325), and every container column is TEXT for
@@ -848,7 +890,13 @@ _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity wou
 # #99: the categorical modifier axes. The parametric ones stay
               # numeric - including the machine-scoped ordinals, which ARE
               # numbers, just not comparable ones.
-              "equipment", "angle_class"}
+              "equipment", "angle_class",
+              # #33: the comparability dataset. `origin_a`/`origin_b` name
+              # instruments, the same reason `origin` above is TEXT, and
+              # `overlap_ref` is a label for a period or a claim id, not a
+              # number - `bias` and `spread` stay numeric, the measured
+              # quantities the row actually carries.
+              "origin_a", "origin_b", "overlap_ref"}
 
 # APPENDED, so a consumer reading by name is unaffected and one reading
 # positionally keeps every column it knew. `reason` (#177) is null on every

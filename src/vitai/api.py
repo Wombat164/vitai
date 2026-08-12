@@ -45,8 +45,8 @@ from .clocks import comparable, day_phase, is_aware, ordering_rule, phase_rule
 from .clocks import parse_time as parse_time
 from .jsonl import EVENT_DATASETS, append, append_many, load
 from . import query
-from .policy import (State, capability, context_on, days_between, events_on,
-                     plan_churn, state)
+from .policy import (State, capability, comparability, context_on,
+                     days_between, events_on, plan_churn, state)
 from .report import build_report
 from .resolution import live_inferences, resolve, retractions
 from .safety import (
@@ -1316,7 +1316,8 @@ class Vitai:
                                 d["sessions"], today=on,
                                 goals=d["goals"], thresholds=d["thresholds"],
                                 medical=d["medical"],
-                                raw_daily=self.dataset("daily"))
+                                raw_daily=self.dataset("daily"),
+                                comparability=self.dataset("comparability"))
 
     def rollup(self, today: date | None = None) -> str:
         """The weekly report as Markdown - the same text `build` writes out.
@@ -1348,7 +1349,8 @@ class Vitai:
                             raw_daily=self.dataset("daily"),
                             gates=self.gates(on),
                             escalations=self.urgent(on),
-                            events=self.events(on))
+                            events=self.events(on),
+                            comparability=self.dataset("comparability"))
 
     def state(self, on: date | str) -> State:
         """The goals and thresholds in force on a date - as-of reconstruction.
@@ -1735,6 +1737,29 @@ class Vitai:
                                      str(r.get("measures") or "")),
                       reverse=True)
 
+    def comparability(self, field: str, origin_a: str, origin_b: str,
+                      on: date | str | None = None) -> dict:
+        """Are these two instruments on the same footing for this field? (#33)
+
+        Never None. Silence answers `not_comparable`, which is a value in the
+        vocabulary rather than a null a consumer has to interpret - and it is
+        #33's own acceptance criterion, not an engineering default: deriving
+        a trend across a source change needs an explicit statement that the
+        two sides are on the same footing, never an assumption because both
+        are called weight.
+
+        NO DEFAULT OUTSIDE THE RECORD, `capability`'s own reasoning one
+        dataset over: a comparability table shipped in `semantics/` would
+        make every unstated pair resolve to whatever this build says today.
+
+        ORDER-INSENSITIVE. Asking about `(origin_a, origin_b)` answers
+        exactly as asking about `(origin_b, origin_a)` would, because
+        whether two instruments agree is one fact about the pair and not
+        about which one a caller happened to name first.
+        """
+        return comparability(self.dataset("comparability"), field, origin_a,
+                             origin_b, on or self.on)
+
     def instrument(self, origin: str,
                    on: date | str | None = None) -> dict | None:
         """The instrument reporting as `origin` on `on`, or None (#311).
@@ -1977,7 +2002,8 @@ class Vitai:
                                     d["sessions"], today=today,
                                     goals=d["goals"], thresholds=d["thresholds"],
                                     medical=d["medical"],
-                                    raw_daily=self.dataset("daily"))
+                                    raw_daily=self.dataset("daily"),
+                                    comparability=self.dataset("comparability"))
         on = (today or self.on).isoformat()
         return {
             "session_weeks": session_weeks(d["sessions"], on),
@@ -2087,7 +2113,8 @@ class Vitai:
                          gates=derivations["gates"],
                          escalations=urgent_now(derivations["escalations"],
                                                 on=on),
-                         events=self.events(on)),
+                         events=self.events(on),
+                         comparability=self.dataset("comparability")),
             encoding="utf-8", newline="\n")
         return db
 

@@ -289,6 +289,30 @@ def cmd_capabilities(args: argparse.Namespace) -> None:
             print(f"    {row['note']}")
 
 
+def cmd_comparability(args: argparse.Namespace) -> None:
+    """Are these two instruments on the same footing for this field? (#33)"""
+    v = Vitai(_root(args))
+    if not (args.field and args.origin_a and args.origin_b):
+        sys.exit("comparability needs --field, --origin-a and --origin-b: a "
+                 "comparability question is always about one field and a "
+                 "pair of instruments, never asked of all of them at once")
+    row = v.comparability(args.field, args.origin_a, args.origin_b)
+    if args.json:
+        print(json.dumps(row))
+        return
+    print(f"{args.origin_a} vs {args.origin_b}, {args.field}: {row['status']}")
+    if row.get("bias") is not None:
+        print(f"    offset: {row['bias']}")
+    if row.get("spread") is not None:
+        print(f"    spread: {row['spread']}")
+    if row.get("basis"):
+        print(f"    basis: {row['basis']}")
+    if row.get("overlap_ref"):
+        print(f"    overlap: {row['overlap_ref']}")
+    if row.get("note"):
+        print(f"    {row['note']}")
+
+
 def cmd_milestones(args: argparse.Namespace) -> None:
     """Every milestone rung a goal has this period, passed or not."""
     rows = Vitai(_root(args)).milestone_ladder(slug=args.slug)
@@ -1655,6 +1679,9 @@ def main(argv: list[str] | None = None) -> None:
          "which part of the athlete's own day each timed row fell in (#212)"),
         ("capabilities", cmd_capabilities,
          "what each instrument is competent at, as the record states it (#171)"),
+        ("comparability", cmd_comparability,
+         "are two instruments on the same footing for one field, earned by "
+         "overlap and never assumed (#33)"),
         ("instruments", cmd_instruments,
          "which instrument reported as each origin, on a date (#311)"),
         ("milestones", cmd_milestones,
@@ -1783,6 +1810,12 @@ def main(argv: list[str] | None = None) -> None:
             p.add_argument("--condition", help="under one condition")
             p.add_argument("--json", action="store_true",
                            help="emit rows as JSONL instead of prose")
+        if name == "comparability":
+            p.add_argument("--field", help="the field the two agree or not on")
+            p.add_argument("--origin-a", help="the first instrument")
+            p.add_argument("--origin-b", help="the second instrument")
+            p.add_argument("--json", action="store_true",
+                           help="emit the row as JSON instead of prose")
         if name == "milestones":
             p.add_argument("--slug", help="only this goal")
             p.add_argument("--json", action="store_true",

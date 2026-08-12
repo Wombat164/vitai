@@ -355,6 +355,19 @@ label = "in the units of the goal's metric"
 unit_of = "metric"
 label = "in the units of the goal's metric"
 
+# A comparability row's `bias`/`spread` are in whatever unit its OWN `field`
+# column names - a `kg` row measures its bias in kilograms, a future `steps`
+# row would measure it in steps - so a constant here would be wrong exactly
+# the way one would be for `target` (#373 review: neither was registered at
+# all, which is why the numeric gate never saw them).
+[unit.bias]
+unit_of = "field"
+label = "in the units of the field being compared"
+
+[unit.spread]
+unit_of = "field"
+label = "in the units of the field being compared"
+
 # `value` means three different things in three datasets, so it is resolved
 # per dataset below rather than here.
 [unit.value]
@@ -630,3 +643,11 @@ to_date = "end date"
 from_date = "start date"
 place_precise = "precise place"
 slug = "identifier"
+
+# #33 item 2: the comparability dataset. `origin_a`/`origin_b` derive to
+# "origin a"/"origin b", and a bare letter is not a word a person reads -
+# the same defect the token gate exists to catch, curated rather than
+# blessed. `overlap_ref` follows the `session_ref` precedent two lines up.
+origin_a = "first instrument"
+origin_b = "second instrument"
+overlap_ref = "overlap reference"

@@ -64,6 +64,15 @@ MACHINERY = {"recorded_at", "device", "supersedes", "date", "_gen"}
 
 # THE BACKLOG. Not an approval - see the module docstring.
 UNWRITTEN = (
+    # #33 item 2. `bias`/`spread` are required beside `offset` and forbidden
+    # beside `not_comparable`, and the demo's one comparability row is
+    # `comparable` - the status that leaves both null. Writing an `offset`
+    # row just to populate these would assert a cross-instrument difference
+    # this fixture has no such measurement behind, which is the exact
+    # fabrication #33 exists to refuse - so the honest fixture leaves them
+    # unwritten rather than inventing a number to satisfy this register.
+    "comparability.bias",
+    "comparability.spread",
     "daily.artifact",
     "daily.path",
     "inferences.depends_on",

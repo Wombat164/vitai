@@ -24,7 +24,7 @@ from statistics import mean
 from .weeks import week_of
 from .clocks import instrument_seam, protocol_seam, weigh_in_timing
 from .config import Config, overlay, phase_rate_for
-from .policy import state
+from .policy import all_comparable, state
 from .schema import EXTERNAL_METRIC, PARTIAL
 from .schema import statistics as _statistics
 
@@ -497,7 +497,8 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
                      goals: list[dict] | None = None,
                      thresholds: list[dict] | None = None,
                      medical: list[dict] | None = None,
-                     raw_daily: list[dict] | None = None) -> list[dict]:
+                     raw_daily: list[dict] | None = None,
+                     comparability: list[dict] | None = None) -> list[dict]:
     """Deterministic weekly verdict rows across all configured metrics.
 
     `raw_daily` is the UNADJUDICATED daily rows, and only `coverage` is read
@@ -507,6 +508,12 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
     day `full` beats a nutrition app's lunchtime `partial`, which is the exact
     incident this reads coverage for. Defaults to the canonical rows, so a
     caller that does not pass it behaves as before rather than worse.
+
+    `comparability` is the `comparability.jsonl` rows (#33 item 2), read by
+    `policy.all_comparable` to decide whether an instrument seam under the
+    weight rate may be lifted. Defaults to none stated, which resolves every
+    pair to `not_comparable` and leaves every seam refused exactly as it was
+    before this parameter existed.
     """
     rows: list[dict] = []
     weeks = _weeks_covered(weight, daily, sessions)
@@ -575,7 +582,16 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
         # PER WINDOW, not permanent. Once the old instrument's readings fall
         # out of the fortnight the rate resumes on its own, so replacing a
         # scale costs two weeks of rate rather than the metric.
-        if instrument_seam(window)["seam"]:
+        #
+        # LIFTED ONLY BY `comparable`, never by silence and never by `offset`
+        # (#33 item 2). A stated `offset` is a MEASURED difference, not a
+        # licence to span it - applying that number to a reading would be
+        # fabricating a measurement (P4), so the rate still refuses. The only
+        # way out is an explicit statement, earned by overlap, that every
+        # instrument pair behind this window is on the same footing.
+        seam = instrument_seam(window)
+        if seam["seam"] and not all_comparable(
+                comparability or [], "kg", seam["instruments"], wk):
             rows.append(_row(wk, "weight_rate", rate, target, NODATA, goal,
                              reason=NOT_SUPPORTED, statistic=PERIOD_CHANGE))
             continue

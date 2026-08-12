@@ -17,6 +17,7 @@ from .clocks import (instrument_seam, protocol_seam, timing_caveat,
                      weigh_in_timing)
 from .composition import decompose, endpoints
 from .config import Config, phase_rate_for
+from .policy import all_comparable
 from .verdicts import open_day_in
 from .vocab import session_classes
 
@@ -138,7 +139,8 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                  gates: list[dict] | None = None,
                  escalations: list[dict] | None = None,
                  events: list[dict] | None = None,
-                 raw_daily: list[dict] | None = None) -> str:
+                 raw_daily: list[dict] | None = None,
+                 comparability: list[dict] | None = None) -> str:
     today = today or date.today()
     # #186 SECTION 3, "wherever it is shown". The tripwire block does not read
     # the verdict rows - it re-derives its own seven-day figures from `daily` -
@@ -292,12 +294,35 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                               "two ends measure different things.",
                           "", "> Weigh in the same way for a fortnight and "
                               "this line comes back."]
-                elif device["seam"]:
+                elif device["seam"] and not all_comparable(
+                        comparability or [], "kg", device["instruments"],
+                        # THE WEEK UNDER JUDGMENT, not `today` (#373 review).
+                        # `compute_verdicts` resolves this same gate as of
+                        # `wk`, the Monday of the week whose rate it is
+                        # computing - the effective-dating convention
+                        # `policy.state` documents for every dated lookup: a
+                        # judgment uses the policy in force THEN. This line
+                        # judges the same window - the week of the most
+                        # recent weigh-in - so it has to ask the same
+                        # question of the record, or a `comparable` row
+                        # dated partway through the week reads as in force
+                        # here (today is after it) while the verdicts table
+                        # for that identical week still sees it as future
+                        # (the week's Monday is before it), and the rollup
+                        # says "losing" beside a table that permanently says
+                        # `no_data`.
+                        _week_key(pts[-1][0])):
                     # NO "WEIGH THE SAME WAY" LINE, because the athlete
                     # cannot. A scale is replaced once and the old readings
                     # are permanent; the rate returns when the fortnight no
                     # longer spans both, which is a fact rather than an
                     # instruction.
+                    #
+                    # LIFTED ONLY BY `comparable`, never by silence and never
+                    # by `offset` (#33 item 2). A stated `offset` records a
+                    # MEASURED difference, not a licence to span it - applying
+                    # that number to a reading would be fabricating a
+                    # measurement (P4), so the rate still refuses beside it.
                     L += ["", "**Rate:** NOT COMPARABLE - the readings behind "
                               "this window came from different instruments "
                               f"({' then '.join(device['instruments'])}), and "

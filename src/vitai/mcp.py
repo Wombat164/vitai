@@ -158,6 +158,26 @@ TOOLS: dict[str, dict] = {
         "method": "capabilities",
         "properties": {},
     },
+    # #33: comparability earned by overlap, never asserted. An agent reading
+    # a weight-rate refusal across an instrument seam needs to be able to ask
+    # WHY - whether the pair has ever been declared comparable at all - and
+    # this is the only route: silence answers `not_comparable`, in the
+    # vocabulary rather than a null.
+    "comparability": {
+        "method": "comparability",
+        "properties": {
+            "field": {"type": "string",
+                      "description": "the field the two instruments may or "
+                                     "may not agree on"},
+            "origin_a": {"type": "string",
+                        "description": "the first instrument"},
+            "origin_b": {"type": "string",
+                        "description": "the second instrument"},
+            "on": {"type": "string",
+                   "description": "valid-time viewpoint, ISO date"},
+        },
+        "required": ["field", "origin_a", "origin_b"],
+    },
     "milestone_ladder": {
         "method": "milestone_ladder",
         "properties": {"slug": {"type": "string",

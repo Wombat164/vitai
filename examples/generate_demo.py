@@ -795,9 +795,28 @@ def _build(target: Path) -> None:
          "device": "demo", "_gen": CURRENT_GENERATION["capabilities"]},
     ]
 
+    # COMPARABILITY EARNED BY OVERLAP, NEVER ASSERTED (#33 item 2). The two
+    # clinic scans in `weight` (2030-05-20 and 2030-06-27) are same-day dual
+    # recordings against the home scale, which is the ONLY route this engine
+    # accepts to a comparability declaration - dated at the first scan, the
+    # day the record could first have earned it.
+    comparability = [
+        {"date": "2030-05-20", "field": "kg", "origin_a": "scale",
+         "origin_b": "dexa", "status": "comparable", "bias": None,
+         "spread": None, "basis": "overlap",
+         "overlap_ref": "same-day scale and clinic readings, 2030-05-20 and "
+                        "2030-06-27",
+         "note": "the home scale and both clinic scans agree within their "
+                 "own measurement bands",
+         "source": "athlete", "supersedes": None,
+         "recorded_at": "2030-05-20T20:13:00+02:00", "device": "demo",
+         "_gen": CURRENT_GENERATION["comparability"]},
+    ]
+
     written = (("weight", weight), ("daily", daily),
                ("instruments", instruments),
                ("capabilities", capabilities),
+               ("comparability", comparability),
                ("sessions", sessions), ("inferences", inferences),
                ("goals", goals), ("thresholds", thresholds),
                ("achievements", achievements), ("context", context),
@@ -1825,10 +1844,10 @@ def _read_all(root: Path) -> dict[str, str]:
 # So it is a register, `main` asserts the writer loop matches it, and
 # `tests/test_fixture_coverage.py` holds it against the schema.
 WRITES = frozenset({
-    "achievements", "capabilities", "checks", "context", "daily", "emissions",
-    "events", "goals", "inferences", "journal", "meals", "measurements",
-    "instruments", "medical", "plans", "sessions", "sets", "thresholds",
-    "weight",
+    "achievements", "capabilities", "checks", "comparability", "context",
+    "daily", "emissions", "events", "goals", "inferences", "journal", "meals",
+    "measurements", "instruments", "medical", "plans", "sessions", "sets",
+    "thresholds", "weight",
 })
 
 

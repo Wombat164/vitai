@@ -220,6 +220,58 @@ KEYS: dict[str, list[str]] = {
     "instruments": ["date", "origin", "from_date", "to_date", "name", "maker",
                     "model", "source", "note", "supersedes", "recorded_at",
                     "device"],
+    # Comparability EARNED BY OVERLAP, never asserted (#33 item 2, #171
+    # section 4.1). The default is NOT COMPARABLE: deriving a trend across a
+    # source change needs an explicit statement that the two sides are on
+    # the same footing, never an assumption because both are called weight.
+    #
+    # A STATEMENT IN THE RECORD, keyed on a pair of instruments and a field,
+    # whose only legal basis is an overlap OBSERVED IN THIS RECORD - a
+    # period of simultaneous measurement from both instruments. Keyed on
+    # `origin`, not "system": `origin` is the identity `capabilities` above
+    # already keys on and 27 call sites already use for an instrument, and a
+    # comparability statement is about that same identity on two rows.
+    #
+    # `status` is `comparable`, `offset` or `not_comparable`. An `offset`
+    # row records that a cross-instrument difference was MEASURED and how
+    # big it was; it is not a licence to apply that number to a reading,
+    # which would be fabricating a measurement (P4) - the seam refusal (#33
+    # item 3) lifts only for `comparable`, never for `offset`. `bias` and
+    # `spread` are BOTH required beside `offset` (an offset with a measured
+    # size and no reported spread is a number with no idea how firm it is,
+    # and #171 settled that both are owed) - the same required-beside/
+    # forbidden-beside shape `_capability_problems` already uses for
+    # `construct`.
+    #
+    # THE TWO ARE NOT SYMMETRIC BESIDE `comparable`, and that is deliberate
+    # rather than an oversight the way it read before this was reasoned
+    # through (#373 review). `bias` beside `comparable` is a contradiction -
+    # a MEASURED bias means the two instruments read differently by a known
+    # amount, which is what `offset` is for, and forbidden here for the same
+    # reason it is forbidden beside `not_comparable`: a number contradicting
+    # its own status is a number about nothing. `spread` beside `comparable`
+    # is not a contradiction - it says how tightly the two agreed over the
+    # overlap, which is meaningful evidence about a pair the record has
+    # already called comparable - so it stays permitted, and forbidden only
+    # beside `not_comparable`, where nothing was measured to have a spread.
+    #
+    # `basis` is `overlap` and ONLY `overlap` - a closed vocabulary of one
+    # value, because the whole point is that this cannot be asserted from a
+    # datasheet, a vendor figure or an athlete's say-so. `overlap_ref` names
+    # the period the overlap was observed in, required whenever `status`
+    # says anything but silence (`comparable` or `offset`) - a `not_comparable`
+    # row may be a bare refusal, since asserting a negative earns nothing.
+    #
+    # IDENTITY IS THE PAIR, resolved as unordered rather than stored that
+    # way: `origin_a`/`origin_b` are two ordinary columns, and the resolver
+    # in `policy.comparability` answers (a, b) and (b, a) identically, since
+    # asking whether two instruments agree is one question regardless of
+    # which one is named first. Two rows recorded with the origins swapped
+    # are two independent identities as far as `supersedes` is concerned -
+    # the resolver, not storage, is where the two are reconciled.
+    "comparability": ["date", "field", "origin_a", "origin_b", "status",
+                      "bias", "spread", "basis", "overlap_ref", "note",
+                      "source", "supersedes", "recorded_at", "device"],
     # A recorded accomplishment worth keeping. Distinct from a MILESTONE, which
     # the engine derives; `source` carries authorship (G31) so a hand-logged
     # race finish is never confused with an engine-derived crossing.
@@ -466,6 +518,32 @@ UNKNOWN_COMPETENCE = "unknown"
 # alone, field observation contradicts them by up to twenty percent, and one
 # vendor's marketed tolerance is half its own service tolerance.
 CAPABILITY_BASES = {"overlap", "observed", "stated"}
+
+# WHETHER TWO INSTRUMENTS' READINGS OF ONE FIELD CAN BE READ AS ONE SERIES
+# (#33 item 2, #171 section 4.1). Three values, and only one of them is ever
+# the answer silence resolves to:
+#
+#   comparable      the pair agrees closely enough that a series can span
+#                    the seam between them
+#   offset          a difference was MEASURED and how big it was is on the
+#                    row; the two sides are still NOT one series - applying
+#                    the number to a reading would be fabricating a
+#                    measurement (P4), so this status still refuses a
+#                    spanning derivation
+#   not_comparable  nothing licenses treating the two as one series, stated
+#                    or silent - and SILENCE RESOLVES HERE, never to
+#                    `comparable`, which is the whole of #33's acceptance
+#                    criterion
+COMPARABLE, OFFSET, NOT_COMPARABLE = "comparable", "offset", "not_comparable"
+COMPARABILITY_STATUSES = {COMPARABLE, OFFSET, NOT_COMPARABLE}
+
+# THE ONLY LEGAL BASIS for a comparability row - a single value rather than a
+# set, for the same reason `capabilities.basis` is a small vocabulary one
+# tier stricter: comparability is earned by overlap or it is not earned.
+# A row naming any other basis would be asserting comparability from a
+# datasheet, an athlete's say-so or a vendor's marketing figure, which is
+# exactly what this dataset exists to refuse - so nothing else validates.
+OVERLAP_BASIS = "overlap"
 # Sourced from semantics/settings.toml (#53): WHERE an activity happened, as
 # its own axis, so `other` + `outdoor` expresses the catchall a vendor would
 # pre-coordinate into `OTHER_OUTDOOR`. Retired values stay legal.
@@ -506,7 +584,17 @@ IDENTITY_KEY: dict[str, str | tuple[str, ...]] = {
     # An instrument is one thing over one stretch of time, so the interval is
     # part of the identity: two watches that both reported as `garmin-watch`
     # are two rows, and neither retires the other.
-    "instruments": ("origin", "from_date")}
+    "instruments": ("origin", "from_date"),
+    # A comparability statement is about a PAIR of instruments measuring one
+    # field, and the pair - not either instrument alone - is the identity: a
+    # scale can be declared comparable to a DEXA for `kg` and simultaneously
+    # not comparable to a different scale for the same field, and both
+    # statements have to survive independently. See `policy.comparability`
+    # for why asking about the pair is ORDER-INSENSITIVE even though this
+    # identity is not: two rows recorded with the origins swapped are two
+    # independent identities here, and the resolver - not storage -
+    # reconciles them.
+    "comparability": ("field", "origin_a", "origin_b")}
 
 # --- the medical layer (increment 3) -----------------------------------------
 # `state` (G57) is a physiological condition rather than an illness -
@@ -1618,7 +1706,7 @@ for _cls, _names in {
         activity_source read_by capture derived_by derived_build derived_from
         derived_op modelled type_source model confidence evidence surface
         machine equipment tracker food_table protocol
-        competence construct basis""",
+        competence construct basis origin_a origin_b""",
     "narrative": """note text title statement about reason""",
     "reference": """slug key dataset field session_ref anchored_by goal event
         metric basis_claims depends_on supersedes contract sha256 media_type
@@ -1628,7 +1716,7 @@ for _cls, _names in {
         on_success on_period_end priority immovable removed result mode
         planned load_type load_unit set_type failure angle_class side
         rpe_scale mood_scale pain_scale activity
-        seq supersedes_seq measures condition""",
+        seq supersedes_seq measures condition overlap_ref""",
     "measurement": """avg_power steps distance_km active_min kcal_out kcal_in
         protein_g
         sleep_h rhr kg body_fat_pct kg_lo kg_hi body_fat_lo body_fat_hi avg_hr
@@ -1637,7 +1725,7 @@ for _cls, _names in {
         angle_deg lever_pos pad_pos seat_pos resistance_level tempo grams
         grams_lo grams_hi kcal_100g protein_100g carb_100g fat_100g fibre_100g
         sugar_100g sodium_mg_100g carb_g fat_g fibre_g sugar_g sodium_mg
-        bytes""",
+        bytes bias spread""",
 }.items():
     for _name in _names.split():
         _BY_NAME[_name] = _cls
@@ -1737,6 +1825,9 @@ PLAIN_WORDS = frozenset({
     # #311's register. `model` and `origin` were already here; these two are
     # the rest of what a person calls a piece of kit.
     "maker", "name",
+    # #33 item 2: the comparability dataset. Two ordinary words a person
+    # reads as themselves.
+    "bias", "spread",
     "about", "accountability", "activity", "alcohol", "anchored",
     "angle", "artifact", "at", "attempted", "basis", "block", "body",
     "build", "by", "bytes", "cadence", "capture", "captured", "change",
@@ -1912,6 +2003,11 @@ _TYPES: dict[str, tuple[type, ...]] = {
     "target": _NUMERIC, "target_hi": _NUMERIC, "guard_pct": _NUMERIC,
     "value": _NUMERIC,
     "mood": (int,), "pain": (int,), "elevation_m": _NUMERIC,
+    # #373 review: neither was type-checked, so 'spread: "banana"' validated
+    # clean beside a required-ness check that only asked whether the key was
+    # present. Registered here rather than hand-rolled in
+    # `_comparability_problems`, the same as every other numeric field.
+    "bias": _NUMERIC, "spread": _NUMERIC,
 }
 
 # extra keys that are always legal (the supersedes mechanic + schema generation)
@@ -2193,6 +2289,102 @@ def _capability_problems(rec: dict) -> list[str]:
     return out
 
 
+def _comparability_problems(rec: dict) -> list[str]:
+    """Comparability EARNED BY OVERLAP, never asserted (#33 item 2, #171 4.1).
+
+    THE SHAPE IS `_capability_problems`'s, reused rather than reinvented:
+    `basis` is checked against a closed vocabulary of exactly one value, and
+    `bias`/`spread` are required beside one status and forbidden beside
+    another - the same required-beside/forbidden-beside pattern `construct`
+    already enforces for `proxy`. An offset with no measured size is an
+    assertion wearing a measurement's clothes; a bias attached to a refusal
+    is a number about nothing. TYPE-CHECKED THROUGH `_TYPES`, not by hand
+    here: both are registered there beside every other numeric field
+    (#373 review), so `spread: "banana"` fails the same generic check
+    `kg: "banana"` already does rather than validating clean because this
+    dataset rolled its own.
+
+    'FIELD' NAMES A MEASUREMENT, not any column this record happens to have
+    (#373 review - the allowlist this used to be, every key of every
+    dataset, accepted `"note"` and `"origin_a"` exactly as readily as `"kg"`).
+    `sensitivity` is the engine's own per-field classification (#299),
+    reused for the reason `_relabelled_values` already reuses it rather than
+    keeping a second list in step with the first: a comparability statement
+    is a question about whether two instruments could disagree on a
+    QUANTITY, and only a field classified `measurement` is one.
+    """
+    out: list[str] = []
+    field = rec.get("field")
+    if not any(field in KEYS[ds] and sensitivity(ds, field) == "measurement"
+              for ds in KEYS):
+        out.append(f"'field' names a measurement - a quantity two "
+                   f"instruments could disagree about, not any column this "
+                   f"record has - got {field!r}")
+
+    origin_a, origin_b = rec.get("origin_a"), rec.get("origin_b")
+    for name, value in (("origin_a", origin_a), ("origin_b", origin_b)):
+        if not isinstance(value, str) or not value.strip():
+            out.append(f"'{name}' names one of the two instruments this "
+                       f"compares, got {value!r}")
+    if (isinstance(origin_a, str) and isinstance(origin_b, str)
+            and origin_a == origin_b):
+        out.append(f"'origin_a' and 'origin_b' both name {origin_a!r} - a "
+                   "comparability statement is about two DIFFERENT "
+                   "instruments, and one instrument is trivially comparable "
+                   "to itself")
+
+    status = rec.get("status")
+    if status not in COMPARABILITY_STATUSES:
+        out.append(f"'status' is one of "
+                   f"{', '.join(sorted(COMPARABILITY_STATUSES))}, got "
+                   f"{status!r}")
+
+    basis = rec.get("basis")
+    if basis != OVERLAP_BASIS:
+        out.append(f"'basis' is {OVERLAP_BASIS!r} - the only route this "
+                   f"engine accepts to a comparability declaration - got "
+                   f"{basis!r}")
+
+    overlap_ref = rec.get("overlap_ref")
+    if status in (COMPARABLE, OFFSET) and not (
+            isinstance(overlap_ref, str) and overlap_ref.strip()):
+        out.append(f"'overlap_ref' names the period the overlap was "
+                   f"observed in, and is required beside {status!r}: "
+                   "comparability earned by overlap has to name the overlap")
+
+    bias, spread = rec.get("bias"), rec.get("spread")
+    if status == OFFSET:
+        if bias is None:
+            out.append("'bias' is the measured cross-instrument offset and "
+                       "is required beside 'offset' - an offset with no "
+                       "measured size is an assertion, not a measurement")
+        if spread is None:
+            out.append("'spread' is how tightly the two instruments agreed "
+                       "over the overlap and is required beside 'offset', "
+                       "per #171: a measured size with no reported spread "
+                       "is a number with no idea how firm it is")
+    # 'bias' BESIDE 'comparable' IS CONTRADICTORY (#373 review): a MEASURED
+    # bias means the two instruments read differently by a known amount,
+    # which is what 'offset' is for. 'spread' beside 'comparable' is NOT
+    # flagged - it says how tightly the two agreed over the overlap, which
+    # is meaningful evidence about a pair the record has already called
+    # comparable, not a contradiction the way a bias would be.
+    if status == COMPARABLE and bias is not None:
+        out.append("'bias' is contradictory beside 'comparable' - a "
+                   "measured bias means the two instruments are OFFSET, not "
+                   f"on the same footing; write 'offset' instead, got "
+                   f"{bias!r}")
+    if status == NOT_COMPARABLE:
+        if bias is not None:
+            out.append("'bias' has no meaning beside 'not_comparable' - a "
+                       f"number on a refusal is a number about nothing, got "
+                       f"{bias!r}")
+        if spread is not None:
+            out.append("'spread' has no meaning beside 'not_comparable', got "
+                       f"{spread!r}")
+    return out
+
+
 def _regime_problems(rec: dict) -> list[str]:
     """A regime is a bounded interval, and the bounds are the whole point."""
     out = []
@@ -2386,6 +2578,8 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
         problems += _instrument_problems(rec)
     if dataset == "capabilities":
         problems += _capability_problems(rec)
+    if dataset == "comparability":
+        problems += _comparability_problems(rec)
     # THE FIELD THAT ALREADY HAD THE VOCABULARY AND NO VALIDATION (#212).
     # `for_phase` was checked by nothing, so a typo or a vendor's own spelling
     # sorted last and silently, and the sort key in `api.py` was the only place

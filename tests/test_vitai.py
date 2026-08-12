@@ -1577,7 +1577,11 @@ def test_it_speaks_the_protocol(tmp_path):
          # #171: what an instrument is competent at. An agent reading a value
          # cannot otherwise tell a measurement from a proxy statistic reported
          # under the same field name.
-         "capabilities"}
+         "capabilities",
+         # #33: comparability earned by overlap, never asserted. An agent
+         # cannot otherwise tell whether a refused instrument seam has ever
+         # been declared safe to span.
+         "comparability"}
     payload = json.loads(replies[2]["result"]["content"][0]["text"])
     assert payload["contract"]
 
