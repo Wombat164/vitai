@@ -527,6 +527,14 @@ label = "centimetres"
 ucum = "cm"
 label = "centimetres"
 
+# `height_cm` (#370) joined the others rather than a `[physiology]` setting in
+# vitai.toml, because a height is a dated, correctable observation like every
+# other body measurement here and not a near-constant default - see schema.py
+# beside `MEASUREMENT_KINDS` for the full reasoning.
+[unit.height_cm]
+ucum = "cm"
+label = "centimetres"
+
 # --- threshold keys, so `unit_of = "key"` lands ----------------------------
 #
 # `policy.THRESHOLD_METRIC` already maps these to their metric explicitly,

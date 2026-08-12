@@ -1626,6 +1626,10 @@ def test_it_speaks_the_protocol(tmp_path):
          # `milestones` table carries the crossings, and neither can say which
          # rung is next.
          "milestone_ladder",
+         # #370: goal-independent, history-wide milestones - a round number
+         # crossed or a new personal best - as distinct from
+         # `milestone_ladder`, which needs a declared goal with a target.
+         "crossings",
          # #171: what an instrument is competent at. An agent reading a value
          # cannot otherwise tell a measurement from a proxy statistic reported
          # under the same field name.

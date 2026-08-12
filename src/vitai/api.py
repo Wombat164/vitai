@@ -28,6 +28,7 @@ from . import __version__
 from .config import Config, load_config, policy_digest
 from .contributions import (_standing, compute_contributions,
                             goal_progress)
+from .crossings import compute_crossings
 from .db import CONTRACT_VERSION, DERIVED_TABLES, build_db
 from . import builds as _builds
 # Re-exported deliberately: the CLI reads them from here and the MCP adapter
@@ -1696,6 +1697,27 @@ class Vitai:
             out += rungs
         return out
 
+    def crossings(self) -> list[dict]:
+        """Round-number and personal-first milestones, goal-independent and
+        history-wide (#370).
+
+        NOT `milestones()`. That table needs a declared goal and a fraction
+        of its target; "you broke 80 kg" and "that is your lowest ever" are
+        true or false of the weight series alone, goal or no goal, and
+        `milestones`' columns have nowhere honest to put either fact.
+
+        WEIGHT ONLY, TODAY. `crossings.compute_crossings` takes the field to
+        read as a parameter rather than assuming `kg` internally, so a second
+        metric is a second call elsewhere rather than a rewrite of that
+        function - but this accessor is the one and only place that
+        parameter is bound, because `kg` is the sole metric #370 asks for.
+
+        CANONICAL, NOT RAW. `self.canonical("weight")` is the same adjudicated
+        series `report.py` builds its trend from - one row per date - so a
+        day resolved from two competing sources counts once here too.
+        """
+        return compute_crossings(self.canonical("weight"), metric="kg")
+
     def capability(self, origin: str, measures: str,
                    on: date | str | None = None,
                    condition: str | None = None) -> dict:
@@ -2011,6 +2033,11 @@ class Vitai:
             "verdicts": verdicts,
             "contributions": contributions,
             "milestones": milestones,
+            # #370: computed directly off `resolved`'s own canonical rows,
+            # the same reason `contributions`/`milestones` above are - so a
+            # build and `crossings()` never see two different resolutions of
+            # one record because one read `self.resolution()` a second time.
+            "crossings": compute_crossings(d["weight"], metric="kg"),
             "plan_churn": plan_churn(d["goals"], d["thresholds"], verdicts,
                                      events=d["events"]),
             "goal_progress": goal_progress(d["goals"], d["thresholds"],

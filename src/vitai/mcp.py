@@ -183,6 +183,15 @@ TOOLS: dict[str, dict] = {
         "properties": {"slug": {"type": "string",
                                 "description": "only this goal"}},
     },
+    # #370: goal-independent, history-wide milestones - a round number
+    # crossed or a personal best set. Distinct from `milestone_ladder` above,
+    # which needs a declared goal with a target; an agent asking "did this
+    # reading matter" for weight has no goal to name and no rung to ask for,
+    # only a series to have crossed something in.
+    "crossings": {
+        "method": "crossings",
+        "properties": {},
+    },
     # The read path an agent would otherwise re-derive. Without it the only
     # way to see a dataset through this adapter was to read the JSONL and
     # apply `supersedes` by hand, which is the nine lines that deleted a row

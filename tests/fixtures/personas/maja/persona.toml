@@ -9,7 +9,7 @@ seed = 113
 span = ["2029-10-01", "2030-06-30"]
 
 [schema]
-contract = "46"
+contract = "47"
 
 [schema.generations]
 achievements = 5

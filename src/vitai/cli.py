@@ -337,6 +337,25 @@ def cmd_milestones(args: argparse.Namespace) -> None:
                   f" = {r['value']:g}{when}")
 
 
+def cmd_crossings(args: argparse.Namespace) -> None:
+    """Round-number and personal-first milestones: no goal required (#370)."""
+    rows = Vitai(_root(args)).crossings()
+    if args.json:
+        for row in rows:
+            print(json.dumps(row))
+        return
+    if not rows:
+        print("no crossings - the record has fewer than two weight readings, "
+              "or none of them cross a multiple of 5 kg or set a new "
+              "personal high or low")
+        return
+    for r in rows:
+        arrow = "down to" if r["direction"] == "down" else "up to"
+        print(f"{r['date']}  {r['kind']:<14} {r['metric']} {arrow} "
+              f"{r['value']:g}  (was {r['previous_value']:g} "
+              f"on {r['previous_date']})")
+
+
 def cmd_goals(args: argparse.Namespace) -> None:
     """Active goals with progress, dates, and each event's contribution."""
     root = _root(args)
@@ -1686,6 +1705,9 @@ def main(argv: list[str] | None = None) -> None:
          "which instrument reported as each origin, on a date (#311)"),
         ("milestones", cmd_milestones,
          "the milestone rungs a goal has this period, passed and not (#330)"),
+        ("crossings", cmd_crossings,
+         "round-number and personal-first milestones over the weight "
+         "series, no goal required (#370)"),
         ("append", cmd_append,
          "append JSONL rows from stdin, stamping recorded_at and _gen"),
         ("pin-policy", cmd_pin_policy,
@@ -1820,6 +1842,9 @@ def main(argv: list[str] | None = None) -> None:
             p.add_argument("--slug", help="only this goal")
             p.add_argument("--json", action="store_true",
                            help="emit rungs as JSONL instead of prose")
+        if name == "crossings":
+            p.add_argument("--json", action="store_true",
+                           help="emit crossing rows as JSONL instead of prose")
         if name == "append":
             p.add_argument("dataset", help="which dataset to append to")
         if name == "key":

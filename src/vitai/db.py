@@ -795,7 +795,44 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     names first, and the alternative - a canonical write-time ordering -
 #     would make every caller responsible for sorting two strings correctly
 #     before appending, silently wrong the day one gets it backwards.
-CONTRACT_VERSION = "46"
+# 47: a `crossings` dataset - the round-number and personal-first thirds of
+#     #370's three milestone kinds. The band crossing (BMI) is not this: it
+#     needs a height, and #370 records that as a separate, still-open ruling
+#     about whether the engine may ever say the band's NAME. Both kinds here
+#     needed no such ruling.
+#
+#     A NEW TABLE, NOT A ROW SHAPE IN `milestones`. That table's columns -
+#     `goal`, `period`, `fraction`, `target` - all assume a DECLARED goal and
+#     a scoring bucket, and both new kinds are goal-independent and
+#     history-wide: "you broke 80 kg" and "that is your lowest ever" are true
+#     or false of the series alone, goal or no goal. Forcing them into
+#     `milestones` means inventing a fake goal and fraction for a fact that
+#     has neither, and `goal_progress.milestones_total` would silently
+#     absorb them into a count they are not part of.
+#
+#     `value` CARRIES DIFFERENT THINGS by `kind`, and that is the one place
+#     this table is easiest to misread: for `round_number` it is the RUNG
+#     crossed (a multiple of 5, `crossings.ROUND_NUMBER_LADDER`), not the
+#     reading that revealed it - two rungs crossed in one gap between
+#     weigh-ins need two distinguishable rows, and the raw reading would be
+#     identical on both. For `personal_first` it IS the reading, because the
+#     reading and the record it sets are the same fact. `previous_value` and
+#     `previous_date` are the evidence pair either way: the last observation
+#     on the OTHER side of the crossing, without which a row would assert a
+#     fact about the series rather than cite one.
+#
+#     READS THE CANONICAL SERIES (#370's own requirement, restated from
+#     `milestones`' own history): raw claims let one adjudicated day's two
+#     competing sources count as two readings, which would mint a
+#     personal-first the athlete's own record never actually reached.
+#
+#     `MEASUREMENT_KINDS` also gains `height_cm` in this PR, decided in the
+#     same loop as this table (#370's third comment) - but that is NOT what
+#     earns this bump. It is a new legal value of an existing TEXT column,
+#     which is a wider column, not a reshaped one; see the comment beside
+#     `MEASUREMENT_KINDS` in `schema.py` for why it ships free of a contract
+#     number of its own.
+CONTRACT_VERSION = "47"
 
 _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity would
               # A JSON map (#325), and every container column is TEXT for
@@ -896,7 +933,11 @@ _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity wou
               # `overlap_ref` is a label for a period or a claim id, not a
               # number - `bias` and `spread` stay numeric, the measured
               # quantities the row actually carries.
-              "origin_a", "origin_b", "overlap_ref"}
+              "origin_a", "origin_b", "overlap_ref",
+              # #370: `crossings.previous_date` is an ISO date like every
+              # other `_date`-suffixed column here; `previous_value` stays
+              # numeric, the reading itself.
+              "previous_date"}
 
 # APPENDED, so a consumer reading by name is unaffected and one reading
 # positionally keeps every column it knew. `reason` (#177) is null on every
@@ -911,6 +952,14 @@ VERDICT_KEYS = ["week", "metric", "value", "target", "verdict", "goal",
 CONTRIBUTION_KEYS = ["date", "goal", "metric", "dataset", "period", "value",
                      "counted", "contribution", "headroom"]
 MILESTONE_KEYS = ["date", "goal", "period", "fraction", "value", "target", "label"]
+# #370: goal-independent, history-wide crossings - a round number crossed or
+# a personal best set. `value` is the notable number itself (the round-number
+# rung for `round_number`, the new extreme reading for `personal_first`), and
+# `previous_value`/`previous_date` are the evidence pair: the last reading on
+# the OTHER side, without which a crossing is an assertion rather than a fact
+# about the series. See `crossings.py` for the full reasoning.
+CROSSING_KEYS = ["date", "kind", "metric", "value", "direction",
+                 "previous_value", "previous_date"]
 CHURN_KEYS = ["date", "slug", "kind", "metric", "edit_no", "before", "after",
               "direction", "deadline_pushed", "deadline_kind", "reason",
               "set_by", "suspicious", "unexplained"]
@@ -980,6 +1029,7 @@ DERIVED_TABLES: dict[str, list[str]] = {
     "verdicts": VERDICT_KEYS,
     "contributions": CONTRIBUTION_KEYS,
     "milestones": MILESTONE_KEYS,
+    "crossings": CROSSING_KEYS,
     "plan_churn": CHURN_KEYS,
     "goal_progress": PROGRESS_KEYS,
     "claims": CLAIM_KEYS,

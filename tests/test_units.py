@@ -42,7 +42,11 @@ from vitai.vocab import registry
 # were never registered at all, so the numeric gate never saw them - both
 # are `unit_of = "field"`, in whatever unit the row's own `field` column
 # names, the same shape `target` already has for a goal's `metric`.
-PINNED_DIGEST = "3da9340661fabb8f"
+# Updated deliberately at #370: `height_cm` joined `MEASUREMENT_KINDS`
+# beside `waist_cm` and `hip_cm`, and needs the same `[unit.height_cm]`
+# entry they have or `measurements.kind = "height_cm"` points at nothing
+# (see `test_following_a_reference_lands_somewhere` below).
+PINNED_DIGEST = "c3fb6f8714473606"
 
 REGISTRY = Path(__file__).resolve().parents[1] / "src" / "vitai" / "semantics" / "units.toml"
 def _numeric_in_the_corpus() -> set[tuple[str, str]]:
