@@ -20,10 +20,15 @@ anyone carry out, and the other asserts a medical purpose. Under FDA general
 wellness and MDCG 2019-11 the trigger is the CLAIM, not the technology.
 
 CATEGORY words (#379): a small deny list of clinical banding vocabulary -
-`overweight`, `obese`, `healthy range`, and the rest catalogued beside
-`CATEGORY_WORDS` below. A category applied to a person IS the class (c)
-diagnosis; it needs no purpose verb and no medical noun beside it, which is
-why it is its own family rather than an addition to `PURPOSE_VERB`.
+`overweight`, `obese`, and the rest catalogued beside `CATEGORY_WORDS` below.
+A category applied to a person IS the class (c) diagnosis, which is why it is
+its own family rather than an addition to `PURPOSE_VERB`. Most of the list
+needs no purpose verb and no medical noun beside it - the word itself is the
+claim. Three phrases (`CATEGORY_WORDS_GENERIC`) are ordinary technical idioms
+outside this domain and only count near a body-composition noun, the same
+proximity trade `PURPOSE_VERB` makes with `MEDICAL_NOUN`. A hyphenated or
+`snake_case` spelling of any of them is still caught - see the comments above
+`_match_form` and `_MARKUP_RE_TIGHT`.
 
 ## What it deliberately does not do, and this is the load-bearing paragraph
 
@@ -173,14 +178,27 @@ MEDICAL_NOUN = (r"\b(?:medical conditions?|disease|illness|disorder|"
 # band"). A bare category word IS the class (c) diagnosis - "your BMI entered
 # the healthy range", "you are in the overweight band", "this reading is in
 # the obese category" - none of them contain a purpose verb or a
-# `MEDICAL_NOUN`, so `_PURPOSE_RE` is structurally blind to all three. No
-# proximity requirement, unlike `PURPOSE_VERB` + `MEDICAL_NOUN`: the word
-# itself is the claim, there is no engineering homograph for "overweight" the
-# way "detect" and "condition" have one, so nothing needs to stand next to it.
+# `MEDICAL_NOUN`, so `_PURPOSE_RE` is structurally blind to all three.
 #
-# Every entry here was checked against the whole repo (docs/, wiki/, README,
-# skills/, src/, tests/) before being kept - see the rejections immediately
-# below the list, which are exactly as load-bearing as the inclusions.
+# Split into two tiers, not one flat list, because PR #382's review ran the
+# original flat list against real sentences and two of them are ordinary
+# technical idioms rather than clinical vocabulary:
+#
+#   CATEGORY_WORDS: no proximity requirement. The word itself is the claim -
+#   there is no engineering homograph for "overweight" the way "detect" and
+#   "condition" have one, so nothing needs to stand next to it.
+#
+#   CATEGORY_WORDS_GENERIC (below, beside `BODY_COMPOSITION_NOUN`): DOES need
+#   a nearby body-composition noun, the same proximity trade `_PURPOSE_RE`
+#   already makes for `PURPOSE_VERB` + `MEDICAL_NOUN`. "ideal weight" is a
+#   barbell-loading idiom, "healthy range" is what a float-precision test
+#   calls its tolerance, and "normal range" is a CSV column name - none of
+#   them are a claim about a person's reading.
+#
+# Every entry in both tiers was checked against the whole repo (docs/, wiki/,
+# README, skills/, src/, tests/) before being kept - see the rejections
+# immediately below the lists, which are exactly as load-bearing as the
+# inclusions.
 #
 # `obese` is deliberately here without `morbidly` in front of it: bare
 # `obese` already matches inside `morbidly obese`, so a separate entry would
@@ -196,9 +214,6 @@ CATEGORY_WORDS = (
     r"underweight",
     r"obese",
     r"healthy weight",
-    r"healthy range",
-    r"normal range",
-    r"ideal weight",
     r"hypertensive",
     r"prehypertension",
 )
@@ -223,10 +238,39 @@ CATEGORY_WORDS = (
 # constantly (`docs/prior-art-schemas.md`, `docs/model.md`, `src/vitai/safety.py`).
 # Either word alone would fire dozens of times across the surface on its first
 # run, which is precisely the "cries wolf" failure mode this file's own
-# doctrine warns gets a lint deleted. Only the two-word collocations above -
-# `healthy weight`, `healthy range`, `normal range` - are specific enough to
-# survive that check, and both were confirmed absent from the repo's existing
-# prose before being added.
+# doctrine warns gets a lint deleted.
+#
+# `healthy weight` stays bare rather than moving to the generic tier below:
+# unlike `healthy range` and `normal range`, PR #382's review did not produce
+# a false positive for it anywhere in the repo, and "a barbell's healthy
+# weight" or "a CSV column named `healthy_weight`" is not an idiom anyone
+# actually writes - "ideal weight" and "normal range" are the idioms, not
+# this collocation. If a real false positive for it ever turns up, it moves
+# to `CATEGORY_WORDS_GENERIC` on that evidence, the same way its two
+# siblings just did.
+CATEGORY_WORDS_GENERIC = (
+    r"healthy range",
+    r"normal range",
+    r"ideal weight",
+)
+
+# The evidence for the split, verified by running the gate: "A barbell's
+# ideal weight for this lift is 60kg per the programming doc.", "returns True
+# when the argument is in a healthy range of floating point precision", and
+# "The exporter writes a `normal_range` column into the CSV." all fired
+# before this tier existed, against three sentences with no athlete, no
+# reading and no body in them. None of `CATEGORY_WORDS_GENERIC` is dropped -
+# the motivating example ("your BMI entered the healthy range") still fires,
+# because `BMI` is within 80 characters of `healthy range` in that sentence.
+#
+# The measurands actually banded in this domain: a BMI figure, a weight, a
+# body-fat reading, a kilogram amount, a mass, a waist measurement. `weight`
+# and `mass` are ordinary engineering words too - the same trade-off
+# `PURPOSE_VERB` makes with `detect` - but a barbell, a float comparison and
+# a CSV column do not have a BMI, a body fat percentage or a waist, so the
+# combination of one of them with a generic phrase inside one sentence is
+# specific to a person's reading in a way that neither word is alone.
+BODY_COMPOSITION_NOUN = r"\b(?:bmi|weight|body fat|kg|mass|waist)\b"
 
 # HYPHENS ARE WORD SPACES for matching. `stop-and-see-a-clinician` is the same
 # claim as `stop and see a clinician`, and every phrase above was blind to it -
@@ -234,6 +278,18 @@ CATEGORY_WORDS = (
 # hyphenated form and passed. Length-preserving on purpose, so a match offset
 # still indexes the original sentence; and matching-only, so the digests the
 # exemptions are keyed on do not move.
+#
+# This is the RIGHT transform for a multi-word phrase like `healthy-range` -
+# turning the hyphen into the space the phrase already has elsewhere on the
+# list. It is the WRONG transform for `overweight`, `underweight` and
+# `prehypertension`: those three are fused compounds with no space-separated
+# form anywhere in `CATEGORY_WORDS` or `CATEGORY_WORDS_GENERIC`, so writing
+# them as `over-weight`, `under-weight` or `pre-hypertension` - the more
+# common clinical spelling for the third one - turns them into `over weight`,
+# `under weight`, `pre hypertension`, none of which is on either list either,
+# and the hyphenated spelling passed clean. `findings()` below runs the
+# category patterns against a SECOND, hyphen-REMOVED probe as well, which
+# fuses `over-weight` back into `overweight` instead.
 def _match_form(sentence: str) -> str:
     return sentence.replace("-", " ")
 
@@ -243,6 +299,20 @@ _PURPOSE_RE = re.compile(
     rf"(?:{PURPOSE_VERB}[^.!?]{{0,80}}{MEDICAL_NOUN})"
     rf"|(?:{WATCH_VERB}[^.!?]{{0,80}}{CONDITION_NOUN})", re.I)
 _CATEGORY_RE = re.compile(r"\b(?:" + "|".join(CATEGORY_WORDS) + r")\b", re.I)
+_CATEGORY_GENERIC_RE = re.compile(
+    rf"(?:{BODY_COMPOSITION_NOUN}[^.!?]{{0,80}}"
+    rf"\b(?:{'|'.join(CATEGORY_WORDS_GENERIC)})\b)"
+    rf"|(?:\b(?:{'|'.join(CATEGORY_WORDS_GENERIC)})\b[^.!?]{{0,80}}"
+    rf"{BODY_COMPOSITION_NOUN})", re.I)
+
+
+def _category_search(candidate: str) -> re.Match | None:
+    """Bare clinical words OR a generic phrase beside a body-composition
+    noun - the two `CATEGORY_WORDS` tiers are one family for `findings()`,
+    which reports both as "category claim" and does not care which tier
+    fired."""
+    return _CATEGORY_RE.search(candidate) or _CATEGORY_GENERIC_RE.search(candidate)
+
 
 # Sentences, across hard line wraps. The docs here are wrapped at ~80 columns,
 # so splitting on a newline hid every directive long enough to straddle one -
@@ -254,6 +324,25 @@ _SENTENCE_RE = re.compile(r"[^.!?]+(?:[.!?]|$)")
 # claim as `see a doctor`, and a lint that can be evaded by emphasis is one
 # that will be, by accident, on the first pass of someone tidying a document.
 _MARKUP_RE = re.compile(r"[*_`]+|\[|\]\([^)]*\)")
+
+# CATEGORY matching needs `_` treated differently from every other family.
+# `_MARKUP_RE` strips it as a markdown emphasis marker - right for `_see a
+# doctor_`, which this codebase's docs do write - but an identifier is not
+# prose: stripping the underscores out of `is_overweight_flag` turns one
+# token into three, and `\b` then lands inside the middle of a variable name.
+# Preserving `_` as a word character is exactly what stops that, because
+# `\b` will not match inside `is_overweight_flag` while the underscores are
+# still there holding it together as one token.
+#
+# Scoped to CATEGORY only, not shared with `_MARKUP_RE`: DIRECTIVES and
+# PURPOSE_VERB still need underscores folded away, because the same
+# emphasis form (`_word_`) is how this codebase's docs occasionally write
+# "doctor" or "detect" for emphasis, and losing that would let `_see a
+# doctor_` evade the directive family the way `**doctor**` almost did.
+# `sentences()` below is unchanged and still feeds hashing, DIRECTIVES and
+# PURPOSE_RE; `_tight_sentences()` is the identifier-preserving twin used
+# only for CATEGORY.
+_MARKUP_RE_TIGHT = re.compile(r"[*`]+|\[|\]\([^)]*\)")
 
 # NEGATION IS CLAUSE-SCOPED, the same discipline `safety.py` applies to prose
 # symptoms - and for the same reason. A token anywhere in the sentence
@@ -350,33 +439,84 @@ def files() -> list[Path]:
     return out
 
 
-def sentences(text: str) -> list[str]:
-    """Sentences, with markdown stripped and hard wraps joined.
+def _segment(text: str, markup_re: re.Pattern[str]) -> list[str]:
+    """Paragraph by paragraph, markup stripped by `markup_re` and hard wraps
+    joined, then split into sentences.
 
-    Paragraph by paragraph: a blank line is a real boundary, and joining
-    across one would invent adjacency between two unrelated statements.
+    A blank line is a real boundary, and joining across one would invent
+    adjacency between two unrelated statements. Shared by `sentences()` and
+    `_tight_sentences()` so the two differ only in which characters count as
+    markup - never in how a paragraph becomes a list of sentences, which is
+    what keeps the two outputs aligned index-for-index.
     """
     out = []
     for para in re.split(r"\n\s*\n", text):
-        joined = " ".join(_MARKUP_RE.sub(" ", para).split())
+        joined = " ".join(markup_re.sub(" ", para).split())
         out += [s.strip() for s in _SENTENCE_RE.findall(joined) if s.strip()]
     return out
+
+
+def sentences(text: str) -> list[str]:
+    """Sentences, with markdown stripped and hard wraps joined.
+
+    This is the prose form: hashing, `EXEMPT` lookups, DIRECTIVES and
+    PURPOSE_RE all read this one. `_tight_sentences()` below is the
+    identifier-preserving twin used only for CATEGORY.
+    """
+    return _segment(text, _MARKUP_RE)
+
+
+def _tight_sentences(text: str) -> list[str]:
+    """Same sentences as `sentences()`, with `_` left as a word character.
+
+    Neither `markup_re` touches `.`, `!` or `?`, so the two segmentations
+    agree on where every sentence starts and ends - only the spelling inside
+    a sentence can differ. `findings()` below zips this against
+    `sentences()` on that assumption and falls back to the prose form
+    (correct, just without identifier protection for that one sentence) if
+    it is ever wrong, rather than trusting a misaligned pairing.
+    """
+    return _segment(text, _MARKUP_RE_TIGHT)
 
 
 def findings(path: Path, text: str, spared: set[str]) -> list[str]:
     """Every care directive, purpose claim, or category claim in this file."""
     out = []
     here = path.as_posix()
-    for sentence in sentences(text):
+    prose = sentences(text)
+    tight = _tight_sentences(text)
+    if len(tight) != len(prose):
+        tight = prose  # fail safe: see `_tight_sentences()`'s docstring.
+    for sentence, tight_sentence in zip(prose, tight):
         digest = hashlib.sha256(_norm(sentence).encode()).hexdigest()
         if digest in spared or (here, digest) in EXEMPT:
             continue
         probe = _match_form(sentence)
-        for label, pattern in (("care directive", _DIRECTIVE_RE),
-                               ("purpose claim", _PURPOSE_RE),
-                               ("category claim", _CATEGORY_RE)):
-            hit = pattern.search(probe)
-            if hit and not _disclaimed(probe, hit.start()):
+        for label, search, candidates in (
+                ("care directive", _DIRECTIVE_RE.search, (probe,)),
+                ("purpose claim", _PURPOSE_RE.search, (probe,)),
+                # CATEGORY is built from `tight_sentence`, NOT `probe`: by
+                # the time `sentence` (and therefore `probe`) exists, its
+                # underscores are already gone - `sentences()` stripped them
+                # at the paragraph stage, which is exactly the hole in
+                # finding 3. Starting from `tight_sentence` and then folding
+                # hyphens the same two ways `_match_form` and the hyphen-
+                # removed form do for `probe` gets both fixes at once:
+                # `healthy-range` reads as the phrase (space-folded), and
+                # `over-weight` / `pre-hypertension` read as the fused
+                # compound (hyphen-removed), while `is_overweight_flag`
+                # stays one token throughout because nothing here ever
+                # touches `_` - see `_MARKUP_RE_TIGHT` above.
+                ("category claim", _category_search,
+                 (tight_sentence, _match_form(tight_sentence),
+                  tight_sentence.replace("-", "")))):
+            hit = None
+            for candidate in candidates:
+                hit = search(candidate)
+                if hit and not _disclaimed(candidate, hit.start()):
+                    break
+                hit = None
+            if hit:
                 out.append(f"{label}: {' '.join(sentence.split())[:80]}")
                 break
     return out
