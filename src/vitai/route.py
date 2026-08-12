@@ -152,6 +152,11 @@ class RouteStats:
     duration_s: float | None
     moving_s: float | None
     elevation_gain_m: float | None
+    # A SECOND FIGURE, NOT A BETTER ONE. `distance_m` is how far they went;
+    # this is what that distance cost against Minetti's flat-equivalent, so a
+    # pace over a hilly route means something beside a pace on the flat. None
+    # where the track carries no usable elevation.
+    grade_adjusted: dict | None
     start: tuple[float, float]
     end: tuple[float, float]
     start_end_gap_m: float
@@ -308,12 +313,7 @@ def elevation_gain_m(points: list[Fix], barometric: bool = False) -> float | Non
     if len(eles) < 2:
         return None
     threshold = CLIMB_THRESHOLD_BARO_M if barometric else CLIMB_THRESHOLD_GPS_M
-    w = max(1, min(ELEV_SMOOTH_WINDOW, len(eles) // 2 or 1))
-    if w > 1:
-        half = w // 2
-        eles = [sum(eles[max(0, i - half):i + half + 1])
-                / len(eles[max(0, i - half):i + half + 1])
-                for i in range(len(eles))]
+    eles = _smooth_elevation(eles)
     gain = 0.0
     anchor = eles[0]
     for e in eles[1:]:
@@ -323,6 +323,185 @@ def elevation_gain_m(points: list[Fix], barometric: bool = False) -> float | Non
         elif e < anchor:
             anchor = e
     return gain
+
+
+# --- grade adjusted distance (#23) -------------------------------------------
+#
+# Minetti et al. 2002, "Energy cost of walking and running at extreme uphill
+# and downhill slopes", J Appl Physiol 93:1039-1046. The polynomial gives the
+# metabolic cost of running, in J/kg/m, as a function of gradient.
+#
+# THE PUBLISHED CURVE, NOT A TUNED ONE. Strava's grade adjustment is a
+# different curve, undocumented, and tuned for competitive parity rather than
+# metabolic cost. Using it would be reporting a number nobody can check
+# against a source - which is what #23 exists to stop, and what G85 says about
+# borrowing algorithms without their provenance.
+MINETTI_COEFFICIENTS = (155.4, -30.4, -43.3, 46.3, 19.5, 3.6)
+MINETTI_VALID_GRADE = 0.45
+"""The steepest gradient the study measured, up or down. Outside it the
+polynomial is an extrapolation and turns sharply: at -0.9 it goes NEGATIVE,
+which would say running down a cliff releases energy. A gradient beyond this
+is refused rather than clamped, because clamping quietly reports a 60% slope
+as a 45% one."""
+
+MIN_GRADE_RUN_BARO_M = 5.0
+"""The same floor where elevation comes from a barometer. The module already
+carries the published pair for sustained climb - 10 m GPS against 2 m
+barometric - and this keeps their ratio: a barometric profile is roughly five
+times quieter in the vertical, so a gradient is believable over a fifth of the
+run. Derived from the thresholds above rather than measured separately, which
+is worth saying because it is an inference and not a citation."""
+
+MIN_GRADE_RUN_M = 25.0
+"""Horizontal distance a segment must cover before its gradient is believed.
+Consumer GNSS vertical error is roughly +/-15 m, so a gradient taken over a
+3 m step is dominated by noise - a flat pavement yields grades of several
+hundred percent. Over 25 m the same error is +/-60%, still poor, which is why
+the elevation series is smoothed first and this is a floor on top of that."""
+
+
+def grade_cost(grade: float) -> float | None:
+    """Metabolic cost of running at `grade`, in J/kg/m, or None if unmeasured.
+
+    `grade` is rise over run, dimensionless: 0.1 is a 10% climb.
+    """
+    if grade is None or abs(grade) > MINETTI_VALID_GRADE:
+        return None
+    c = 0.0
+    for coefficient in MINETTI_COEFFICIENTS:
+        c = c * grade + coefficient
+    return c
+
+
+def grade_adjusted_distance_m(points: list[Fix],
+                              barometric: bool = False) -> dict | None:
+    """Flat-equivalent distance, by Minetti's cost curve (#23).
+
+    A hilly 10 km costs what a longer flat one does, and comparing the two by
+    distance alone says the athlete was slower. This converts each segment to
+    the flat distance of equal metabolic cost, so a pace over it means
+    something next to a pace on the flat.
+
+    NOT A CORRECTION TO THE DISTANCE. The distance is what it was; this is a
+    second figure with a different meaning, returned beside the real one and
+    named so nobody reads it as a better measurement of how far they went.
+
+    Returns None where the track has no usable elevation - absent stays
+    absent. `adjusted_m` is the flat-equivalent of the distance that could be
+    judged, and `covered_pct` says how much of the route that was: a figure
+    derived from a third of a run is not a figure about the run, and scaling
+    it says so rather than quietly reporting the third as the whole.
+
+    THE ELEVATION IS SMOOTHED FIRST and the gradient is taken over at least
+    `MIN_GRADE_RUN_M`, for the reason `elevation_gain_m` gives: raw per-point
+    deltas are dominated by vertical noise, and a gradient is a ratio with
+    that noise in the numerator. On the simplified track instead of the clean
+    one the smoothing window spans kilometres and flattens the profile to
+    nothing (#42), so this takes clean output like its neighbour does.
+    """
+    usable = [p for p in points if p.ele is not None]
+    if len(usable) < 2:
+        return None
+    # Smoothed over the elevation-bearing points, then mapped back onto the
+    # full track so the walk below can see where elevation stops and starts.
+    smoothed = dict(zip((id(p) for p in usable),
+                        _smooth_elevation([p.ele for p in usable])))
+
+    flat_cost = grade_cost(0.0)
+    floor = MIN_GRADE_RUN_BARO_M if barometric else MIN_GRADE_RUN_M
+    weighted = 0.0
+    covered = 0.0
+    walked = 0.0
+    refused = 0.0
+
+    # WALKED COUNTS EVERY METRE, INCLUDING THE ONES WITH NO ELEVATION. The
+    # first version filtered those points out before measuring anything, so
+    # the coverage fraction was a share of the elevation-bearing part rather
+    # than of the route - and a track whose first kilometre has no elevation
+    # reported 98% covered when half of it had been judged. A device that
+    # loses barometric lock at the start, a tunnel, a merged file: all
+    # ordinary, and all silently extrapolated. It is the same defect this
+    # function already refuses for gradients beyond the curve, arriving
+    # through a different door.
+    previous, anchor_ele = points[0], None
+    run = 0.0
+    for point in points[1:]:
+        step = haversine_m(previous, point)
+        previous = point
+        walked += step
+        ele = smoothed.get(id(point))
+        if ele is None:
+            # The elevation stops here; whatever was accruing is abandoned
+            # rather than measured across the gap.
+            anchor_ele, run = None, 0.0
+            continue
+        if anchor_ele is None:
+            anchor_ele, run = ele, 0.0
+            continue
+        run += step
+        if run < floor:
+            continue
+        cost = grade_cost((ele - anchor_ele) / run)
+        if cost is None:
+            refused += run
+        else:
+            weighted += run * cost / flat_cost
+            covered += run
+        anchor_ele, run = ele, 0.0
+    if covered <= 0:
+        return None
+
+    # A MULTIPLIER, APPLIED TO THE DERIVED DISTANCE - not a distance summed
+    # here. The grade profile has to be read off the CLEAN track, because the
+    # smoothing window is calibrated at native sampling density (#42), while
+    # the clean track's own haversine sum is the overestimate this module
+    # already refuses: jitter adds length at every fix. So the profile decides
+    # the RATIO and the simplified track decides the distance, which is where
+    # every other length in this module comes from.
+    #
+    # The demo tracks cannot show the difference - they are synthetic and
+    # smooth, so their raw and simplified lengths agree within a metre and a
+    # half. A test supplies a horizontally jittery track instead, because a
+    # parameter whose justification no fixture exercises is a parameter nobody
+    # can check.
+    #
+    # A TAIL SHORTER THAN THE FLOOR IS NEVER JUDGED, so `covered_pct` is up to
+    # `floor` metres pessimistic and a track shorter than it gets no answer at
+    # all. Bounded and stated rather than papered over: on anything of
+    # kilometre scale it is under a percent, and judging a 5 m tail would be
+    # reading noise.
+    multiplier = weighted / covered
+    measured = path_length_m(simplify(points))
+    fraction = covered / walked if walked else 0.0
+    return {
+        "adjusted_m": measured * fraction * multiplier,
+        "measured_m": measured,
+        "multiplier": multiplier,
+        "covered_m": covered,
+        "covered_pct": 100.0 * fraction,
+        "beyond_the_curve_m": refused,
+        "basis": "minetti-2002",
+        # WHAT THE FLOOR WAS SET FOR, not a label about smoothing. The first
+        # version wrote "barometric" or "gps" into a `smoothing` key while
+        # every number in the dict was bit-identical either way - a provenance
+        # distinction asserted with no mechanism behind it.
+        "gradient_floor_m": floor,
+    }
+
+
+def _smooth_elevation(eles: list[float]) -> list[float]:
+    """The centred moving average `elevation_gain_m` applies, factored out.
+
+    Two readings of the same profile that smooth it differently would disagree
+    about the same hill, which is the drift a shared helper exists to stop.
+    """
+    w = max(1, min(ELEV_SMOOTH_WINDOW, len(eles) // 2 or 1))
+    if w <= 1:
+        return list(eles)
+    half = w // 2
+    return [sum(eles[max(0, i - half):i + half + 1])
+            / len(eles[max(0, i - half):i + half + 1])
+            for i in range(len(eles))]
 
 
 def find_stops(points: list[Fix]) -> list[Stop]:
@@ -708,6 +887,7 @@ def analyse(points: list[Fix], barometric: bool = False) -> RouteStats:
         # NOT `used`: RDP is a horizontal simplification and discards exactly
         # the samples that carry the vertical profile (#42). See `simplify`.
         elevation_gain_m=elevation_gain_m(cleaned, barometric),
+        grade_adjusted=grade_adjusted_distance_m(cleaned, barometric),
         start=(home.lat, home.lon), end=(used[-1].lat, used[-1].lon),
         start_end_gap_m=haversine_m(used[0], used[-1]),
         furthest_m=haversine_m(home, furthest),

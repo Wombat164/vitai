@@ -1221,6 +1221,15 @@ def cmd_route(args: argparse.Namespace) -> None:
     if s.elevation_gain_m is not None:
         print(f"elevation gain {s.elevation_gain_m:.0f} m "
               f"(climbs under {s.params['climb_threshold_m']:.0f} m ignored)")
+    if s.grade_adjusted is not None:
+        g = s.grade_adjusted
+        # PRINTED, because a metric the human rendering never shows is one
+        # only a reader of `--json` knows exists.
+        print(f"grade adjusted {g['adjusted_m'] / 1000:.2f} km "
+              f"(x{g['multiplier']:.3f}, {g['basis']})")
+        if g["covered_pct"] < 95:
+            print(f"  over {g['covered_pct']:.0f}% of the route - the rest "
+                  f"carries no elevation or is steeper than the curve covers")
     print(f"stops: {len(s.stops)}")
     for st in s.stops:
         when = st.start.strftime("%H:%M") if st.start else "?"
