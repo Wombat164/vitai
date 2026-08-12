@@ -779,6 +779,58 @@ def test_neither_table_invents_a_contract():
         assert not extra, f"{path} documents contracts that do not exist: {sorted(extra)}"
 
 
+def _readme_prose_outside_migration_table() -> str:
+    """README.md with the Schema-migrations `<details>` block cut out.
+
+    That block - the table plus the one paragraph of history right after it
+    ("this table stopped at contract 8...") - is the single place a contract
+    number is allowed to live in prose. Everywhere else in the file is read
+    by a human forming a belief about the CURRENT state of the engine, and a
+    number there is a second copy of a fact the table already states, which
+    is exactly the shape that drifted (#369): the Status line said "contract
+    27" while the table and `CONTRACT_VERSION` both said 45.
+    """
+    from pathlib import Path
+    text = (Path(__file__).resolve().parents[1] / "README.md").read_text(
+        encoding="utf-8")
+    start = text.index("<summary><b>Schema migrations</b></summary>")
+    end = text.index("</details>", start) + len("</details>")
+    return text[:start] + text[end:]
+
+
+def test_no_prose_outside_the_migration_table_names_a_contract_number():
+    """#369: the Status line named contract 27 as current, eighteen releases
+    stale, and the coverage/agreement/ahead-of-release tests above could not
+    catch it because they all parse table ROWS - `_table_contracts` and
+    `_table_versions` both anchor on `^\\| (\\d+) \\| `, so a number sitting
+    in a paragraph is invisible to every one of them.
+
+    A number written in two places drifts; this repo has now demonstrated
+    that twice, the second time inside the very file that has a drift test
+    for it. So rather than teach the check to also read the Status line
+    (which just adds a THIRD place that must agree with the first two), the
+    number is removed from prose entirely and this asserts it stays removed:
+    no `contract N` claim may appear anywhere in README.md except inside the
+    migration table, which remains the one place an integrator can trust.
+
+    The pattern is case-insensitive and treats the separator between the
+    word and the number as optional, so it also catches `CONTRACT 27`,
+    `contract-27` and `contract27` - `wiki/content/explanation/platform.md`
+    already has a hyphenated "a contract-1 reader", which the space-only
+    pattern this replaced would have walked straight past had it been
+    written in README.md instead.
+    """
+    import re
+    prose = _readme_prose_outside_migration_table()
+    hits = re.findall(r"\bcontract[ -]?\d+\b", prose, re.IGNORECASE)
+    assert not hits, (
+        f"README.md names a contract number outside the migration table: "
+        f"{hits}. The table is the only place that number should live - "
+        f"either fold the fact into a table row, or say it without the "
+        f"number."
+    )
+
+
 # ---- #158: the CLI is a harness over the API, and stays one ----------------
 #
 # P9 is doctrine: "the CLI is a thin harness over the same `vitai.api` the
