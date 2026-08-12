@@ -351,9 +351,18 @@ def cmd_crossings(args: argparse.Namespace) -> None:
         return
     for r in rows:
         arrow = "down to" if r["direction"] == "down" else "up to"
+        # A `round_number` row's evidence pair can be null - the series was
+        # NEVER on that side before (#370's fix: the pair names the last
+        # reading on the destination side, not the reading right before this
+        # one, and there may be none). That is a stronger fact than the
+        # ordinary case, not a gap, so it gets its own phrasing rather than
+        # a `:g` format crashing on `None`.
+        if r["previous_value"] is None:
+            evidence = " (first time ever)"
+        else:
+            evidence = f"  (was {r['previous_value']:g} on {r['previous_date']})"
         print(f"{r['date']}  {r['kind']:<14} {r['metric']} {arrow} "
-              f"{r['value']:g}  (was {r['previous_value']:g} "
-              f"on {r['previous_date']})")
+              f"{r['value']:g}{evidence}")
 
 
 def cmd_goals(args: argparse.Namespace) -> None:

@@ -35,23 +35,53 @@ def _rows(kind: str, points: list[dict]) -> list[dict]:
 # --- round_number --------------------------------------------------------------
 
 def test_a_downward_round_number_crossing_has_the_right_evidence_pair():
+    """Two readings only, so there is no history below 80 to find - the
+    evidence pair is null, the "first time ever" case, not the preceding
+    reading (81.2, which is on the WRONG side of 80 to be evidence for a
+    downward crossing at all)."""
     points = [{"date": "2030-01-01", "kg": 81.2}, {"date": "2030-01-05", "kg": 79.6}]
     got = _rows("round_number", points)
     assert got == [{
         "date": "2030-01-05", "kind": "round_number", "metric": "kg",
         "value": 80.0, "direction": "down",
-        "previous_value": 81.2, "previous_date": "2030-01-01",
+        "previous_value": None, "previous_date": None,
     }]
 
 
 def test_an_upward_round_number_crossing_has_the_right_evidence_pair():
+    """Same shape, upward: 78.4 is on the wrong side to be evidence for
+    "back above 80", and there is nothing earlier - null pair."""
     points = [{"date": "2030-01-01", "kg": 78.4}, {"date": "2030-01-05", "kg": 80.7}]
     got = _rows("round_number", points)
     assert got == [{
         "date": "2030-01-05", "kind": "round_number", "metric": "kg",
         "value": 80.0, "direction": "up",
-        "previous_value": 78.4, "previous_date": "2030-01-01",
+        "previous_value": None, "previous_date": None,
     }]
+
+
+def test_the_evidence_pair_names_the_destination_side_not_the_prior_reading():
+    """#370's own worked example, built explicitly. A reading right before
+    the crossing (81.0, last week) is on the WRONG side of 80 to answer
+    "since when has this been true" - the record was below 80 six months
+    ago, and that is the reading that makes "first below 80 since <date>"
+    true. The far reading from 13 months back (75.0, a lower value but the
+    WRONG fact - #370's "lowest ever" instinct) must not win just because it
+    is more extreme; the nearer of the two on-side readings does."""
+    points = [
+        {"date": "2029-01-01", "kg": 75.0},   # 13 months back: lower, but stale
+        {"date": "2029-02-01", "kg": 82.0},    # back above 80
+        {"date": "2029-08-01", "kg": 79.0},    # 6 months back: last time below 80
+        {"date": "2029-09-01", "kg": 83.0},    # back above 80 again
+        {"date": "2030-02-01", "kg": 78.0},    # today: crosses 80 down again
+    ]
+    got = [r for r in _rows("round_number", points) if r["value"] == 80.0]
+    todays = [r for r in got if r["date"] == "2030-02-01"]
+    assert todays == [{
+        "date": "2030-02-01", "kind": "round_number", "metric": "kg",
+        "value": 80.0, "direction": "down",
+        "previous_value": 79.0, "previous_date": "2029-08-01",
+    }], todays
 
 
 def test_approaching_a_level_without_reaching_it_mints_nothing():
@@ -70,34 +100,118 @@ def test_landing_exactly_on_the_level_counts_as_reaching_it():
 
 def test_a_recrossing_mints_a_second_row_with_its_own_evidence():
     """#370's own example: under 80, back over, under again - three
-    crossings, not one deduplicated to a single "current side" fact."""
+    crossings, not one deduplicated to a single "current side" fact. Each
+    row's evidence is the last reading on the side it is ARRIVING at, so the
+    first crossing (nothing below 80 in this short history yet) is null,
+    and the second and third each cite a different, older reading - never
+    the reading immediately before them, which is on the wrong side."""
     points = [
         {"date": "2030-01-01", "kg": 81.0},
-        {"date": "2030-01-02", "kg": 79.0},   # crosses 80 down
-        {"date": "2030-01-03", "kg": 82.0},   # crosses 80 up
-        {"date": "2030-01-04", "kg": 78.0},   # crosses 80 down again
+        {"date": "2030-01-02", "kg": 79.0},   # crosses 80 down - no prior data below 80
+        {"date": "2030-01-03", "kg": 82.0},   # crosses 80 up - last above 80 was 01-01
+        {"date": "2030-01-04", "kg": 78.0},   # crosses 80 down - last below 80 was 01-02
     ]
     got = [r for r in _rows("round_number", points) if r["value"] == 80.0]
     assert [r["direction"] for r in got] == ["down", "up", "down"]
-    assert [(r["date"], r["previous_date"]) for r in got] == [
-        ("2030-01-02", "2030-01-01"),
-        ("2030-01-03", "2030-01-02"),
-        ("2030-01-04", "2030-01-03"),
+    assert [(r["date"], r["previous_date"], r["previous_value"]) for r in got] == [
+        ("2030-01-02", None, None),
+        ("2030-01-03", "2030-01-01", 81.0),
+        ("2030-01-04", "2030-01-02", 79.0),
     ]
 
 
 def test_a_big_jump_crosses_every_rung_in_between():
     """One gap between weigh-ins can skip several rungs. Each is a fact about
     the series independent of whether the athlete was weighed in between, so
-    each gets its own row - sharing the one evidence pair the record holds."""
+    each gets its own row - but here 91.0 is the FIRST reading in the whole
+    record, so none of the three rungs (80, 85, 90) has ever been visited
+    from below before now: every evidence pair is null, the "first time
+    ever" case, not the 91.0 reading itself (which sits above all three
+    rungs and so is on the wrong side to be evidence for any of them)."""
     points = [{"date": "2030-01-01", "kg": 91.0}, {"date": "2030-03-01", "kg": 78.0}]
     got = _rows("round_number", points)
     # Sorted by VALUE, ascending, like every other tie on (date, kind,
     # direction) - `compute_crossings` makes no claim about which rung was
     # crossed "first" within one gap, only that all three were.
     assert [r["value"] for r in got] == [80.0, 85.0, 90.0]
-    assert all(r["previous_value"] == 91.0 and r["previous_date"] == "2030-01-01"
+    assert all(r["previous_value"] is None and r["previous_date"] is None
               for r in got)
+
+
+def test_a_big_jump_can_give_each_rung_its_own_evidence():
+    """Unlike the case above, when the series HAS prior history, different
+    rungs crossed in one jump can each cite a DIFFERENT last-on-that-side
+    reading - the destination side is a property of each level, not of the
+    jump as a whole."""
+    points = [
+        {"date": "2029-01-01", "kg": 79.0},   # below every rung that matters here
+        {"date": "2029-04-01", "kg": 84.0},   # below 90 and 85's near side only
+        {"date": "2029-07-01", "kg": 89.0},   # below 90 only
+        {"date": "2030-01-01", "kg": 91.0},   # now above all three rungs
+        {"date": "2030-03-01", "kg": 78.0},   # crosses 90, 85 and 80 downward
+    ]
+    got = [r for r in _rows("round_number", points) if r["date"] == "2030-03-01"]
+    by_value = {r["value"]: (r["previous_date"], r["previous_value"]) for r in got}
+    assert by_value == {
+        80.0: ("2029-01-01", 79.0),
+        85.0: ("2029-04-01", 84.0),
+        90.0: ("2029-07-01", 89.0),
+    }
+
+
+def test_a_first_ever_crossing_has_a_null_evidence_pair_not_missing_data():
+    """A consumer must be able to tell "the series has never been on that
+    side" apart from "the data is missing" - and does so structurally, not
+    by inspecting a value: `compute_crossings` never mints a partial row, so
+    BOTH keys are always present (`"previous_value" in row`), and a null
+    evidence pair is always the deliberate pair - both fields None together,
+    from a row that otherwise carries a real `date` and `value` - never a
+    KeyError or a half-filled row a caller could confuse with a data gap."""
+    points = [{"date": "2030-01-01", "kg": 91.0}, {"date": "2030-01-02", "kg": 78.0}]
+    got = _rows("round_number", points)
+    assert got, "the fixture must mint something to test this"
+    for row in got:
+        assert "previous_value" in row and "previous_date" in row
+        assert row["previous_value"] is None
+        assert row["previous_date"] is None
+        # The rest of the row is a real, fully-formed fact - the null pair
+        # is the ONLY thing distinguishing "never" from an ordinary row.
+        assert row["date"] == "2030-01-02"
+        assert isinstance(row["value"], float)
+
+
+def test_a_down_then_up_then_down_series_names_a_different_date_each_time():
+    """Three crossings of the same level, each citing a DIFFERENT reading -
+    proof the evidence is recomputed per crossing over the whole series
+    rather than carried forward from the last one found.
+
+    The very first transition (below-80 to above-80) is unavoidably a
+    fourth crossing with NULL evidence - nothing precedes the first reading
+    in a record, so that one cannot help being the "first time ever" case.
+    It is kept in the fixture rather than engineered away, because it is
+    what establishes the "above 80" anchor the later `up` crossing needs;
+    the three DOWN-UP-DOWN crossings that follow it are the ones under
+    test, and every one of them gets a distinct real evidence date."""
+    points = [
+        {"date": "2029-01-01", "kg": 70.0},   # first reading: below 80, mints nothing
+        {"date": "2029-06-01", "kg": 90.0},   # crosses 80 up (null evidence - anchor only)
+        {"date": "2030-01-01", "kg": 70.0},   # T1: down - last below was 2029-01-01
+        {"date": "2030-06-01", "kg": 90.0},   # T2: up - last above was 2029-06-01
+        {"date": "2031-01-01", "kg": 70.0},   # T3: down - last below was 2030-01-01
+    ]
+    got = [r for r in _rows("round_number", points) if r["value"] == 80.0]
+    assert [(r["date"], r["direction"], r["previous_date"], r["previous_value"])
+           for r in got] == [
+        ("2029-06-01", "up", None, None),
+        ("2030-01-01", "down", "2029-01-01", 70.0),
+        ("2030-06-01", "up", "2029-06-01", 90.0),
+        ("2031-01-01", "down", "2030-01-01", 70.0),
+    ]
+    targets = [r for r in got if r["date"] != "2029-06-01"]
+    assert [r["direction"] for r in targets] == ["down", "up", "down"]
+    # Three target crossings, three distinct evidence dates - never the
+    # reading immediately before the crossing it backs.
+    assert len({r["previous_date"] for r in targets}) == 3
 
 
 def test_sitting_on_a_rung_then_moving_off_it_does_not_recross_it():
@@ -175,22 +289,37 @@ def test_the_first_reading_in_a_record_mints_nothing():
 # --- the vocabulary and the column register -------------------------------------
 
 def test_every_minted_row_uses_the_closed_vocabulary():
+    """`round_number`'s first crossing (91.0 -> 79.0, the series' opening
+    descent) has no history below any of the three rungs it passes, so its
+    rows carry a null evidence pair - the "first time ever" case - while
+    the later `round_number` rows and every `personal_first` row have real
+    evidence. Both are legal; what is never legal is a HALF pair."""
     points = [
         {"date": "2030-01-01", "kg": 91.0}, {"date": "2030-01-02", "kg": 79.0},
         {"date": "2030-01-03", "kg": 82.0}, {"date": "2030-01-04", "kg": 78.0},
     ]
     got = compute_crossings(points)
     assert got, "the fixture above must actually mint something to test this"
+    saw_null_pair = saw_real_pair = False
     for row in got:
         assert set(row) == set(CROSSING_KEYS)
         assert row["kind"] in CROSSING_KINDS
         assert row["direction"] in CROSSING_DIRECTIONS
         assert row["metric"] == "kg"
-        # THE EVIDENCE PAIR IS NEVER ABSENT. A row minted with no
-        # `previous_value`/`previous_date` would be an assertion rather than
-        # a fact about the series moving from one reading to another.
-        assert row["previous_value"] is not None
-        assert row["previous_date"] is not None
+        # THE EVIDENCE PAIR IS NEVER HALF-ABSENT: `previous_value` and
+        # `previous_date` are null together or present together. A row with
+        # one but not the other would be neither a citable fact nor an
+        # honest "never" - it would be ambiguous with missing data, which
+        # this module's contract never produces (see `crossings.py`'s
+        # `_last_on_destination_side`).
+        assert (row["previous_value"] is None) == (row["previous_date"] is None)
+        if row["previous_value"] is None:
+            saw_null_pair = True
+        else:
+            saw_real_pair = True
+    assert saw_null_pair and saw_real_pair, (
+        "the fixture above must exercise both the null-pair (first time "
+        "ever) and real-pair cases to test this")
 
 
 def test_metric_is_a_parameter_not_hardcoded():
@@ -257,6 +386,10 @@ def test_the_canonical_series_is_used_rather_than_raw_rows(tmp_path):
 
 
 def test_it_reaches_the_derived_table_and_a_build(tmp_path):
+    """Only two readings ever recorded, so there is no history below 80 to
+    cite - the round-number row's evidence pair is the "first time ever"
+    null, and the point of this test is that a null survives the round trip
+    through SQLite as NULL, with every other column still intact."""
     root = init(tmp_path / "content")
     v = Vitai(root)
     v.append("weight", {"date": "2030-01-01", "kg": 81.2, "source": "scale"})
@@ -274,8 +407,8 @@ def test_it_reaches_the_derived_table_and_a_build(tmp_path):
     # two readings), which this query filters out - proved separately above
     # and not this test's concern, which is that the round-number row made it
     # through `build_db` with every column intact.
-    assert stored == [("2030-01-05", "round_number", "kg", 80.0, "down", 81.2,
-                       "2030-01-01")]
+    assert stored == [("2030-01-05", "round_number", "kg", 80.0, "down", None,
+                       None)]
 
 
 def test_the_three_surfaces_agree(tmp_path):

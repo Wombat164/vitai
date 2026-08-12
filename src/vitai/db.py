@@ -816,10 +816,24 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     reading that revealed it - two rungs crossed in one gap between
 #     weigh-ins need two distinguishable rows, and the raw reading would be
 #     identical on both. For `personal_first` it IS the reading, because the
-#     reading and the record it sets are the same fact. `previous_value` and
-#     `previous_date` are the evidence pair either way: the last observation
-#     on the OTHER side of the crossing, without which a row would assert a
-#     fact about the series rather than cite one.
+#     reading and the record it sets are the same fact.
+#
+#     `previous_value`/`previous_date` are the evidence pair, and for
+#     `round_number` they are NOT the immediately preceding reading (#370's
+#     own worked example, restated because getting this wrong is the whole
+#     defect the table exists to avoid: "lowest ever" and "first time below
+#     80 in over a year" were both false of a real record, and "first below
+#     80 since February" - a smaller, checkable claim - was the true one, and
+#     the reading taken right before the crossing supported none of the
+#     three). They name the most recent reading already on the DESTINATION
+#     side of the level - below it for a downward crossing, above it for an
+#     upward one - found by searching the series, not by reading the one row
+#     before this one. `personal_first` keeps the running-extreme reading,
+#     which is honest there because a personal first is a claim about the
+#     whole history's floor or ceiling, not about an interval. Either way, a
+#     null pair means the series was never on that side before - a STRONGER
+#     fact, not a missing one, and never confusable with absent data because
+#     nothing here mints a row from a partial point.
 #
 #     READS THE CANONICAL SERIES (#370's own requirement, restated from
 #     `milestones`' own history): raw claims let one adjudicated day's two
@@ -955,9 +969,13 @@ MILESTONE_KEYS = ["date", "goal", "period", "fraction", "value", "target", "labe
 # #370: goal-independent, history-wide crossings - a round number crossed or
 # a personal best set. `value` is the notable number itself (the round-number
 # rung for `round_number`, the new extreme reading for `personal_first`), and
-# `previous_value`/`previous_date` are the evidence pair: the last reading on
-# the OTHER side, without which a crossing is an assertion rather than a fact
-# about the series. See `crossings.py` for the full reasoning.
+# `previous_value`/`previous_date` are the evidence pair: for `round_number`,
+# the most recent reading already on the destination side of the level
+# (NOT the previous reading - see the module docstring in `crossings.py` for
+# why that distinction is the whole point), or null if the series was never
+# there before; for `personal_first`, the running extreme being beaten.
+# Without this pair a crossing is an assertion rather than a fact about the
+# series. See `crossings.py` for the full reasoning.
 CROSSING_KEYS = ["date", "kind", "metric", "value", "direction",
                  "previous_value", "previous_date"]
 CHURN_KEYS = ["date", "slug", "kind", "metric", "edit_no", "before", "after",

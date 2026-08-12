@@ -1715,6 +1715,11 @@ class Vitai:
         CANONICAL, NOT RAW. `self.canonical("weight")` is the same adjudicated
         series `report.py` builds its trend from - one row per date - so a
         day resolved from two competing sources counts once here too.
+
+        A `round_number` row's evidence pair names the last reading on the
+        DESTINATION side of the level, not the reading right before this one
+        - see `crossings.py`'s module docstring for #370's worked example of
+        why "the previous reading was 81" is not the fact worth minting.
         """
         return compute_crossings(self.canonical("weight"), metric="kg")
 

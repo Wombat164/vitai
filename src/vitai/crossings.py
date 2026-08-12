@@ -40,6 +40,35 @@ across one. Because of that, nothing here ever mints a row for a series with
 fewer than two points: the first reading has no `previous_value` to cite, so
 it cannot be evidence for anything yet, only a first fact for a later row to
 cite against.
+
+WHAT THE EVIDENCE PAIR NAMES, FOR `round_number`, IS NOT THE PRIOR READING
+(#370's own worked example, and the whole reason this module looks the way it
+does). Tested against a real record where the athlete crossed 80 kg and a
+coach improvised a frame for it:
+
+  - "lowest ever" - false. There was a reading 5 kg lower, 13 months back.
+  - "first time below 80 in over a year" - false. The last reading below 80
+    was six months ago, not thirteen.
+  - The true statement is "first reading below 80 since February" - smaller
+    than either instinct produced, and the only one a person can check.
+
+The immediately preceding reading supports NONE of those three sentences. It
+answers "what did the scale say last time", which nobody celebrates and which
+the issue never asks for. The sentence worth minting is about the SERIES
+having been on the far side of a level and now returning to it, which is a
+question over the whole history, not over one adjacent pair. So for
+`round_number`, `previous_value`/`previous_date` name the most recent reading
+that was already on the DESTINATION side of the level being crossed - below
+it for a downward crossing, above it for an upward one - searched back through
+the full series, not just the one reading before this one. See
+`_last_on_destination_side` for the exact rule, including why landing exactly
+on a level counts as being on its near side, matching `_levels_crossed`'s own
+convention.
+
+`personal_first` keeps the prior design: its evidence pair is the running
+extreme itself, which is honest THERE because a personal first is a claim
+about the whole history's floor or ceiling moving, not about an interval - see
+`_personal_firsts` below.
 """
 
 from __future__ import annotations
@@ -107,6 +136,46 @@ def _levels_crossed(prev_v: float, curr_v: float,
     return levels
 
 
+def _last_on_destination_side(points: list[tuple[str, float]], idx: int,
+                              level: float, direction: str) -> tuple[str | None, float | None]:
+    """The most recent reading at or before `points[idx]` that already sat on
+    the DESTINATION side of `level` - the side this crossing is arriving at:
+    below `level` for a "down" crossing, above it for an "up" one. That
+    reading is what makes "first below 80 since <date>" true rather than
+    fabricated, so this is the whole mechanism the fix in #370 turns on.
+
+    SIDE MEMBERSHIP REUSES `_levels_crossed`'s OWN NEAR-SIDE-INCLUSIVE RULE: a
+    value sitting exactly ON `level` already counts as having reached the
+    down side (`v <= level`) or the up side (`v >= level`), the same
+    convention that makes "sitting on a rung" not re-cross it on the way off.
+    Anything else would let this function and the crossing detector disagree
+    about what "on that side" means for the one value that sits on the
+    boundary.
+
+    `idx` is the index of the reading immediately BEFORE the one that
+    triggered this crossing, so the scan starts there and walks backward.
+    That reading is included for completeness but can never itself match: by
+    construction, every level `_levels_crossed` returns is strictly on the
+    far side of `points[idx]`'s value (that is what "crossed" means), so the
+    scan always has to look further back to find a match - which is exactly
+    how "the previous reading was 81" gets replaced by "six months ago", not
+    "the reading before this one".
+
+    Returns `(None, None)` when no earlier reading was ever on that side -
+    the series' first-ever arrival there. THAT IS A STRONGER FACT, not a data
+    gap, and a caller tells the two apart because a data gap cannot happen
+    here: nothing in this module ever mints a row from a partial or missing
+    point, so a null pair from a MINTED round_number row always means "never
+    before", and only that.
+    """
+    on_side = (lambda v: v <= level) if direction == "down" else (lambda v: v >= level)
+    for j in range(idx, -1, -1):
+        d, v = points[j]
+        if on_side(v):
+            return d, v
+    return None, None
+
+
 def _round_numbers(points: list[tuple[str, float]], metric: str,
                    ladder: float) -> list[dict]:
     """One row per rung of `ladder` the series crosses, in either direction.
@@ -119,13 +188,14 @@ def _round_numbers(points: list[tuple[str, float]], metric: str,
     supposed to let a person notice.
     """
     out: list[dict] = []
-    for (prev_date, prev_v), (this_date, this_v) in zip(points, points[1:]):
+    for idx, ((_prev_date, prev_v), (this_date, this_v)) in enumerate(zip(points, points[1:])):
+        direction = "down" if this_v < prev_v else "up"
         for level in _levels_crossed(prev_v, this_v, ladder):
+            ev_date, ev_v = _last_on_destination_side(points, idx, level, direction)
             out.append({
                 "date": this_date, "kind": "round_number", "metric": metric,
-                "value": level,
-                "direction": "down" if this_v < prev_v else "up",
-                "previous_value": prev_v, "previous_date": prev_date,
+                "value": level, "direction": direction,
+                "previous_value": ev_v, "previous_date": ev_date,
             })
     return out
 
