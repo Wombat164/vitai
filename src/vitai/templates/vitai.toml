@@ -47,6 +47,21 @@
 # A record that stores what a screen happened to show cannot be compared
 # with itself after a device changes locale.
 
+# [device]                # Only needed once a SECOND device appears (#105).
+# slug = "laptop"          # THIS machine's name, set here BEFORE a second
+#                          # device ever writes - lowercase letters, digits
+#                          # and hyphens, up to 32 characters.
+#
+# Unset, every append lands in data/<dataset>.jsonl - correct for a
+# single-device record, which is what every existing record already is. The
+# moment a second machine starts from this same template, it appends to that
+# identical plain file too: two writers, one file, and a sync client
+# resolving that by last-writer-wins or a `conflicted copy` silently drops
+# one device's rows. Set a slug per device instead and appends land in
+# data/<dataset>.<slug>.jsonl, so no two devices ever write the same file -
+# see devices.py for why that makes a conflict structurally impossible
+# rather than merely resolved.
+
 # [inference]            # OPT-IN intelligence layer for `vitai infer`:
                          # a model reads the record and appends validated
                          # knowledge to data/inferences.jsonl. Never feeds

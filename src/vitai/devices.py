@@ -49,6 +49,16 @@ offline still converges, because the dedupe happens over whatever files are
 present whenever they arrive. Deduping at write would require the writer to
 have seen the other device's file, which is exactly the coupling actor-per-file
 exists to remove.
+
+**The collision this whole scheme prevents - two machines with no slug set,
+both appending to the plain file - is not detectable once it has happened.**
+`write_path` sends an unslugged writer to `<dataset>.jsonl` and never stamps
+`device` on the row (#367); a second unslugged machine writing the same file
+produces rows that are byte-for-byte the same shape as a single machine's,
+because the field that would tell them apart is exactly the one both writers
+lack. There is no scan of `<dataset>.jsonl` worth writing here: anything it
+flagged would be a guess dressed as a finding. The fix is upstream, at
+`vitai init` time, before a second device's first write - not a check after.
 """
 
 from __future__ import annotations

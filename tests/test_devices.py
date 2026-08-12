@@ -491,3 +491,28 @@ def test_a_device_file_is_never_silently_ignored_for_its_case(tmp_path):
     # And the writer stays strict, so nothing produces that name here.
     with pytest.raises(ValueError):
         write_path(data, "weight", "Laptop")
+
+
+# ---- the template documents the mechanism, not just the code -----------------------------
+
+def test_the_stamped_template_tells_a_reader_the_device_section_exists(tmp_path):
+    """#367: `vitai init` stamped `[targets]`, `[tripwires]`, `[preferences]`,
+    `[resolution]` and `[inference]` with their keys spelled out in comments,
+    and no `[device]` section at all - not even commented out. The shape was
+    discoverable only by reading `config.py`, so an athlete adding a second
+    device had nothing in their own repo pointing at the setting that is the
+    entire reason two machines do not collide.
+
+    This does not assert exact wording - the fix is prose and prose is free
+    to be reworded - only that a reader of the stamped file, who has not read
+    `config.py` or `devices.py`, can find the section and the key. Mutating
+    the template back to having no `[device]` section at all must fail this.
+    """
+    root = repo(tmp_path)
+    toml = (root / "vitai.toml").read_text(encoding="utf-8")
+    assert "[device]" in toml, (
+        "the stamped vitai.toml never mentions a [device] section - a reader "
+        "has no way to discover the setting that keeps a second machine from "
+        "colliding with the first")
+    assert "slug" in toml.split("[device]", 1)[1].split("[inference]", 1)[0], (
+        "the [device] section is present but does not show the `slug` key")
