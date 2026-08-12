@@ -55,6 +55,15 @@ PINNED = {
         "device": 3,
         "recorded_at": 2,
     },
+    # #33 item 2, a new dataset added the same way `capabilities` and
+    # `instruments` were: inside the founding `KEYS` literal, so it is swept
+    # by the blanket blocks below rather than declared after them. Both
+    # entries come from those blocks, not from anything this register
+    # declares.
+    "comparability": {
+        "device": 3,
+        "recorded_at": 2,
+    },
     "achievements": {
         "device": 4,
         "occurred_date": 2,
@@ -267,6 +276,12 @@ PINNED_FOUNDING = {
     "instruments": [
         "date", "from_date", "maker", "model", "name", "note", "origin",
         "source", "supersedes", "to_date",
+    ],
+    # #33 item 2. Every field the dataset was born with, excluding `device`/
+    # `recorded_at`, which arrive via the blanket blocks and are pinned above.
+    "comparability": [
+        "basis", "bias", "date", "field", "note", "origin_a", "origin_b",
+        "overlap_ref", "source", "spread", "status", "supersedes",
     ],
     "artifacts": [
         "bytes", "captured_at", "date", "kind", "media_type", "note",

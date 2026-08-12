@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 from .clocks import order_key
-from .schema import IDENTITY_KEY, UNKNOWN_COMPETENCE
+from .schema import COMPARABLE, IDENTITY_KEY, NOT_COMPARABLE, UNKNOWN_COMPETENCE
 
 HARD, SOFT = "hard", "soft"
 
@@ -189,6 +189,81 @@ def capability(rows: list[dict], origin: str, measures: str,
             # to work out whether a row was stated is a consumer that will get
             # it wrong on the row where it matters.
             "stated": False}
+
+
+def comparability(rows: list[dict], field: str, origin_a: str, origin_b: str,
+                  on: str | date) -> dict:
+    """Are these two instruments on the same footing for this field? (#33 item 2)
+
+    Returns the comparability row in force, or a synthesised `not_comparable`
+    one. Never None, for exactly `capability`'s reason one dataset over: a
+    consumer asking whether a rate can span a scale change gets an answer in
+    the vocabulary rather than a null it has to interpret.
+
+    SILENCE RESOLVES TO `not_comparable`, and that is #33's whole acceptance
+    criterion rather than an engineering default. Comparability is EARNED BY
+    OVERLAP - a period of simultaneous measurement from both instruments,
+    recorded in this record - never assumed because two readings share a
+    field name. A comparability table shipped in `semantics/` would be #148's
+    defect one dataset over: effective-dating that a default escapes is not
+    effective-dating, so there is no default outside the record.
+
+    ORDER-INSENSITIVE IN THE PAIR, deliberately, though the identity stored
+    on a row is not: `(field, origin_a, origin_b)` and
+    `(field, origin_b, origin_a)` are two different identities as far as
+    `_in_force`/`supersedes` are concerned, because whether a scale is
+    comparable to a DEXA is one fact about the PAIR regardless of which one
+    somebody typed first when they wrote it down - asking (dexa, scale) is
+    the same question as asking (scale, dexa). So the match here is by SET
+    rather than by tuple order, and where more than one in-force row answers
+    (because both orders were written as separate lines), the most recently
+    dated one wins - the same tie-break `_in_force` already applies within
+    one identity, reapplied by hand across the two identities this question
+    can straddle.
+    """
+    on_s = on.isoformat() if isinstance(on, date) else str(on)
+    want = frozenset({str(origin_a), str(origin_b)})
+    matches = [
+        row for row in _in_force(rows, "comparability", on_s).values()
+        if str(row.get("field")) == str(field)
+        and frozenset({str(row.get("origin_a")), str(row.get("origin_b"))})
+        == want]
+    if matches:
+        return max(matches, key=order_key)
+    return {"field": str(field), "origin_a": str(origin_a),
+            "origin_b": str(origin_b), "status": NOT_COMPARABLE,
+            "bias": None, "spread": None, "basis": None, "overlap_ref": None,
+            "date": None,
+            # SAID RATHER THAN INFERRED FROM A NULL DATE, `capability`'s own
+            # reasoning: a consumer that has to work out whether a row was
+            # stated is a consumer that will get it wrong on the row where it
+            # matters.
+            "stated": False}
+
+
+def all_comparable(rows: list[dict], field: str, instruments: list[str],
+                   on: str | date) -> bool:
+    """Does EVERY pair among `instruments` resolve to `comparable`? (#33 item 3)
+
+    The gate the weight-rate seam refusal (`verdicts.compute_verdicts`) and
+    its report-layer mirror (`report.build_report`) both call, so the two
+    surfaces cannot drift on what "every pair" means. `offset` is not enough
+    here and never will be: it records that a cross-instrument difference was
+    MEASURED, not that the two sides may be read as one series, and applying
+    a measured offset to a reading would be fabricating a measurement (P4).
+    Only `comparable` lifts the refusal.
+
+    Vacuously true for zero or one instrument. That cannot happen where this
+    is called today - `clocks.instrument_seam` only reports a seam once at
+    least two distinct instruments are behind one window - but it is stated
+    rather than left to an empty `combinations()` call reading as an
+    accident.
+    """
+    from itertools import combinations
+
+    named = sorted({str(i) for i in instruments})
+    return all(comparability(rows, field, a, b, on)["status"] == COMPARABLE
+              for a, b in combinations(named, 2))
 
 
 def instrument(rows: list[dict], origin: str, on: str | date) -> dict | None:

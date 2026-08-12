@@ -73,6 +73,28 @@ PINNED = {
         "recorded_at": "temporal",
         "device": "provenance",
     },
+    # #33 item 2: comparability earned by overlap. `origin_a`/`origin_b` are
+    # PROVENANCE beside `origin` - they name what observed a value, the
+    # class's own definition. `bias`/`spread` are MEASUREMENT, the measured
+    # cross-instrument quantities. `overlap_ref` is REFERENCE, the same class
+    # `basis_claims`/`session_ref` carry: a pointer to evidence rather than a
+    # statement about the athlete.
+    "comparability": {
+        "date": "temporal",
+        "field": "reference",
+        "origin_a": "provenance",
+        "origin_b": "provenance",
+        "status": "reference",
+        "bias": "measurement",
+        "spread": "measurement",
+        "basis": "provenance",
+        "overlap_ref": "reference",
+        "note": "narrative",
+        "source": "provenance",
+        "supersedes": "reference",
+        "recorded_at": "temporal",
+        "device": "provenance",
+    },
     "achievements": {
         "date": "temporal", "title": "narrative", "goal": "reference",
         "source": "provenance", "note": "narrative", "occurred_date":

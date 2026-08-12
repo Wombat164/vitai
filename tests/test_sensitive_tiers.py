@@ -335,6 +335,13 @@ ARG_TAKING_OUT_OF_SCOPE = {
     # `dataset`, which is the door above, and returns no row from a sensitive
     # dataset - the athlete is not in it.
     "capability",
+    # `comparability` answers a vocabulary value about a PAIR of instruments
+    # and a field (#33 item 2): a status, an offset and a spread. Same shape
+    # as `capability` immediately above - it reads comparability rows through
+    # `dataset`, and no field on the dataset (`origin_a`/`origin_b`/`status`/
+    # `bias`/`spread`/`basis`/`overlap_ref`) is precise-tier or otherwise
+    # about the athlete rather than about the instruments.
+    "comparability",
     "check", "window", "ramp", "may", "project", "plan_for", "urgent",
     "safety_banner", "pending_checks", "gated", "session_weeks",
     "contributions", "milestones", "churn", "field_types", "schema",

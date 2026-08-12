@@ -630,3 +630,11 @@ to_date = "end date"
 from_date = "start date"
 place_precise = "precise place"
 slug = "identifier"
+
+# #33 item 2: the comparability dataset. `origin_a`/`origin_b` derive to
+# "origin a"/"origin b", and a bare letter is not a word a person reads -
+# the same defect the token gate exists to catch, curated rather than
+# blessed. `overlap_ref` follows the `session_ref` precedent two lines up.
+origin_a = "first instrument"
+origin_b = "second instrument"
+overlap_ref = "overlap reference"

@@ -35,7 +35,10 @@ from vitai.vocab import registry
 # covered.
 # Updated deliberately at #331, which added the [name] table to the digest's
 # coverage: 54 display names are 54 strings a client prints.
-PINNED_DIGEST = "71ce48e513dba748"
+# Updated deliberately at #33 item 2, which curated three more: `origin_a` ->
+# "first instrument", `origin_b` -> "second instrument", `overlap_ref` ->
+# "overlap reference" (the `session_ref` precedent, one dataset over).
+PINNED_DIGEST = "0e983ffa73ee0f40"
 
 REGISTRY = Path(__file__).resolve().parents[1] / "src" / "vitai" / "semantics" / "units.toml"
 def _numeric_in_the_corpus() -> set[tuple[str, str]]:

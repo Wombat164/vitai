@@ -9,13 +9,14 @@ seed = 112
 span = ["2029-08-01", "2030-06-30"]
 
 [schema]
-contract = "45"
+contract = "46"
 
 [schema.generations]
 achievements = 5
 artifacts = 4
 capabilities = 3
 checks = 4
+comparability = 3
 context = 5
 daily = 14
 emissions = 1

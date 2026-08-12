@@ -50,6 +50,9 @@ CURATED_WORDS = frozenset({
     "pad", "per", "perceived", "position", "power", "precise", "protein",
     "rate", "reference", "reserve", "rest", "resting", "seat", "sequence",
     "session", "sodium", "sugar", "trained", "upper", "weight", "with",
+    # #33 item 2: the comparability dataset's curated names, `origin_a` ->
+    # "first instrument" and `overlap_ref` -> "overlap reference".
+    "first", "second", "instrument", "overlap",
 })
 BLESSED = PLAIN_WORDS | CURATED_WORDS
 

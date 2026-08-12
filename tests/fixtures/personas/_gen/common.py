@@ -239,7 +239,14 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # came off different scales. A dataset that ships exercised by nobody proves
 # nothing about the populated case, which is what the two re-pins above left
 # open. The other nine personas get an empty `instruments.jsonl`.
-AUTHORED_AGAINST_CONTRACT = "45"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #33 item 2's `comparability` dataset (contract 46), and the
+# review the gate demands is recorded rather than implied: no builder writes
+# a comparability row - the only mention across all ten is this comment - so
+# every persona gets an empty `comparability.jsonl` and nothing else moves.
+# The populated case (`scale` vs `dexa` on `kg`) ships in `examples/demo`
+# instead, which is the fixture #33's own acceptance criterion is checked
+# against.
+AUTHORED_AGAINST_CONTRACT = "46"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     # #171: a new dataset, empty for every persona. Generation 3 rather than 1
     # because every dataset gets the blanket `recorded_at` and `device`
@@ -250,6 +257,9 @@ AUTHORED_AGAINST_GENERATIONS = {
     # above - the blanket `recorded_at` and `device` blocks - and populated
     # for `ines` rather than empty everywhere.
     "instruments": 3,
+    # #33 item 2: a new dataset, empty for every persona, generation 3 for
+    # the same blanket-block reason as `capabilities` above.
+    "comparability": 3,
     # #221: a new dataset, empty for every persona.
     "plans": 1,
     "achievements": 5,
