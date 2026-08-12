@@ -427,7 +427,8 @@ proven durable.
 
 ## Status
 
-0.5.0 (August 2026), contract 27; contract 28 is unreleased. The engine, the skills and the boundary
+0.5.0 (August 2026); see the Schema migrations table above for exactly
+which contract each release shipped. The engine, the skills and the boundary
 enforcement work, and the surface a client application needs is in place: the
 whole state in one call, a write path that stamps its own provenance, a version
 to pin against, and refusals that say which kind of no. Connectors are doctrine
