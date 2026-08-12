@@ -1792,7 +1792,12 @@ def main(argv: list[str] | None = None) -> None:
             p.add_argument("--set-by", dest="set_by", default="athlete",
                            help="who decided: athlete, coach, onboard, derived")
             p.add_argument("--corrects", metavar="SLUG@DATE",
-                           help="retire the plan row this names (destructive)")
+                           help="retire the plan row this names (destructive). "
+                                "The date is the plan's own 'date', the day it "
+                                "was WRITTEN - not 'for_date'. A plan is the "
+                                "one dataset carrying both, and aiming this at "
+                                "the wrong one matches nothing and appends "
+                                "anyway")
             p.add_argument("--on", metavar="YYYY-MM-DD",
                            help="the date the plan is WRITTEN on (default: "
                                 "today); the day it is FOR is 'for_date' "

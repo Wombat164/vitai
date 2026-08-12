@@ -2431,7 +2431,13 @@ class Vitai:
 
         `corrects` and `on` mean what they mean on `claim()`: `corrects` is
         the reference (see `line_key`, e.g. `<slug>@<date>`) of the plan row
-        this one supersedes - explicit because a supersede is destructive and
+        this one supersedes - and the date in that reference is the row's own
+        `date`, the day it was WRITTEN, never its `for_date`. A plan is the
+        one dataset carrying both, so this is the one place the ambiguity
+        bites: aiming it at `for_date` matches nothing, retires nothing, and
+        appends the row anyway, with only `validate` noticing later.
+
+        It is explicit because a supersede is destructive and
         a caller who reached it by putting `supersedes` in `values` would not
         have decided to. It is NOT how a plan is resolved: a second row
         naming the same `slug` with no `supersedes` and an `outcome` filled in
