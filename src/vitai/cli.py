@@ -1547,6 +1547,37 @@ def cmd_claim(args: argparse.Namespace) -> None:
     print(json.dumps(row, sort_keys=True))
 
 
+def cmd_plan(args: argparse.Namespace) -> None:
+    """A harness over `Vitai.plan()`. Every rule lives there (#368).
+
+    A separate command from `claim`, mirroring the separate method: a plan is
+    a third act, decided rather than acquired, and `plan` is the one door
+    that writes it with its own provenance instead of the acquisition
+    vocabulary `claim` stamps.
+    """
+    on = date.fromisoformat(args.on) if args.on else None
+    engine = Vitai(_root(args), on=on)
+    values = {}
+    for pair in args.value:
+        if "=" not in pair:
+            sys.exit(f"{pair!r} is not field=value")
+        field, _, raw = pair.partition("=")
+        try:
+            values[field] = json.loads(raw)
+        except json.JSONDecodeError:
+            values[field] = raw
+    try:
+        row = engine.plan(values, set_by=args.set_by, corrects=args.corrects)
+    except (ValueError, DataError) as e:
+        # The engine's own sentence, exactly as `claim` relays it - including
+        # the one `claim(dataset="plans", ...)` now raises, naming this
+        # command as the way in.
+        sys.exit(str(e))
+    except KeyError as e:
+        sys.exit(e.args[0] if e.args else str(e))
+    print(json.dumps(row, sort_keys=True))
+
+
 def cmd_status(args: argparse.Namespace) -> None:
     """A harness over `Vitai.status()`.
 
@@ -1673,6 +1704,9 @@ def main(argv: list[str] | None = None) -> None:
          "speak MCP on stdio, so an off-the-shelf agent can attach (#158)"),
         ("claim", cmd_claim,
          "append what the athlete stated, with provenance the engine stamps"),
+        ("plan", cmd_plan,
+         "append what a day was MEANT to be, with the plan's own provenance "
+         "(set_by) - not claim's acquisition vocabulary (#368)"),
         ("verdicts", cmd_verdicts, "weekly goal-attainment rows as JSONL (the platform contract)"),
         ("goals", cmd_goals, "active goals: progress, dates, contributions, flagged edits"),
         ("phases", cmd_phases,
@@ -1754,6 +1788,19 @@ def main(argv: list[str] | None = None) -> None:
             p.add_argument("--about", help="what the utterance refers to")
             p.add_argument("value", nargs="*", metavar="field=value",
                            help="the quantities stated")
+        if name == "plan":
+            p.add_argument("--set-by", dest="set_by", default="athlete",
+                           help="who decided: athlete, coach, onboard, derived")
+            p.add_argument("--corrects", metavar="SLUG@DATE",
+                           help="retire the plan row this names (destructive)")
+            p.add_argument("--on", metavar="YYYY-MM-DD",
+                           help="the date the plan is WRITTEN on (default: "
+                                "today); the day it is FOR is 'for_date' "
+                                "among the field=value pairs, since the two "
+                                "are different dates")
+            p.add_argument("value", nargs="*", metavar="field=value",
+                           help="the plan's fields, e.g. slug=evening-run "
+                                "for_date=2026-08-10 activity=run tier=committed")
         if name == "infer":
             p.add_argument("--dry-run", action="store_true",
                            help="print validated inferences without appending")

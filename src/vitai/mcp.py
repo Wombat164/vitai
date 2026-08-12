@@ -35,7 +35,7 @@ from pathlib import Path
 from . import api as _api
 from .api import Vitai, schema
 from .db import DERIVED_TABLES
-from .schema import KEYS
+from .schema import AUTHORS, KEYS
 
 PROTOCOL = "2024-11-05"
 
@@ -279,6 +279,24 @@ TOOLS: dict[str, dict] = {
             "about": {"type": "string"},
         },
         "required": ["text"],
+    },
+    # #368: a plan is a third act, decided rather than acquired, so it gets
+    # its own tool rather than a `dataset` value on `claim`. NO `corrects`
+    # here, for the reason `claim` does not offer it either: the destructive
+    # retire path is deliberately withheld from this surface, not merely
+    # undocumented, so an agent driving this tool cannot reach it by ignoring
+    # the schema.
+    "plan": {
+        "method": "plan",
+        "properties": {
+            "values": {"type": "object",
+                       "description": "the plan's fields: slug, for_date, "
+                                      "activity, tier, serves, and the rest "
+                                      "of what 'plans' carries"},
+            "set_by": {"type": "string", "enum": sorted(AUTHORS),
+                       "description": "who decided (default: athlete)"},
+        },
+        "required": ["values"],
     },
 }
 
