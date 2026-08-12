@@ -431,6 +431,36 @@ def test_the_three_surfaces_agree(tmp_path):
     assert from_api == from_mcp == from_cli
 
 
+def test_the_cli_says_since_rather_than_leaving_it_to_be_reconstructed(tmp_path):
+    """THE SENTENCE IS THE FEATURE. The issue's argument is that "lowest ever"
+    and "first in over a year" were both false and "first below 80 since
+    February" was true, so the prose surface has to be able to say the last
+    one.
+
+    The first version printed both kinds through one template, "(was X on
+    DATE)". On a personal first that reads correctly - X is the record beaten.
+    On a round number it reads as the OPPOSITE of the fact: "down to 80 (was
+    75)" looks like a five-kilo gain, when 75 is the last reading BELOW 80 and
+    the point is that the athlete is under 80 for the first time since then.
+
+    Nothing pinned the prose, so the suite stayed green through the fix. This
+    is that pin."""
+    root = init(tmp_path / "content")
+    v = Vitai(root)
+    for d, kg in (("2029-01-01", 75.0), ("2029-02-01", 82.0),
+                  ("2029-08-01", 79.0)):
+        v.append("weight", {"date": d, "kg": kg, "source": "scale"})
+    out = subprocess.run(
+        [sys.executable, "-m", "vitai.cli", "crossings", "--root", str(root)],
+        capture_output=True, text=True, check=True).stdout
+
+    assert "first kg below 80 since 2029-01-01" in out, out
+    # And the reading that was beaten is NOT presented as the prior weigh-in.
+    assert "was 82" not in out
+    # A first-ever crossing says so rather than naming a date it does not have.
+    assert "for the first time in this record" in out, out
+
+
 def test_the_cli_reports_no_crossings_rather_than_nothing(tmp_path):
     root = init(tmp_path / "content")
     out = subprocess.run(

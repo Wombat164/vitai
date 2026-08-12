@@ -350,19 +350,33 @@ def cmd_crossings(args: argparse.Namespace) -> None:
               "personal high or low")
         return
     for r in rows:
-        arrow = "down to" if r["direction"] == "down" else "up to"
-        # A `round_number` row's evidence pair can be null - the series was
-        # NEVER on that side before (#370's fix: the pair names the last
-        # reading on the destination side, not the reading right before this
-        # one, and there may be none). That is a stronger fact than the
-        # ordinary case, not a gap, so it gets its own phrasing rather than
-        # a `:g` format crashing on `None`.
-        if r["previous_value"] is None:
-            evidence = " (first time ever)"
+        # TWO KINDS, TWO SENTENCES, because one template said the wrong thing
+        # about one of them. Both rows carry a `previous_value` and a
+        # `previous_date`, and they mean different things: on a personal first
+        # it is the record this reading beat, and on a round number it is the
+        # last time the series was on the side it just arrived at.
+        #
+        # Printed as one "(was X on DATE)" they read alike, and the round
+        # number reads as its own opposite: "down to 80 (was 75)" looks like a
+        # five-kilo gain, when 75 is the last reading BELOW 80 and the fact
+        # being reported is that the athlete is under 80 for the first time
+        # since then. This is the sentence the whole feature exists to make
+        # sayable - "first below 80 since February" - so it is worth saying in
+        # those words rather than leaving a reader to reconstruct it.
+        side = "below" if r["direction"] == "down" else "above"
+        if r["kind"] == "round_number":
+            if r["previous_date"] is None:
+                said = (f"{r['metric']} {side} {r['value']:g} for the first "
+                        f"time in this record")
+            else:
+                said = (f"first {r['metric']} {side} {r['value']:g} since "
+                        f"{r['previous_date']}")
         else:
-            evidence = f"  (was {r['previous_value']:g} on {r['previous_date']})"
-        print(f"{r['date']}  {r['kind']:<14} {r['metric']} {arrow} "
-              f"{r['value']:g}{evidence}")
+            arrow = "low" if r["direction"] == "down" else "high"
+            was = (f", beating {r['previous_value']:g} on {r['previous_date']}"
+                   if r["previous_date"] is not None else "")
+            said = f"{r['metric']} {arrow} of {r['value']:g}{was}"
+        print(f"{r['date']}  {r['kind']:<14}  {said}")
 
 
 def cmd_goals(args: argparse.Namespace) -> None:
