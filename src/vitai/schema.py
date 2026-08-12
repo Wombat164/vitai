@@ -3625,14 +3625,32 @@ def protocol_pin_advisories(dataset: str, rows: list[tuple[int, dict]],
     missing"). So: no slug ever named in this dataset -> return nothing for
     it, full stop, before any row is even looked at for absence.
 
-    SCOPED TO ON-OR-AFTER THE DECLARATION. A row dated before the earliest
-    `protocols` row for a slug this dataset uses could not have named a
-    protocol that did not exist yet - the athlete cannot cite a procedure
-    from the future. Flagging it would be noise on exactly the readings that
-    were never wrong, which trains a reader to stop trusting the advisory for
-    the ones that are. So the cutoff is the earliest DECLARATION date among
-    the slugs this dataset actually uses, not the earliest date any row in
-    this dataset happens to carry.
+    A DANGLING SLUG DOES NOT COUNT AS A REAL PROTOCOL. Naming a slug on a
+    `weight` row is not the same as that slug being a real, declared
+    protocol - it could be a typo, or a slug used before its `protocols` row
+    ever lands (legal and open, see the comment on `KEYS["protocols"]`). A
+    slug with no matching `protocols` row ANYWHERE in the record is not
+    evidence any procedure applies, so it must not anchor the scope and must
+    not, on its own, turn the advisory on. This is a SEPARATE gate from the
+    empty-named-set one above and from the adoption-date gate below, and it
+    matters most in combination: one real slug plus one dangling one must
+    still anchor correctly on the real one (tested), not fall through to
+    "nothing is declared, scope the whole history".
+
+    THE ANCHOR IS THIS DATASET'S OWN ADOPTION, not a `protocols` declaration
+    date pulled from anywhere it happens to sit. It used to be the earliest
+    DECLARATION date among the slugs this dataset uses - which over-reaches
+    the moment a dataset ever names two slugs: `weight` naming `proto-a`
+    (declared 2030) and, much later, also naming `proto-b` (declared 2020 for
+    something else entirely) pulled the scope back to 2020 and flagged six
+    years of `weight` rows that came before `weight` had named anything at
+    all. That is exactly the noise-on-rows-that-were-never-wrong failure the
+    scoping rule exists to prevent, just reached from the other direction.
+    The fix uses the same principle Step 1 already uses - derive from the
+    dataset's OWN rows, never from `protocols.jsonl` directly - so the anchor
+    is the earliest date on which a row in THIS dataset actually named a REAL
+    (non-dangling) slug. A dataset cannot be dragged backwards by a slug it
+    only adopted later, and cannot be anchored by a slug it never really had.
 
     ADVISORY, NEVER A REFUSAL - the issue is explicit about why. A reading
     taken under unknown conditions is still true, and losing it (by refusing
@@ -3649,6 +3667,22 @@ def protocol_pin_advisories(dataset: str, rows: list[tuple[int, dict]],
     `timestamp_advisories` set the precedent: a validator that printed one
     line per unpinned row on a 377-of-381 record would be almost the whole
     file, and that is the validator people stop reading.
+
+    NO LINE-NUMBER POINTER. An earlier version named "(first: line N)", but
+    `rows` here is one dataset's UNION across every device file - one writer
+    per file (#105) - and a line number is only unique per FILE, not across
+    the union. On a record with `weight.jsonl` and `weight.scale2.jsonl`
+    both in play, "line 1" could name either file, and nothing here says
+    which; a reader who followed it could land on a row that IS pinned while
+    the advisory is reporting the ones that are not. Even single-file, the
+    first entry in iteration order is not the earliest by date, so the
+    pointer could name a later-dated row while the span (below) starts
+    earlier. The span's start date is unambiguous across every file in the
+    union and is what a reader actually searches for, so the pointer is
+    dropped rather than patched to carry a filename too - the file identity
+    is not threaded through the tuples `validate()` builds for any of the
+    dozen checks that share this shape, and doing it only here for one
+    caller would be new machinery this advisory does not need.
     """
     if dataset not in ("weight", "measurements"):
         return []
@@ -3658,18 +3692,29 @@ def protocol_pin_advisories(dataset: str, rows: list[tuple[int, dict]],
     named = {str(r["protocol"]) for _, r in rows if r.get("protocol")}
     if not named:
         return []
-    # Step 2: the earliest date any of those named slugs was DECLARED. A slug
-    # may be named on a row before its `protocols` row exists at all (legal
-    # and open - see the comment on `KEYS["protocols"]`); if none of the used
-    # slugs has a matching `protocols` row yet, there is no declaration date
-    # to scope against, so there is nothing yet to advise.
-    declared = [str(r["date"]) for _, r in protocol_rows
-               if str(r.get("slug")) in named and r.get("date")
-               and not _bad_date(r["date"])]
-    if not declared:
+    # Step 2: of those named slugs, which are REAL - i.e. have at least one
+    # matching `protocols` row anywhere in the record. A slug this dataset
+    # names but that is declared nowhere is a DANGLING reference, not
+    # evidence a protocol applies (see the docstring's DANGLING SLUG
+    # paragraph), and must not reach Step 3 at all.
+    declared_slugs = {str(r["slug"]) for _, r in protocol_rows
+                      if r.get("slug") and r.get("date")
+                      and not _bad_date(r["date"])}
+    real = named & declared_slugs
+    if not real:
         return []
-    since = min(date.fromisoformat(d) for d in declared)
-    # Step 3: rows in THIS dataset, dated on or after `since`, that carry no
+    # Step 3: THIS DATASET'S OWN adoption date - the earliest date on which
+    # one of ITS OWN rows named a real slug. Derived from `rows`, exactly
+    # like Step 1, and deliberately NOT from `protocol_rows`: see the
+    # docstring's ANCHOR paragraph for why anchoring on a declaration date
+    # instead over-reaches into a slug this dataset only adopted later.
+    own_adoption = [date.fromisoformat(str(r["date"])) for _, r in rows
+                    if str(r.get("protocol")) in real and r.get("date")
+                    and not _bad_date(r["date"])]
+    if not own_adoption:
+        return []
+    since = min(own_adoption)
+    # Step 4: rows in THIS dataset, dated on or after `since`, that carry no
     # protocol. A malformed date is skipped here rather than guessed at -
     # `_bad_date` already reports it elsewhere as its own problem.
     unpinned = [(n, r) for n, r in rows
@@ -3682,10 +3727,9 @@ def protocol_pin_advisories(dataset: str, rows: list[tuple[int, dict]],
     return [
         f"{dataset}.jsonl: {len(unpinned)} row(s) dated {span[0].isoformat()} "
         f"to {span[-1].isoformat()} carry no 'protocol', though this record "
-        f"has named {', '.join(sorted(named))!r} since {since.isoformat()} "
-        f"(first: line {unpinned[0][0]}). Legal and unrefused - an unpinned "
-        "reading is still true - but it is not comparable to one that names "
-        "its conditions until it does too"]
+        f"has named {', '.join(sorted(real))!r} since {since.isoformat()}. "
+        "Legal and unrefused - an unpinned reading is still true - but it is "
+        "not comparable to one that names its conditions until it does too"]
 
 
 def unranked_source_problems(dataset: str, rows: list[tuple[int, dict]],
