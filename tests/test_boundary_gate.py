@@ -59,6 +59,117 @@ def test_the_finding_names_the_sentence_so_it_can_be_found():
     assert "see a doctor" in found[0]
 
 
+# ---- #379: a category is a diagnosis in one word --------------------------------------
+
+@pytest.mark.parametrize("line", [
+    "Your BMI entered the healthy range.",
+    "You are in the overweight band.",
+    "This reading is in the obese category.",
+    "That result sits in the underweight range.",
+    "Your latest reading suggests you are morbidly obese.",
+    "Your BMI is now in the healthy weight range.",
+    # "ideal weight" moved to `CATEGORY_WORDS_GENERIC` (see the proximity
+    # tests below), so this needs the BMI it would have in a real report -
+    # bare "ideal weight" with nothing beside it no longer fires, and
+    # should not: see test_a_generic_phrase_needs_a_body_composition_noun.
+    "This value falls in the ideal weight zone for your BMI.",
+    "Your systolic reading is hypertensive.",
+    "This value is in the prehypertension range.",
+])
+def test_a_category_word_is_caught(line):
+    """#370 decided the engine may state the ratio and the numeric boundary
+    but may never name the band - "you have entered the healthy band" is
+    class (c), a category applied to a person as the engine's own conclusion.
+    None of these contain a purpose verb or a `MEDICAL_NOUN`, so they were
+    invisible to the gate before #379."""
+    found = scan(line)
+    assert found and found[0].startswith("category claim"), line
+
+
+@pytest.mark.parametrize("line", [
+    # PR #382's review: `_match_form` turns a hyphen into a space, which is
+    # right for a multi-word phrase already on the list ("healthy-range")
+    # but wrong for these three fused compounds - there is no space-
+    # separated form of any of them anywhere in `CATEGORY_WORDS`, so the
+    # hyphenated spelling used to pass clean. Both spellings of all three
+    # words are checked here, not just the hyphenated one, so a regression
+    # that broke the plain spelling instead would still be caught.
+    "the athlete is in an over-weight band",
+    "the athlete is in an overweight band",
+    "that result sits in an under-weight range",
+    "that result sits in an underweight range",
+    # "pre-hypertension" is the more common clinical spelling than the fused
+    # form this gate already caught - both must fire.
+    "this reads as pre-hypertension",
+    "this reads as prehypertension",
+])
+def test_a_hyphenated_compound_is_the_same_category_word(line):
+    found = scan(line)
+    assert found and found[0].startswith("category claim"), line
+
+
+@pytest.mark.parametrize("line", [
+    # PR #382's review, run and confirmed firing before this fix: none of
+    # these three names a person's reading, and none has a body-composition
+    # noun within the sentence.
+    "A barbell's ideal weight for this lift is 60kg per the programming doc.",
+    "returns True when the argument is in a healthy range of floating "
+    "point precision",
+    "The exporter writes a normal range column into the CSV.",
+])
+def test_a_generic_phrase_with_no_body_composition_noun_is_left_alone(line):
+    """`ideal weight`, `healthy range` and `normal range` are ordinary
+    technical idioms outside this domain, unlike the five unambiguous
+    clinical words that stay bare. Scoped to a nearby body-composition
+    noun the way `_PURPOSE_RE` scopes `PURPOSE_VERB` to `MEDICAL_NOUN`."""
+    assert scan(line) == [], line
+
+
+@pytest.mark.parametrize("line", [
+    # The motivating example must survive the scoping fix: "BMI" is within
+    # 80 characters of "healthy range" here, on the noun-then-phrase side.
+    "Your BMI entered the healthy range.",
+    # Phrase-then-noun must also fire - a real sentence could name the
+    # measurand after the band as easily as before it.
+    "The healthy range for your BMI is wide.",
+    "Your weight is now in the normal range for your height.",
+    "The ideal weight for your body fat percentage is unchanged.",
+])
+def test_a_generic_phrase_needs_a_body_composition_noun(line):
+    found = scan(line)
+    assert found and found[0].startswith("category claim"), line
+
+
+@pytest.mark.parametrize("line", [
+    # PR #382's review: `_MARKUP_RE` strips `_` as a markdown emphasis
+    # marker, which turns a code identifier into three separate words -
+    # exactly the shape the new bare CATEGORY family made exploitable, and
+    # exactly the shape #370's BMI band field will plausibly introduce.
+    "`is_overweight_flag`",
+    "The schema adds a `is_overweight_flag` column.",
+    "`healthy_range_min`",
+    "The config exposes `healthy_range_min` and `healthy_range_max`.",
+    "`ideal_weight_kg`",
+    "The report renders `ideal_weight_kg` next to the athlete's own value.",
+])
+def test_an_identifier_is_not_prose(line):
+    """An identifier is not prose: `\\b` must not land inside
+    `is_overweight_flag` just because it would land inside "is overweight
+    flag". Preserving `_` as a word character for CATEGORY matching only
+    (see `_MARKUP_RE_TIGHT`) is what stops it."""
+    assert scan(line) == [], line
+
+
+def test_underscore_emphasis_still_reaches_directives_and_purpose():
+    """The identifier fix is scoped to CATEGORY only (see `_MARKUP_RE_TIGHT`
+    and `_tight_sentences()`): DIRECTIVES and PURPOSE_RE still read the
+    prose form, where `_` folds away like every other emphasis marker, so
+    `_see a doctor_` and `_detects_ a medical condition` still evade
+    nothing."""
+    assert scan("If it persists, _see a doctor_ about it.")
+    assert scan("vitai _detects_ the medical condition early.")
+
+
 # ---- it does not cry wolf ---------------------------------------------------------------
 
 @pytest.mark.parametrize("line", [
@@ -84,6 +195,46 @@ def test_a_disclaimer_is_not_a_claim(line):
 def test_ordinary_engineering_words_are_left_alone(line):
     """`detect`, `screen` and `monitor` are everyday words here. They count
     only next to a medical noun, or the lint fires on half the codebase."""
+    assert scan(line) == [], line
+
+
+@pytest.mark.parametrize("line", [
+    # docs/prior-art-schemas.md, describing OSS project health, not a person.
+    "Open Food Facts is alive and healthy.",
+    "OSRM, Valhalla and GraphHopper are all healthy.",
+    "This plus a healthy vendor ecosystem.",
+    # src/vitai/safety.py's own RHR comment - "healthy" and "normal" describe
+    # a population and an athlete's physiology respectively, not a category
+    # word from the deny list.
+    "Resting heart rate outside this band is outside the range of a healthy "
+    "person at rest.",
+    "Mid-30s is normal for a trained endurance athlete and must not fire.",
+    # docs/medical-boundary.md's own worked (a) example: the SAME two words
+    # as `healthy range`, but in the opposite order, which is exactly the
+    # collocation the deny list must not fire on out of order.
+    "Your recorded resting heart rate is outside the range seen in healthy "
+    "people at rest.",
+    # docs/model.md and skills/vitai-coach/SKILL.md: "normal" as an ordinary
+    # adjective for a day, a route, or a mode - not a clinical band.
+    "Two goals may share a metric, or be pursued differently, and that is "
+    "normal.",
+    "Vacation and a deadline week are not normal weeks.",
+    # docs/plan-v3.md and skills/vitai-validate/SKILL.md: "obesity" naming a
+    # persona-construction test axis, not the engine's own conclusion about a
+    # reading. This is why `obesity` (unlike `obese`) is not on the deny
+    # list - see the rejection comment beside `CATEGORY_WORDS`.
+    "Deliberately span the axes the author does not occupy: shift work, "
+    "life-stage physiology, severe obesity, elite performance.",
+    "Body composition spectrum: elite and lean through to severe obesity.",
+])
+def test_ordinary_healthy_and_normal_are_left_alone(line):
+    """"healthy" and "normal" are ordinary English, and this codebase's own
+    prose uses them constantly for OSS projects, routes, weeks and
+    physiology. Only the specific two-word collocations on the deny list
+    (`healthy range`, `healthy weight`, `normal range`) are narrow enough to
+    survive a scan of the whole repo; bare `healthy` or `normal` is not, and
+    `obesity` bare is not either, because of the two "severe obesity"
+    sentences quoted above."""
     assert scan(line) == [], line
 
 
