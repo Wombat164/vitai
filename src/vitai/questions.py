@@ -235,13 +235,21 @@ def waking_questions(phase_rows: list[dict], on: date) -> list[dict]:
     merging, a narrative claim that becomes matchable against a device claim
     ("the athlete says 'morning weigh-in'; the scale says 07:36"), and a
     disagreement that gets a shape. The second of those IS the single-row
-    case - a lone reading is exactly what a stated phase would confirm or
+    case - a lone reading is what a stated phase would confirm or
     contradict - so requiring multiplicity silenced that motivation
-    permanently, on every record, forever. There is nothing to disambiguate
-    a lone reading FROM, but there is something to check it AGAINST, and the
-    engine asking "when did you wake" is that check. So multiplicity is
-    gone, and all three of the issue's motivations are covered rather than
-    two of them.
+    permanently, on every record, forever.
+
+    WHAT ASKING BUYS TODAY IS NARROWER THAN THAT SOUNDS, and saying so is
+    the point: no weight or session row can carry a stated phase yet -
+    `for_phase` exists on `plans` and on nothing else - so answering
+    compares nothing against anything the moment it lands. What the answer
+    supplies is the ANCHOR such a comparison would need, a waking that lets
+    `phases()` place the row at all. That is still worth asking for, on two
+    grounds that do not depend on the comparison ever being built: the
+    anchor is the part only the athlete holds, and it is the part that gets
+    harder to recall with every week that passes. So this is a prerequisite
+    being collected rather than a check being run, and a docstring implying
+    otherwise would be the overclaim this rewrite exists to remove.
 
     ONLY THE MOST RECENT QUALIFYING DAY PER DATASET IS ASKED ABOUT, and this
     - not multiplicity - is what bounds the volume. Not a day-count cutoff:
