@@ -43,6 +43,17 @@ athlete writing a sentence there, including a clinician's name or why - and
 this hands it to a consumer under a field a docstring once called a slug.
 Downstream that matters: it is a surface record text leaves through, and
 whatever asks has to treat it as content rather than as an identifier.
+
+A THIRD KIND, `waking` (#212), which answers a question the other two cannot
+even ask about: not what is coming, but what a day that already happened
+cannot be understood without. `clocks.day_phase` derives which part of the
+athlete's own day a weigh-in or a session fell in, anchored on when they woke,
+and a day with no sleep row behind it gets no phase - not "probably morning",
+because that inference was tried on this issue and retracted: a logging habit
+and a waking window are indistinguishable in the record, and the proposal
+would be confidently wrong for the athlete the feature exists for. So the only
+mechanism left is to ask, and `waking_questions` is where that lands. See its
+own docstring for the worth-asking rule, which is the substance of this kind.
 """
 
 from __future__ import annotations
@@ -51,7 +62,7 @@ from datetime import date
 
 # What kind of unknown this is. Closed, and short on purpose: a vocabulary
 # that grows by guesswork is how "unusual" arrives as a category.
-KINDS = frozenset({"precondition", "clearance"})
+KINDS = frozenset({"precondition", "clearance", "waking"})
 
 # Who or what could settle it. This is the field that lets something other than
 # a person answer, which is the whole reason a question says what would settle
@@ -196,3 +207,117 @@ def gates_for(plan: dict, gates_on_day) -> list[str]:
                and not undecidable_scope(g, activity)]
     return sorted({str(g.get("slug")) for g in waiting
                    if is_gated([g], activity)})
+
+
+def waking_questions(phase_rows: list[dict], on: date) -> list[dict]:
+    """One question per day the record could place if it knew when the
+    athlete woke (#212), from `Vitai.phases()`'s own output.
+
+    THE OBVIOUS BUILD IS WRONG, AND IT IS WRONG BY A LOT. "Ask about every
+    unanchored day" was measured against the shipped persona corpus while
+    designing this: several personas that have never logged a sleep row carry
+    hundreds of unanchored weigh-ins each, one has over two thousand. Asking
+    about every one of them is the exact failure this module's own docstring
+    names for plans - the channel that is supposed to protect the athlete's
+    attention becomes the thing that exhausts it, worst on the record that
+    has gone longest without a confirmed waking to anchor against.
+
+    WORTH ASKING HAS TWO PARTS, and both are structural rather than a number
+    picked because it felt right (G85: no invented threshold where a
+    principled rule exists).
+
+    1. THE DAY MUST CARRY MORE THAN ONE UNANCHORED ROW IN THE SAME DATASET.
+       A single weigh-in on a day with no other reading has nothing for a
+       phase to disambiguate - the case this issue exists for is two rows on
+       one date that a merge cannot tell apart without knowing which part of
+       the day each belongs to (`#212`'s motivating defect), and a completed
+       session only needs its phase to pick between two same-day plans
+       (`#221`). Neither situation exists with one row. So a day with exactly
+       one unanchored reading stays unanchored and unasked-about: `phases()`
+       still reports it, honestly, as a row nothing can be said about, and
+       this derivation leaves it alone rather than manufacturing a question
+       an answer to which would change nothing checkable today.
+
+    2. OF THE DAYS THAT CLEAR (1), ONLY THE MOST RECENT ONE PER DATASET IS
+       ASKED ABOUT. Not a day-count cutoff - there is no published number of
+       days after which a waking is unrecallable, and inventing one would be
+       the same mistake #212 already made once and retracted, a fabricated
+       precision dressed as a rule. "Most recent" needs no number: it is
+       simply the day closest to the record's own horizon, which is both the
+       one the athlete is likeliest to still remember and the one most
+       likely to still matter to something unresolved. Older qualifying days
+       are not hidden - `phases()` keeps reporting them as unanchored - they
+       are just not competing for the one channel this floor has. Answering
+       the asked day (by logging a `daily.sleep_end` for it, the same field
+       and the same append any other waking is recorded with) removes it from
+       the unanchored set, and the next call surfaces whichever day is then
+       most recent. The backlog drains one question at a time, on its own,
+       with no accelerator and nothing to switch on.
+
+    CAPPED PER DATASET, NOT GLOBALLY, because `weight` and `sessions` feed
+    different consumers with different stakes - a same-day weigh-in pair
+    disambiguated by phase is a different fact from a same-day session
+    matched to the right plan - and a backlog on one must not silence the
+    other. Two datasets carry a time (`PHASE_FIELD` in `api.py`), so this
+    asks at most two questions at once, record-wide, regardless of how deep
+    either backlog runs.
+
+    MEASURED ON THE SHIPPED CORPUS, not asserted: applied to every persona
+    fixture and the demo, this rule produces at most one question per
+    dataset per record - five in total across thirteen personas and the demo
+    - even though three of those records carry hundreds of unanchored rows
+    each. The volume the naive build would have produced and the volume this
+    one does are not close.
+
+    `on` is the valid-time viewpoint (`Vitai.on`, or a caller's override): a
+    day after it has not been reached yet from where the record is being
+    read, so it is excluded the same way `ahead()` excludes a plan whose date
+    has not arrived - the mirror image, since these rows are already in the
+    past rather than still ahead, but the same discipline against answering
+    for a future the viewpoint has not seen.
+
+    THE SHAPE DIFFERS FROM `precondition`/`clearance` ON PURPOSE. There is no
+    plan slug to hang `about` from and no free-text field to pass through as
+    `subject` - the record never wrote a sentence about this day, only
+    timestamps - so `resolves` carries those timestamps verbatim instead: the
+    record's own values, not the engine's words, which is the same rule
+    `subject` follows for a precondition, applied to a kind that has numbers
+    where a precondition has prose.
+    """
+    # UNANCHORED ROWS, GROUPED BY THE DATASET AND DAY THEY SHARE. A row phases()
+    # already resolved is not a question - it is a fact - so only `phase is
+    # None` rows are candidates, and `anchored_on` is not read: an anchor
+    # that turned out incomparable (#38, naive against aware) is exactly as
+    # unusable to the athlete's answer as no anchor at all.
+    by_day: dict[tuple[str, str], list[dict]] = {}
+    for row in phase_rows:
+        if row.get("phase") is not None:
+            continue
+        when = _as_date(row.get("date"))
+        if when is None or when > on:
+            continue
+        key = (str(row["dataset"]), str(row["date"]))
+        by_day.setdefault(key, []).append(row)
+
+    # RULE 1: multiplicity. A day with one unanchored row is left alone.
+    multi: dict[str, dict[str, list[dict]]] = {}
+    for (dataset, day), rows in by_day.items():
+        if len(rows) >= 2:
+            multi.setdefault(dataset, {})[day] = rows
+
+    # RULE 2: recency, per dataset. ISO dates compare lexically in date order,
+    # so `max` over the keys is the newest qualifying day with no parsing.
+    out = []
+    for dataset in sorted(multi):
+        days = multi[dataset]
+        newest = max(days)
+        rows = days[newest]
+        out.append({
+            "id": f"waking:{dataset}:{newest}",
+            "kind": "waking",
+            "about": dataset,
+            "for_date": newest,
+            "resolves": sorted(str(r["at"]) for r in rows),
+            "settled_by": "athlete",
+        })
+    return out

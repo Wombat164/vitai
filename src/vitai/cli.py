@@ -776,6 +776,16 @@ def cmd_questions(args: argparse.Namespace) -> None:
               "still ahead")
         return
     for row in rows:
+        if row["kind"] == "waking":
+            # NO `bears_on`: a waking question has one axis, not two - the
+            # dataset it would resolve IS what it bears on, already in
+            # `about`. Forcing a second copy of the same value into a field
+            # meant for a different plan's activity would be padding a shape
+            # that does not fit rather than describing the one that does.
+            print(f"{row['for_date']} {row['about']}: waking "
+                  f"{', '.join(row['resolves'])} (settled by "
+                  f"{row['settled_by']})")
+            continue
         print(f"{row['for_date']} {row['about']}: {row['kind']} "
               f"{row['subject']} (settled by {row['settled_by']}, bears on "
               f"{row['bears_on']})")

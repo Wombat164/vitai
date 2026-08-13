@@ -27,7 +27,7 @@ from pathlib import Path
 
 from vitai import mcp
 from vitai.api import Vitai, init
-from vitai.questions import KINDS, SETTLED_BY, ahead, open_questions
+from vitai.questions import KINDS, SETTLED_BY, ahead, open_questions, waking_questions
 
 DEMO = Path(__file__).resolve().parents[1] / "examples" / "demo"
 
@@ -37,6 +37,16 @@ def _plan(v: Vitai, slug: str, for_date: str, activity: str = "run", **kw):
            "activity": activity, "tier": "committed", "outcome": "unresolved"}
     row.update(kw)
     v.append("plans", row)
+
+
+def _weight(v: Vitai, day: str, at: str, kg: float = 70.0, source: str = "scale"):
+    v.append("weight", {"date": day, "kg": kg, "source": source,
+                        "measured_at": at})
+
+
+def _session(v: Vitai, day: str, start: str, activity: str = "run"):
+    v.append("sessions", {"date": day, "type": activity, "distance_km": 5.0,
+                          "source": "watch", "start_time": start})
 
 
 def _fingerprint(root: Path) -> str:
@@ -532,11 +542,25 @@ def test_the_shipped_record_holds_one_of_each_kind():
     rather than by being written. The demo has an achilles episode restricting
     `impact` and waiting on a hop-test, and a planned `run` - which the
     engine's own `may()` calls blocked and which string-matching `restricts`
-    against the activity could not see at all."""
+    against the activity could not see at all.
+
+    Grew a third kind with #212: the demo carries no sleep rows at all, so
+    every timed weight and session row is unanchored, and its most recent
+    multi-row day in each dataset qualifies under `waking_questions`'s rule.
+    Ordered by `(for_date, id)`, the two backward-looking `waking` questions
+    - dated before the plan is even due - sort ahead of the two forward-
+    looking ones, which is the engine's own sort and not asserted here as a
+    coincidence."""
     questions = Vitai(DEMO).questions("2030-06-30")
 
-    assert [q["kind"] for q in questions] == ["clearance", "precondition"]
-    assert {q["subject"] for q in questions} == {"achilles", "dry-forecast"}
+    assert [q["kind"] for q in questions] == \
+        ["waking", "waking", "clearance", "precondition"]
+    # `subject` is a `precondition`/`clearance` field; `waking` carries
+    # `resolves` instead (#212's docstring on `waking_questions` says why),
+    # so this reads only the two kinds that have one rather than assuming
+    # every question in the list shares a shape.
+    named = {q["subject"] for q in questions if q["kind"] != "waking"}
+    assert named == {"achilles", "dry-forecast"}
 
 
 def test_the_cli_says_so_when_there_is_nothing(tmp_path):
@@ -548,3 +572,206 @@ def test_the_cli_says_so_when_there_is_nothing(tmp_path):
         capture_output=True, text=True, check=True)
 
     assert "nothing open" in out.stdout
+
+
+# --- waking: what already happened but cannot be placed (#212) ------------
+
+def test_two_unanchored_readings_on_one_day_are_a_waking_question(tmp_path):
+    """THE MOTIVATING CASE. Two weigh-ins on one date with no sleep row
+    behind either is exactly the shape `phases()` cannot place and a merge
+    cannot disambiguate - the defect #212 opened over. Answering settles
+    both at once, which is the whole reason it clears the worth-asking bar."""
+    v = Vitai(init(tmp_path / "content"))
+    _weight(v, "2030-05-30", "06:40")
+    _weight(v, "2030-05-30", "18:05")
+
+    questions = v.questions(date(2030, 6, 1))
+
+    assert [q["kind"] for q in questions] == ["waking"]
+    q = questions[0]
+    assert q["for_date"] == "2030-05-30"
+    assert q["about"] == "weight"
+    assert q["resolves"] == ["06:40", "18:05"]
+    assert q["settled_by"] == "athlete"
+
+
+def test_a_lone_unanchored_reading_asks_nothing(tmp_path):
+    """RULE 1, THE FIRST DIRECTION. One weigh-in with no other reading that
+    day has nothing for a phase to disambiguate - nothing downstream reads a
+    lone row's phase to decide anything - so it is left unanchored rather
+    than turned into a question an answer to which would change nothing."""
+    v = Vitai(init(tmp_path / "content"))
+    _weight(v, "2030-05-30", "06:40")
+    _session(v, "2030-05-31", "2030-05-31T18:30:00")
+
+    assert v.questions(date(2030, 6, 1)) == []
+    # The rows are still there and still honestly unanchored - RULE 1 is
+    # "not worth asking about", never "not worth reporting".
+    unanchored = [r for r in v.phases() if r["phase"] is None]
+    assert len(unanchored) == 2
+
+
+def test_a_thousand_lone_unanchored_days_still_ask_nothing(tmp_path):
+    """THE FAILURE THE OBVIOUS BUILD WOULD HAVE HAD, reproduced small. "Ask
+    about every unanchored day" was measured against the shipped persona
+    corpus and killed for exactly this: a record that has never logged sleep
+    but weighs in once a day would emit one question per day, forever. Under
+    the actual rule it emits none, because no day here ever has more than one
+    reading to disambiguate."""
+    v = Vitai(init(tmp_path / "content"))
+    start = date(2027, 1, 1)
+    for i in range(200):
+        _weight(v, (start + timedelta(days=i)).isoformat(), "07:00")
+
+    assert v.questions(date(2030, 6, 1)) == []
+
+
+def test_a_fully_anchored_day_asks_nothing_however_many_readings(tmp_path):
+    """RULE 1's other edge: multiplicity alone is not the bar, unanchored-ness
+    is. Two readings on a day the athlete's own sleep already anchors have a
+    phase already - `phases()` says so - and asking again would be asking a
+    question the record has already answered."""
+    v = Vitai(init(tmp_path / "content"))
+    v.append("daily", {"date": "2030-05-30", "sleep_h": 7.0,
+                       "sleep_start": "2030-05-29T23:00:00",
+                       "sleep_end": "2030-05-30T06:00:00", "source": "watch"})
+    _weight(v, "2030-05-30", "06:40")
+    _weight(v, "2030-05-30", "18:05")
+
+    assert all(r["phase"] for r in v.phases())
+    assert v.questions(date(2030, 6, 1)) == []
+
+
+def test_a_record_with_no_timed_rows_asks_nothing(tmp_path):
+    """No `weight` or `sessions` data at all: `phases()` is empty, so there
+    is nothing for `waking_questions` to group, let alone ask about."""
+    v = Vitai(init(tmp_path / "content"))
+
+    assert v.phases() == []
+    assert v.questions(date(2030, 6, 1)) == []
+
+
+def test_only_the_most_recent_qualifying_day_is_asked_about(tmp_path):
+    """RULE 2, THE FIRST DIRECTION, and it is not a day-count: two separate
+    dates both clear rule 1, and only the newer one - closer to the record's
+    own horizon and likelier to still be remembered - becomes a question. The
+    older one stays truthfully unanchored in `phases()` rather than vanishing,
+    it is just not competing for the one channel this floor has."""
+    v = Vitai(init(tmp_path / "content"))
+    _weight(v, "2030-04-01", "06:00")
+    _weight(v, "2030-04-01", "20:00")
+    _weight(v, "2030-05-30", "06:40")
+    _weight(v, "2030-05-30", "18:05")
+
+    questions = v.questions(date(2030, 6, 1))
+
+    assert [q["for_date"] for q in questions if q["kind"] == "waking"] == \
+        ["2030-05-30"]
+    still_unanchored = {r["date"] for r in v.phases() if r["phase"] is None}
+    assert still_unanchored == {"2030-04-01", "2030-05-30"}
+
+
+def test_answering_the_asked_day_surfaces_the_next_one(tmp_path):
+    """RULE 2's other direction, run as a loop rather than asserted as a
+    property: the backlog drains one day at a time, on its own, with nothing
+    to switch on. Answering means appending `daily.sleep_end` for the date -
+    the same field and the same append any other waking is recorded with,
+    not a new write path - and the previously-silenced older day is what the
+    next call surfaces."""
+    v = Vitai(init(tmp_path / "content"))
+    _weight(v, "2030-04-01", "06:00")
+    _weight(v, "2030-04-01", "20:00")
+    _weight(v, "2030-05-30", "06:40")
+    _weight(v, "2030-05-30", "18:05")
+
+    first = v.questions(date(2030, 6, 1))
+    assert [q["for_date"] for q in first] == ["2030-05-30"]
+
+    v.append("daily", {"date": "2030-05-30", "sleep_h": 7.0,
+                       "sleep_start": "2030-05-29T23:00:00",
+                       "sleep_end": "2030-05-30T06:00:00", "source": "watch"})
+
+    second = Vitai(v.root).questions(date(2030, 6, 1))
+    assert [q["for_date"] for q in second] == ["2030-04-01"]
+
+
+def test_several_rows_sharing_a_day_are_one_question_not_one_per_row(tmp_path):
+    """DEDUPLICATION, stated directly. Three readings on one unanchored day
+    must not become three questions asking the same thing three times - the
+    day has one waking, and one answer resolves all three rows at once."""
+    v = Vitai(init(tmp_path / "content"))
+    for at in ("06:00", "12:00", "20:00"):
+        _weight(v, "2030-05-30", at)
+
+    questions = v.questions(date(2030, 6, 1))
+
+    assert len(questions) == 1
+    assert questions[0]["resolves"] == ["06:00", "12:00", "20:00"]
+
+
+def test_the_two_timed_datasets_are_capped_separately(tmp_path):
+    """CAPPED PER DATASET, NOT GLOBALLY. A `weight` backlog and a `sessions`
+    backlog are different consumers - a same-day weigh-in pair and a same-day
+    session pair mean different things downstream - so one qualifying day in
+    each dataset produces two questions, not one, and resolving one must not
+    silence the other."""
+    v = Vitai(init(tmp_path / "content"))
+    _weight(v, "2030-05-30", "06:40")
+    _weight(v, "2030-05-30", "18:05")
+    _session(v, "2030-05-30", "2030-05-30T07:00:00")
+    _session(v, "2030-05-30", "2030-05-30T19:00:00")
+
+    questions = v.questions(date(2030, 6, 1))
+
+    assert {q["about"] for q in questions if q["kind"] == "waking"} == \
+        {"weight", "sessions"}
+    assert len(questions) == 2
+
+
+def test_a_day_after_the_viewpoint_is_not_yet_askable(tmp_path):
+    """The mirror of `ahead()`'s future filter, for data that runs the other
+    direction. These rows are already in the past by the time anyone reads
+    them, but a viewpoint earlier than the record's own horizon must still
+    see the record as it stood then - a day the viewpoint has not reached yet
+    is not something that viewpoint can be asked about."""
+    v = Vitai(init(tmp_path / "content"))
+    _weight(v, "2030-05-30", "06:40")
+    _weight(v, "2030-05-30", "18:05")
+
+    assert v.questions(date(2030, 5, 20)) == []
+    assert v.questions(date(2030, 6, 1)) != []
+
+
+def test_the_cli_renders_a_waking_question_without_the_plan_only_fields(tmp_path):
+    """`cmd_questions`'s text mode reads `subject`/`bears_on` unconditionally
+    for a plan-shaped question, which a `waking` row does not carry - so the
+    kind needs its own branch, and this is the branch actually running end to
+    end rather than assumed from reading the source."""
+    root = init(tmp_path / "content")
+    v = Vitai(root)
+    _weight(v, "2030-05-30", "06:40")
+    _weight(v, "2030-05-30", "18:05")
+
+    out = subprocess.run(
+        [sys.executable, "-m", "vitai.cli", "questions", "--root", str(root),
+         "--on", "2030-06-01"],
+        capture_output=True, text=True, check=True)
+
+    assert "2030-05-30 weight: waking 06:40, 18:05 (settled by athlete)" \
+        in out.stdout
+
+
+def test_waking_questions_is_the_filter_and_nothing_else_is(tmp_path):
+    """Stated directly against the helper, the same way
+    `test_ahead_is_the_filter_and_nothing_else_is` pins `open_questions` to
+    `ahead`: the whole rule lives in this one function, so nothing above it
+    (`Vitai.questions`) may relax or duplicate it."""
+    v = Vitai(init(tmp_path / "content"))
+    _weight(v, "2030-05-30", "06:40")
+    _weight(v, "2030-05-30", "18:05")
+
+    rows = v.phases()
+
+    assert rows
+    assert waking_questions(rows, date(2030, 6, 1))
+    assert waking_questions([], date(2030, 6, 1)) == []
