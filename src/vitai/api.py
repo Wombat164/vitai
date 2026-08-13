@@ -56,7 +56,7 @@ from .safety import (
 from .schema import (CURRENT_GENERATION, KEYS, aliases_for, coarse,
                      day_phases, units)
 from .verdicts import compute_verdicts
-from .questions import open_questions
+from .questions import open_questions, waking_questions
 from .weeks import session_weeks
 
 
@@ -1199,18 +1199,28 @@ class Vitai:
         return [g for g in self.gates(on) if g.get("status") == "check_not_done"]
 
     def questions(self, on: date | str | None = None) -> list[dict]:
-        """What the record does not know about what is coming (#224).
+        """What the record does not know - about what is coming, and about
+        what already happened but cannot be placed (#224, #212).
 
         The floor of the asking channel and deliberately nothing above it: a
         deterministic derivation, computable with no model configured, no
         network, no permission layer and no budget.
 
-        DERIVE FEW, DO NOT GENERATE MANY AND SUPPRESS. Every question here
-        hangs off a plan that is still ahead, so a record with nothing planned
-        produces nothing to ask - by construction, rather than by a filter
-        that could be relaxed or left switched off. The engine's urge to ask
-        peaks exactly where asking is least welcome, and that property has to
-        hold with the budget layer unbuilt.
+        DERIVE FEW, DO NOT GENERATE MANY AND SUPPRESS. Every plan-shaped
+        question here hangs off a plan that is still ahead, so a record with
+        nothing planned produces nothing to ask about the future - by
+        construction, rather than by a filter that could be relaxed or left
+        switched off. The engine's urge to ask peaks exactly where asking is
+        least welcome, and that property has to hold with the budget layer
+        unbuilt.
+
+        THE THIRD KIND LOOKS BACKWARD INSTEAD OF FORWARD, and the same
+        discipline applies the other way round: `waking_questions` does not
+        ask about every day `phases()` cannot place, only the ones where an
+        answer would actually resolve something and only the most recent of
+        those per dataset - see its docstring for the rule and why it is not
+        a numeric threshold. A record with nothing unresolved, forward or
+        backward, still produces nothing.
 
         IT DOES NOT ASK ANYBODY. There is no surface here that speaks and
         `nudge_ok` is not read; a decline needs somewhere of its own to live
@@ -1223,7 +1233,13 @@ class Vitai:
         # `gates` is passed as a FUNCTION, because a clearance has to be
         # judged on the day the thing is planned for rather than on the
         # day somebody asked (#224).
-        return open_questions(self.plans(when), self.gates, when)
+        out = open_questions(self.plans(when), self.gates, when)
+        # `phases()` is read WHOLE, undated, the same way `self.plans(when)`
+        # above is read whole and then filtered inside `open_questions` - the
+        # viewpoint discipline belongs in one place per direction, and
+        # `waking_questions` is where the backward one lives.
+        out += waking_questions(self.phases(), when)
+        return sorted(out, key=lambda q: (q["for_date"], q["id"]))
 
     def gated(self, activity: str, on: date | str | None = None) -> bool:
         """Is this activity class or session type blocked on a date?
