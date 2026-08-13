@@ -1788,8 +1788,8 @@ def main(argv: list[str] | None = None) -> None:
         ("milestones", cmd_milestones,
          "the milestone rungs a goal has this period, passed and not (#330)"),
         ("crossings", cmd_crossings,
-         "round-number and personal-first milestones over the weight "
-         "series, no goal required (#370)"),
+         "round-number, personal-first and boundary milestones over the "
+         "weight series, no goal required (#370)"),
         ("append", cmd_append,
          "append JSONL rows from stdin, stamping recorded_at and _gen"),
         ("pin-policy", cmd_pin_policy,

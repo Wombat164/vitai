@@ -184,7 +184,9 @@ TOOLS: dict[str, dict] = {
                                 "description": "only this goal"}},
     },
     # #370: goal-independent, history-wide milestones - a round number
-    # crossed or a personal best set. Distinct from `milestone_ladder` above,
+    # crossed, a personal best set, or a population-reference boundary
+    # crossed (stated as a number, never named - see `crossings.py`'s THE
+    # BAND CROSSING). Distinct from `milestone_ladder` above,
     # which needs a declared goal with a target; an agent asking "did this
     # reading matter" for weight has no goal to name and no rung to ask for,
     # only a series to have crossed something in.

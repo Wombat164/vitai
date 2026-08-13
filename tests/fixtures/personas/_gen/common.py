@@ -272,9 +272,9 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # her: of the personas with a height stated in `WORLD.md` and a real weight
 # series, hers is the one whose canonical BMI (165 cm) actually crosses a
 # `BAND_LEVELS` boundary - five times, both directions, matching her own
-# "failed attempts" record - while `tom` (175 cm) and `rachel` (162 cm) never
-# leave the obese band at any recorded weight and would have needed invented
-# numbers to exercise this feature at all.
+# "failed attempts" record - while `tom` (175 cm) and `rachel` (162 cm) stay
+# above the topmost `BAND_LEVELS` edge at every weight they record and would
+# have needed invented numbers to exercise this feature at all.
 AUTHORED_AGAINST_CONTRACT = "48"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     # #171: a new dataset, empty for every persona. Generation 3 rather than 1

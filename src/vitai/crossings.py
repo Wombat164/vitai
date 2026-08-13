@@ -379,7 +379,18 @@ def _band_crossings(points: list[tuple[str, float]], metric: str,
     (see the module docstring's THE BAND CROSSING section). A downstream
     consumer may say "the ratio is 25.4 and the boundary is 25.0"; nothing
     here has anywhere to put the word a population-health source would
-    attach to that boundary, because no field on this row is a string.
+    attach to that boundary.
+
+    STATED PRECISELY, because the loose version of this sentence said "no
+    field on this row is a string" and that is simply false - `date`, `kind`,
+    `metric` and `direction` all are. The true property is narrower and is
+    what actually closes the hole: `value` is always numeric, and every
+    string field is either an ISO date or drawn from a closed vocabulary
+    (`kind` from `CROSSING_KINDS`, `direction` from up/down, `metric` from
+    the metric this was computed for). There is no free-text field anywhere
+    on the row, so no category word can arrive as data - it could only ever
+    arrive from a renderer, which is why the control that guards this rule
+    scans rendered output rather than the row shape.
     """
     out: list[dict] = []
     for idx, ((_prev_date, prev_v), (this_date, this_v)) in enumerate(zip(points, points[1:])):
