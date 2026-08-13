@@ -318,6 +318,13 @@ def test_the_sweep_would_notice(tmp_path):
 # into the test file.
 ARG_TAKING_COVERED = {"dataset", "day", "derived", "precise", "append",
                       "append_many", "claim", "said",
+                      # #368: a third write door beside `claim`/`said`, and
+                      # covered the same way - `test_the_other_write_doors_
+                      # echo_through_the_same_one` pins by source that it too
+                      # returns `self.append(...)` and so inherits the
+                      # coarsened echo, rather than this sweep calling it (it
+                      # needs a valid plan's worth of arguments to succeed).
+                      "plan",
                       # #311 returns a STORED ROW - the register line itself -
                       # rather than a vocabulary answer the way `capability`
                       # does, so it is covered here rather than excused below.
@@ -447,14 +454,15 @@ def test_a_write_echoes_back_the_coarse_row(tmp_path):
 
 
 def test_the_other_write_doors_echo_through_the_same_one():
-    """`claim` and `said` return `self.append(...)`, so they inherit the
-    coarsened echo. Pinned by reading the source, because the day one of them
-    starts building its own return value nothing else would notice."""
+    """`claim`, `said` and `plan` (#368) all return `self.append(...)`, so
+    they inherit the coarsened echo. Pinned by reading the source, because
+    the day one of them starts building its own return value nothing else
+    would notice."""
     import inspect
 
     from vitai import api
 
-    for method in (api.Vitai.claim, api.Vitai.said):
+    for method in (api.Vitai.claim, api.Vitai.said, api.Vitai.plan):
         assert "self.append(" in inspect.getsource(method), method
 
 

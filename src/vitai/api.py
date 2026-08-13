@@ -2347,6 +2347,23 @@ class Vitai:
         if dataset not in KEYS:
             raise KeyError(f"unknown dataset {dataset!r}; "
                            f"one of {sorted(KEYS)}")
+        if dataset == "plans":
+            # THE OTHER HALF OF #368, named regardless of which shape landed.
+            # `plans` carries no `capture`, `read_by` or `source` - nothing
+            # was ACQUIRED, because a plan is DECIDED - so appending here
+            # would fall through to `append_many`'s generic "unknown key(s)
+            # for plans: capture, read_by, source", which names three internal
+            # fields and no way forward. Caught HERE, before the stamp is even
+            # built, because this is the one place that knows WHY the refusal
+            # happens: this method is the thing stamping fields the caller did
+            # not ask for, and it is the thing that can name the door out.
+            raise ValueError(
+                "claim() stamps capture, read_by and source - the vocabulary "
+                "of something ACQUIRED - and a plan is not acquired, it is "
+                "decided: 'I am going to run tonight' has no instrument and "
+                "never will. Use plan() instead: it writes the same dataset "
+                "with plans' own provenance, `set_by`, naming who decided "
+                "rather than who read")
         refused = sorted(k for k in values if k in self.NOT_A_QUANTITY)
         if refused:
             hints = {"read_by": "the `read_by` parameter",
@@ -2398,6 +2415,103 @@ class Vitai:
             when = date.fromisoformat(when)
         row.setdefault("date", when.isoformat())
         return self.append(dataset, row)
+
+    # What `plan()` stamps and a caller may never assert directly (#368).
+    # `set_by` is the engine's to stamp, for the reason `capture` is on
+    # `claim()`'s list: a caller who could name their own `set_by` could file
+    # a coach's decision as the athlete's own, or the reverse. `supersedes`
+    # is on the same list `claim()` puts it on, and for the same reason - it
+    # is the record's only destructive primitive, so it is reached through
+    # `corrects`, explicitly, never through a key that rode into `values`.
+    # `recorded_at`, `device` and `_gen` are machine-set everywhere in this
+    # record; `append_many` refuses the first two on its own, but `_gen`
+    # passes straight through a caller-supplied value via `META_KEYS`, which
+    # is exactly the gap `claim()`'s own list already closes.
+    PLAN_STAMPED = frozenset({
+        "set_by", "supersedes", "recorded_at", "device", "_gen",
+    })
+
+    def plan(self, values: dict, set_by: str = "athlete",
+             corrects: str | None = None, on: date | str | None = None) -> dict:
+        """Append ONE plan: what a day was MEANT to be, decided rather than observed.
+
+        `claim()` and `said()` split narrative capture on whether a number can
+        be taken from what was said. A plan is neither of those acts: it has
+        structure - `slug`, `for_date`, `activity`, `tier`, `serves` - so
+        `said()` cannot hold it, and nothing was OBSERVED, so `claim()`'s
+        stamp (`capture`, `read_by`, `source`) would be a lie on it. This is
+        the third act (#368), and `plans` was already carrying its own
+        provenance vocabulary with nowhere to write through: `set_by` says who
+        decided, `tier` says how binding, `reason` says why it did not happen.
+        Those are the provenance of an INTENTION, complete without an
+        acquisition story, because the question "how was this acquired" has
+        no answer for something nobody observed.
+
+        `set_by` DEFAULTS TO `athlete`, matching `claim()`'s default for
+        `read_by`: the commonest case is the athlete stating their own plan in
+        chat. Pass `set_by="coach"` for a plan the coach set - `plans` treats
+        a coach-set plan and a self-set plan as equally able to bind (the
+        vocabulary is `goals`, `events` and `thresholds`' own, not invented
+        here), so the difference is worth carrying rather than defaulted away.
+
+        ONLY `plans`, and there is no `dataset` parameter to say otherwise.
+        `claim()` takes one because it writes several datasets that share one
+        acquisition shape; `plans` does not share that shape with anything,
+        so offering a dataset argument here would invite the exact conflation
+        this method exists to end. A caller that wants another dataset
+        already has `claim()` or `append()`.
+
+        `corrects` and `on` mean what they mean on `claim()`: `corrects` is
+        the reference (see `line_key`, e.g. `<slug>@<date>`) of the plan row
+        this one supersedes - and the date in that reference is the row's own
+        `date`, the day it was WRITTEN, never its `for_date`. A plan is the
+        one dataset carrying both, so this is the one place the ambiguity
+        bites: aiming it at `for_date` matches nothing, retires nothing, and
+        appends the row anyway, with only `validate` noticing later.
+
+        It is explicit because a supersede is destructive and
+        a caller who reached it by putting `supersedes` in `values` would not
+        have decided to. It is NOT how a plan is resolved: a second row
+        naming the same `slug` with no `supersedes` and an `outcome` filled in
+        is the ordinary resolution, and superseding one would erase the plan
+        rather than record what became of it. `on` is the viewpoint the plan
+        is dated from when the caller does not name a `date` of its own.
+        """
+        refused = sorted(k for k in values if k in self.PLAN_STAMPED)
+        if refused:
+            hints = {"set_by": "the `set_by` parameter",
+                     "supersedes": "the `corrects` parameter"}
+            named = [f"{k} (use {hints[k]})" if k in hints else k
+                     for k in refused]
+            raise ValueError(
+                f"not a field the caller states: {', '.join(named)}. "
+                "`set_by` is the engine's to stamp, `supersedes` is explicit "
+                "through `corrects` because it is destructive, and "
+                "`recorded_at`/`device`/`_gen` are machine-set everywhere in "
+                "this record")
+        unknown = sorted(set(values) - set(KEYS["plans"]))
+        if unknown:
+            raise ValueError(f"plans has no field(s) {', '.join(unknown)}")
+        from .schema import AUTHORS
+        if set_by not in AUTHORS:
+            raise ValueError(f"set_by is one of {', '.join(sorted(AUTHORS))}, "
+                             f"got {set_by!r}")
+        row = dict(values)
+        row["set_by"] = set_by
+        if corrects is not None:
+            # EXPLICIT, because it is destructive, exactly as on `claim()`: a
+            # supersede retires the line it names on every future load, and a
+            # caller that reached it by putting a key in a dict would not have
+            # decided to.
+            row["supersedes"] = corrects
+        # The VIEWPOINT is the write date, as on `claim()`: an engine pinned
+        # to a past date for a historical question stamps a plan with that
+        # date. Pass `on` to say otherwise.
+        when = on if on is not None else self.on
+        if isinstance(when, str):
+            when = date.fromisoformat(when)
+        row.setdefault("date", when.isoformat())
+        return self.append("plans", row)
 
     def said(self, text: str, kind: str = "claim",
              about: str | None = None, on: date | str | None = None) -> dict:

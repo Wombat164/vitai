@@ -249,8 +249,21 @@ vitai claim [--root ROOT] [--dataset DATASET] [--said SAID]
 ```
 
 Append what someone said, with its provenance. `--corrects` supersedes an
-earlier line rather than editing it. This is the only write path an agent
-gets, and it appends claims: it never touches the deterministic number path.
+earlier line rather than editing it. It appends claims and never touches the
+deterministic number path.
+
+`claim` is for something OBSERVED - it stamps `capture`, `read_by` and
+`source`, the vocabulary of a value that was acquired. A plan was not
+acquired, it was decided, so it has its own verb:
+
+```
+vitai plan [--root ROOT] [--set-by SET_BY] [--corrects SLUG@DATE]
+           [--on YYYY-MM-DD] field=value [field=value ...]
+```
+
+Between them, `claim` and `plan` are the write paths an agent gets. Asking
+`claim` for a plan refuses and names `plan` instead, rather than failing on
+the three fields it would have stamped.
 
 ```
 vitai mcp [--root ROOT]

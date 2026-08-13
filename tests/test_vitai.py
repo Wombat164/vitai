@@ -1620,6 +1620,11 @@ def test_it_speaks_the_protocol(tmp_path):
          "goals", "safety", "claim", "said", "dataset", "derived", "may",
          "project", "corrections", "questions", "instruments", "instrument",
          "phases", "can_emit", "absence",
+         # #368: a plan is decided, not acquired - a third act beside `claim`
+         # (a stated quantity) and `said` (an utterance with no quantity in
+         # it), stamped with the dataset's own provenance (`set_by`) instead
+         # of claim's acquisition vocabulary.
+         "plan",
          # A REGISTER of what an agent can reach, pinned exactly so a tool
          # cannot arrive or vanish without this line changing.
          # `milestone_ladder` joined at #330: `goals` carries a count and the
