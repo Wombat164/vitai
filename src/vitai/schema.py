@@ -556,8 +556,26 @@ def _settings() -> set[str]:
 SETTINGS = _settings()
 SESSION_CONTEXTS = {"commute", "family", "social", "solo", "club"}
 WEATHERS = {"dry", "rain", "hot", "cold", "wind"}
+# `height_cm` joined (#370), decided over a `[physiology]` setting in
+# `vitai.toml` because that shape is #148 one measurand over: a load-bearing
+# value in a MUTABLE FILE OUTSIDE the append-only record means a
+# reconstruction of March computes its ratio from whatever the file says
+# TODAY, and a height entered once at forty would silently rewrite every
+# band crossing in a record that runs to seventy. A `MEASUREMENT_KINDS` value
+# is dated and correctable like every reading here, and admits what is true
+# of a height anyway: it changes, slowly, and measurably in both directions
+# after fifty. This unblocks a future band-crossing milestone (BMI) that
+# needs a height to compute a ratio from; nothing in THIS change reads it.
+#
+# NO CONTRACT BUMP for this addition by itself. `CONTRACT_VERSION` moves when
+# a table or column changes SHAPE, and `measurements.kind` is already a TEXT
+# column validated against this set - adding a legal string to a closed
+# vocabulary widens what an existing column accepts, it does not add or
+# reshape one. Contract 47 bumps for the `crossings` table below, which is a
+# real shape change; `height_cm` rides along in the same PR without being
+# what earned the bump.
 MEASUREMENT_KINDS = {"body_fat_pct", "waist_cm", "hip_cm", "chest_cm",
-                     "thigh_cm", "arm_cm", "neck_cm", "other"}
+                     "thigh_cm", "arm_cm", "neck_cm", "height_cm", "other"}
 CONTEXT_MODES = {"normal", "vacation", "work", "conference", "weekend",
                  "social", "deadline", "heatwave", "travel", "illness"}
 

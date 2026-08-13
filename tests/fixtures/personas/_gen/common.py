@@ -246,7 +246,16 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # The populated case (`scale` vs `dexa` on `kg`) ships in `examples/demo`
 # instead, which is the fixture #33's own acceptance criterion is checked
 # against.
-AUTHORED_AGAINST_CONTRACT = "46"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #370's contract 47. Reviewed and nothing here moves: the new
+# `crossings` table is DERIVED (built from `weight` at build time, same as
+# `milestones`), so no generator writes a line for it and it needs no entry
+# in `AUTHORED_AGAINST_GENERATIONS`, which only tracks raw dataset LINE
+# shapes. `height_cm` joining `MEASUREMENT_KINDS` widens the legal values of
+# `measurements.kind`, an existing field - it adds no key, so `measurements`
+# keeps generation 11 below. No persona builder emits `height_cm` and none is
+# asked to; the review this pin demands is that fact, stated rather than
+# implied.
+AUTHORED_AGAINST_CONTRACT = "47"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     # #171: a new dataset, empty for every persona. Generation 3 rather than 1
     # because every dataset gets the blanket `recorded_at` and `device`
