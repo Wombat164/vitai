@@ -222,37 +222,45 @@ def waking_questions(phase_rows: list[dict], on: date) -> list[dict]:
     attention becomes the thing that exhausts it, worst on the record that
     has gone longest without a confirmed waking to anchor against.
 
-    WORTH ASKING HAS TWO PARTS, and both are structural rather than a number
-    picked because it felt right (G85: no invented threshold where a
-    principled rule exists).
+    WORTH ASKING IS ONE CONDITION - RECENCY - and it is structural rather
+    than a number picked because it felt right (G85: no invented threshold
+    where a principled rule exists).
 
-    1. THE DAY MUST CARRY MORE THAN ONE UNANCHORED ROW IN THE SAME DATASET.
-       A single weigh-in on a day with no other reading has nothing for a
-       phase to disambiguate - the case this issue exists for is two rows on
-       one date that a merge cannot tell apart without knowing which part of
-       the day each belongs to (`#212`'s motivating defect), and a completed
-       session only needs its phase to pick between two same-day plans
-       (`#221`). Neither situation exists with one row. So a day with exactly
-       one unanchored reading stays unanchored and unasked-about: `phases()`
-       still reports it, honestly, as a row nothing can be said about, and
-       this derivation leaves it alone rather than manufacturing a question
-       an answer to which would change nothing checkable today.
+    A DAY phases() CANNOT PLACE IS A CANDIDATE THE MOMENT IT EXISTS, whether
+    it carries one unanchored row or several. An earlier version of this
+    rule also required two or more unanchored rows on the day, reasoning
+    that a lone reading "has nothing for a phase to disambiguate" - and that
+    reasoning did not survive being checked against #212's own text. The
+    issue names three things a phase fixes: two same-day readings that stop
+    merging, a narrative claim that becomes matchable against a device claim
+    ("the athlete says 'morning weigh-in'; the scale says 07:36"), and a
+    disagreement that gets a shape. The second of those IS the single-row
+    case - a lone reading is exactly what a stated phase would confirm or
+    contradict - so requiring multiplicity silenced that motivation
+    permanently, on every record, forever. There is nothing to disambiguate
+    a lone reading FROM, but there is something to check it AGAINST, and the
+    engine asking "when did you wake" is that check. So multiplicity is
+    gone, and all three of the issue's motivations are covered rather than
+    two of them.
 
-    2. OF THE DAYS THAT CLEAR (1), ONLY THE MOST RECENT ONE PER DATASET IS
-       ASKED ABOUT. Not a day-count cutoff - there is no published number of
-       days after which a waking is unrecallable, and inventing one would be
-       the same mistake #212 already made once and retracted, a fabricated
-       precision dressed as a rule. "Most recent" needs no number: it is
-       simply the day closest to the record's own horizon, which is both the
-       one the athlete is likeliest to still remember and the one most
-       likely to still matter to something unresolved. Older qualifying days
-       are not hidden - `phases()` keeps reporting them as unanchored - they
-       are just not competing for the one channel this floor has. Answering
-       the asked day (by logging a `daily.sleep_end` for it, the same field
-       and the same append any other waking is recorded with) removes it from
-       the unanchored set, and the next call surfaces whichever day is then
-       most recent. The backlog drains one question at a time, on its own,
-       with no accelerator and nothing to switch on.
+    ONLY THE MOST RECENT QUALIFYING DAY PER DATASET IS ASKED ABOUT, and this
+    - not multiplicity - is what bounds the volume. Not a day-count cutoff:
+    there is no published number of days after which a waking is
+    unrecallable, and inventing one would be the same mistake #212 already
+    made once and retracted, a fabricated precision dressed as a rule.
+    "Most recent" needs no number: it is simply the day closest to the
+    record's own horizon, which is both the one the athlete is likeliest to
+    still remember and the one most likely to still matter to something
+    unresolved. Older qualifying days are not hidden - `phases()` keeps
+    reporting them as unanchored - they are just not competing for the one
+    channel this floor has. Answering the asked day (by logging a
+    `daily.sleep_end` for it, the same field and the same append any other
+    waking is recorded with) removes it from the unanchored set, and the
+    next call surfaces whichever day is then most recent. The backlog
+    drains one question at a time, on its own, with no accelerator and
+    nothing to switch on. BOUNDED BY CONSTRUCTION rather than by counting:
+    at most one day per dataset can ever be "the newest", no matter how many
+    unanchored days sit behind it or how long the record runs.
 
     CAPPED PER DATASET, NOT GLOBALLY, because `weight` and `sessions` feed
     different consumers with different stakes - a same-day weigh-in pair
@@ -262,12 +270,16 @@ def waking_questions(phase_rows: list[dict], on: date) -> list[dict]:
     asks at most two questions at once, record-wide, regardless of how deep
     either backlog runs.
 
-    MEASURED ON THE SHIPPED CORPUS, not asserted: applied to every persona
-    fixture and the demo, this rule produces at most one question per
-    dataset per record - five in total across thirteen personas and the demo
-    - even though three of those records carry hundreds of unanchored rows
-    each. The volume the naive build would have produced and the volume this
-    one does are not close.
+    MEASURED ON THE SHIPPED CORPUS, not asserted, before AND after dropping
+    multiplicity - the claim that multiplicity was the volume control was
+    itself measured and found false. With multiplicity in place: five
+    questions across thirteen personas and the demo. With it dropped and
+    only recency left: eighteen, and still at most two per record (one per
+    dataset), because most of a backlog's unanchored days are not the one
+    closest to the record's own horizon and so never win recency for their
+    dataset. Recency was already doing the volume control credited to
+    multiplicity; dropping multiplicity only widens what recency was
+    already bounding, it does not remove the bound.
 
     `on` is the valid-time viewpoint (`Vitai.on`, or a caller's override): a
     day after it has not been reached yet from where the record is being
@@ -284,32 +296,27 @@ def waking_questions(phase_rows: list[dict], on: date) -> list[dict]:
     `subject` follows for a precondition, applied to a kind that has numbers
     where a precondition has prose.
     """
-    # UNANCHORED ROWS, GROUPED BY THE DATASET AND DAY THEY SHARE. A row phases()
-    # already resolved is not a question - it is a fact - so only `phase is
-    # None` rows are candidates, and `anchored_on` is not read: an anchor
-    # that turned out incomparable (#38, naive against aware) is exactly as
-    # unusable to the athlete's answer as no anchor at all.
-    by_day: dict[tuple[str, str], list[dict]] = {}
+    # UNANCHORED ROWS, GROUPED BY DATASET AND THE DAY THEY SHARE. A row
+    # phases() already resolved is not a question - it is a fact - so only
+    # `phase is None` rows are candidates, and `anchored_on` is not read: an
+    # anchor that turned out incomparable (#38, naive against aware) is
+    # exactly as unusable to the athlete's answer as no anchor at all.
+    by_dataset: dict[str, dict[str, list[dict]]] = {}
     for row in phase_rows:
         if row.get("phase") is not None:
             continue
         when = _as_date(row.get("date"))
         if when is None or when > on:
             continue
-        key = (str(row["dataset"]), str(row["date"]))
-        by_day.setdefault(key, []).append(row)
+        dataset, day = str(row["dataset"]), str(row["date"])
+        by_dataset.setdefault(dataset, {}).setdefault(day, []).append(row)
 
-    # RULE 1: multiplicity. A day with one unanchored row is left alone.
-    multi: dict[str, dict[str, list[dict]]] = {}
-    for (dataset, day), rows in by_day.items():
-        if len(rows) >= 2:
-            multi.setdefault(dataset, {})[day] = rows
-
-    # RULE 2: recency, per dataset. ISO dates compare lexically in date order,
-    # so `max` over the keys is the newest qualifying day with no parsing.
+    # RECENCY, per dataset - the one condition, and the whole volume control.
+    # ISO dates compare lexically in date order, so `max` over the keys is
+    # the newest qualifying day with no parsing.
     out = []
-    for dataset in sorted(multi):
-        days = multi[dataset]
+    for dataset in sorted(by_dataset):
+        days = by_dataset[dataset]
         newest = max(days)
         rows = days[newest]
         out.append({
