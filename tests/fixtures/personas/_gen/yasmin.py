@@ -42,7 +42,22 @@ from . import common
 SEED = 106
 # Bumped only when the history could change an engine output
 # (docs/persona-doctrine.md); never for prose, typos, or findings.
-PERSONA_VERSION: int = 1
+#
+# 2: `data/measurements.jsonl` gains one `height_cm` row (#370's band
+# crossing). It changes an engine output - `Vitai.crossings()` now mints
+# `band` rows for this record where before it minted none - so this is a
+# version bump, not a finding-only note.
+PERSONA_VERSION: int = 2
+
+# 165 cm (WORLD.md, "Body and build") - stated there since this persona was
+# authored and, until now, never present as a data-facing fact: no
+# `MEASUREMENT_KINDS` value existed to hold a height before #370's contract
+# 47 added `height_cm`. Dated at `ATTEMPT1_START`, the record's own first
+# day, so adding it changes no persona SPAN (`persona.toml`'s dates are
+# computed from the rows themselves) and the height is in force for every
+# weight reading this record has ever logged - there is no pre-height
+# straddle here because nothing in her record predates it.
+HEIGHT_CM = 165.0
 
 # The record's own calendar: three restarts and two holes, a fixed piece of
 # her history rather than a window that slides with wherever the corpus
@@ -101,6 +116,28 @@ def on_week(d: date) -> bool:
     return ((d - CUSTODY_ANCHOR).days // 7) % 2 == 0
 
 
+def _measurements(stamper: common.Stamper) -> list[dict]:
+    """One row: her height, stated once (#370).
+
+    DATED AT `ATTEMPT1_START`, not "whenever she happened to mention it" -
+    the record's own first day, which is also the record's SPAN start, so
+    this row is in force for every weight reading the record has ever logged
+    and adding it changes no persona span. A record where the first weight
+    predates the first height - the straddle #370 asks generators to
+    consider - is deliberately NOT this persona: nothing in the corpus needs
+    manufacturing to exercise it, `tests/test_crossings.py` covers that seam
+    directly against synthetic points, and yasmin's own job here is to be the
+    real, corpus-exercised case where a band actually crosses.
+    """
+    return [common.record(
+        "measurements", date=ATTEMPT1_START.isoformat(), kind="height_cm",
+        value=HEIGHT_CM, source="self_report", capture="manual_entry",
+        origin="self_report", read_by="athlete",
+        note="stated once; adults' height changes slowly enough that "
+             "nothing in this record's three years re-asks it",
+        recorded_at=stamper.stamp(ATTEMPT1_START))]
+
+
 def build(end: date = DEFAULT_END) -> dict[str, str]:
     rng = random.Random(SEED)
 
@@ -109,12 +146,14 @@ def build(end: date = DEFAULT_END) -> dict[str, str]:
     sessions_stamper = common.Stamper(offset=ottawa_offset)
     goals_stamper = common.Stamper(offset=ottawa_offset)
     journal_stamper = common.Stamper(offset=ottawa_offset)
+    measurements_stamper = common.Stamper(offset=ottawa_offset)
 
     weight, jumps = _weight(rng, weight_stamper)
     daily = _daily(rng, daily_stamper)
     sessions, missed_dates = _sessions(rng, sessions_stamper)
     goals, goal_dates = _goals(goals_stamper)
     journal = _journal(journal_stamper)
+    measurements = _measurements(measurements_stamper)
 
     expectations = [
         _e1_biased_weighing(jumps),
@@ -123,6 +162,7 @@ def build(end: date = DEFAULT_END) -> dict[str, str]:
         _e4_two_week_cadence(),
         _e5_goal_period_enum(goal_dates),
         _e6_re_entry_pattern(goal_dates),
+        _e7_band_crossing(),
     ]
 
     return {
@@ -130,6 +170,7 @@ def build(end: date = DEFAULT_END) -> dict[str, str]:
         "data/weight.jsonl": common.jsonl_text(common.sort_rows(weight)),
         "data/daily.jsonl": common.jsonl_text(common.sort_rows(daily)),
         "data/sessions.jsonl": common.jsonl_text(common.sort_rows(sessions)),
+        "data/measurements.jsonl": common.jsonl_text(common.sort_rows(measurements)),
         "data/goals.jsonl": common.jsonl_text(common.sort_rows(goals)),
         "data/journal.jsonl": common.jsonl_text(common.sort_rows(journal)),
         "expectations.jsonl": common.jsonl_text(
@@ -643,6 +684,52 @@ def _e6_re_entry_pattern(goal_dates: dict) -> dict:
             "of attempts; each active/abandoned goal pair validates fine "
             "on its own, but there is no read that groups three same-shape "
             "goals into one re-entry history"
+        ),
+    }
+
+
+def _e7_band_crossing() -> dict:
+    # Verified by running `Vitai(root).crossings()` against this persona's
+    # generated corpus (not hand-computed): five `band` rows, alternating
+    # direction, on exactly these dates - 2027-08-09 down, 2028-05-15 up,
+    # 2028-05-29 down, 2029-10-01 up, 2029-12-31 down.
+    band_dates = ["2027-08-09", "2028-05-15", "2028-05-29", "2029-10-01",
+                 "2029-12-31"]
+    return {
+        "id": "yasmin-E7", "kind": "behavior", "dataset": "measurements",
+        "dates": [ATTEMPT1_START.isoformat()] + band_dates,
+        "claim": (
+            f"a single `height_cm` row, {HEIGHT_CM:g} cm, dated "
+            f"{ATTEMPT1_START.isoformat()} and in force for the whole record"
+        ),
+        "truth": (
+            "combined with her weight series, the ratio this height and "
+            "weight support crosses the 30.0 population-reference boundary "
+            "`crossings.BAND_LEVELS` carries five times across the record, "
+            f"alternating direction, on {', '.join(band_dates)} - the shape "
+            "her own three-attempt, loss-then-regain history produces for "
+            "the one boundary that sits inside her weight range"
+        ),
+        "expect": (
+            "the engine computes the ratio and states the numeric boundary "
+            "as a boundary - a `crossings` row of kind `band`, `value` "
+            "30.0, `direction` down or up, with the evidence pair naming "
+            "the last reading already on the side the crossing arrives at. "
+            "It never publishes a name for the boundary: no field on the "
+            "row is a string, and no consumer surface bundled with this "
+            "engine (`vitai crossings`, its JSON form, the MCP tool) prints "
+            "one either. `docs/medical-boundary.md` class (a) - a bound "
+            "stated as a bound, never a category applied to her as the "
+            "engine's own conclusion"
+        ),
+        "gap": (
+            "none in the engine: `crossings.compute_band_crossings` "
+            "computes and evidences this correctly. The gap this row closes "
+            "was in the CORPUS - `height_cm` had been a legal "
+            "`MEASUREMENT_KINDS` value since contract 47, but no persona "
+            "carried one, so a band crossing built against this corpus was "
+            "exercised by nothing but its own hand-written unit tests until "
+            "now"
         ),
     }
 

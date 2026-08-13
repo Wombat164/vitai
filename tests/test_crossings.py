@@ -1,31 +1,47 @@
-"""Round-number and personal-first milestones, goal-independent and
+"""Round-number, personal-first and band milestones, goal-independent and
 history-wide (#370).
 
-`milestones` needs a declared goal and a scoring bucket; these two kinds do
+`milestones` needs a declared goal and a scoring bucket; these three kinds do
 not, which is why they are a new table (`crossings.py`, `db.CROSSING_KEYS`)
 rather than a new row shape in that one. See `crossings.py`'s module
-docstring for the full design, and `db.py` beside contract 47 for the
+docstring for the full design, and `db.py` beside contracts 47 and 48 for the
 column-by-column reasoning - this file holds it to the letter.
 
-Most cases are checked against `compute_crossings` directly, over synthetic
-point lists, because the interesting behaviour is in the walk across
-consecutive readings and a bare list of `{"date", "kg"}` dicts is the whole
-input that logic needs. The handful of cases that are about the ENGINE rather
-than the arithmetic - canonical resolution, an empty record, the three
-surfaces agreeing - go through a real `Vitai` instance instead.
+Most cases are checked against `compute_crossings`/`compute_band_crossings`
+directly, over synthetic point lists, because the interesting behaviour is in
+the walk across consecutive readings and a bare list of `{"date", "kg"}` (or
+`{"date", "kind", "value"}` for a height) dicts is the whole input that logic
+needs. The handful of cases that are about the ENGINE rather than the
+arithmetic - canonical resolution, an empty record, the three surfaces
+agreeing - go through a real `Vitai` instance instead.
+
+THE CONTROL AT THE BOTTOM OF THIS FILE (`test_no_band_row_is_ever_rendered_
+with_a_category_word`) IS NOT LIKE THE OTHERS. Every other test in this file
+checks that the engine computes the right NUMBER. That one checks the rule
+the whole feature exists to keep - "the engine may compute the ratio and
+state the boundary as a boundary; it may never name the band" - against the
+ACTUAL RENDERED TEXT a real consumer would see, over the WHOLE committed
+persona corpus, using a category-word list authored independently of
+`scripts/boundary_gate.py`'s own deny list. See that test's docstring for why
+both of those choices are load-bearing rather than stylistic.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
+from pathlib import Path
 
 from vitai import mcp
 from vitai.api import Vitai, init
-from vitai.crossings import (CROSSING_DIRECTIONS, CROSSING_KINDS,
-                             ROUND_NUMBER_LADDER, compute_crossings)
+from vitai.crossings import (BAND_LEVELS, CROSSING_DIRECTIONS, CROSSING_KINDS,
+                             ROUND_NUMBER_LADDER, compute_band_crossings,
+                             compute_crossings)
 from vitai.db import CROSSING_KEYS
+
+PERSONAS = Path(__file__).parent / "fixtures" / "personas"
 
 
 def _rows(kind: str, points: list[dict]) -> list[dict]:
@@ -286,6 +302,184 @@ def test_the_first_reading_in_a_record_mints_nothing():
     assert compute_crossings([]) == []
 
 
+# --- band (#370's third kind) ---------------------------------------------------
+#
+# A height of 200 cm makes BMI = kg / 4 exactly, which is why most of these
+# fixtures use it: it turns the arithmetic into something checkable by eye
+# without pretending to be a plausible human height, the same liberty the
+# round_number tests above take with weights that are never meant to look
+# like a real person's.
+
+def _height(on: str, cm: float) -> dict:
+    return {"date": on, "kind": "height_cm", "value": cm}
+
+
+def test_a_downward_band_crossing_has_the_right_evidence_pair():
+    """125 kg / 200 cm = BMI 31.25; 115 kg / 200 cm = BMI 28.75 - crosses the
+    30.0 edge downward, and two readings is not enough history to have ever
+    been on the far side before, so the evidence pair is the null "first
+    time ever" case, exactly as the round_number equivalent above."""
+    weight = [{"date": "2030-01-01", "kg": 125.0}, {"date": "2030-01-05", "kg": 115.0}]
+    height = [_height("2029-01-01", 200.0)]
+    got = compute_band_crossings(weight, height)
+    assert got == [{
+        "date": "2030-01-05", "kind": "band", "metric": "bmi",
+        "value": 30.0, "direction": "down",
+        "previous_value": None, "previous_date": None,
+    }]
+
+
+def test_an_upward_band_crossing_has_the_right_evidence_pair():
+    """Same shape, upward: 115 kg (BMI 28.75) to 125 kg (BMI 31.25)."""
+    weight = [{"date": "2030-01-01", "kg": 115.0}, {"date": "2030-01-05", "kg": 125.0}]
+    height = [_height("2029-01-01", 200.0)]
+    got = compute_band_crossings(weight, height)
+    assert got == [{
+        "date": "2030-01-05", "kind": "band", "metric": "bmi",
+        "value": 30.0, "direction": "up",
+        "previous_value": None, "previous_date": None,
+    }]
+
+
+def test_a_big_jump_crosses_every_nonuniform_level_in_between():
+    """`BAND_LEVELS` (18.5, 25.0, 30.0) is NOT a uniform ladder, unlike
+    `ROUND_NUMBER_LADDER` - this is the one behaviour that genuinely needs
+    its own arithmetic (`_band_levels_crossed`) rather than reusing
+    `_levels_crossed`. At 200 cm the three edges sit at 74, 100 and 120 kg;
+    one gap from 130 kg (BMI 32.5) down to 70 kg (BMI 17.5) crosses all
+    three, and - the series' opening move - none of them has been reached
+    from below before, so every evidence pair is null."""
+    weight = [{"date": "2030-01-01", "kg": 130.0}, {"date": "2030-03-01", "kg": 70.0}]
+    height = [_height("2029-01-01", 200.0)]
+    got = compute_band_crossings(weight, height)
+    assert [r["value"] for r in got] == [18.5, 25.0, 30.0]
+    assert all(r["direction"] == "down" for r in got)
+    assert all(r["previous_value"] is None and r["previous_date"] is None
+              for r in got)
+
+
+def test_a_band_recrossing_mints_a_second_row_with_its_own_evidence():
+    """The same real behaviour yasmin's corpus exercises (FINDINGS.md #7):
+    under a boundary, back over, under again - three crossings, not one."""
+    weight = [
+        {"date": "2030-01-01", "kg": 124.0},   # BMI 31.0
+        {"date": "2030-01-02", "kg": 116.0},   # BMI 29.0 - crosses down
+        {"date": "2030-01-03", "kg": 128.0},   # BMI 32.0 - crosses up
+        {"date": "2030-01-04", "kg": 112.0},   # BMI 28.0 - crosses down
+    ]
+    height = [_height("2029-01-01", 200.0)]
+    got = [r for r in compute_band_crossings(weight, height) if r["value"] == 30.0]
+    assert [r["direction"] for r in got] == ["down", "up", "down"]
+    assert [(r["date"], r["previous_date"], r["previous_value"]) for r in got] == [
+        ("2030-01-02", None, None),
+        ("2030-01-03", "2030-01-01", 31.0),
+        ("2030-01-04", "2030-01-02", 29.0),
+    ]
+
+
+def test_a_weight_reading_with_no_height_yet_in_force_mints_nothing():
+    """THE STRADDLE (#370's own design constraint): two weight readings
+    before the first height row exist have no ratio at all and are simply
+    absent from the series - never a ratio back-filled from the height that
+    arrives later. Only once the height exists does the ratio series start,
+    so the first ratio point AFTER it (125 kg / 200 cm = BMI 31.25) is the
+    series' effective opening move and mints nothing itself; the crossing
+    below it is the first one with anything to compute at all."""
+    weight = [
+        {"date": "2029-01-01", "kg": 90.0},    # before any height: invisible
+        {"date": "2029-03-01", "kg": 130.0},   # before any height: invisible
+        {"date": "2029-07-01", "kg": 125.0},   # BMI 31.25 - first computable point
+        {"date": "2029-09-01", "kg": 110.0},   # BMI 27.5 - crosses 30 down
+    ]
+    height = [_height("2029-06-01", 200.0)]
+    got = compute_band_crossings(weight, height)
+    assert got == [{
+        "date": "2029-09-01", "kind": "band", "metric": "bmi",
+        "value": 30.0, "direction": "down",
+        "previous_value": None, "previous_date": None,
+    }]
+
+
+def test_a_height_change_mid_series_uses_the_height_in_force_on_each_date():
+    """THE HEIGHT MUST BE EFFECTIVE-DATED (#148's lesson, restated for
+    #370): a ratio computed for a date must use the height that was in
+    force ON THAT DATE, never the newest height the record happens to hold.
+
+    Two readings before the height change (200 cm) cross 30 upward
+    (116 kg = BMI 29.0 -> 124 kg = BMI 31.0). The height then changes to
+    180 cm. Two readings after it: 110 kg is BMI 33.95 under the NEW height
+    (still above 30, no crossing) and 90 kg is BMI 27.78 under the NEW
+    height (below 30 - crosses down). Get either of those two BACKWARDS -
+    using 200 cm after the change - and 110 kg reads as BMI 27.5, which
+    would already be below 30 and change which pair of readings crosses at
+    all. The evidence pair for the second crossing still reaches back
+    correctly across the height change, to the 116 kg / 200 cm reading that
+    was the last one on the "below 30" side, computed under the height that
+    applied on ITS OWN date."""
+    weight = [
+        {"date": "2029-07-01", "kg": 116.0},    # BMI 29.0 (200 cm)
+        {"date": "2029-08-01", "kg": 124.0},    # BMI 31.0 (200 cm) - crosses up
+        {"date": "2030-02-01", "kg": 110.0},    # BMI 33.95 (180 cm) - stays above
+        {"date": "2030-03-01", "kg": 90.0},     # BMI 27.78 (180 cm) - crosses down
+    ]
+    height = [_height("2029-01-01", 200.0), _height("2030-01-01", 180.0)]
+    got = [r for r in compute_band_crossings(weight, height) if r["value"] == 30.0]
+    assert got == [
+        {"date": "2029-08-01", "kind": "band", "metric": "bmi",
+         "value": 30.0, "direction": "up",
+         "previous_value": None, "previous_date": None},
+        {"date": "2030-03-01", "kind": "band", "metric": "bmi",
+         "value": 30.0, "direction": "down",
+         "previous_value": 29.0, "previous_date": "2029-07-01"},
+    ]
+
+
+def test_no_height_at_all_mints_nothing():
+    """A weight series alone is not a ratio series - `round_number` and
+    `personal_first` need no height and still fire on this same data
+    (`compute_crossings`, exercised elsewhere in this file); `band` needs
+    one and, with none recorded, mints nothing rather than assuming a
+    default stature."""
+    weight = [{"date": "2030-01-01", "kg": 125.0}, {"date": "2030-01-05", "kg": 115.0}]
+    assert compute_band_crossings(weight, []) == []
+
+
+def test_the_ladder_is_adopted_not_a_round_number():
+    """`BAND_LEVELS` is a fixed, cited set of population-reference edges
+    (see the sourced comment beside the constant), not a derivation from
+    `ROUND_NUMBER_LADDER` or from anything about the metric - a different
+    shape of constant for a different kind of boundary."""
+    assert BAND_LEVELS == (18.5, 25.0, 30.0)
+    assert "band" in CROSSING_KINDS
+
+
+def test_weight_metric_and_ratio_metric_are_both_parameters():
+    """Neither `weight_metric` nor `metric` is hardcoded - the same proof
+    `test_metric_is_a_parameter_not_hardcoded` gives for `compute_crossings`,
+    over a differently-named weight field and a differently-named ratio."""
+    weight = [{"date": "2030-01-01", "w": 125.0}, {"date": "2030-01-05", "w": 115.0}]
+    height = [_height("2029-01-01", 200.0)]
+    got = compute_band_crossings(weight, height, weight_metric="w", metric="ratio")
+    assert got and all(r["metric"] == "ratio" for r in got)
+    assert got[0]["value"] == 30.0
+
+
+def test_band_rows_never_carry_a_string_value():
+    """THE RULE THIS TABLE SHIPS UNDER: the engine may compute the ratio and
+    state the boundary as a boundary, and may never name the band. Checked
+    here at the level furthest from any renderer's wording - a `band` row's
+    `value` is always a number, never a string, so the violation this issue
+    is about is structurally unrepresentable in the row itself, whatever a
+    consumer later chooses to print beside it."""
+    weight = [{"date": "2030-01-01", "kg": 130.0}, {"date": "2030-03-01", "kg": 70.0}]
+    height = [_height("2029-01-01", 200.0)]
+    got = compute_band_crossings(weight, height)
+    assert got, "the fixture above must actually mint something to test this"
+    for row in got:
+        assert isinstance(row["value"], float)
+        assert isinstance(row["kind"], str) and row["kind"] == "band"
+
+
 # --- the vocabulary and the column register -------------------------------------
 
 def test_every_minted_row_uses_the_closed_vocabulary():
@@ -431,6 +625,99 @@ def test_the_three_surfaces_agree(tmp_path):
     assert from_api == from_mcp == from_cli
 
 
+# --- band, through the engine (P9: CLI and API in the same PR) ------------------
+
+def test_a_band_crossing_reaches_the_engine_through_a_real_height_row(tmp_path):
+    """`Vitai.crossings()` must combine weight-only crossings with the band
+    kind, which needs `measurements` too - the engine-level echo of
+    `compute_band_crossings`'s own unit tests above, through
+    `Vitai.append`/`Vitai.canonical` rather than hand-built points."""
+    root = init(tmp_path / "content")
+    v = Vitai(root)
+    v.append("measurements", {"date": "2029-01-01", "kind": "height_cm",
+                              "value": 200.0, "source": "self_report"})
+    v.append("weight", {"date": "2030-01-01", "kg": 125.0, "source": "scale"})
+    v.append("weight", {"date": "2030-01-05", "kg": 115.0, "source": "scale"})
+
+    got = [r for r in v.crossings() if r["kind"] == "band"]
+    assert got == [{
+        "date": "2030-01-05", "kind": "band", "metric": "bmi",
+        "value": 30.0, "direction": "down",
+        "previous_value": None, "previous_date": None,
+    }]
+
+
+def test_a_weight_reading_before_any_height_reaches_the_engine_with_no_ratio(tmp_path):
+    """The straddle, through `Vitai` rather than through hand-built points:
+    a weight logged before any height row exists must not retroactively
+    gain a ratio once a height is appended later - append order here mirrors
+    an athlete who has been weighing in for a while and only later tells the
+    engine their height."""
+    root = init(tmp_path / "content")
+    v = Vitai(root)
+    v.append("weight", {"date": "2029-07-01", "kg": 125.0, "source": "scale"})
+    assert v.crossings() == []  # one reading, no height: nothing to mint yet
+
+    v.append("measurements", {"date": "2029-06-01", "kind": "height_cm",
+                              "value": 200.0, "source": "self_report"})
+    v.append("weight", {"date": "2029-09-01", "kg": 110.0, "source": "scale"})
+    got = [r for r in v.crossings() if r["kind"] == "band"]
+    assert got == [{
+        "date": "2029-09-01", "kind": "band", "metric": "bmi",
+        "value": 30.0, "direction": "down",
+        "previous_value": None, "previous_date": None,
+    }]
+
+
+def test_the_three_surfaces_agree_on_a_band_crossing_too(tmp_path):
+    """P9, restated for the kind that needed a second dataset to compute:
+    agent, script and library still get one answer once a height row is in
+    the record."""
+    root = init(tmp_path / "content")
+    v = Vitai(root)
+    v.append("measurements", {"date": "2029-01-01", "kind": "height_cm",
+                              "value": 200.0, "source": "self_report"})
+    for d, kg in (("2030-01-01", 125.0), ("2030-01-05", 115.0)):
+        v.append("weight", {"date": d, "kg": kg, "source": "scale"})
+
+    from_api = v.crossings()
+    assert any(r["kind"] == "band" for r in from_api), (
+        "the fixture above must actually mint a band row to test this")
+
+    from_mcp = mcp.call(root, "crossings", {})
+    out = subprocess.run(
+        [sys.executable, "-m", "vitai.cli", "crossings", "--root", str(root),
+         "--json"], capture_output=True, text=True, check=True)
+    from_cli = [json.loads(line) for line in out.stdout.splitlines()]
+
+    assert from_api == from_mcp == from_cli
+
+
+def test_the_cli_states_the_boundary_and_never_a_name_for_it(tmp_path):
+    """The class (a) sentence the ruling permits, reusing `round_number`'s
+    template exactly (see `cli.py`'s `cmd_crossings`): a bound stated as a
+    bound - "bmi below 30", "first bmi below 30 since <date>" - and nothing
+    beside `bmi` and the figures that could ever spell a category word.
+
+    Two readings only, so this is the null-evidence "first time in this
+    record" sentence; the "since <date>" form is the same template `test_
+    the_cli_says_since_rather_than_leaving_it_to_be_reconstructed` above
+    already pins for `round_number`, and `band` shares that branch verbatim
+    (see `cli.py`) rather than a second copy of it.
+    """
+    root = init(tmp_path / "content")
+    v = Vitai(root)
+    v.append("measurements", {"date": "2029-01-01", "kind": "height_cm",
+                              "value": 200.0, "source": "self_report"})
+    v.append("weight", {"date": "2030-01-01", "kg": 125.0, "source": "scale"})
+    v.append("weight", {"date": "2030-01-05", "kg": 115.0, "source": "scale"})
+    out = subprocess.run(
+        [sys.executable, "-m", "vitai.cli", "crossings", "--root", str(root)],
+        capture_output=True, text=True, check=True).stdout
+
+    assert "bmi below 30 for the first time in this record" in out, out
+
+
 def test_the_cli_says_since_rather_than_leaving_it_to_be_reconstructed(tmp_path):
     """THE SENTENCE IS THE FEATURE. The issue's argument is that "lowest ever"
     and "first in over a year" were both false and "first below 80 since
@@ -474,3 +761,100 @@ def test_the_mcp_tool_is_pinned_in_the_protocol_register():
     name; asserted here too so a rename shows up beside the tool itself."""
     assert "crossings" in mcp.TOOLS
     assert mcp.TOOLS["crossings"]["method"] == "crossings"
+
+
+# --- the control that matters most -----------------------------------------------
+#
+# "The engine may compute the ratio and state the boundary as a boundary. It
+# may never name the band." (the operator, decided on #370.) Everything above
+# this line checks that the NUMBERS are right; this checks that the RULE
+# holds, against real rendered text rather than against the row shape.
+#
+# TWO CHOICES HERE ARE LOAD-BEARING, both because this repo has hit variants
+# of this exact defect five times before (per the task that asked for this
+# control):
+#
+# 1. AN INDEPENDENT WORD LIST. `_CATEGORY_WORDS` below is authored fresh for
+#    this file rather than imported from `scripts/boundary_gate.py`'s
+#    `CATEGORY_WORDS`/`CATEGORY_WORDS_GENERIC`. Importing that list and
+#    reusing it here would mean this control and the boundary gate share
+#    exactly one blind spot: a word neither list's author thought of passes
+#    both, and a bug in the gate's list silently becomes a bug in this test
+#    too. This list is also DELIBERATELY BROADER than the gate's - it
+#    includes "obesity" and "normal weight", which `boundary_gate.py`'s own
+#    comments explain it leaves out on purpose (false positives elsewhere on
+#    the public surface that do not apply to a `crossings` sentence) - so
+#    a shared blind spot is structurally unlikely even by accident.
+#
+# 2. THE ACTUAL RENDERED OUTPUT, not the row or the template source. This
+#    runs the real `vitai crossings` CLI (text AND `--json`) as a subprocess
+#    against every persona in the committed corpus and greps the words
+#    against what actually printed - the same distinction #379's own finding
+#    drew between a lint over `cli.py`'s SOURCE (which has no category word
+#    literal anywhere in it to catch) and a check over what that source
+#    PRODUCES once real numbers pass through its f-strings.
+_CATEGORY_WORDS = (
+    "underweight", "overweight", "obese", "obesity",
+    "healthy weight", "healthy range", "normal weight", "normal range",
+    "ideal weight", "hypertensive", "hypertension", "prehypertension",
+)
+_CATEGORY_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(w) for w in _CATEGORY_WORDS) + r")\b",
+    re.I)
+
+
+def _persona_dirs() -> list[Path]:
+    return sorted(d for d in PERSONAS.iterdir()
+                 if d.is_dir() and d.name != "_gen" and (d / "data").is_dir())
+
+
+def _rendered_crossings_output(root: Path) -> str:
+    """Every byte `vitai crossings` would print for this record, text and
+    JSON both concatenated - the two shapes a real consumer actually reads."""
+    out = ""
+    for extra in ([], ["--json"]):
+        proc = subprocess.run(
+            [sys.executable, "-m", "vitai.cli", "crossings",
+             "--root", str(root), *extra],
+            capture_output=True, text=True, check=True)
+        out += proc.stdout
+    return out
+
+
+def test_no_band_row_is_ever_rendered_with_a_category_word():
+    """Renders `vitai crossings` for every persona in the committed corpus -
+    not a synthetic fixture built to pass - and fails if a category word
+    appears anywhere in the combined output.
+
+    A SYNTHETIC FIXTURE WOULD BE BUILT FROM THE SAME ASSUMPTIONS THE
+    RENDERER WAS, which is exactly the blind spot #370's own review of
+    `scripts/boundary_gate.py` names: a control built from the material it
+    polices can pass by construction rather than by having checked anything.
+    The persona corpus is real, independently-authored data (`yasmin`'s band
+    crossings measured against her actual weight series, not invented to
+    exercise this test) - if a category word were EVER going to leak out of
+    `cmd_crossings`'s f-strings for some combination of `metric`/`direction`/
+    `previous_date` this repo's own corpus has not anticipated, running it
+    against thirteen different real records is a better chance of finding it
+    than one hand-built case.
+    """
+    rendered = "\n".join(_rendered_crossings_output(d) for d in _persona_dirs())
+    assert rendered.strip(), "the corpus must render SOMETHING to test this"
+
+    hit = _CATEGORY_RE.search(rendered)
+    assert hit is None, (
+        f"a category word ({hit.group()!r}) appeared in rendered `vitai "
+        f"crossings` output - the ruling this table exists under is that "
+        f"the engine may state a boundary but never name it")
+
+
+def test_the_corpus_this_control_scans_actually_exercises_a_band_row():
+    """Guards the guard: if no persona's rendered output ever carried a
+    `band` row, the test above would pass by having nothing to say rather
+    than by having checked the rule. `yasmin`'s corpus (FINDINGS.md #7)
+    exists to make this assertion true."""
+    rendered = "\n".join(
+        _rendered_crossings_output(d) for d in _persona_dirs())
+    assert "band" in rendered, (
+        "no persona in the corpus rendered a `band` crossing - the category-"
+        "word scan above would be vacuous")

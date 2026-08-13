@@ -38,7 +38,7 @@ from datetime import date, datetime, timedelta
 
 from .clocks import order_key
 from .schema import (COMPARABLE, IDENTITY_KEY, NOT_COMPARABLE, OFFSET,
-                     OVERLAP_BASIS, UNKNOWN_COMPETENCE)
+                     OVERLAP_BASIS, UNKNOWN_COMPETENCE, is_number)
 
 HARD, SOFT = "hard", "soft"
 
@@ -388,14 +388,43 @@ def instrument(rows: list[dict], origin: str, on: str | date) -> dict | None:
     return None
 
 
-def _in_force(records: list[dict], dataset: str, on: str) -> dict[str, dict]:
-    """Last line per identity whose date is on or before `on`.
+def _in_force_by(records: list[dict], parts: tuple[str, ...],
+                 on: str) -> dict[str, dict]:
+    """Last line per identity whose date is on or before `on` - the walk
+    `_in_force` runs, factored out so a caller that already knows its
+    identity (rather than a `dataset` name `IDENTITY_KEY` has an entry for)
+    can still use it. `height_on` below is exactly that caller: a height is
+    not a dataset of its own, it is `measurements` filtered to one `kind`, and
+    registering `IDENTITY_KEY["measurements"]` to make `_in_force` accept that
+    dataset name would wrongly turn on identity-keyed (supersedes-chain)
+    resolution for every OTHER measurement kind too - `waist_cm`, `hip_cm` -
+    which `resolution.py` already resolves a different way, per DATE rather
+    than per chain. Extracting the walk itself is the reuse; the dispatch by
+    dataset name stays exactly as narrow as it was.
 
     Ordered by (date, recorded_at) - valid time then transaction time (#37).
     Sorting was by date alone, which meant two lines sharing a date resolved
     by FILE POSITION, and a sort, a reformat or a merge could silently change
     which one won. `sorted` is stable and the key is constant across unstamped
     rows, so a legacy file still resolves exactly as it did.
+
+    A row is skipped when its identity is ABSENT. For a tuple that means every
+    component is None: a partly-stated identity is a validation problem rather
+    than a row to drop here, and `capabilities.condition` is legitimately null
+    - an unconditioned statement is a statement.
+    """
+    out: dict[str, dict] = {}
+    for r in sorted((r for r in records if r.get("date") and r["date"] <= on),
+                    key=order_key):
+        values = tuple(r.get(k) for k in parts)
+        if all(v is None for v in values):
+            continue
+        out[str(values[0]) if len(values) == 1 else str(values)] = r
+    return out
+
+
+def _in_force(records: list[dict], dataset: str, on: str) -> dict[str, dict]:
+    """Last line per identity whose date is on or before `on`.
 
     A TUPLE IDENTITY IS AN IDENTITY. This read `r.get(ident)` with whatever
     `IDENTITY_KEY` declared, which returns None for the tuple-keyed datasets -
@@ -405,21 +434,48 @@ def _in_force(records: list[dict], dataset: str, on: str) -> dict[str, dict]:
     invisible; it is the shape that stops the machinery being reusable, which
     is the one thing #171 wanted from it.
 
-    A row is skipped when its identity is ABSENT. For a tuple that means every
-    component is None: a partly-stated identity is a validation problem rather
-    than a row to drop here, and `capabilities.condition` is legitimately null
-    - an unconditioned statement is a statement.
+    See `_in_force_by` for the walk itself; this is the dataset-named door
+    onto it, resolving `dataset` to the identity `IDENTITY_KEY` declares.
     """
     ident = IDENTITY_KEY[dataset]
     parts = ident if isinstance(ident, tuple) else (ident,)
-    out: dict[str, dict] = {}
-    for r in sorted((r for r in records if r.get("date") and r["date"] <= on),
-                    key=order_key):
-        values = tuple(r.get(k) for k in parts)
-        if all(v is None for v in values):
-            continue
-        out[str(values[0]) if len(values) == 1 else str(values)] = r
-    return out
+    return _in_force_by(records, parts, on)
+
+
+def height_on(rows: list[dict], on: str | date) -> float | None:
+    """The height in force on `on`, in cm, or None before any is recorded
+    (#370).
+
+    THE HEIGHT MUST BE EFFECTIVE-DATED - #148's lesson, restated by the
+    operator when `height_cm` was decided as a `measurements` kind rather
+    than a `vitai.toml` setting: a ratio computed for a date in March must
+    use the height that was in force THAT March, never the newest height the
+    record happens to hold today. A reconstruction that used the latest row
+    regardless of date would let a height entered once at forty silently
+    rewrite every band crossing computed for a record running back to
+    twenty.
+
+    REUSES `_in_force_by`, THE SAME MACHINERY `state()`/`capability()` use
+    for goals, thresholds and capabilities, rather than a second sort-and-
+    pick-last written for this one caller. `rows` is expected to be the LIVE
+    `measurements` rows for one record (supersedes already applied - see
+    `Vitai.dataset`/`Vitai.canonical`); this filters to `kind == "height_cm"`
+    itself, so a caller never has to pre-filter or know the identity is
+    trivial (every height row shares one `kind`, so `_in_force_by` picks the
+    single most recent one on or before `on` exactly as it would pick the
+    latest of several dated rows sharing any other identity).
+
+    `None` BEFORE THE FIRST HEIGHT, not a fallback to some default stature.
+    A record with no height row before a date has no ratio for that date and
+    must say so by producing nothing, never by back-filling a later height
+    onto an earlier reading.
+    """
+    on_s = on.isoformat() if isinstance(on, date) else str(on)
+    heights = [r for r in rows if r.get("kind") == "height_cm"]
+    found = _in_force_by(heights, ("kind",), on_s)
+    row = found.get("height_cm")
+    value = row.get("value") if row else None
+    return float(value) if is_number(value) else None
 
 
 def state(goals: list[dict], thresholds: list[dict], on: str | date) -> State:

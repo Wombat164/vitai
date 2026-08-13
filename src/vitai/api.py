@@ -28,7 +28,7 @@ from . import __version__
 from .config import Config, load_config, policy_digest
 from .contributions import (_standing, compute_contributions,
                             goal_progress)
-from .crossings import compute_crossings
+from .crossings import compute_band_crossings, compute_crossings
 from .db import CONTRACT_VERSION, DERIVED_TABLES, build_db
 from . import builds as _builds
 # Re-exported deliberately: the CLI reads them from here and the MCP adapter
@@ -1714,30 +1714,46 @@ class Vitai:
         return out
 
     def crossings(self) -> list[dict]:
-        """Round-number and personal-first milestones, goal-independent and
-        history-wide (#370).
+        """Round-number, personal-first and band milestones, goal-independent
+        and history-wide (#370).
 
         NOT `milestones()`. That table needs a declared goal and a fraction
         of its target; "you broke 80 kg" and "that is your lowest ever" are
         true or false of the weight series alone, goal or no goal, and
         `milestones`' columns have nowhere honest to put either fact.
 
-        WEIGHT ONLY, TODAY. `crossings.compute_crossings` takes the field to
-        read as a parameter rather than assuming `kg` internally, so a second
-        metric is a second call elsewhere rather than a rewrite of that
-        function - but this accessor is the one and only place that
-        parameter is bound, because `kg` is the sole metric #370 asks for.
+        WEIGHT AND HEIGHT ONLY, TODAY. `crossings.compute_crossings` and
+        `crossings.compute_band_crossings` both take the fields to read as
+        parameters rather than assuming `kg`/`bmi` internally, so a second
+        metric or a second ratio is a second call elsewhere rather than a
+        rewrite of either function - but this accessor is the one and only
+        place those parameters are bound, because weight and BMI are the
+        kinds #370 asks for.
 
-        CANONICAL, NOT RAW. `self.canonical("weight")` is the same adjudicated
-        series `report.py` builds its trend from - one row per date - so a
-        day resolved from two competing sources counts once here too.
+        CANONICAL, NOT RAW. `self.canonical("weight")` and
+        `self.canonical("measurements")` are the same adjudicated series
+        `report.py`'s trend and `policy.height_on` read - one row per date
+        per quantity - so a day resolved from two competing sources counts
+        once here too, for a weight claim or a height claim alike.
 
-        A `round_number` row's evidence pair names the last reading on the
-        DESTINATION side of the level, not the reading right before this one
-        - see `crossings.py`'s module docstring for #370's worked example of
-        why "the previous reading was 81" is not the fact worth minting.
+        A `round_number` or `band` row's evidence pair names the last reading
+        on the DESTINATION side of the level, not the reading right before
+        this one - see `crossings.py`'s module docstring for #370's worked
+        example of why "the previous reading was 81" is not the fact worth
+        minting. A `band` row's `value` is the numeric boundary crossed and
+        never its name - see `crossings.py`'s "THE BAND CROSSING" for the
+        ruling this accessor must never let a caller route around.
+
+        Sorted together on (date, kind, direction, value) rather than the
+        weight kinds concatenated with the band kind, so a caller reading
+        this list in order sees the record's crossings in the order they
+        actually happened, not grouped by which function minted them.
         """
-        return compute_crossings(self.canonical("weight"), metric="kg")
+        out = (compute_crossings(self.canonical("weight"), metric="kg")
+              + compute_band_crossings(self.canonical("weight"),
+                                       self.canonical("measurements")))
+        out.sort(key=lambda r: (r["date"], r["kind"], r["direction"], r["value"]))
+        return out
 
     def capability(self, origin: str, measures: str,
                    on: date | str | None = None,
@@ -2058,7 +2074,13 @@ class Vitai:
             # the same reason `contributions`/`milestones` above are - so a
             # build and `crossings()` never see two different resolutions of
             # one record because one read `self.resolution()` a second time.
-            "crossings": compute_crossings(d["weight"], metric="kg"),
+            # `d["measurements"]` supplies the height `compute_band_crossings`
+            # needs (via `policy.height_on`) for the same reason: computed
+            # from THIS resolution's own canonical rows, not a fresh one.
+            "crossings": sorted(
+                compute_crossings(d["weight"], metric="kg")
+                + compute_band_crossings(d["weight"], d["measurements"]),
+                key=lambda r: (r["date"], r["kind"], r["direction"], r["value"])),
             "plan_churn": plan_churn(d["goals"], d["thresholds"], verdicts,
                                      events=d["events"]),
             "goal_progress": goal_progress(d["goals"], d["thresholds"],

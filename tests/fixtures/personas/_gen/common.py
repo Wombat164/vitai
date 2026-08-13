@@ -255,7 +255,27 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # keeps generation 11 below. No persona builder emits `height_cm` and none is
 # asked to; the review this pin demands is that fact, stated rather than
 # implied.
-AUTHORED_AGAINST_CONTRACT = "47"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #370's contract 48, the band-crossing third: `crossings.kind`
+# gains `band`, and like `round_number`/`personal_first` before it that is a
+# DERIVED-table vocabulary widening (built from `weight` and `measurements`
+# at build time), so it needs no entry in `AUTHORED_AGAINST_GENERATIONS`
+# either - no generator writes a `crossings` line, and `measurements` stays
+# generation 11, because `height_cm` was already a legal `kind` value as of
+# the previous pin and this PR adds no new KEY to that dataset.
+#
+# UNLIKE the previous pin, one builder DOES move here: `yasmin.py` gains a
+# `data/measurements.jsonl` she did not ship before, one `height_cm` row at
+# generation 11 (every key her file already knows how to write). That is a
+# NEW FILE for one persona, not a new generation for the dataset - the same
+# distinction #311's `instruments` re-pin above draws between a dataset
+# nobody writes and one whose shape does not move. Measured before choosing
+# her: of the personas with a height stated in `WORLD.md` and a real weight
+# series, hers is the one whose canonical BMI (165 cm) actually crosses a
+# `BAND_LEVELS` boundary - five times, both directions, matching her own
+# "failed attempts" record - while `tom` (175 cm) and `rachel` (162 cm) never
+# leave the obese band at any recorded weight and would have needed invented
+# numbers to exercise this feature at all.
+AUTHORED_AGAINST_CONTRACT = "48"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     # #171: a new dataset, empty for every persona. Generation 3 rather than 1
     # because every dataset gets the blanket `recorded_at` and `device`

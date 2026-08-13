@@ -338,7 +338,8 @@ def cmd_milestones(args: argparse.Namespace) -> None:
 
 
 def cmd_crossings(args: argparse.Namespace) -> None:
-    """Round-number and personal-first milestones: no goal required (#370)."""
+    """Round-number, personal-first and band milestones: no goal required
+    (#370)."""
     rows = Vitai(_root(args)).crossings()
     if args.json:
         for row in rows:
@@ -346,15 +347,20 @@ def cmd_crossings(args: argparse.Namespace) -> None:
         return
     if not rows:
         print("no crossings - the record has fewer than two weight readings, "
-              "or none of them cross a multiple of 5 kg or set a new "
-              "personal high or low")
+              "or none of them cross a multiple of 5 kg, cross a "
+              "population-reference boundary, or set a new personal high "
+              "or low")
         return
     for r in rows:
-        # TWO KINDS, TWO SENTENCES, because one template said the wrong thing
-        # about one of them. Both rows carry a `previous_value` and a
-        # `previous_date`, and they mean different things: on a personal first
-        # it is the record this reading beat, and on a round number it is the
-        # last time the series was on the side it just arrived at.
+        # TWO SENTENCE SHAPES, because one template said the wrong thing
+        # about one of them. Every row carries a `previous_value` and a
+        # `previous_date`, and they mean different things depending on
+        # `kind`: on a personal first it is the record this reading beat, and
+        # on a round number OR a band crossing it is the last time the series
+        # was on the side it just arrived at - `band` reuses `round_number`'s
+        # sentence rather than getting a third one, because its evidence pair
+        # means exactly the same thing (`crossings._last_on_destination_side`
+        # backs both).
         #
         # Printed as one "(was X on DATE)" they read alike, and the round
         # number reads as its own opposite: "down to 80 (was 75)" looks like a
@@ -363,8 +369,17 @@ def cmd_crossings(args: argparse.Namespace) -> None:
         # since then. This is the sentence the whole feature exists to make
         # sayable - "first below 80 since February" - so it is worth saying in
         # those words rather than leaving a reader to reconstruct it.
+        #
+        # A `band` ROW'S `value` IS A NUMBER, NEVER A NAME - the ruling this
+        # function must never route around (`docs/medical-boundary.md`,
+        # `crossings.py`'s "THE BAND CROSSING"). This branch prints the
+        # boundary exactly the way it prints a round-number rung: as a bare
+        # figure beside `metric`, "first bmi below 30 since <date>" - a bound
+        # stated as a bound, class (a), with no category word anywhere in the
+        # template for one to hide in. `tests/test_crossings.py` renders this
+        # sentence over the whole persona corpus and fails if one ever does.
         side = "below" if r["direction"] == "down" else "above"
-        if r["kind"] == "round_number":
+        if r["kind"] in ("round_number", "band"):
             if r["previous_date"] is None:
                 said = (f"{r['metric']} {side} {r['value']:g} for the first "
                         f"time in this record")
