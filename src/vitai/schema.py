@@ -262,6 +262,13 @@ KEYS: dict[str, list[str]] = {
     # says anything but silence (`comparable` or `offset`) - a `not_comparable`
     # row may be a bare refusal, since asserting a negative earns nothing.
     #
+    # `difference_lo`/`difference_hi` ARRIVE AT CONTRACT 52 and are registered
+    # further down with their reasoning, beside the generation that carries
+    # them. In one line: `bias` is a point and `spread` a width, so a range
+    # running further one way than the other had nowhere to live, and these are
+    # its two observed ends. They earn no band - `offset` still does not lift
+    # the seam, and observed extrema carry no coverage claim.
+    #
     # IDENTITY IS THE PAIR, resolved as unordered rather than stored that
     # way: `origin_a`/`origin_b` are two ordinary columns, and the resolver
     # in `policy.comparability` answers (a, b) and (b, a) identically, since
@@ -1929,7 +1936,7 @@ for _cls, _names in {
         angle_deg lever_pos pad_pos seat_pos resistance_level tempo grams
         grams_lo grams_hi kcal_100g protein_100g carb_100g fat_100g fibre_100g
         sugar_100g sodium_mg_100g carb_g fat_g fibre_g sugar_g sodium_mg
-        bytes bias spread""",
+        bytes bias spread difference_lo difference_hi""",
 }.items():
     for _name in _names.split():
         _BY_NAME[_name] = _cls
@@ -2239,6 +2246,66 @@ for _ds in ("weight", "daily", "sessions"):
         KEY_GENERATION.setdefault(_ds, {})[_k] = CURRENT_GENERATION[_ds]
 
 
+# --- the two ends of a measured disagreement (#402) ---------------------------
+#
+# A RANGE RUNNING FURTHER ONE WAY THAN THE OTHER, which the row could not write
+# down. `bias` is a point and `spread` a width, so the schema could say "they
+# leaned this way by this much" and "they got this far apart" and could not say
+# "further above than below". `vera` is the record that made that concrete: 101
+# paired runs, a median difference of 0.00 km, a low tail 0.03 km deep and a
+# high tail 1.23 km deep, because the phone loses fix under canopy and
+# under-reads and there is no mechanism that would make it over-read to match.
+#
+# THE ASYMMETRY SURVIVED ONLY IN A `note` BEFORE THIS, and that is the defect
+# rather than a stylistic complaint. The engine measured four numbers, the row
+# stored two, and the shape of the disagreement reached the next reader as the
+# English sentence "it parts one way only" beside data that said otherwise.
+#
+# WHAT THEY ARE: the lowest and highest paired difference OBSERVED over the
+# overlap, on the same signed convention `bias` uses - the later-sorted origin
+# minus the earlier-sorted one. Observations, under the `basis` and
+# `overlap_ref` that already qualify `spread`, asserting no distribution and no
+# coverage factor.
+#
+# WHAT THEY ARE NOT, and the naming is where this was decided rather than
+# merely documented. `bias_lo`/`bias_hi` would read under this schema's own
+# `_lo`/`_hi` convention - `kg_lo` bounds `kg`, `target_hi` bounds `target` - as
+# BOUNDS ON THE BIAS, which is a confidence interval on a median and is exactly
+# the coverage claim #402 forbids inventing; the name would have smuggled it in.
+# `spread_lo`/`spread_hi` would read as bounds on the WIDTH, a claim about how
+# well the width itself is known, which is also not this. These are bounds on
+# the DIFFERENCE, and naming them so states the row's implicit subject out loud
+# for the first time: `bias` and `spread` have always been statistics OF the
+# difference and nothing on the row said which quantity they were about.
+#
+# THEY DO NOT EARN A BAND, and adding them does not move #372 one step. Two
+# independent reasons, either sufficient. `offset` does not lift the seam -
+# `policy.comparability` and `all_comparable` are untouched, and a row that may
+# not be read across is not a row a band derives from whatever columns it
+# carries. And observed extrema are not a coverage interval: the minimum and
+# maximum of 101 differences are the two most sample-dependent numbers in the
+# set, they can only widen as days arrive, and they say nothing about the 102nd
+# run. What the columns buy is that the record can now hold what was measured
+# without losing half of it, and that a consumer halving the spread is
+# contradicted by the row rather than only by a docstring it never reads.
+#
+# OPTIONAL BESIDE `offset`, DELIBERATELY, and this is the rule that took the
+# most argument. Requiring them would force a writer who honestly knows a width
+# and not its ends to invent the ends - the fabrication this dataset exists to
+# refuse, arriving through a validation rule - and would invalidate every
+# `offset` row written before contract 52. So they express a third state rather
+# than a second: a width whose ends are recorded, a width whose ends are not,
+# and no width at all.
+#
+# Full reasoning, with the options that lost:
+# `docs/proposals/comparability-asymmetric-range.md`.
+CURRENT_GENERATION["comparability"] += 1
+for _k in ("difference_lo", "difference_hi"):
+    KEYS["comparability"] = KEYS["comparability"] + [_k]
+    KEY_GENERATION.setdefault("comparability", {})[_k] = \
+        CURRENT_GENERATION["comparability"]
+
+
 def absent_fields(rec: dict) -> set[str]:
     """Fields this row says are absent, and says why.
 
@@ -2395,6 +2462,11 @@ _TYPES: dict[str, tuple[type, ...]] = {
     # present. Registered here rather than hand-rolled in
     # `_comparability_problems`, the same as every other numeric field.
     "bias": _NUMERIC, "spread": _NUMERIC,
+    # The two ends of the same measured difference `bias` and `spread` describe
+    # (#402), typed here for the reason those two were: the generic check is
+    # what stops `difference_hi: "banana"` reaching the comparisons below,
+    # which would raise a TypeError instead of reporting a malformed row.
+    "difference_lo": _NUMERIC, "difference_hi": _NUMERIC,
 }
 
 # extra keys that are always legal (the supersedes mechanic + schema generation)
@@ -2822,6 +2894,90 @@ def _comparability_problems(rec: dict) -> list[str]:
         if spread is not None:
             out.append("'spread' has no meaning beside 'not_comparable', got "
                        f"{spread!r}")
+    out += _difference_range_problems(rec, status, bias, spread)
+    return out
+
+
+def _difference_range_problems(rec: dict, status: object, bias: object,
+                               spread: object) -> list[str]:
+    """The two ends of the measured difference, and the rules they ship with.
+
+    OPTIONAL EVERYWHERE THEY ARE LEGAL, and that is the decision rather than a
+    softness. Requiring them beside `offset` would force a writer who honestly
+    knows a width and not its ends to invent the ends - the fabrication this
+    whole dataset exists to refuse, arriving through a validation rule - and
+    would invalidate every `offset` row written before contract 52. So the
+    three states are a width whose ends are recorded, a width whose ends are
+    not, and no width at all, and only the first is checked in full.
+
+    THE REDUNDANCY IS THE CHECK, NOT THE COST. `spread` and the two ends state
+    one width twice, which is normally a reason to store one of them. Here both
+    are wanted - `spread` because every existing reader and both pinned clients
+    already read it, the ends because `spread` alone cannot say which way the
+    range runs - so the duplication is made load-bearing instead: the two
+    spellings are compared against each other, and a row where they disagree is
+    a row where somebody edited one and not the other.
+
+    GUARDED ON TYPE BEFORE EVERY COMPARISON, the way the `kg_lo <= kg <= kg_hi`
+    band check in `validate_record` is. `_TYPES` reports a non-number, but it
+    reports it into the same list rather than short-circuiting this function,
+    so an unguarded `<=` here would raise a TypeError on the row it is supposed
+    to describe.
+    """
+    lo, hi = rec.get("difference_lo"), rec.get("difference_hi")
+    if lo is None and hi is None:
+        return []
+
+    if status == NOT_COMPARABLE:
+        # For `bias` and `spread`'s reason one line up: nothing was measured to
+        # have a range, so an observed range on a refusal is a measurement
+        # attached to the statement that no measurement was made.
+        return ["'difference_lo'/'difference_hi' are the two ends of a "
+                "MEASURED difference and have no meaning beside "
+                f"'not_comparable', got {lo!r} to {hi!r}"]
+
+    out: list[str] = []
+    if lo is None or hi is None:
+        # `_band_problems`' argument for `target`/`target_hi`, one dataset
+        # over: a range with one end is not a range. Which end is missing does
+        # not matter, because neither half says which way the range runs -
+        # which is the only thing these two exist to say.
+        out.append("a range needs both ends: 'difference_lo' is the lowest "
+                   "paired difference observed and 'difference_hi' the "
+                   f"highest, and one without the other says nothing about "
+                   f"which way the range runs (got {lo!r} and {hi!r})")
+        return out
+
+    def _num(v: object) -> bool:
+        return isinstance(v, _NUMERIC) and not isinstance(v, bool)
+
+    if not (_num(lo) and _num(hi)):
+        # `_TYPES` has already said so; this only stops the comparisons below.
+        return out
+
+    if hi < lo:
+        out.append(f"'difference_lo' is the LOW end and 'difference_hi' the "
+                   f"high one, so {hi!r} must not be below {lo!r}")
+        return out
+
+    if spread is None:
+        out.append("'spread' is the width these two are the ends of, and is "
+                   "required beside them: a row stating where a range runs "
+                   "from and to, and not how wide it is, leaves its own "
+                   "readers to compute the number it already knows")
+    elif _num(spread) and round(hi - lo, 6) != round(spread, 6):
+        out.append(f"'spread' is the full observed width, so it must equal "
+                   f"'difference_hi' minus 'difference_lo': "
+                   f"{hi!r} - {lo!r} is {round(hi - lo, 6)!r}, not {spread!r}")
+
+    if _num(bias) and not lo <= bias <= hi:
+        # A median lies inside the set it was taken over. A row saying
+        # otherwise was assembled from two different overlaps, and every
+        # figure on it is then about a window nobody can name.
+        out.append(f"'bias' is the median of the differences these two bound, "
+                   f"so {bias!r} must lie between {lo!r} and {hi!r} - a centre "
+                   "outside its own observed range means the three numbers "
+                   "came from different overlaps")
     return out
 
 

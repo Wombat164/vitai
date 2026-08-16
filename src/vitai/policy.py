@@ -291,7 +291,14 @@ def comparability(rows: list[dict], field: str, origin_a: str, origin_b: str,
         return max(matches, key=order_key)
     return {"field": str(field), "origin_a": str(origin_a),
             "origin_b": str(origin_b), "status": NOT_COMPARABLE,
-            "bias": None, "spread": None, "basis": None, "overlap_ref": None,
+            "bias": None, "spread": None,
+            # PRESENT AND NULL rather than absent, for `bias` and `spread`'s
+            # own reason: this dict is the answer a consumer gets when the
+            # record has said nothing, and a caller reading the same keys off
+            # a stated row and off this one must not have to guard one shape
+            # against a KeyError and the other against a null (#402).
+            "difference_lo": None, "difference_hi": None,
+            "basis": None, "overlap_ref": None,
             "date": None,
             # SAID RATHER THAN INFERRED FROM A NULL DATE, `capability`'s own
             # reasoning: a consumer that has to work out whether a row was

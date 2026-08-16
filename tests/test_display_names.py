@@ -53,6 +53,12 @@ CURATED_WORDS = frozenset({
     # #33 item 2: the comparability dataset's curated names, `origin_a` ->
     # "first instrument" and `overlap_ref` -> "overlap reference".
     "first", "second", "instrument", "overlap",
+    # #402's contract 52: `difference_lo`/`difference_hi` -> "difference,
+    # lower bound" / "difference, upper bound", the two ends of the measured
+    # disagreement `bias` and `spread` are statistics of. "lower", "upper" and
+    # "bound" are already blessed by the weight and goal bands; only the noun
+    # is new, and it is the row's subject named out loud for the first time.
+    "difference",
 })
 BLESSED = PLAIN_WORDS | CURATED_WORDS
 

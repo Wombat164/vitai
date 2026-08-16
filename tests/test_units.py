@@ -46,7 +46,13 @@ from vitai.vocab import registry
 # beside `waist_cm` and `hip_cm`, and needs the same `[unit.height_cm]`
 # entry they have or `measurements.kind = "height_cm"` points at nothing
 # (see `test_following_a_reference_lands_somewhere` below).
-PINNED_DIGEST = "c3fb6f8714473606"
+# Updated deliberately at #402's contract 52: `difference_lo`/`difference_hi`
+# join `bias` and `spread` on `comparability`, with their `unit_of = "field"`
+# entries for the same reason those two have them - the two ends of a measured
+# difference are in whatever unit the row's own `field` column names - and two
+# curated display names, "difference, lower bound" and "difference, upper
+# bound", following `kg_lo`'s wording exactly.
+PINNED_DIGEST = "f1705cd848237f04"
 
 REGISTRY = Path(__file__).resolve().parents[1] / "src" / "vitai" / "semantics" / "units.toml"
 def _numeric_in_the_corpus() -> set[tuple[str, str]]:

@@ -93,6 +93,15 @@ def test_silence_resolves_to_not_comparable_stated_false():
     assert got["basis"] is None and got["overlap_ref"] is None
 
 
+def test_the_default_answer_carries_the_range_keys_as_nulls():
+    """The synthesised `not_comparable` answer names every figure a stated row
+    could, `difference_lo`/`difference_hi` included (#402). A caller reading
+    the same keys off a stated row and off silence must not have to guard one
+    shape against a KeyError and the other against a null."""
+    got = comparability([], "kg", "scale", "dexa", "2030-05-14")
+    assert got["difference_lo"] is None and got["difference_hi"] is None
+
+
 def test_it_never_returns_none():
     for field in ("kg", "rhr", "steps"):
         got = comparability([], field, "a", "b", "2030-06-01")
@@ -324,6 +333,144 @@ def test_a_bias_on_a_refusal_is_meaningless():
     good = crow("2030-01-01", "kg", "scale", "dexa", "not_comparable",
                basis=OVERLAP_BASIS)
     assert validate_record("comparability", good) == []
+
+
+# --- the two ends of a measured difference (#402, contract 52) --------------------
+#
+# `bias` is a point and `spread` a width, so until contract 52 a range running
+# further one way than the other had nowhere to live and reached a reader only
+# through prose. These check the rules the two columns ship with, and one rule
+# they deliberately do NOT have.
+
+
+def _offset(**kw) -> dict:
+    return crow("2030-01-01", "kg", "scale", "dexa", "offset",
+               **{"basis": OVERLAP_BASIS, "overlap_ref": "a fortnight",
+                  "bias": 0.6, "spread": 1.0, **kw})
+
+
+def test_the_row_can_hold_a_range_that_runs_one_way():
+    """The change in one assertion. A median sitting 0.1 above its low end and
+    0.9 below its high one is a row the schema now accepts and could not state
+    at all one contract ago."""
+    good = _offset(difference_lo=0.5, difference_hi=1.5)
+    assert validate_record("comparability", good) == []
+
+
+def test_a_range_with_one_end_is_not_a_range():
+    """`_band_problems`' argument for `target`/`target_hi`, one dataset over:
+    neither half alone says which way the range runs, which is the only thing
+    these two exist to say. Both directions, because a gate that catches the
+    missing high end and not the missing low one is half a gate."""
+    for kw in ({"difference_lo": 0.5}, {"difference_hi": 1.5}):
+        problems = validate_record("comparability", _offset(**kw))
+        assert any("both ends" in p for p in problems), (kw, problems)
+
+
+def test_the_ends_must_be_in_order():
+    problems = validate_record("comparability",
+                              _offset(difference_lo=1.5, difference_hi=0.5))
+    assert any("must not be below" in p for p in problems), problems
+
+
+def test_the_two_spellings_of_the_width_are_checked_against_each_other():
+    """THE REDUNDANCY MADE LOAD-BEARING. `spread` and the two ends state one
+    width twice, which is normally an argument for storing one of them - both
+    are kept because every existing reader wants `spread` and `spread` alone
+    cannot say which way the range runs, so instead the pair is checked. A row
+    where somebody edited one and not the other is refused rather than left for
+    a consumer to notice."""
+    problems = validate_record(
+        "comparability", _offset(spread=9.0, difference_lo=0.5,
+                                 difference_hi=1.5))
+    assert any("must equal" in p for p in problems), problems
+
+
+def test_ends_without_a_width_are_refused():
+    """Checked beside `comparable` rather than `offset`, because `offset`
+    already requires `spread` for #171's own reason and would report this rule
+    passing on the strength of the other one."""
+    bad = crow("2030-01-01", "kg", "scale", "dexa", "comparable",
+              basis=OVERLAP_BASIS, overlap_ref="a fortnight",
+              difference_lo=-0.1, difference_hi=0.4)
+    problems = validate_record("comparability", bad)
+    assert any("required beside them" in p for p in problems), problems
+
+
+def test_a_median_outside_its_own_range_is_refused():
+    """A median lies inside the set it was taken over. A row saying otherwise
+    was assembled from two different overlaps, and then every figure on it is
+    about a window nobody can name."""
+    problems = validate_record("comparability",
+                              _offset(bias=5.0, difference_lo=0.5,
+                                      difference_hi=1.5))
+    assert any("must lie between" in p for p in problems), problems
+
+
+def test_a_range_on_a_refusal_is_meaningless():
+    """`bias`/`spread`'s rule two functions up, for the same reason: nothing
+    was measured to have a range, so an observed range beside `not_comparable`
+    is a measurement attached to the statement that no measurement was made."""
+    bad = crow("2030-01-01", "kg", "scale", "dexa", "not_comparable",
+              basis=OVERLAP_BASIS, difference_lo=-0.1, difference_hi=0.4)
+    problems = validate_record("comparability", bad)
+    assert any("difference_lo" in p for p in problems), problems
+
+
+def test_a_non_numeric_end_is_rejected():
+    """Through `_TYPES` like `bias` and `spread`, and asserted because the
+    comparisons above would raise a TypeError rather than report a problem if
+    the guard in `_difference_range_problems` were removed."""
+    problems = validate_record(
+        "comparability", _offset(difference_lo=0.5, difference_hi="banana"))
+    assert any("difference_hi" in p for p in problems), problems
+
+
+def test_the_ends_are_NOT_required_beside_an_offset():
+    """THE RULE THAT IS DELIBERATELY ABSENT, pinned so nobody adds it for
+    symmetry. Requiring them would force a writer who honestly knows a width
+    and not its ends to invent the ends - the fabrication this dataset exists
+    to refuse, arriving through a validation rule - and would invalidate every
+    `offset` row written before contract 52."""
+    assert validate_record("comparability", _offset()) == []
+
+
+def test_the_ends_do_not_lift_the_seam(tmp_path):
+    """THE LOAD-BEARING NEGATIVE. The columns let the row STATE an asymmetric
+    observed range; they do not make it a band, and they change nothing about
+    what may be read across the seam. An `offset` carrying both ends is still
+    an `offset`."""
+    rows = [crow("2030-05-01", "kg", "scale", "dexa", "offset",
+                basis=OVERLAP_BASIS, overlap_ref="a fortnight",
+                bias=0.6, spread=1.0, difference_lo=0.1, difference_hi=1.1)]
+    assert not all_comparable(rows, "kg", ["scale", "dexa"], "2030-05-14")
+    v = record(tmp_path, weight=series("scale", "dexa"),
+              comparability_rows=rows)
+    line = [ln for ln in v.rollup().splitlines()
+           if ln.startswith("**Rate:**")][0]
+    assert "NOT COMPARABLE" in line, line
+
+
+def test_the_ends_reach_the_read_model():
+    """A column a consumer cannot select is a column that does not exist, and
+    `vera` is the record that carries them."""
+    import sqlite3
+
+    vera = Path(__file__).resolve().parent / "fixtures" / "personas" / "vera"
+    con = sqlite3.connect(Vitai(vera).build())
+    try:
+        cols = [r[1] for r in con.execute("PRAGMA table_info(comparability)")]
+        assert {"difference_lo", "difference_hi"} <= set(cols), cols
+        got = con.execute(
+            "SELECT bias, spread, difference_lo, difference_hi "
+            "FROM comparability WHERE field = 'distance_km'").fetchone()
+        assert got == (0.0, 1.26, -0.03, 1.23), got
+        # The asymmetry, as the number it is rather than as the note beside it.
+        bias, _spread, lo, hi = got
+        assert (hi - bias) > 40 * (bias - lo), (
+            "her high tail is over a kilometre and her low tail is centimetres")
+    finally:
+        con.close()
 
 
 def test_comparable_and_offset_require_an_overlap_ref():
