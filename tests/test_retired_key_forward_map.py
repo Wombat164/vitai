@@ -70,6 +70,29 @@ def test_the_gate_and_the_prose_do_not_disagree_about_one_row(tmp_path):
     assert not any("unspecified site" in ln for ln in said), said
 
 
+def test_a_legacy_line_reaches_the_verdict_through_the_api(tmp_path):
+    """THE READER THAT CANONICALISES NOWHERE OF ITS OWN, pinned at the surface.
+
+    `gates_on` and `escalations` call `canonical_daily` themselves, so the
+    tests above hold whatever the caller hands them. `compute_verdicts` does
+    not: it reads `d["pain"]` and nothing else, on the stated grounds that the
+    rows arriving have already been mapped. That grounds is a property of
+    every CALL SITE rather than of the function, and nothing checked it - the
+    suite's other legacy-verdict test resolves the rows by hand first, so it
+    would stay green if `Vitai.verdicts()` began passing raw ones.
+
+    What that would look like is the reason this is worth a test: a legacy
+    line has no `pain`, so it would not raise or warn. It would drop out of
+    the pain gate silently, and a record whose only pain lines predate the
+    generalisation would report no pain at all while validating cleanly.
+    """
+    rows = [r for r in legacy_record(tmp_path, 4).verdicts()
+            if r["metric"] == "pain_gate"]
+    assert rows, "the legacy line never reached the pain gate"
+    assert rows[0]["value"] == 4
+    assert rows[0]["verdict"] == "behind"
+
+
 def test_a_legacy_line_escalates_at_the_site_it_named():
     """The same hand-copy sat on the absolute-threshold path, where the row
     that reaches it is the one nobody adjudicated on purpose."""
