@@ -1,0 +1,97 @@
+# Body state - the conditions a measurement protocol can FIX (#404).
+#
+# A `protocols` row said WHICH procedure was followed and never WHAT THAT
+# PROCEDURE CONTROLS FOR, so a reading either named a protocol or did not and
+# nothing downstream could say which conditions were left free. That is the
+# defect this file exists to close: it is the vocabulary a protocol declares
+# against in `protocols.controls`.
+#
+# The athlete's own framing, which is the whole issue: "voided or not, how much
+# drank during the day? did you just eat? bladder and bowels full? just after
+# sports session, lost lots of sweat? clothes on? shoes?"
+#
+# CLOSED, AND VALIDATION REJECTS AN UNREGISTERED VALUE. That is deliberately
+# unlike `protocols.slug`, which is open and where an undefined slug is legal.
+# The asymmetry has a reason: a protocol slug is the athlete's own name for
+# their own procedure and nobody else has to read it, while a condition exists
+# ONLY to be compared - across protocols, across readings, and eventually
+# across records. An open vocabulary here yields `bladder` in one record and
+# `bladder_full` in the next with nothing able to tell they are one fact, which
+# defeats the point of declaring it at all. `body_sites.toml` made the same
+# call for the same reason, and aliases absorb the spelling.
+#
+# NO MAGNITUDES, ANYWHERE IN THIS FILE, and this is the rule the whole feature
+# rests on. #404 lists rough masses for these conditions - clothing 0.3 to 1 kg,
+# a bladder several hundred grams, sweat 0.5 to 2 kg - to argue the problem is
+# real. They are orders of magnitude from general knowledge, and #402's rule and
+# #264's rewording both say a band comes from a measured overlap, a per-reading
+# `u_obs` or an athlete-stated range and from nowhere else. A figure from that
+# table entering arithmetic would be inventing precision about imprecision, so
+# not one of them is recorded here, not even as a note. What a condition is
+# WORTH on a given record is measurable - same-day repeat weigh-ins differing in
+# one declared condition - and until a record holds those pairs the honest
+# answer is that nobody knows.
+#
+# G85, HONESTLY. These seven are the athlete's own enumeration in #404. No
+# published enumeration was transcribed. Clinical body-composition and
+# anthropometry procedures do standardise conditions of this kind - fasted,
+# voided, minimal clothing - but naming a specific clause from memory is what
+# `day_phase.toml` already refuses to do, on the grounds that a code written
+# here from memory is a code nobody checked. If someone fetches a primary
+# source, this file is where it lands and `citation` is where it goes.
+#
+# EXTENDING IT: a condition nobody here imagined is a gap in this file rather
+# than a fault in the athlete's record. Add the member, with its aliases.
+
+version = 1
+
+[condition.bladder]
+label = "Bladder voided"
+aliases = ["void", "voided", "wee", "pee", "urinated", "empty bladder",
+           "bladder empty"]
+note = "whether the bladder was emptied before the reading"
+
+[condition.bowel]
+label = "Bowel"
+aliases = ["bowels", "stool", "toilet", "been to the toilet"]
+note = "whether the bowel was emptied before the reading"
+
+[condition.fed]
+label = "Fed state"
+aliases = ["fasted", "fasting", "eaten", "ate", "food", "breakfast",
+           "before eating", "after eating"]
+note = "whether anything had been eaten before the reading"
+
+[condition.hydration]
+label = "Hydration"
+# Distinct from `fed` because they come apart on the case that prompted the
+# issue: coffee on an otherwise fasted morning is drink without food, and a
+# protocol that fixes one may leave the other free.
+aliases = ["drink", "drank", "drinking", "water", "fluid", "coffee", "hydrated"]
+note = "what had been drunk before the reading"
+
+[condition.clothing]
+label = "Clothing"
+aliases = ["clothes", "dressed", "undressed", "underwear", "naked", "nude"]
+note = "what was being worn for the reading"
+
+[condition.footwear]
+label = "Footwear"
+# Its own member rather than part of `clothing`, because the athlete named it
+# separately and because it is the one a person forgets: stepping onto a scale
+# in shoes is a different mistake from weighing in a dressing gown, and a
+# protocol can easily fix one and not the other.
+aliases = ["shoes", "boots", "trainers", "socks", "barefoot", "shoes off"]
+note = "whether shoes were worn for the reading"
+
+[condition.post_exertion]
+label = "Post-exertion state"
+# THE ONE THAT IS NOT A STATE AT AN INSTANT, and it is recorded as a member
+# anyway because the athlete named it. Sweat loss decays over hours rather than
+# being on or off, so a fuller treatment wants a duration - and a duration
+# invites a magnitude, which is the one thing this vocabulary may not carry.
+# Left as a condition the protocol either fixes or does not; see the open
+# question on #404.
+aliases = ["sweat", "sweaty", "after training", "after a session",
+           "post workout", "post-workout", "after exercise"]
+note = "whether the reading was taken soon after exertion"

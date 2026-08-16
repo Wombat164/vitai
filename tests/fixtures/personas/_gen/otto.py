@@ -311,12 +311,23 @@ def _protocols(stamp: common.Stamper) -> list[dict]:
             "protocols", date=START.isoformat(), slug="fasted-post-void",
             text="First thing, after the bathroom, before anything to drink. "
                  "The tape is taken standing, at the navel, breathing out.",
+            # #404, and read STRICTLY off his own words. "After the bathroom"
+            # is the bladder, "first thing" is the fed state and "before
+            # anything to drink" is hydration. `bowel` is NOT declared: the
+            # bathroom could mean either and guessing which would be the
+            # engine putting a condition in his mouth.
+            controls=["bladder", "fed", "hydration"],
             recorded_at=stamp.stamp(START)),
         common.record(
             "protocols", date="2030-01-15", slug="clinic-dexa",
             text="A whole-body scan at the clinic, fasted, in the morning. "
                  "Their machine and their procedure, neither of which he "
                  "controls or can repeat at home.",
+            # Controls LESS than his own morning protocol, which is the point
+            # of declaring it: the clinic fixes what he ate and says nothing
+            # about clothing or the bathroom, so those stay unstated rather
+            # than being assumed from the setting.
+            controls=["fed"],
             recorded_at=stamp.stamp(date(2030, 1, 15))),
     ]
 

@@ -142,6 +142,23 @@ UNREAD = (
     # `sleep_start` still has none. When the athlete went to BED is not what
     # the day is anchored on, and its reader is #203.
     "daily.sleep_start",
+    # WRITTEN AND NOT YET READ, and this one is a DECISION rather than a
+    # backlog item (#404). Two personas declare what their weigh-in protocol
+    # fixes, and nothing in the engine reads it.
+    #
+    # That is deliberate and the alternative was worse. The consumer is a band
+    # whose width reflects the conditions a protocol leaves free, which is
+    # #402 - and #402's own rule says a band comes from a measured overlap, a
+    # per-reading `u_obs` or an athlete-stated range and from nowhere else. No
+    # record holds the same-day pairs differing in ONE declared condition that
+    # would earn it, so a reader written now could only be reading the COUNT of
+    # uncontrolled conditions and calling it a magnitude, which is the exact
+    # arithmetic #404 says must not happen.
+    #
+    # So the register is doing its job by naming this, and the honest answer is
+    # that the evidence half has to exist before the reading half can. It
+    # leaves this list the day a band is earned rather than assumed.
+    "protocols.controls",
     # WRITTEN AND NOT YET READ. `otto` photographs the club ergometer's
     # console, so every artifact row says when the shutter went - which is a
     # different instant from `recorded_at` (when the row was written) and from
