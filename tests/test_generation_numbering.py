@@ -87,6 +87,9 @@ PINNED = {
         "seq": 5,
     },
     "daily": {
+        # #402: why a value is missing, not just that it is.
+        "absent_fields": 15,
+        "absent_reason": 15,
         "artifact": 7,
         "capture": 5,
         "carb_g": 10,
@@ -186,6 +189,9 @@ PINNED = {
         "seq": 2,
     },
     "sessions": {
+        # #402: why a value is missing, not just that it is.
+        "absent_fields": 17,
+        "absent_reason": 17,
         "activity_id": 4,
         "activity_source": 4,
         "artifact": 8,
@@ -239,6 +245,9 @@ PINNED = {
         "recorded_at": 2,
     },
     "weight": {
+        # #402: why a value is missing, not just that it is.
+        "absent_fields": 13,
+        "absent_reason": 13,
         "artifact": 7,
         "body_fat_hi": 2,
         "body_fat_lo": 2,
@@ -372,7 +381,7 @@ PINNED_CURRENT = {
     "artifacts": 4,
     "checks": 4,
     "context": 5,
-    "daily": 14,
+    "daily": 15,
     "emissions": 1,
     "events": 4,
     "goals": 6,
@@ -384,10 +393,10 @@ PINNED_CURRENT = {
     "plans": 1,
     "protocols": 2,
     "regimes": 2,
-    "sessions": 16,
+    "sessions": 17,
     "sets": 7,
     "thresholds": 3,
-    "weight": 12,
+    "weight": 13,
 }
 
 

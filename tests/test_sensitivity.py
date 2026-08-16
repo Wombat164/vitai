@@ -127,6 +127,13 @@ PINNED = {
 
     },
     "daily": {
+        # #402. The field list names columns and says nothing about
+        # anybody, so REFERENCE. The reason is BEHAVIOURAL: two of
+        # its six codes say why the ATHLETE did not provide a value
+        # - declined, or does not know - which is that class's own
+        # definition and the call `plans.reason` already gets.
+        "absent_fields": "reference",
+        "absent_reason": "behavioural",
         "date": "temporal", "steps": "measurement", "distance_km":
         "measurement", "active_min": "measurement", "kcal_out":
         "measurement", "kcal_in": "measurement", "protein_g": "measurement",
@@ -264,6 +271,13 @@ PINNED = {
 
     },
     "sessions": {
+        # #402. The field list names columns and says nothing about
+        # anybody, so REFERENCE. The reason is BEHAVIOURAL: two of
+        # its six codes say why the ATHLETE did not provide a value
+        # - declined, or does not know - which is that class's own
+        # definition and the call `plans.reason` already gets.
+        "absent_fields": "reference",
+        "absent_reason": "behavioural",
         "date": "temporal", "type": "reference", "distance_km":
         "measurement", "duration_s": "measurement", "avg_hr": "measurement", "avg_power":
         "measurement",
@@ -312,6 +326,13 @@ PINNED = {
         "device": "provenance"
     },
     "weight": {
+        # #402. The field list names columns and says nothing about
+        # anybody, so REFERENCE. The reason is BEHAVIOURAL: two of
+        # its six codes say why the ATHLETE did not provide a value
+        # - declined, or does not know - which is that class's own
+        # definition and the call `plans.reason` already gets.
+        "absent_fields": "reference",
+        "absent_reason": "behavioural",
         "date": "temporal", "kg": "measurement", "source": "provenance",
         "note": "narrative", "body_fat_pct": "measurement", "kg_lo":
         "measurement", "kg_hi": "measurement", "body_fat_lo": "measurement",

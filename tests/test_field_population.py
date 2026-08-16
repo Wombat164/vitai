@@ -73,6 +73,21 @@ UNWRITTEN = (
     # unwritten rather than inventing a number to satisfy this register.
     "comparability.bias",
     "comparability.spread",
+    # #402, on the two datasets whose absence case belongs to another change.
+    # `weight` carries the mechanism: `bea` records a shift day she chose not
+    # to weigh on, which is the state this field exists for and the one her
+    # own protocol already described in prose.
+    #
+    # The `daily` and `sessions` cases are the OUTAGE shape - a watch that
+    # stopped reporting takes steps, distance and heart rate together - and
+    # contract 49's `false_zero` and #405's `outage` question kind are the
+    # change that owns detecting it. Writing an outage-shaped day here to
+    # populate this register would be inventing the fixture that work needs,
+    # ahead of the work, in a corpus somebody else is editing.
+    "daily.absent_fields",
+    "daily.absent_reason",
+    "sessions.absent_fields",
+    "sessions.absent_reason",
     "daily.artifact",
     "daily.path",
     # `inferences.depends_on` and `inferences.note` LEFT THIS REGISTER (#386).
@@ -159,6 +174,22 @@ UNREAD = (
     # that the evidence half has to exist before the reading half can. It
     # leaves this list the day a band is earned rather than assumed.
     "protocols.controls",
+    # WRITTEN AND NOT YET READ, and a decision rather than a backlog item
+    # (#402). `bea` records a shift day she chose not to weigh on, and nothing
+    # in the engine reads the reason.
+    #
+    # That is the shape this field was landed in. Its consumers are on the
+    # capture side - a client letting somebody tap a gap and explain it - and
+    # in the coverage work that would count explained holes separately from
+    # silent ones. Neither exists here, and a reader written now would have to
+    # decide what an unexplained hole is WORTH, which is #402's band question
+    # and is blocked on evidence no record holds.
+    #
+    # The rule the field ships with is the reason it is safe to leave unread:
+    # a reason explains a hole and never fills one, so nothing downstream that
+    # ignores it reads a number that is not there.
+    "weight.absent_fields",
+    "weight.absent_reason",
     # WRITTEN AND NOT YET READ. `otto` photographs the club ergometer's
     # console, so every artifact row says when the shutter went - which is a
     # different instant from `recorded_at` (when the row was written) and from
