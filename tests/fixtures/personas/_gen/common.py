@@ -275,7 +275,7 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # "failed attempts" record - while `tom` (175 cm) and `rachel` (162 cm) stay
 # above the topmost `BAND_LEVELS` edge at every weight they record and would
 # have needed invented numbers to exercise this feature at all.
-AUTHORED_AGAINST_CONTRACT = "50"  # vitai.db.CONTRACT_VERSION is a string
+AUTHORED_AGAINST_CONTRACT = "51"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     # #171: a new dataset, empty for every persona. Generation 3 rather than 1
     # because every dataset gets the blanket `recorded_at` and `device`
@@ -295,7 +295,7 @@ AUTHORED_AGAINST_GENERATIONS = {
     "artifacts": 4,
     "checks": 4,
     "context": 5,
-    "daily": 14,
+    "daily": 15,
     "emissions": 1,
     "events": 4,
     "goals": 6,
@@ -304,12 +304,12 @@ AUTHORED_AGAINST_GENERATIONS = {
     "meals": 6,
     "measurements": 11,
     "medical": 6,
-    "sessions": 16,
+    "sessions": 17,
     "sets": 7,
     "protocols": 2,
     "regimes": 2,
     "thresholds": 3,
-    "weight": 12,
+    "weight": 13,
 }
 
 

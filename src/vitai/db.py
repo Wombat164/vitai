@@ -952,9 +952,53 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     like `derived_from`. Partial adherence to a protocol is deliberately NOT
 #     here: it is a property of the reading rather than of the procedure, and
 #     lives on the observation row if it is built at all (designed on #404).
-CONTRACT_VERSION = "50"
+# 51: `absent_fields` and `absent_reason` on the observation datasets - WHY a
+#     value is missing, not just that it is.
+#
+#     A null said only that nothing is there. "Nobody measured it", "it was
+#     measured and rejected", "the athlete was asked and declined", "asked and
+#     they do not know" and "it does not apply here" are different facts with
+#     opposite consequences for a reader, and the record collapsed all five
+#     into one.
+#
+#     THE OTHER HALF OF 49. `false_zero` exists because a dying watch reported
+#     `steps: 0` for a day the athlete spent moving. Retiring that zero leaves
+#     a hole, and without a reason the next reader re-derives the same
+#     confusion from the same silence.
+#
+#     Nothing required. Both are null on every existing row and old lines keep
+#     validating.
+#
+#     **A REASON EXPLAINS A HOLE AND NEVER FILLS ONE**, and a consumer must not
+#     read one as a value. `absent_fields` names the columns and `absent_reason`
+#     says why; a reason beside a value that is PRESENT is refused at
+#     validation rather than silently preferred, because that row makes two
+#     claims and offers no way to choose between them. Nothing here makes a
+#     null render as a number, and a consumer that substitutes the reason for
+#     the value has reinvented `steps: 0`.
+#
+#     Two fields rather than one parsed one, which is contract 36's lesson: a
+#     `field:reason` micro-syntax is one vendor field name away from being
+#     ambiguous. ONE reason for the fields it names, deliberately - absence
+#     usually has one cause that takes several fields with it, and a per-field
+#     map would carry the same reason three times and let the copies drift. A
+#     day with two causes takes two rows.
+#
+#     The vocabulary is FHIR `dataAbsentReason`'s distinctions, not its
+#     codelist: `unknown` and `not-asked` are dropped because a null
+#     `absent_reason` already says that, `unsupported` because contract 44's
+#     `competence: absent` already carries it, and the numeric sentinels
+#     because smuggling a value through a type is the disease 49 cured.
+CONTRACT_VERSION = "51"
 
 _TEXT_COLS = {"statistic", "answers",
+              # #402. Both word-valued: a space-separated list of field
+              # names, and a code from a closed vocabulary. REAL affinity
+              # would have made `column_affinity` answer REAL for two
+              # columns that never hold a number, which is the lie #257
+              # published the accessor to stop consumers telling
+              # themselves.
+              "absent_fields", "absent_reason",
               # A JSON array (#404): the conditions a protocol declares
               # it fixes. TEXT for the reason every container column is,
               # `derived_from` first among them - REAL affinity mangles

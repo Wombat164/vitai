@@ -504,6 +504,61 @@ COMPETENCES = {"measures", "proxy", "absent", "unknown"}
 PROXY = "proxy"
 UNKNOWN_COMPETENCE = "unknown"
 
+# WHY A VALUE IS MISSING, which the record could not say (#402, and #93 one
+# granularity up). A null said only that nothing is there, and these are
+# different states with opposite consequences for a reader:
+#
+#   nobody measured it              -> ask again, or do not
+#   it was measured and rejected    -> the instrument or the transcription is
+#                                      suspect, and the day is not evidence of
+#                                      a body that did nothing
+#   asked, and they declined        -> a permanent answer; asking again is rude
+#   asked, and they do not know     -> answered, and asking again is pointless
+#   it does not apply here          -> not a gap at all
+#
+# THE OTHER HALF OF CONTRACT 49. `false_zero` exists because a dying watch
+# reported `steps: 0` for a day the athlete spent moving, and a fabricated
+# measurement averages as though it were observed. Retiring that zero leaves a
+# hole, and without this the next reader re-derives the same confusion from the
+# same silence.
+#
+# ADOPTED FROM FHIR's `dataAbsentReason`, and NOT wholesale. The distinctions
+# are taken; the codes that earn a place in a training record are kept and the
+# rest are not, per code:
+#
+#   `unknown` and `not-asked` are DROPPED because a null `absent_reason`
+#   already says exactly that, and a code meaning the same as the absence of a
+#   code is an in-band restatement of it. `asked-unknown` survives because it
+#   is the opposite fact - somebody was asked and the answer was that nobody
+#   knows - which is the one the client's gap-tapping flow needs to tell apart
+#   from silence.
+#
+#   `unsupported` is DROPPED because contract 44 already carries it: an
+#   instrument that does not observe a quantity is `competence: absent`, and a
+#   second spelling of that fact would drift from the first.
+#
+#   `masked` and `not-permitted` are DROPPED. Neither arises in a record whose
+#   owner is its only subject, and a redaction vocabulary invites a redaction
+#   mechanism nobody has designed.
+#
+#   `not-a-number`, the infinities and `as-text` are DROPPED: they encode
+#   values a numeric column cannot hold, and this engine validates types rather
+#   than smuggling sentinels through them - which is the disease #398 cured
+#   for `steps: 0`.
+#
+# THE SPELLINGS FOLLOW FHIR'S PATTERN and were not checked against a fetched
+# copy of the codelist. Where that matters is a mapping claim, and this file
+# makes none: these are this record's reasons, named after the published ones
+# so a future mapping is obvious rather than asserted.
+ABSENT_REASONS = {
+    "not-performed",     # the measurement was never made
+    "unable-to-obtain",  # attempted, and no value came back
+    "error",             # a value came back and was rejected as wrong
+    "asked-declined",    # the athlete was asked and would rather not say
+    "asked-unknown",     # the athlete was asked and does not know
+    "not-applicable",    # the quantity does not apply here
+}
+
 # WHERE A CAPABILITY STATEMENT COMES FROM. Not a confidence score - a statement
 # about how the claim was arrived at, so a reader can weigh it themselves.
 #
@@ -1845,7 +1900,8 @@ for _cls, _names in {
         precondition expects pain pain_site pain_side hip_pain
         provider_type""",
     "behavioural": """mood feel motivator rationale accountability alcohol
-        coverage""",
+        coverage
+        absent_reason""",
     "whereabouts": """place place_precise location route track with facilities
         setting weather context""",
     "provenance": """source device origin path origin_evidence activity_id
@@ -1863,7 +1919,8 @@ for _cls, _names in {
         planned load_type load_unit set_type failure angle_class side
         rpe_scale mood_scale pain_scale activity
         seq supersedes_seq measures condition overlap_ref
-        controls""",
+        controls
+        absent_fields""",
     "measurement": """avg_power steps distance_km active_min kcal_out kcal_in
         protein_g
         sleep_h rhr kg body_fat_pct kg_lo kg_hi body_fat_lo body_fat_hi avg_hr
@@ -1974,6 +2031,10 @@ PLAIN_WORDS = frozenset({
     # word the athlete used when they described why a weigh-in depends on more
     # than the scale.
     "controls",
+    # #402. Two ordinary words: a row says which fields are ABSENT and gives a
+    # REASON. Added deliberately, because this is an allowlist and a new field
+    # fails the gate until somebody says what it looks like to a reader.
+    "absent", "fields",
     # #311's register. `model` and `origin` were already here; these two are
     # the rest of what a person calls a piece of kit.
     "maker", "name",
@@ -2136,6 +2197,105 @@ CURRENT_GENERATION["protocols"] += 1
 KEYS["protocols"] = KEYS["protocols"] + ["controls"]
 KEY_GENERATION.setdefault("protocols", {})["controls"] = \
     CURRENT_GENERATION["protocols"]
+
+
+# --- why a value is missing, not just that it is (#402) ------------------------
+#
+# A null said only that nothing is there. The states below are different facts
+# with opposite consequences, and `ABSENT_REASONS` above says which they are.
+#
+# TWO FIELDS, NEVER A PARSED ONE, which is contract 36's lesson applied here.
+# `absent_fields` names the columns the reason is about and `absent_reason`
+# says why, rather than one column carrying `steps:unable-to-obtain` in a
+# micro-syntax nothing else in this schema speaks. A field name is a bare
+# token and a reason contains a hyphen; a separator between them is one
+# vendor's field name away from being ambiguous, and the engine has already
+# been bitten by exactly that.
+#
+# ONE REASON FOR THE NAMED FIELDS, which is a deliberate limit rather than an
+# oversight. Absence usually has ONE cause that takes several fields with it -
+# a watch that died stops reporting steps, distance and heart rate together -
+# so a per-field map would carry the same reason three times and invite the
+# three copies to drift. A day with two genuinely different causes needs two
+# rows, and the record is append-only precisely so that is cheap.
+#
+# WHY IT IS SCOPED TO FIELDS AT ALL, when the proposal says "daily/coverage
+# territory": `daily.coverage` already answers the row-level question, so an
+# unscoped reason would either duplicate it or float free of the value it
+# explains - and the rule below, that a reason may not sit beside a value,
+# cannot be checked without knowing which value is meant.
+# NOT ON `measurements`, and the exclusion is a finding rather than an
+# oversight. That dataset requires `value` - "a measurement with no number is
+# not a measurement" - so an absent measurement is an absent ROW, and a reason
+# for a row that does not exist has nowhere to live. The other three permit a
+# row whose values are all null, which is exactly the hole this explains: a day
+# that happened, a weigh-in attempted, a session recorded, with a field missing
+# from it. Supporting the measurements case would mean relaxing a required
+# field, which is a different change with a different argument.
+for _ds in ("weight", "daily", "sessions"):
+    CURRENT_GENERATION[_ds] += 1
+    for _k in ("absent_fields", "absent_reason"):
+        KEYS[_ds] = KEYS[_ds] + [_k]
+        KEY_GENERATION.setdefault(_ds, {})[_k] = CURRENT_GENERATION[_ds]
+
+
+def absent_fields(rec: dict) -> set[str]:
+    """Fields this row says are absent, and says why.
+
+    Parsed the way `modelled` is, and for the same reason: an author writing a
+    row by hand should not have to remember a second convention for a second
+    list of field names on the same row.
+    """
+    written = rec.get("absent_fields")
+    if not written or not str(written).strip():
+        return set()
+    return {f.strip() for f in str(written).replace(",", " ").split() if f.strip()}
+
+
+def absence_problems(rec: dict, keys: list[str]) -> list[str]:
+    """The rule that keeps a reason from becoming a value.
+
+    AN ABSENT VALUE STAYS ABSENT. A reason explains a hole and never fills
+    one, so a reason beside a value that is present is refused rather than
+    quietly preferred - the failure mode being a row that says "no reading was
+    obtained" while carrying a reading, which is two claims and no way to
+    choose. #398 cured the same disease one layer down, where a fabricated
+    zero averaged as though it had been observed.
+
+    BOTH FIELDS OR NEITHER. A reason naming no field explains nothing, and a
+    field list with no reason is a claim that something is missing without the
+    one thing that makes it worth recording. Either alone is almost certainly
+    a half-written row.
+    """
+    out: list[str] = []
+    named = absent_fields(rec)
+    reason = rec.get("absent_reason")
+
+    if reason is not None and str(reason) not in ABSENT_REASONS:
+        out.append(f"'absent_reason' is one of "
+                   f"{', '.join(sorted(ABSENT_REASONS))}, got {reason!r}")
+    if named and reason is None:
+        out.append("'absent_fields' says something is missing and "
+                   "'absent_reason' says why; a list with no reason records "
+                   "the gap and not the fact worth keeping")
+    if reason is not None and not named:
+        out.append("'absent_reason' explains which values are missing, so "
+                   "'absent_fields' has to name them - a reason attached to "
+                   "the whole row cannot be checked against anything")
+
+    for f in sorted(named):
+        if f in ("absent_fields", "absent_reason"):
+            out.append(f"'absent_fields' cannot name {f!r}")
+        elif f not in keys:
+            out.append(f"'absent_fields' names {f!r}, which is not a field on "
+                       f"this dataset")
+        elif rec.get(f) is not None:
+            out.append(
+                f"'absent_fields' names {f!r} and the row carries a value for "
+                f"it. A reason explains a hole and never fills one: either the "
+                f"value is real and the reason is stale, or the value is "
+                f"wrong and belongs in a correction")
+    return out
 
 
 def body_state_conditions() -> dict[str, dict]:
@@ -2888,6 +3048,10 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
         problems += provenance_problems(rec)
         problems += capture_problems(rec)
         problems += value_kind_problems(rec, KEYS[dataset])
+        # Beside the two ways a row can say a value was not OBSERVED, the way
+        # it says a value is not THERE (#402). Same scope, because both are
+        # per-field statements about an observation row.
+        problems += absence_problems(rec, KEYS[dataset])
         problems += _computed_by_problems(dataset, rec)
         if (ref := rec.get("artifact")) is not None and not is_reference(ref):
             problems.append(

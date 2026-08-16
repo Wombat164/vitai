@@ -306,8 +306,30 @@ def _weight(rng: random.Random, stamp: common.Stamper,
     gap is a decision rather than an omission, which `protocol` records.
     """
     rows = []
+    skipped = 0
     for d in common.daterange(START, end):
-        if roster.get(d) != OFF or d.weekday() not in (0, 4):
+        if d.weekday() not in (0, 4):
+            continue
+        if roster.get(d) != OFF:
+            # THE DECISION, WRITTEN DOWN (#402). Her protocol says a weigh-in
+            # after twelve hours on the unit is not the same measurement, so
+            # she does not take one - and until this field existed that choice
+            # left no trace at all. The day simply had no row, which reads as
+            # forgetting rather than as the judgement it is.
+            #
+            # `not-performed` rather than `unable-to-obtain`: the scale worked
+            # and she was standing next to it. Nobody measured, on purpose.
+            #
+            # Two of them, not every shift day. The point is that the state is
+            # expressible and exercised, and filling her corpus with rows
+            # carrying no reading would drown the readings.
+            if skipped < 2:
+                skipped += 1
+                rows.append(common.record(
+                    "weight", date=d.isoformat(),
+                    absent_fields="kg", absent_reason="not-performed",
+                    source="scale", protocol="fasted-post-waking",
+                    recorded_at=stamp.stamp(d)))
             continue
         base = 68.0 - 0.0022 * (d - START).days
         rows.append(common.record(
