@@ -54,15 +54,25 @@ and a waking window are indistinguishable in the record, and the proposal
 would be confidently wrong for the athlete the feature exists for. So the only
 mechanism left is to ask, and `waking_questions` is where that lands. See its
 own docstring for the worth-asking rule, which is the substance of this kind.
+
+A FOURTH AND A FIFTH (#398), from a real outage: a charger left at home, and a
+watch that first fell quiet and then, on its last charge, reported a day the
+athlete spent moving as `steps: 0`. `outage` names the run of silence and
+`false_zero` names the fabricated measurement, and they are two kinds rather
+than one list because they want opposite gestures - an append against a day
+with no row, a supersede against a row that exists and is wrong. See the
+comment above `false_zero_questions` for why the second is the dangerous one
+and why neither rule carries a number.
 """
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 # What kind of unknown this is. Closed, and short on purpose: a vocabulary
 # that grows by guesswork is how "unusual" arrives as a category.
-KINDS = frozenset({"precondition", "clearance", "waking"})
+KINDS = frozenset({"precondition", "clearance", "waking", "outage",
+                   "false_zero"})
 
 # Who or what could settle it. This is the field that lets something other than
 # a person answer, which is the whole reason a question says what would settle
@@ -333,6 +343,218 @@ def waking_questions(phase_rows: list[dict], on: date) -> list[dict]:
             "about": dataset,
             "for_date": newest,
             "resolves": sorted(str(r["at"]) for r in rows),
+            "settled_by": "athlete",
+        })
+    return out
+
+
+# --- an instrument that stopped, and a zero that should have been an absence --
+#
+# THE TWO SHAPES A DEAD WEARABLE LEAVES, and they are not one problem with two
+# symptoms. A GAP is honest: the record says nothing and every reader already
+# treats absence as absence. A FALSE ZERO is a fabricated measurement - it
+# averages into weekly steps, `kcal_out` and energy availability exactly as
+# though somebody observed it - and the athlete will never report it, because
+# from their side nothing looks wrong. They know they lost sleep tracking; they
+# have no reason to suspect a zero.
+#
+# THEY STAY TWO KINDS BECAUSE THEY WANT OPPOSITE GESTURES. A gap is answered by
+# an APPEND: the day has no row and one can be added. A false zero is answered
+# by a SUPERSEDE: a row exists and is wrong, and appending beside it leaves the
+# lie in the record with a correction next to it rather than over it. A consumer
+# handed one undifferentiated "these days need attention" list cannot tell which
+# it is holding and will reach for the wrong one, so `kind` carries the
+# difference. No parallel `remedy` field is emitted: it would co-vary with
+# `kind` in every row forever, which is a second definition of one fact.
+#
+# DAILY ONLY, and that is a boundary rather than a first instalment. A `daily`
+# row is supposed to exist for every day, so its absence means something. A
+# `sessions` source going quiet is confounded with not training - an athlete who
+# rests produces no session, and an engine that read that as an instrument
+# failure would ask why the watch stopped every time somebody took a week off.
+# The two need different evidence and only the first is derivable from silence.
+
+
+# Fields where a zero from an instrument means IT SAW NOTHING, not that there
+# was nothing to see. Declared, and the declaration is the finding rather than
+# a shortcut - see `false_zero_questions` for the measurement that forced it.
+#
+# A FLOOR, NOT A DEFINITION, the same way `boundary_gate`'s word list is. It
+# holds the one field where zero is categorically implausible for a worn
+# device: a person wearing a synced wearable does not take zero steps in a
+# day. Widening it is a claim about another field and should be argued.
+#
+# WHY THE OBVIOUS NEIGHBOURS ARE OUT. `active_min` and `distance_km` are
+# honestly zero on a rest day, so a question about them would be asking the
+# athlete to confirm they had a quiet Tuesday. `kcal_out` is never exactly
+# zero even from a dying device - the reporting issue describes it arriving
+# near the floor - and separating "near the floor" from "low" needs a
+# threshold on a distribution, which is the invented number this module
+# refuses.
+ZERO_MEANS_UNOBSERVED = frozenset({"steps"})
+
+
+def _by_source(rows: list[dict], on: date) -> dict[str, list[dict]]:
+    """Live daily rows on or before `on`, grouped by the source that wrote
+    them, each group in date order.
+
+    PER SOURCE, because every question here is about ONE instrument
+    contradicting itself or falling quiet. The canonical view cannot answer
+    either: it merges the day's claims into one row, so which instrument said
+    what is exactly the fact it resolves away.
+    """
+    out: dict[str, list[dict]] = {}
+    for row in rows:
+        source = str(row.get("source") or "").strip()
+        when = _as_date(row.get("date"))
+        if not source or when is None or when > on:
+            continue
+        out.setdefault(source, []).append(row)
+    for source in out:
+        out[source].sort(key=lambda r: str(r.get("date")))
+    return out
+
+
+def false_zero_questions(daily: list[dict], on: date) -> list[dict]:
+    """A day a source reported an exact zero it had never reported before.
+
+    THE RULE IS THE SOURCE CONTRADICTING ITSELF, not a threshold on the value
+    (G85: no invented number where a principled rule exists). A zero is out of
+    family when this source has never written a zero for this field before -
+    the record's own history is what decides whether zero is a thing this
+    instrument says.
+
+    THE FIELD SET IS DECLARED (`ZERO_MEANS_UNOBSERVED`) AND THAT WAS FORCED BY
+    MEASUREMENT, not chosen for convenience. This rule was built first over
+    every numeric daily field, on the issue's own reasoning that a field whose
+    recent non-zero distribution makes zero implausible could be recognised
+    from the distribution alone. Run against the shipped corpus it produced
+    FOUR questions and every one was a false positive - three on `pain` and
+    one on `sugar_g`, each simply the first ordinary day somebody had no pain
+    or ate no sugar - and it produced no true positive anywhere, because no
+    corpus record contains the shape this kind exists for.
+
+    A second attempt failed the same way: "the source writes this field on
+    every day it appears" separates a wearable's step count from an occasional
+    note in principle, and in this corpus `pain` is written on 71 of 71 and 42
+    of 42 days, so it separates nothing.
+
+    The conclusion is worth stating because it contradicts the issue: whether
+    a zero means NOT OBSERVED or means NONE is a fact about what the field
+    means, and no amount of looking at its distribution recovers it. So it is
+    declared, with the reasoning beside the register, and kept to the one
+    field where the claim is safe.
+
+    ONLY THE FIRST ZERO, and the engine stops there deliberately. Once the
+    record shows this source writing zeros for this field, the engine has no
+    basis left for calling the next one wrong - it would be arguing with
+    evidence it just accepted. Answering the first is what settles the
+    interpretation, and superseding it removes the row, so the NEXT zero is
+    first again and gets asked about in its turn.
+
+    EXACT ZERO ONLY, AND THAT LEAVES SOMETHING UNCAUGHT. The reporting issue
+    describes the dying watch writing a near-floor `kcal_out` beside its zero
+    steps, and this rule does not catch it: 1500 is not zero, and deciding it
+    is "too low" needs a threshold on a distribution, which is the invented
+    number the rest of this module refuses. The zero is detectable because it
+    is categorical - the source has never said it - and the floor is not. What
+    saves the day in practice is that both arrive together, so the zero raises
+    the question and the athlete's answer covers the row; but a day where only
+    the floor appears is not derivable here and is not claimed to be.
+
+    ONE QUESTION PER SOURCE, carrying every field that went out of family on
+    the day. A dying watch reports its zero steps and its floor `kcal_out` in
+    the same breath, and that is one instrument failing once, not two facts.
+    The most recent such day wins, for the reason `waking_questions` takes the
+    most recent unplaceable day: it is the one the athlete can still remember,
+    and it bounds the output by construction rather than by a cap somebody
+    could raise.
+    """
+    fields = sorted(ZERO_MEANS_UNOBSERVED)
+    out = []
+    for source, rows in sorted(_by_source(daily, on).items()):
+        seen_zero: set[str] = set()
+        first_zero_days: dict[str, list[str]] = {}
+        for row in rows:
+            day = str(row.get("date"))
+            for field in fields:
+                value = row.get(field)
+                if not isinstance(value, (int, float)) or isinstance(value, bool):
+                    continue
+                if value != 0:
+                    continue
+                if field in seen_zero:
+                    continue
+                seen_zero.add(field)
+                first_zero_days.setdefault(day, []).append(field)
+        if not first_zero_days:
+            continue
+        day = max(first_zero_days)
+        out.append({
+            "id": f"false_zero:daily:{source}:{day}",
+            "kind": "false_zero",
+            "about": "daily",
+            "for_date": day,
+            "subject": source,
+            "resolves": sorted(first_zero_days[day]),
+            "settled_by": "athlete",
+        })
+    return out
+
+
+def outage_questions(daily: list[dict], on: date) -> list[dict]:
+    """A source that had been contributing and has gone quiet.
+
+    CADENCE IS MEASURED, NEVER ASSUMED. The run of silence has to be longer
+    than the longest gap this source has ALREADY shown in this record, so a
+    weekly source is not silent after two days and a daily one is. No number
+    appears here: the comparison is against the record's own worst case, which
+    is the same move `crossings` makes when it asks what the series has done
+    before rather than what a constant says it should do.
+
+    SILENCE IS NOT AN INSTRUMENT. A record that never carried a step count is
+    never asked why it stopped carrying one - the same refusal the protocol
+    advisory makes, where a record with none declared has nothing to be
+    missing. Mechanically that falls out of needing gaps to compare against:
+    a source seen once has no gap at all.
+
+    TWO PRIOR GAPS, NOT ONE, and this is a distinction in kind rather than a
+    magnitude picked to feel safe. With a single prior gap "longer than ever
+    before" compares against one observation, which is an anecdote and not a
+    cadence: a source seen twice a day apart would be called silent on its
+    second quiet day, having never demonstrated a habit to have broken. Two is
+    the smallest number of gaps for which "longer than any of them" says
+    anything at all.
+
+    ONE QUESTION PER RUN, and per source there is only ever one run that
+    matters - the one still open at `on`. A five-day outage is one fact about
+    one episode, not five facts, and the discipline this module opens with
+    applies here harder than anywhere: the longer somebody is away the more
+    days go missing and the more the engine wants to ask, which is precisely
+    when a questionnaire is least welcome. A source that has resumed is not
+    asked about at all, because the answer would resolve nothing that is still
+    open.
+
+    `for_date` is the first silent day and `through` the last, so the run is
+    stated rather than left for a client to reconstruct from a count.
+    """
+    out = []
+    for source, rows in sorted(_by_source(daily, on).items()):
+        days = sorted({d for r in rows if (d := _as_date(r.get("date")))})
+        if len(days) < 3:
+            continue
+        gaps = [(b - a).days for a, b in zip(days, days[1:])]
+        current = (on - days[-1]).days
+        if current <= max(gaps):
+            continue
+        first_silent = days[-1] + timedelta(days=1)
+        out.append({
+            "id": f"outage:daily:{source}:{first_silent.isoformat()}",
+            "kind": "outage",
+            "about": "daily",
+            "for_date": first_silent.isoformat(),
+            "through": on.isoformat(),
+            "subject": source,
             "settled_by": "athlete",
         })
     return out
