@@ -63,11 +63,20 @@ def test_every_data_line_validates(slug: str) -> None:
     root = PERSONAS / slug
     total = 0
     for path in sorted((root / "data").glob("*.jsonl")):
+        # THE DATASET IS THE STEM BEFORE THE FIRST DOT, not the whole stem.
+        # `daily.old-band.jsonl` is one of #105's per-device streams and holds
+        # `daily` rows; taking `path.stem` whole asked the schema about a
+        # dataset called `daily.old-band` and raised `KeyError`. Nothing had
+        # noticed because no persona used a second stream until `hana`, whose
+        # one-time archive import is a second writer by nature - which is the
+        # shape #405 is about, and it could not have been fixtured without
+        # hitting this.
+        dataset = path.name.split(".", 1)[0]
         for line in path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
             rec = json.loads(line)
-            problems = validate_record(path.stem, rec)
+            problems = validate_record(dataset, rec)
             assert not problems, f"{path.name}: {problems} in {rec}"
             total += 1
     assert total > 0, f"{slug} has an empty record"
