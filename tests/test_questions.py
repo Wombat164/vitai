@@ -595,35 +595,53 @@ def test_two_unanchored_readings_on_one_day_are_a_waking_question(tmp_path):
     assert q["settled_by"] == "athlete"
 
 
-def test_a_lone_unanchored_reading_asks_nothing(tmp_path):
-    """RULE 1, THE FIRST DIRECTION. One weigh-in with no other reading that
-    day has nothing for a phase to disambiguate - nothing downstream reads a
-    lone row's phase to decide anything - so it is left unanchored rather
-    than turned into a question an answer to which would change nothing."""
+def test_a_lone_unanchored_reading_is_worth_asking_about(tmp_path):
+    """A lone weigh-in with no other reading that day still has something a
+    phase would check: #212's own SECOND motivation is a narrative claim
+    matched against a device claim - "the athlete says 'morning weigh-in';
+    the scale says 07:36" - and that is a comparison over ONE row, not two.
+    An earlier version of this rule also required a second same-day row
+    before asking, reasoning that a lone reading has nothing to
+    disambiguate - true, but disambiguation is not the only thing a phase
+    is for here, and that reasoning silenced this exact motivation on every
+    record, permanently. So the lone reading below is a question too, one
+    per dataset, same as if a second reading had shared its day."""
     v = Vitai(init(tmp_path / "content"))
     _weight(v, "2030-05-30", "06:40")
     _session(v, "2030-05-31", "2030-05-31T18:30:00")
 
-    assert v.questions(date(2030, 6, 1)) == []
-    # The rows are still there and still honestly unanchored - RULE 1 is
-    # "not worth asking about", never "not worth reporting".
-    unanchored = [r for r in v.phases() if r["phase"] is None]
-    assert len(unanchored) == 2
+    questions = v.questions(date(2030, 6, 1))
+
+    assert [q["kind"] for q in questions] == ["waking", "waking"]
+    by_about = {q["about"]: q for q in questions}
+    assert by_about["weight"]["for_date"] == "2030-05-30"
+    assert by_about["weight"]["resolves"] == ["06:40"]
+    assert by_about["sessions"]["for_date"] == "2030-05-31"
+    assert by_about["sessions"]["resolves"] == ["2030-05-31T18:30:00"]
 
 
-def test_a_thousand_lone_unanchored_days_still_ask_nothing(tmp_path):
-    """THE FAILURE THE OBVIOUS BUILD WOULD HAVE HAD, reproduced small. "Ask
-    about every unanchored day" was measured against the shipped persona
-    corpus and killed for exactly this: a record that has never logged sleep
-    but weighs in once a day would emit one question per day, forever. Under
-    the actual rule it emits none, because no day here ever has more than one
-    reading to disambiguate."""
+def test_a_thousand_lone_unanchored_days_still_ask_one_question(tmp_path):
+    """THE FAILURE THE OBVIOUS BUILD WOULD HAVE HAD, reproduced small, and
+    RECENCY - not multiplicity - is what stops it. "Ask about every
+    unanchored day" was measured against the shipped persona corpus and
+    killed for exactly this: a record that has never logged sleep but
+    weighs in once a day would emit one question per day, forever, under
+    that build. Multiplicity used to get the credit for preventing that
+    here (every day below carries exactly one reading, so none would ever
+    have cleared "two or more"), and that credit was measured and found
+    false: dropping multiplicity still caps this at ONE question, because
+    recency admits only the single most recent day per dataset no matter
+    how many hundreds of lone-reading days sit behind it - at most one day
+    can ever be "the newest", by construction, not by counting."""
     v = Vitai(init(tmp_path / "content"))
     start = date(2027, 1, 1)
     for i in range(200):
         _weight(v, (start + timedelta(days=i)).isoformat(), "07:00")
 
-    assert v.questions(date(2030, 6, 1)) == []
+    questions = v.questions(date(2030, 6, 1))
+
+    assert len(questions) == 1
+    assert questions[0]["for_date"] == (start + timedelta(days=199)).isoformat()
 
 
 def test_a_fully_anchored_day_asks_nothing_however_many_readings(tmp_path):
