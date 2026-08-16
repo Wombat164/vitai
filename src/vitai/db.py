@@ -1115,7 +1115,23 @@ DERIVED_TABLES: dict[str, list[str]] = {
 # is mangled - and `test_every_list_column_is_text` asserts it. The set is
 # checked against the fixtures in both directions, so it cannot quietly
 # describe a field that stopped being a list or miss one that became one.
-LIST_COLS = frozenset({"derived_from", "basis_claims"})
+#
+# `depends_on` JOINED LATE AND THAT IS THE POINT (#386). It has been a list in
+# the schema since inferences generation 2 - the claim ids a belief rests on -
+# and no corpus row had ever carried one, so nobody had cause to declare it.
+#
+# STATED PRECISELY, because the loose version of this is wrong: the stored
+# text was never mangled. `_scalar` JSON-encodes any list it is handed, so the
+# column held the array either way. What was wrong was the CONTRACT PUBLISHED
+# ABOUT IT - `api.field_types` reports `container` straight off this set, and
+# it was reporting `false` for a field that is a list. That accessor exists
+# (#257) so a consumer does not have to guess which TEXT columns need
+# decoding, and a consumer trusting it reads the array as a scalar string,
+# which drops the justification link rather than failing.
+#
+# It was found by writing the first row that carries one, not by reading this
+# file - which is the argument for exercising a field at all.
+LIST_COLS = frozenset({"derived_from", "basis_claims", "depends_on"})
 
 
 def _cols(keys: list[str]) -> str:

@@ -75,8 +75,19 @@ UNWRITTEN = (
     "comparability.spread",
     "daily.artifact",
     "daily.path",
-    "inferences.depends_on",
-    "inferences.note",
+    # `inferences.depends_on` and `inferences.note` LEFT THIS REGISTER (#386).
+    # The demo's third inference rests on exactly two claims and names both.
+    # The other two could not carry the link honestly - one rests on two weeks
+    # of rows and the other on the record's full range, so any list short
+    # enough to read would be a partial justification presented as the whole
+    # one, which is worse than the null it replaced.
+    #
+    # WRITING IT FOUND A DEFECT, which is this register's argument in one
+    # line: `depends_on` had been a list in the schema since generation 2 with
+    # no row ever carrying one, so `db.LIST_COLS` had never been told, and a
+    # consumer reading the projection would have taken the JSON array as a
+    # bare string and dropped the link without failing. A field nothing writes
+    # is not merely uncovered, it is a place a defect sits undisturbed.
     # #280, and they sit beside the lineage fields they qualify: a dataset
     # with no derived row in any fixture has nothing to say about who
     # derived it either. Written where a derived row exists - `weight` by

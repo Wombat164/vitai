@@ -318,12 +318,39 @@ def _build(target: Path) -> None:
                       "average sleep is under 7h.",
          "confidence": 0.7, "model": "demo-model",
          "evidence": "sessions+daily, weeks of 2030-05-20 and 2030-06-03",
-         "note": None},
+         "note": None,
+         "recorded_at": f"{(END - timedelta(days=9)).isoformat()}T21:12:00+02:00"},
         {"date": (END - timedelta(days=2)).isoformat(), "kind": "observation",
          "statement": "Weekend step counts run about 3k below weekdays; the "
                       "floor is carried by commute days.",
          "confidence": 0.85, "model": "demo-model",
-         "evidence": "daily.steps by weekday, full range", "note": None},
+         "evidence": "daily.steps by weekday, full range", "note": None,
+         "recorded_at": f"{(END - timedelta(days=2)).isoformat()}T20:40:00+02:00"},
+        # THE JUSTIFICATION LINK, WHICH NEEDS AN INFERENCE NARROW ENOUGH TO
+        # HAVE ONE (#386). `depends_on` names the claim ids an inference
+        # rests on, so that retracting one retracts the inference rather than
+        # leaving a belief whose evidence quietly went away. The two above
+        # cannot carry it honestly: one rests on two weeks of sessions and
+        # daily rows and the other on the full range, so any list short
+        # enough to read would be a partial answer presented as the whole
+        # justification, which is worse than the null it replaced.
+        #
+        # This one rests on exactly two claims and says so. Both ids are real
+        # rows in this record - `claim_id` is `dataset:date:source` - and the
+        # numbers are read off them rather than restated: 78.9 kg to 75.8,
+        # and 22.4 percent to 19.6. The two scans' own body-fat bands do not
+        # overlap, which is what makes the fall reportable at all rather than
+        # a difference inside the measurement.
+        {"date": (END - timedelta(days=1)).isoformat(), "kind": "observation",
+         "statement": "Between the two clinic scans, body fat fell further "
+                      "than either scan's own band is wide, and weight fell "
+                      "with it.",
+         "confidence": 0.9, "model": "demo-model",
+         "evidence": "the two dexa rows in weight, 2030-05-20 and 2030-06-27",
+         "note": "the scale cannot see this - it reports no body fat at all, "
+                 "so this rests entirely on the two clinic readings",
+         "depends_on": ["weight:2030-05-20:dexa", "weight:2030-06-27:dexa"],
+         "recorded_at": f"{(END - timedelta(days=1)).isoformat()}T19:05:00+02:00"},
     ]
     # The unplanned long run: a Saturday late in the block, after that week's
     # Tue/Thu runs have already spent the ramp budget. This is the event the
