@@ -64,15 +64,17 @@ MACHINERY = {"recorded_at", "device", "supersedes", "date", "_gen"}
 
 # THE BACKLOG. Not an approval - see the module docstring.
 UNWRITTEN = (
-    # #33 item 2. `bias`/`spread` are required beside `offset` and forbidden
-    # beside `not_comparable`, and the demo's one comparability row is
-    # `comparable` - the status that leaves both null. Writing an `offset`
-    # row just to populate these would assert a cross-instrument difference
-    # this fixture has no such measurement behind, which is the exact
-    # fabrication #33 exists to refuse - so the honest fixture leaves them
-    # unwritten rather than inventing a number to satisfy this register.
-    "comparability.bias",
-    "comparability.spread",
+    # `comparability.bias` and `comparability.spread` LEFT THIS REGISTER
+    # (#402). The entry here was right for as long as it stood: the demo's one
+    # row is `comparable`, the status that leaves both null, and writing an
+    # `offset` row to populate them would have asserted a cross-instrument
+    # difference no fixture had measured - the exact fabrication #33 refuses.
+    #
+    # `vera` has the measurement. A hundred-odd runs recorded by two GPS
+    # sources, paired by date, with a median difference and a range that were
+    # observed rather than chosen. The register worked exactly as intended:
+    # it held the fields empty until a record could fill them honestly.
+
     # #402, on the two datasets whose absence case belongs to another change.
     # `weight` carries the mechanism: `bea` records a shift day she chose not
     # to weigh on, which is the state this field exists for and the one her

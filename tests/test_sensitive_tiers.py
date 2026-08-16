@@ -328,7 +328,12 @@ ARG_TAKING_COVERED = {"dataset", "day", "derived", "precise", "append",
                       # #311 returns a STORED ROW - the register line itself -
                       # rather than a vocabulary answer the way `capability`
                       # does, so it is covered here rather than excused below.
-                      "instrument"}
+                      "instrument",
+                      # #402 needs a dataset, a field and two origins before it
+                      # can answer anything, so the sweep cannot call it.
+                      # `tests/test_calibration.py` exercises it by name over
+                      # both hand-built rows and the shipped corpus.
+                      "overlap_calibration"}
 ARG_TAKING_OUT_OF_SCOPE = {
     # Writes and administration. None return a record row they read back.
     "init", "build", "conform", "implementation", "infer",
