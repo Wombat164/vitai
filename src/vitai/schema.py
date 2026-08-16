@@ -1969,6 +1969,11 @@ PLAIN_WORDS = frozenset({
     # deliberately because this is an ALLOWLIST: a new field fails the gate
     # until somebody says what it looks like at a reader.
     "competence", "condition", "construct", "measures",
+    # #404, and it reads as itself for the same reason `measures` does: a
+    # protocol CONTROLS the bladder and the fed state, and "controls" is the
+    # word the athlete used when they described why a weigh-in depends on more
+    # than the scale.
+    "controls",
     # #311's register. `model` and `origin` were already here; these two are
     # the rest of what a person calls a piece of kit.
     "maker", "name",
