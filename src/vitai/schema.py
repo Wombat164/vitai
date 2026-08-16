@@ -1862,7 +1862,8 @@ for _cls, _names in {
         on_success on_period_end priority immovable removed result mode
         planned load_type load_unit set_type failure angle_class side
         rpe_scale mood_scale pain_scale activity
-        seq supersedes_seq measures condition overlap_ref""",
+        seq supersedes_seq measures condition overlap_ref
+        controls""",
     "measurement": """avg_power steps distance_km active_min kcal_out kcal_in
         protein_g
         sleep_h rhr kg body_fat_pct kg_lo kg_hi body_fat_lo body_fat_hi avg_hr
@@ -2086,6 +2087,81 @@ CURRENT_GENERATION["sessions"] += 1
 KEYS["sessions"] = KEYS["sessions"] + ["avg_power"]
 KEY_GENERATION.setdefault("sessions", {})["avg_power"] = \
     CURRENT_GENERATION["sessions"]
+
+
+# --- a protocol declares what it CONTROLS (#404) -------------------------------
+#
+# A `protocols` row is a slug, a date and prose. It says WHICH procedure was
+# followed and never what that procedure controls FOR, so a reading either
+# named a protocol or did not, and nothing downstream could say which
+# conditions were left free. The model is binary and real mornings are not.
+#
+# `01-schema.md` section 7 already frames a protocol-anchored measurement as an
+# ANCHOR, and says the unprotocolled row carries the measurand's full
+# definitional uncertainty. This is the missing half of that sentence: which
+# part of the definitional uncertainty a NAMED protocol actually removes.
+#
+# `controls` is a list of `semantics/body_state.toml` slugs. It is the move
+# `capabilities` already makes for instruments - a declaration beside the prose,
+# machine-readable, in a closed vocabulary - and the shape is copied rather than
+# invented for that reason.
+#
+# THERE IS NO `free` LIST, and the absence is a decision. Silence resolves to
+# UNKNOWN rather than to "free", which is contract 44's rule one dataset over: a
+# capability nobody declared is `unknown`, never a default. A second list would
+# co-vary with this one forever, and worse, "declared free" reads as "measured
+# to be irrelevant" - a claim nobody made about a condition nobody has yet
+# weighed on any record.
+#
+# NO MAGNITUDE REACHES THIS FIELD OR ITS REGISTRY. #404 lists rough masses to
+# argue the problem is real; #402 and #264 both say a band comes from a measured
+# overlap, a per-reading `u_obs` or an athlete-stated range and from nowhere
+# else. So this says WHICH conditions are fixed and never what one is worth,
+# and the arithmetic that would consume it is #402's and is blocked on evidence
+# no record holds yet.
+#
+# PARTIAL ADHERENCE IS NOT HERE, deliberately. "I voided but I had coffee" is
+# not a property of the protocol - the protocol is unchanged and the morning
+# deviated from it - so it belongs on the observation row rather than on this
+# one, and a slug per combination is the protocol proliferation section 7 names
+# as the failure mode. Designed on #404, not built: it moves two observation
+# datasets' generations rather than one policy dataset's, and its consumer does
+# not exist yet.
+CURRENT_GENERATION["protocols"] += 1
+KEYS["protocols"] = KEYS["protocols"] + ["controls"]
+KEY_GENERATION.setdefault("protocols", {})["controls"] = \
+    CURRENT_GENERATION["protocols"]
+
+
+def body_state_conditions() -> dict[str, dict]:
+    """The conditions a protocol may declare it fixes (#404).
+
+    READ FROM THE REGISTRY rather than restated here, which is the lesson
+    `day_phase.toml` records: a vocabulary hardcoded inline in one consumer is
+    a vocabulary the next consumer invents again.
+    """
+    from .vocab import registry
+
+    return dict(registry("body_state")["condition"])
+
+
+def body_state_alias(value: object) -> str | None:
+    """Resolve an athlete's word onto a condition slug, or None.
+
+    Aliases exist so the vocabulary can be closed without making it hostile:
+    "shoes off" and "barefoot" are `footwear`, and refusing them would teach
+    the athlete that declaring anything costs an argument.
+    """
+    from .vocab import _normalise
+
+    wanted = _normalise(value)
+    for slug, meta in body_state_conditions().items():
+        if _normalise(slug) == wanted:
+            return slug
+        for alias in (meta or {}).get("aliases", []):
+            if _normalise(alias) == wanted:
+                return slug
+    return None
 
 
 def key_generation(dataset: str, key: str) -> int:
@@ -2383,6 +2459,59 @@ def _protocol_problems(rec: dict) -> list[str]:
         out.append("'text' says what the procedure IS, in the athlete's own "
                    "words. A slug with no definition is a name for something "
                    "nobody wrote down")
+    out += _controls_problems(rec)
+    return out
+
+
+def _controls_problems(rec: dict) -> list[str]:
+    """What this protocol declares it FIXES (#404).
+
+    A CLOSED VOCABULARY, unlike the slug beside it, and the asymmetry is the
+    point rather than an inconsistency. A protocol slug is the athlete's own
+    name for their own procedure and nobody else has to read it, so an
+    undefined one is legal. A condition exists ONLY to be compared - across
+    protocols, across readings, eventually across records - so an open
+    vocabulary would give one record `bladder` and the next `bladder_full`
+    with nothing able to tell they are one fact, which is the entire value of
+    declaring it.
+
+    REFUSED THROUGH THE ALIAS LAYER, never against the raw string. "Shoes off"
+    and "barefoot" are both `footwear`, and a closed vocabulary that refused
+    the athlete's own words would teach them that declaring anything costs an
+    argument - which ends with nobody declaring anything.
+
+    EMPTY IS REFUSED AND ABSENT IS FINE, and they are different facts. A null
+    `controls` is a protocol written before this field existed, or one whose
+    author has not said; an empty list asserts that the procedure fixes
+    NOTHING, which is a claim about a procedure somebody bothered to write
+    down and is almost certainly a serialiser rather than a statement.
+    """
+    controls = rec.get("controls")
+    if controls is None:
+        return []
+    if not isinstance(controls, list) or not controls:
+        return ["'controls' is a non-empty list of the conditions this "
+                "protocol fixes, drawn from semantics/body_state.toml, or "
+                "absent where nobody has said. An empty list would assert "
+                f"that the procedure controls nothing, got {controls!r}"]
+    out: list[str] = []
+    seen: set[str] = set()
+    for value in controls:
+        slug = body_state_alias(value)
+        if slug is None:
+            out.append(
+                f"'controls' takes conditions from semantics/body_state.toml "
+                f"(or an alias the registry knows; add one there rather than "
+                f"writing free text), got {value!r}. Legal: "
+                f"{', '.join(sorted(body_state_conditions()))}")
+            continue
+        # A REPEAT IS A MISTAKE RATHER THAN AN EMPHASIS. Two spellings of one
+        # condition - `shoes` and `footwear` - resolve to one slug, and a row
+        # carrying both looks like two declarations and is one.
+        if slug in seen:
+            out.append(f"'controls' names {slug!r} more than once, counting "
+                       f"aliases; one declaration per condition")
+        seen.add(slug)
     return out
 
 

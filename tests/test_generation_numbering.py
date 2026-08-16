@@ -261,6 +261,11 @@ PINNED = {
         "recorded_at": 3,
         "seq": 12,
     },
+    # #404: the first non-founding key this policy dataset has. A protocol
+    # said WHICH procedure was followed and never what it controls FOR.
+    "protocols": {
+        "controls": 2,
+    },
 }
 
 PINNED_FOUNDING = {
@@ -377,7 +382,7 @@ PINNED_CURRENT = {
     "measurements": 11,
     "medical": 6,
     "plans": 1,
-    "protocols": 1,
+    "protocols": 2,
     "regimes": 2,
     "sessions": 16,
     "sets": 7,

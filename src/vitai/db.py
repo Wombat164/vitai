@@ -914,9 +914,52 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     number: silence is measured against the longest gap that source has
 #     already shown in this record, and a zero is out of family when the
 #     source has never written one for that field before.
-CONTRACT_VERSION = "49"
+# 50: `protocols` gains `controls` - the conditions a protocol DECLARES it
+#     fixes, from the closed vocabulary in `semantics/body_state.toml`.
+#
+#     WHAT WAS BINARY AND SHOULD NOT HAVE BEEN. A `protocols` row is a slug, a
+#     date and prose: it says WHICH procedure was followed and never what that
+#     procedure controls FOR. So a reading either named a protocol or did not,
+#     and nothing downstream could say which conditions were left free.
+#     `docs/proposals/uncertainty/01-schema.md` section 7 already calls a
+#     protocol-anchored measurement an ANCHOR and says the unprotocolled row
+#     carries the measurand's full definitional uncertainty; this is the
+#     missing half of that sentence, which is WHICH part of it a named protocol
+#     removes.
+#
+#     Nothing required. `controls` is null on every existing row and old lines
+#     keep validating - generation 2 on a dataset that had only founding keys.
+#
+#     **THE FIELD CARRIES NO MAGNITUDE AND NEITHER DOES ITS REGISTRY**, and a
+#     consumer must not supply one. #404 lists rough masses for these
+#     conditions to argue the problem is real; #402's rule and #264's rewording
+#     both say a band comes from a measured overlap, a per-reading `u_obs` or
+#     an athlete-stated range and from nowhere else. This column says which
+#     conditions are fixed and never what one is worth, so a consumer deriving
+#     a width from the COUNT of uncontrolled conditions would be inventing
+#     precision about imprecision - the arithmetic is #402's and is blocked on
+#     evidence no record holds yet.
+#
+#     **ABSENT AND EMPTY ARE DIFFERENT FACTS.** Null is a protocol written
+#     before this field existed or one whose author has not said; an empty list
+#     asserts the procedure fixes nothing, and validation refuses it as a
+#     serialiser artefact rather than a statement. A condition NOT listed on a
+#     row that lists others is UNSTATED, never "declared free" - contract 44's
+#     rule that silence resolves to `unknown` rather than to a default, one
+#     dataset over, which is also why there is no companion `free` list.
+#
+#     A container column, JSON-encoded in TEXT and registered in `LIST_COLS`
+#     like `derived_from`. Partial adherence to a protocol is deliberately NOT
+#     here: it is a property of the reading rather than of the procedure, and
+#     lives on the observation row if it is built at all (designed on #404).
+CONTRACT_VERSION = "50"
 
-_TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity would
+_TEXT_COLS = {"statistic", "answers",
+              # A JSON array (#404): the conditions a protocol declares
+              # it fixes. TEXT for the reason every container column is,
+              # `derived_from` first among them - REAL affinity mangles
+              # the serialised text.
+              "controls",            # a slug, and REAL affinity would
               # A JSON map (#325), and every container column is TEXT for
               # the same reason `derived_from` is: REAL affinity would
               # mangle the serialised text.
@@ -1158,7 +1201,14 @@ DERIVED_TABLES: dict[str, list[str]] = {
 #
 # It was found by writing the first row that carries one, not by reading this
 # file - which is the argument for exercising a field at all.
-LIST_COLS = frozenset({"derived_from", "basis_claims", "depends_on"})
+LIST_COLS = frozenset({"derived_from", "basis_claims", "depends_on",
+                       # `protocols.controls` (#404): the conditions a protocol
+                       # declares it fixes. A container for the same reason the
+                       # others are - a protocol that fixes the bladder and the
+                       # fed state fixes two things, and folding them into one
+                       # string would make the set unreadable without a parser
+                       # the contract never described.
+                       "controls"})
 
 
 def _cols(keys: list[str]) -> str:

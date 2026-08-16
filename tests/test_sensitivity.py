@@ -241,7 +241,18 @@ PINNED = {
     "protocols": {
         "date": "temporal", "slug": "reference", "text": "narrative",
         "supersedes": "reference", "recorded_at": "temporal", "device":
-        "provenance"
+        "provenance",
+        # #404. `reference` because it is a list of closed-vocabulary slugs
+        # describing a PROCEDURE - "this method fixes the bladder and the fed
+        # state" is a property of the method rather than a fact about the
+        # athlete on any day.
+        #
+        # Worth stating because the obvious neighbour is not: a companion field
+        # on the READING, saying which conditions actually held that morning,
+        # would be `behavioural` and possibly `clinical`, because "I had not
+        # voided" is a fact about a body. That asymmetry is part of why the
+        # reading-side half was designed and deliberately not built here.
+        "controls": "reference",
     },
     "regimes": {
         "date": "temporal", "from_date": "temporal", "to_date": "temporal",
