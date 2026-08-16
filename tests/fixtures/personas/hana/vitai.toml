@@ -1,0 +1,14 @@
+# hana - Galway. Four channels, three of them quiet, one of them a question.
+[athlete]
+timezone = "Europe/Dublin"
+
+[targets]
+phases = [[71.0, 68.0, 0.2]]
+
+[tripwires]
+steps_floor = 7000
+sleep_floor_h = 6.5
+
+[resolution]
+source_order = ["bathroom-scale", "phone-app", "chest-strap",
+                "club-treadmill", "old-band"]

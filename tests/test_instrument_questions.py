@@ -120,22 +120,64 @@ def test_a_field_that_is_ordinarily_zero_is_never_asked_about(tmp_path):
     assert kinds(v, "2030-06-14") == []
 
 
-def test_the_corpus_asks_nothing_it_should_not(tmp_path):
-    """The measurement above, kept rather than described. Every shipped record
-    is run, and the only acceptable answer today is silence: none of them
-    contains an instrument outage or a fabricated zero, so any question at all
-    is a false positive of the kind that gets an asking channel switched off.
+def test_the_corpus_asks_exactly_one_instrument_question(tmp_path):
+    """BOTH DIRECTIONS, ON THE SHIPPED CORPUS, AND THIS IS THE ANCHOR.
+
+    An earlier version of this asserted the corpus asks NOTHING, which was
+    true and half a control: it guarded every refusal and could not tell a
+    working rule from one that never fires. `hana` closes that. Her record
+    carries four daily channels and three of them are quiet at the horizon:
+
+      `old-band`   an archive, 106 dates at ONE transaction day - the shape
+                   that produced the false positive #405 was filed for
+      `club-treadmill`  stopped in February, with `instruments.to_date`
+                   closed on the day of the last session
+      `chest-strap`     stopped in April with its instrument row still open,
+                   and nothing in the record accounting for it
+
+    Exactly one of those is a question. A change that silences it has broken
+    the detection; a change that adds a second has broken a refusal; and
+    because the three sit in one record, each failure names itself.
     """
     roots = [p for p in sorted(Path("tests/fixtures/personas").iterdir())
              if (p / "vitai.toml").exists()]
     roots.append(Path(__file__).parent.parent / "examples" / "demo")
     assert len(roots) >= 10, roots
-    noise = []
+    asked = []
     for root in roots:
         for q in Vitai(root).questions():
             if q["kind"] in ("outage", "false_zero"):
-                noise.append((root.name, q["kind"], q["for_date"], q.get("resolves")))
-    assert noise == [], noise
+                asked.append((root.name, q["kind"], q["subject"], q["for_date"]))
+    assert asked == [("hana", "outage", "chest-strap", "2030-04-15")], asked
+
+
+def test_hana_holds_all_three_shapes(tmp_path):
+    """Guards the guard above, which would still pass if `hana` stopped
+    carrying the channels that make its single result meaningful - if the
+    archive vanished, or the treadmill's `to_date` opened, the corpus would
+    ask exactly one question for the wrong reasons."""
+    hana = Path(__file__).parent / "fixtures" / "personas" / "hana"
+    stamps: dict[str, set[str]] = {}
+    dates: dict[str, set[str]] = {}
+    for row in Vitai(hana).dataset("daily"):
+        src = str(row.get("source"))
+        stamps.setdefault(src, set()).add(str(row.get("recorded_at"))[:10])
+        dates.setdefault(src, set()).add(str(row.get("date")))
+    # The import: many dates, one day on the clock that matters.
+    assert len(dates["old-band"]) > 50, dates["old-band"]
+    assert len(stamps["old-band"]) == 1, stamps["old-band"]
+    # The declared end, and the undeclared one.
+    closed = {r["origin"] for r in Vitai(hana).dataset("instruments")
+              if r.get("to_date")}
+    assert "club-treadmill" in closed
+    assert "chest-strap" not in closed, (
+        "the strap's silence is only a question because nothing declares it "
+        "finished")
+    assert "old-band" not in {r["origin"] for r in
+                              Vitai(hana).dataset("instruments")}, (
+        "the archive is undeclared on purpose - the record that found this "
+        "defect had no instruments rows at all, so the transaction-time layer "
+        "has to stand on its own here")
 
 
 def test_a_zero_outside_the_declared_set_is_not_a_question(tmp_path):

@@ -23,6 +23,7 @@ fixture built from a person tests what you did not.
 | `bea` | 34, Ghent, intensive-care nurse on a rotating night roster | **the day does not start at midnight**: sleeps 09:00 to 16:00 after a shift, trains at 18:30, and has no sleep timing at all on the days the watch is off | 1 |
 | `otto` | 58, Leipzig, masters rower who photographs the club ergometer's console | **evidence**: the first artifacts in the corpus, a removal with a reason, a shared instrument nobody calibrates, and a claim his own record cannot settle | 1 |
 | `maja` | 29, Ljubljana, trains on machines and logs food off packaging | **a setting is part of the measurement**: seat, pad, lever and angle on every set; label values including fibre, sugar and sodium; a protein goal that is a band | 1 |
+| `hana` | 41, Galway, four channels and three of them quiet at the horizon | instrument lifecycle, one-time import, declared retirement | 1 |
 
 ## The one who has no past
 
