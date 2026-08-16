@@ -502,15 +502,82 @@ def false_zero_questions(daily: list[dict], on: date) -> list[dict]:
     return out
 
 
-def outage_questions(daily: list[dict], on: date) -> list[dict]:
+def _stamped_day(value: object) -> date | None:
+    """The calendar day of a `recorded_at`, or None if it has none.
+
+    THE DATE PART ONLY, AND THAT SIDESTEPS #38 RATHER THAN SOLVING IT. Two
+    stamps can be incomparable - one naive, one offset-bearing - and comparing
+    them is the defect `clocks.comparable` exists to refuse. A cadence does not
+    need the instant: it needs which day the record learned something, and the
+    calendar day is readable off either shape without either being compared to
+    the other. The stamp is a prefix of an ISO datetime, so the first ten
+    characters are that day, offset or not.
+    """
+    text = str(value or "")
+    return _as_date(text[:10]) if len(text) >= 10 else None
+
+
+def retired_origins(instruments: list[dict], on: date) -> set[str]:
+    """Origins whose instrument is declared finished by `on` (#405 layer one).
+
+    THE DECLARATION OUTRANKS THE INFERENCE, which is this engine's grain:
+    `capabilities` declares competence rather than deriving it, and the vocab
+    registry retires a value rather than guessing it is dead. `to_date` has
+    been on `instruments` since contract 45 and nothing consulted it, so the
+    record could already say a device was used until a date and the asking
+    channel went on asking why it stopped.
+
+    RETIRED MEANS EVERY INTERVAL HAS CLOSED, not that any one of them has, and
+    the difference is a live trap rather than a hypothetical. A persona in this
+    repo's own corpus carries two `watch` rows - an old watch closed in
+    February and a replacement opened the day after, reporting under the SAME
+    name - with a note saying that is the whole reason the interval matters. A
+    rule reading "some row has a past `to_date`" would declare that watch
+    retired and silence every question about a channel still in daily use.
+
+    A row with no `to_date`, or one closing after `on`, keeps the origin live.
+    """
+    by_origin: dict[str, list[dict]] = {}
+    for row in instruments:
+        origin = str(row.get("origin") or "").strip()
+        if origin:
+            by_origin.setdefault(origin, []).append(row)
+    out = set()
+    for origin, rows in by_origin.items():
+        closes = [_as_date(r.get("to_date")) for r in rows]
+        if closes and all(c is not None and c <= on for c in closes):
+            out.add(origin)
+    return out
+
+
+def outage_questions(daily: list[dict], on: date,
+                     instruments: list[dict] | None = None) -> list[dict]:
     """A source that had been contributing and has gone quiet.
 
-    CADENCE IS MEASURED, NEVER ASSUMED. The run of silence has to be longer
-    than the longest gap this source has ALREADY shown in this record, so a
-    weekly source is not silent after two days and a daily one is. No number
-    appears here: the comparison is against the record's own worst case, which
-    is the same move `crossings` makes when it asks what the series has done
-    before rather than what a constant says it should do.
+    CADENCE IS MEASURED, NEVER ASSUMED, AND MEASURED IN TRANSACTION TIME. The
+    run of silence has to be longer than the longest gap this source has
+    ALREADY shown, so a weekly source is not silent after two days and a daily
+    one is. No number appears here: the comparison is against the record's own
+    worst case, the same move `crossings` makes when it asks what the series
+    has done before rather than what a constant says it should do.
+
+    THE CLOCK IS THE CORRECTION THIS RULE NEEDED (#405). It first measured on
+    `date` and produced its first live question as a FALSE POSITIVE: a one-time
+    archive import, pulled once to recover years of readings from a replaced
+    device, which had finished rather than failed. In valid time it looked like
+    the most established channel in the record - thousands of rows spanning
+    seven years - and every guard below passed it through, because it is not
+    seen once and holds far more than an anecdote's history. In transaction
+    time it is a single day. `date` is when the reading happened; `recorded_at`
+    is when the record learned it, and "has this source been contributing" was
+    always a question about the second.
+
+    TWO LAYERS, DECLARED FIRST. `retired_origins` reads what the record SAYS
+    through `instruments.to_date`, and this rule refuses on it before measuring
+    anything - because an instrument imported several times and then abandoned
+    still looks like a live channel by any transaction-time measure, so no
+    structural test can reach that case. The clock is the fallback for the
+    common record that declared nothing, which today is most of them.
 
     SILENCE IS NOT AN INSTRUMENT. A record that never carried a step count is
     never asked why it stopped carrying one - the same refusal the protocol
@@ -539,8 +606,32 @@ def outage_questions(daily: list[dict], on: date) -> list[dict]:
     stated rather than left for a client to reconstruct from a count.
     """
     out = []
+    retired = retired_origins(instruments or [], on)
     for source, rows in sorted(_by_source(daily, on).items()):
-        days = sorted({d for r in rows if (d := _as_date(r.get("date")))})
+        # LAYER ONE: A DECLARED END IS NOT AN OUTAGE. An instrument is declared
+        # per `origin`, and a daily row names both a `source` and, sometimes,
+        # the `origin` behind it - so the candidates are this source's own name
+        # and every origin its rows carry. Either matching a closed instrument
+        # is the record saying this channel finished, and silence from it is
+        # the expected state rather than an anomaly.
+        names = {source} | {str(r.get("origin")).strip()
+                            for r in rows if r.get("origin")}
+        if names & retired:
+            continue
+        # LAYER TWO: THE CADENCE IS IN TRANSACTION TIME. `date` is when the
+        # reading happened; `recorded_at` is when the record LEARNED it, and
+        # "has this source been contributing" is a question about the second.
+        # Measured on `date`, a one-time archive import fakes a perfect
+        # multi-year cadence and every guard below passes it through - it is
+        # not seen once, and it holds far more than an anecdote's history. On
+        # the right clock it collapses to a single day and cannot be silent,
+        # because it never had a rhythm to break.
+        days = sorted({d for r in rows if (d := _stamped_day(r.get("recorded_at")))})
+        # NO STAMPS, NO QUESTION. A source whose rows never say when they were
+        # written cannot support a transaction-time cadence, and guessing one
+        # off `date` is exactly the mistake this layer exists to remove. The
+        # refusal is the safe direction: an unasked question costs less than a
+        # confident one about an import that finished years ago.
         if len(days) < 3:
             continue
         gaps = [(b - a).days for a, b in zip(days, days[1:])]

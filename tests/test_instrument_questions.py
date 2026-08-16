@@ -35,13 +35,22 @@ from vitai.schema import KEYS
 START = date(2030, 6, 1)
 
 
-def row(day: date, source: str = "watch", **kw) -> dict:
+def row(day: date, source: str = "watch", learned: date | None = None,
+        **kw) -> dict:
+    """One daily claim, stamped with WHEN THE RECORD LEARNED IT.
+
+    `learned` defaults to the day itself, which is what a channel syncing each
+    evening looks like. Passing one date for many rows is what a backfill looks
+    like, and #405 is the finding that the two are indistinguishable on the
+    other clock."""
     return {**{k: None for k in KEYS["daily"]}, "date": day.isoformat(),
-            "source": source, **kw}
+            "source": source,
+            "recorded_at": f"{(learned or day).isoformat()}T20:00:00+02:00",
+            **kw}
 
 
 def steady(n: int, source: str = "watch", every: int = 1, **kw) -> list[dict]:
-    """`n` appearances at a fixed cadence, each a plausible active day."""
+    """`n` appearances at a fixed cadence, each learned on the day it happened."""
     return [row(START + timedelta(days=i * every), source,
                 steps=9000 + i * 13, kcal_out=2400, **kw) for i in range(n)]
 
@@ -289,6 +298,8 @@ def test_neither_derivation_needs_a_record_on_disk():
     """Both are pure functions of rows and a viewpoint, which is what lets
     `questions()` promise no model, no network and no permission layer."""
     rows = [{"date": (START + timedelta(days=i)).isoformat(), "source": "w",
+             "recorded_at": f"{(START + timedelta(days=i)).isoformat()}"
+                            f"T20:00:00+02:00",
              "steps": 9000 + i} for i in range(5)]
     assert outage_questions(rows, date(2030, 6, 30))[0]["subject"] == "w"
     assert false_zero_questions(rows, date(2030, 6, 30)) == []
@@ -341,3 +352,141 @@ def test_every_emitted_kind_is_renderable(tmp_path):
     assert proc.returncode == 0, proc.stderr
     for kind in sorted(emitted):
         assert kind in proc.stdout, (kind, proc.stdout)
+
+
+# --- the clock, and the declaration (#405) ------------------------------------
+
+def instrument(origin: str, from_date: str, to_date: str | None = None) -> dict:
+    return {**{k: None for k in KEYS["instruments"]}, "date": from_date,
+            "origin": origin, "from_date": from_date, "to_date": to_date,
+            "source": "athlete"}
+
+
+def record_with(tmp_path: Path, daily: list[dict],
+                instruments: list[dict] | None = None) -> Vitai:
+    v = record(tmp_path, daily)
+    if instruments:
+        (v.root / "data" / "instruments.jsonl").write_text(
+            "".join(json.dumps(r) + "\n" for r in instruments), encoding="utf-8")
+    return v
+
+
+def test_a_one_time_backfill_is_not_a_channel_that_died(tmp_path):
+    """THE FALSE POSITIVE THIS RULE'S FIRST LIVE RUN PRODUCED.
+
+    An archive pulled once to recover years of readings from a replaced
+    device. Thousands of dates, one transaction day. On the wrong clock it is
+    the most established channel in the record and every existing guard passes
+    it through: it is not seen once, and it holds far more than an anecdote's
+    history. On the right clock it never had a rhythm to break.
+    """
+    backfill = [row(date(2023, 1, 1) + timedelta(days=i * 7), "old-device",
+                    learned=date(2030, 6, 1), steps=8000 + i)
+                for i in range(200)]
+    v = record_with(tmp_path, backfill)
+    assert len({r["date"][:4] for r in v.dataset("daily")}) >= 4, "spans years"
+    assert [q for q in v.questions("2030-06-30") if q["kind"] == "outage"] == []
+
+
+def test_the_same_rows_on_the_wrong_clock_would_have_asked(tmp_path):
+    """Guards the guard, so the test above cannot pass by the backfill being
+    unremarkable. Measured on `date` these rows have a settled weekly cadence
+    and a month of silence, which is exactly what the old rule asked about."""
+    backfill = [row(date(2023, 1, 1) + timedelta(days=i * 7), "old-device",
+                    learned=date(2030, 6, 1), steps=8000 + i)
+                for i in range(200)]
+    days = sorted({date.fromisoformat(r["date"]) for r in backfill})
+    gaps = [(b - a).days for a, b in zip(days, days[1:])]
+    assert max(gaps) == 7, gaps
+    assert (date(2030, 6, 30) - days[-1]).days > max(gaps), (
+        "on valid time this source has been silent longer than it ever was")
+
+
+def test_a_channel_learned_daily_still_asks(tmp_path):
+    """The clock change must not disable the rule. A source learned on the day
+    it reports still has a transaction cadence, and still breaks it."""
+    v = record_with(tmp_path, steady(14))
+    q = [x for x in v.questions("2030-06-25") if x["kind"] == "outage"]
+    assert len(q) == 1, q
+
+
+def test_a_source_that_never_says_when_it_was_written_is_not_asked_about(tmp_path):
+    """THE REFUSAL THE CLOCK CHANGE BUYS AND COSTS. A row with no
+    `recorded_at` cannot support a transaction-time cadence, and reading one
+    off `date` instead is the mistake this whole change removes. Silence is
+    the safe direction: an unasked question costs less than a confident one
+    about an import that finished years ago."""
+    unstamped = [{**{k: None for k in KEYS["daily"]},
+                  "date": (START + timedelta(days=i)).isoformat(),
+                  "source": "watch", "steps": 9000 + i} for i in range(14)]
+    v = record_with(tmp_path, unstamped)
+    assert [q for q in v.questions("2030-06-30") if q["kind"] == "outage"] == []
+
+
+def test_a_declared_end_is_not_an_outage(tmp_path):
+    """LAYER ONE. `instruments.to_date` has been in the schema since contract
+    45 and nothing consulted it, so a record could already say a device was
+    used until a date while the asking channel went on asking why it stopped.
+    """
+    daily = [row(START + timedelta(days=i), "old-watch", steps=9000 + i,
+                 origin="old-watch") for i in range(14)]
+    live = record_with(tmp_path, daily)
+    assert [q for q in live.questions("2030-06-30") if q["kind"] == "outage"]
+
+    declared = record_with(tmp_path / "b", daily,
+                           [instrument("old-watch", "2030-06-01", "2030-06-14")])
+    assert [q for q in declared.questions("2030-06-30")
+            if q["kind"] == "outage"] == []
+
+
+def test_a_replacement_reporting_under_the_same_name_stays_live(tmp_path):
+    """THE TRAP, AND IT IS IN THIS REPO'S OWN CORPUS. `bea` carries two
+    `watch` rows: an old watch closed in February and its replacement opened
+    the day after, reporting under the same name, with a note saying that is
+    the whole reason the interval matters.
+
+    A rule reading "some row for this origin has a past `to_date`" would call
+    that watch retired and silence every question about a channel in daily
+    use. Retired means EVERY interval has closed.
+    """
+    daily = [row(START + timedelta(days=i), "watch", steps=9000 + i,
+                 origin="watch") for i in range(14)]
+    v = record_with(tmp_path, daily, [
+        instrument("watch", "2029-09-03", "2030-02-14"),
+        instrument("watch", "2030-02-15", None)])
+    assert [q for q in v.questions("2030-06-30") if q["kind"] == "outage"], (
+        "a live replacement was silenced by its predecessor's closed interval")
+
+
+def test_the_corpus_replacement_case_is_real():
+    """Reads `bea` rather than restating her, so this fails if the fixture
+    that motivates the rule above stops carrying it."""
+    bea = Path(__file__).parent / "fixtures" / "personas" / "bea"
+    rows = [json.loads(ln) for ln
+            in (bea / "data" / "instruments.jsonl").read_text(
+                encoding="utf-8").splitlines() if ln.strip()]
+    watch = [r for r in rows if r.get("origin") == "watch"]
+    assert len(watch) == 2, watch
+    assert sum(1 for r in watch if r.get("to_date")) == 1
+    assert sum(1 for r in watch if not r.get("to_date")) == 1
+
+
+def test_an_instrument_closing_after_the_viewpoint_is_still_live(tmp_path):
+    """`to_date` in the future is a planned end, not a past one."""
+    daily = [row(START + timedelta(days=i), "watch", steps=9000 + i,
+                 origin="watch") for i in range(14)]
+    v = record_with(tmp_path, daily,
+                    [instrument("watch", "2030-06-01", "2031-01-01")])
+    assert [q for q in v.questions("2030-06-30") if q["kind"] == "outage"]
+
+
+def test_the_declaration_matches_the_source_name_too(tmp_path):
+    """An instrument is declared per `origin` and a daily row does not always
+    carry one - most of this corpus leaves it null. So the source's own name
+    is a candidate as well, which is what the operator's wording on the issue
+    says: a source OR origin whose instrument is closed."""
+    daily = [row(START + timedelta(days=i), "old-import", steps=9000 + i)
+             for i in range(14)]
+    v = record_with(tmp_path, daily,
+                    [instrument("old-import", "2030-06-01", "2030-06-14")])
+    assert [q for q in v.questions("2030-06-30") if q["kind"] == "outage"] == []
