@@ -289,6 +289,53 @@ def cmd_capabilities(args: argparse.Namespace) -> None:
             print(f"    {row['note']}")
 
 
+def cmd_calibrate(args: argparse.Namespace) -> None:
+    """What the overlap between two instruments measured (#402, route 1).
+
+    IT PRINTS EVIDENCE AND DOES NOT WRITE IT. The row this reports is what a
+    `comparability` line COULD say; putting it in the record is an append the
+    athlete makes, because a measurement the engine took is not a statement the
+    record has adopted.
+    """
+    v = Vitai(_root(args))
+    if not (args.dataset and args.field and args.origin_a and args.origin_b):
+        sys.exit("calibrate needs --dataset, --field, --origin-a and "
+                 "--origin-b: an overlap is between one pair of instruments "
+                 "on one field of one dataset, and a field name does not "
+                 "identify a dataset - `distance_km` is on both `daily` and "
+                 "`sessions`")
+    out = v.overlap_calibration(args.dataset, args.field, args.origin_a,
+                                args.origin_b, on=args.on)
+    if args.json:
+        print(json.dumps(out))
+        return
+    print(f"{out['origin_a']} vs {out['origin_b']}, {out['field']}: "
+          f"{out['pairs']} paired day(s)")
+    if out["ambiguous_days"]:
+        print(f"    {len(out['ambiguous_days'])} day(s) dropped as ambiguous "
+              f"- more than one reading from an origin, and no rule in the "
+              f"record for pairing them")
+    if out["refused"] is not None:
+        print(f"    no row: {out['refused']}")
+        return
+    seen = out["observed"]
+    row = out["row"]
+    print(f"    status:  {row['status']}")
+    if row["bias"] is not None:
+        print(f"    bias:    {row['bias']:g} (median difference)")
+    print(f"    spread:  {row['spread']:g} (full observed width, NOT a "
+          f"plus-or-minus)")
+    print(f"    range:   {seen['low']:g} to {seen['high']:g}")
+    if seen["asymmetric"]:
+        # SAID OUT LOUD BECAUSE THE ROW CANNOT SAY IT. `bias` is a point and
+        # `spread` a width, so a reader reconstructing bias +/- spread/2 would
+        # be wrong on both sides at once.
+        print("    the range is ASYMMETRIC about the median, which no field "
+              "on the row can carry - read the range, not the spread, before "
+              "building anything on it")
+    print(f"    overlap: {row['overlap_ref']}")
+
+
 def cmd_comparability(args: argparse.Namespace) -> None:
     """Are these two instruments on the same footing for this field? (#33)"""
     v = Vitai(_root(args))
@@ -1799,6 +1846,8 @@ def main(argv: list[str] | None = None) -> None:
          "which part of the athlete's own day each timed row fell in (#212)"),
         ("capabilities", cmd_capabilities,
          "what each instrument is competent at, as the record states it (#171)"),
+        ("calibrate", cmd_calibrate,
+         "what an overlap between two instruments measured (#402)"),
         ("comparability", cmd_comparability,
          "are two instruments on the same footing for one field, earned by "
          "overlap and never assumed (#33)"),
@@ -1951,6 +2000,15 @@ def main(argv: list[str] | None = None) -> None:
             p.add_argument("--condition", help="under one condition")
             p.add_argument("--json", action="store_true",
                            help="emit rows as JSONL instead of prose")
+        if name == "calibrate":
+            p.add_argument("--dataset", help="the dataset the readings live in")
+            p.add_argument("--field", help="the field both instruments record")
+            p.add_argument("--origin-a", help="the first instrument")
+            p.add_argument("--origin-b", help="the second instrument")
+            p.add_argument("--on", metavar="YYYY-MM-DD",
+                           help="viewpoint: ignore readings dated after this")
+            p.add_argument("--json", action="store_true",
+                           help="emit the measurement as JSON instead of prose")
         if name == "comparability":
             p.add_argument("--field", help="the field the two agree or not on")
             p.add_argument("--origin-a", help="the first instrument")

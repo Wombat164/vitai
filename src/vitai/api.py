@@ -1812,6 +1812,44 @@ class Vitai:
                                      str(r.get("measures") or "")),
                       reverse=True)
 
+    def overlap_calibration(self, dataset: str, field: str, origin_a: str,
+                            origin_b: str,
+                            on: date | str | None = None) -> dict:
+        """What the overlap between two origins MEASURES, for #402's route 1.
+
+        `comparability()` above answers what the record SAYS about a pair;
+        this answers what its readings actually did, so a statement can be
+        earned instead of asserted. The two are deliberately separate calls: a
+        derived measurement is not a declaration, and writing the row is the
+        athlete's act rather than the engine's.
+
+        READS RAW CLAIMS, NOT THE CANONICAL SERIES, and it has to. The whole
+        question is what two instruments said about one quantity, and
+        canonicalisation is precisely where that is resolved away - one row per
+        day, the disagreement adjudicated and gone.
+
+        Never None; `row` is None with `refused` saying why when the overlap
+        cannot carry a figure. See `calibration.overlap_calibration` for what
+        the returned shape can and cannot express - in particular that an
+        asymmetric range does not fit in `spread` and is returned beside it
+        rather than folded into it.
+        """
+        from .calibration import overlap_calibration as _calibrate
+
+        # THE DATASET IS NAMED, NEVER INFERRED FROM THE FIELD. The first
+        # version of this searched the datasets for one carrying the field
+        # name and took the first hit, which is wrong the moment a name is
+        # shared: `distance_km` is on `daily` AND on `sessions`, so asking
+        # about two GPS sources' runs silently measured the daily summaries
+        # instead and reported a refusal on an overlap that was there all
+        # along. A field name does not identify a dataset.
+        if dataset not in KEYS:
+            raise KeyError(f"unknown dataset {dataset!r}; one of {sorted(KEYS)}")
+        if field not in KEYS[dataset]:
+            raise KeyError(f"{dataset} has no field {field!r}")
+        return _calibrate(self.dataset(dataset), field, origin_a, origin_b,
+                          on=on or self.on)
+
     def comparability(self, field: str, origin_a: str, origin_b: str,
                       on: date | str | None = None) -> dict:
         """Are these two instruments on the same footing for this field? (#33)

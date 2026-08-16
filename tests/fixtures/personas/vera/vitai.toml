@@ -1,0 +1,17 @@
+# vera - Bilbao. Every run recorded twice, by two things that disagree.
+[athlete]
+timezone = "Europe/Madrid"
+
+[targets]
+phases = [[59.0, 57.5, 0.1]]
+
+[tripwires]
+steps_floor = 7000
+sleep_floor_h = 6.5
+
+[resolution]
+# THE WATCH FIRST, and that is a preference rather than a finding. She trusts
+# the thing strapped to her wrist over the thing in a vest pocket; the record
+# says so here so the resolver has a rule, and says nothing about which is
+# closer to the truth - which is what the `comparability` row is for.
+source_order = ["watch", "phone", "scale", "athlete"]

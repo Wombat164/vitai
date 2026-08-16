@@ -24,6 +24,7 @@ fixture built from a person tests what you did not.
 | `otto` | 58, Leipzig, masters rower who photographs the club ergometer's console | **evidence**: the first artifacts in the corpus, a removal with a reason, a shared instrument nobody calibrates, and a claim his own record cannot settle | 1 |
 | `maja` | 29, Ljubljana, trains on machines and logs food off packaging | **a setting is part of the measurement**: seat, pad, lever and angle on every set; label values including fibre, sugar and sodium; a protein goal that is a band | 1 |
 | `hana` | 41, Galway, four channels and three of them quiet at the horizon | instrument lifecycle, one-time import, declared retirement | 1 |
+| `vera` | 36, Bilbao, every run recorded twice by two things that disagree | measured overlap, bias vs spread, asymmetry | 1 |
 
 ## The one who has no past
 
