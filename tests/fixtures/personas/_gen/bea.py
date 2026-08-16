@@ -449,6 +449,11 @@ def _protocols(stamp: common.Stamper) -> list[dict]:
                  "shift day: a weigh-in after twelve hours on the unit is not "
                  "the same measurement, and skipping it is a decision rather "
                  "than an omission.",
+            # #404. "Before eating" is the only condition her own words fix.
+            # Waking is not a clock time for her, so nothing here controls
+            # hydration or the bathroom, and declaring them would assert a
+            # procedure she does not follow.
+            controls=["fed"],
             recorded_at=stamp.stamp(START)),
     ]
 
