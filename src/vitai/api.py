@@ -1250,7 +1250,11 @@ class Vitai:
         # false zero the athlete has already retired stops being asked about
         # rather than being re-derived off the retired line forever.
         daily_claims = self.dataset("daily")
-        out += outage_questions(daily_claims, when)
+        # `instruments` is READ AND PASSED rather than looked up inside, so
+        # the derivation stays a pure function of rows and a viewpoint - the
+        # property that lets `questions()` promise no model and no network.
+        out += outage_questions(daily_claims, when,
+                                self.dataset("instruments"))
         out += false_zero_questions(daily_claims, when)
         return sorted(out, key=lambda q: (q["for_date"], q["id"]))
 
