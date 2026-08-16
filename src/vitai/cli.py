@@ -801,6 +801,25 @@ def cmd_questions(args: argparse.Namespace) -> None:
                   f"{', '.join(row['resolves'])} (settled by "
                   f"{row['settled_by']})")
             continue
+        if row["kind"] == "outage":
+            # THE RUN, NOT A COUNT. `through` is on the row so a client does
+            # not rebuild the span from a number of days, and printing it the
+            # same way keeps the reader from having to.
+            print(f"{row['for_date']} to {row['through']} {row['about']}: "
+                  f"outage {row['subject']} (settled by {row['settled_by']})")
+            continue
+        if row["kind"] == "false_zero":
+            print(f"{row['for_date']} {row['about']}: false_zero "
+                  f"{row['subject']} {', '.join(row['resolves'])} "
+                  f"(settled by {row['settled_by']})")
+            continue
+        # NO `bears_on` ON EVERY KIND, and reading it unguarded crashed the
+        # command outright the first time #398's kinds reached it. The two
+        # plan-shaped kinds carry it because a plan has an activity a gate
+        # bears on; an instrument question has no second axis, and the whole
+        # suite stayed green because nothing drove this renderer over a record
+        # holding one. A shape that varies by kind has to be branched on, not
+        # assumed.
         print(f"{row['for_date']} {row['about']}: {row['kind']} "
               f"{row['subject']} (settled by {row['settled_by']}, bears on "
               f"{row['bears_on']})")

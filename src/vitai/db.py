@@ -887,7 +887,34 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     written beside it. A weight reading with no height yet in force
 #     contributes no ratio and mints nothing - never a ratio back-filled from
 #     a later height.
-CONTRACT_VERSION = "48"
+# 49: `questions.kind` gains `outage` and `false_zero` - #398's fourth and
+#     fifth kinds, from a real instrument outage: a charger left at home, a
+#     watch that fell quiet, and one day on its last charge where it reported
+#     an athlete who had been moving as `steps: 0`.
+#
+#     THE SAME SHAPE AS 48 AND EARNED THE SAME WAY. No field moved on a
+#     question row; what widens is the closed vocabulary `kind` may hold. A
+#     client matching `kind in ("precondition", "clearance", "waking")` - the
+#     three legal values as of contract 48 - silently drops both new kinds
+#     rather than erroring, and the one it drops most quietly is the one that
+#     matters most, because a false zero is the case the athlete cannot see
+#     from their side and will never report.
+#
+#     TWO KINDS RATHER THAN ONE, and the split is the consumer-visible part.
+#     They want opposite gestures: a gap is answered by an APPEND, a false
+#     zero by a SUPERSEDE, because a row exists and is wrong and appending
+#     beside it leaves the lie in the record with a correction next to it
+#     rather than over it. A client handed one undifferentiated list cannot
+#     tell which it is holding. No `remedy` field is emitted alongside - it
+#     would co-vary with `kind` in every row forever, which is one fact with
+#     two definitions.
+#
+#     `outage` also adds `through`, so a run of days is stated rather than
+#     left for a client to rebuild from a count. Neither rule carries a
+#     number: silence is measured against the longest gap that source has
+#     already shown in this record, and a zero is out of family when the
+#     source has never written one for that field before.
+CONTRACT_VERSION = "49"
 
 _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity would
               # A JSON map (#325), and every container column is TEXT for

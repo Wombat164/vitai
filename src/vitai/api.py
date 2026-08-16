@@ -57,7 +57,8 @@ from .safety import (
 from .schema import (CURRENT_GENERATION, KEYS, aliases_for, coarse,
                      day_phases, units)
 from .verdicts import compute_verdicts
-from .questions import open_questions, waking_questions
+from .questions import (false_zero_questions, open_questions,
+                        outage_questions, waking_questions)
 from .weeks import session_weeks
 
 
@@ -1240,6 +1241,17 @@ class Vitai:
         # viewpoint discipline belongs in one place per direction, and
         # `waking_questions` is where the backward one lives.
         out += waking_questions(self.phases(), when)
+        # RAW CLAIMS, NOT THE CANONICAL DAY (#398). Both instrument kinds are
+        # about ONE source contradicting itself or falling quiet, and the
+        # canonical view is precisely where that fact goes: it merges the
+        # day's claims into a single row, so which instrument reported the
+        # zero - or reported nothing at all - is what it resolves away.
+        # `dataset` is the supported raw read and applies supersedes, so a
+        # false zero the athlete has already retired stops being asked about
+        # rather than being re-derived off the retired line forever.
+        daily_claims = self.dataset("daily")
+        out += outage_questions(daily_claims, when)
+        out += false_zero_questions(daily_claims, when)
         return sorted(out, key=lambda q: (q["for_date"], q["id"]))
 
     def gated(self, activity: str, on: date | str | None = None) -> bool:
