@@ -959,6 +959,134 @@ def terminal_retirement(dataset: str, key: str) -> tuple[str, str] | None:
     """Why this retired key is never read forward, and what to do instead."""
     return TERMINAL_RETIREMENT.get(dataset, {}).get(key)
 
+
+# --- G89 PART FOUR: a retirement nobody can end is permanent surface area -----
+#
+# `KEY_RETIREMENT` says when a key stopped being EXPECTED. Nothing said when it
+# stops being CARRIED, and that gap is #126's third item: every adopter
+# inherits the field, the validation branch and the reader machinery serving a
+# shape only a handful of records ever wrote. Legacy support with no end is not
+# legacy support, it is surface area with a story attached.
+#
+# So every retired key states a removal decision here, and `None` IS A DECISION
+# rather than a blank: it carries the precondition that has to hold before a
+# generation can be named. That is what makes the absence somebody's choice
+# instead of nobody's oversight - the same reason `test_fixture_coverage`'s
+# DEMO_OMITS records why a dataset is missing rather than listing the ones that
+# happen to be present.
+#
+# WHY ALL FOUR ARE UNSCHEDULED TODAY, AND IT IS NOT CAUTION. Removing a key
+# from `KEYS` makes every line carrying it fail with an unknown-field error,
+# and this repo's own corpus still writes three of the four. A generation named
+# while any reachable record still writes the key is a promise to break that
+# record. The counts are asserted by `tests/test_retirement_removal.py` against
+# the corpus rather than quoted here, because a number in a comment is a number
+# that rots and this file has been wrong that way before.
+#
+# THE ASYMMETRY WORTH KEEPING IN VIEW: a forward-mapped retirement can in
+# principle end, because the value has somewhere to go and a record can be
+# migrated with `supersedes` and then checked. A TERMINAL one cannot be ended
+# by migration alone - nothing maps the value, so removal makes it unreadable
+# rather than relocating it. Those are different arguments and this register
+# keeps them apart instead of averaging them into one policy.
+KEY_REMOVAL: dict[str, dict[str, tuple[int | None, str]]] = {
+    "daily": {
+        "hip_pain": (
+            None,
+            "forward-mapped, so an end is reachable: a record appends "
+            "corrected `pain`/`pain_site` lines and the old ones are "
+            "superseded. It is not reachable YET - the shipped corpus still "
+            "writes the key, and whether any other record has migrated is a "
+            "fact about records the engine cannot observe"),
+    },
+    "goals": {
+        "status": (
+            None,
+            "retired in the same generation the engine currently writes, so "
+            "no line carrying it has had a single release in which to "
+            "migrate. Scheduling waits on the corpus moving off it and on "
+            "both pinned clients doing the same"),
+    },
+    "sessions": {
+        "location": (
+            None,
+            "terminal, so removal would make the free text unreadable rather "
+            "than relocate it. The corpus carries none, and that is not "
+            "evidence about anyone else's record: with no successor there is "
+            "nothing to check a migration against, which is what an end would "
+            "have to be conditioned on"),
+        "planned": (
+            None,
+            "terminal, and its successor points the other way (#221) - what "
+            "the field meant now lives on a `plans` row citing the session. "
+            "An end waits on those rows existing, and a session file cannot "
+            "show whether they do"),
+    },
+}
+
+
+def removal_plan(dataset: str, key: str) -> tuple[int | None, str] | None:
+    """When this retired key is scheduled to leave `KEYS`, and why or why not.
+
+    A `None` generation is an answer with a reason beside it, never a gap.
+    """
+    return KEY_REMOVAL.get(dataset, {}).get(key)
+
+
+def removal_problems(retirement: dict[str, dict[str, int]],
+                     removal: dict[str, dict[str, tuple[int | None, str]]],
+                     current: dict[str, int],
+                     keys: dict[str, list[str]]) -> list[str]:
+    """Everything wrong with a removal register, reported rather than raised.
+
+    PURE AND PARAMETERISED, and that is the point rather than a style choice.
+    Every entry in the live register is unscheduled today, so a check that
+    could only read `KEY_REMOVAL` would exercise none of its scheduled
+    branches while looking thorough - a control whose failure path has never
+    run once. Taking the registers as arguments lets the test build the
+    schedules that do not exist yet and watch each branch fire.
+
+    The last check is the one this exists for. A generation names a release at
+    which the key LEAVES `KEYS`; if that release arrives and the key is still
+    there, the register has quietly become a false promise, and the failure is
+    silent because nothing else in the engine reads a removal generation. That
+    is the same shape as the defect #126 opened with - right number, wrong
+    linkage, nothing looks broken.
+    """
+    out: list[str] = []
+    for dataset, retired in sorted(retirement.items()):
+        for key in sorted(retired):
+            if key not in removal.get(dataset, {}):
+                out.append(
+                    f"{dataset}.{key} is retired and states no removal "
+                    f"decision. Add one to KEY_REMOVAL: a generation, or None "
+                    f"with the precondition that would let one be named")
+    for dataset, planned in sorted(removal.items()):
+        for key, (gen, why) in sorted(planned.items()):
+            if key not in retirement.get(dataset, {}):
+                out.append(
+                    f"{dataset}.{key} has a removal decision and is not "
+                    f"retired. Remove the entry, or retire the key")
+                continue
+            if not str(why).strip():
+                out.append(f"{dataset}.{key} states no reason")
+            if gen is None:
+                continue
+            retired_at = retirement[dataset][key]
+            if gen <= retired_at:
+                out.append(
+                    f"{dataset}.{key} is scheduled to be removed at "
+                    f"generation {gen} and was retired at {retired_at}. A key "
+                    f"cannot leave before it stopped being expected")
+            if gen <= current.get(dataset, 0) and key in keys.get(dataset, []):
+                out.append(
+                    f"{dataset}.{key} was scheduled to be removed at "
+                    f"generation {gen}, {dataset} is at {current[dataset]}, "
+                    f"and the key is still in KEYS. Either remove it or move "
+                    f"the generation - a schedule nothing honours is worse "
+                    f"than none, because it reads as a plan")
+    return out
+
 CURRENT_GENERATION: dict[str, int] = {name: 1 for name in KEYS}
 for _ds in ("weight", "daily", "sessions", "inferences", "medical",
             "achievements", "goals"):
