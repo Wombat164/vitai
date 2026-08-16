@@ -846,7 +846,48 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     which is a wider column, not a reshaped one; see the comment beside
 #     `MEASUREMENT_KINDS` in `schema.py` for why it ships free of a contract
 #     number of its own.
-CONTRACT_VERSION = "47"
+# 48: `crossings.kind` gains `band` - the third of #370's three milestone
+#     kinds, unblocked now that contract 47's `height_cm` gives it something
+#     to compute a ratio from.
+#
+#     NO COLUMN MOVED. `CROSSING_KEYS` is unchanged - `date`, `kind`, `metric`,
+#     `value`, `direction`, `previous_value`, `previous_date` said everything
+#     a `band` row needs to say before this PR existed, the same way contract
+#     47's two kinds shared one column set. What moves is the CLOSED
+#     VOCABULARY `kind` may legally hold, and that is a consumer-visible
+#     change on its own: code matching `kind in ("round_number",
+#     "personal_first")` - the two legal values as of contract 47 - silently
+#     drops every `band` row rather than erroring on it, which is a worse
+#     failure than a missing column would be, because nothing about it looks
+#     broken. `MEASUREMENT_KINDS` widening for `height_cm` in contract 47
+#     stayed free of a number for the opposite reason: that vocabulary is
+#     INPUT a consumer validates against, and a consumer ignorant of a new
+#     legal input value is unaffected by rows it never has to parse. Emitted
+#     OUTPUT vocabulary is the reverse - a consumer built against contract 47
+#     is the one with something to miss.
+#
+#     THE RULING THIS KIND SHIPS UNDER, decided by the operator on the issue:
+#     the engine may compute the ratio and state the boundary as a boundary,
+#     and may never name the band. A `band` row's `value` is the numeric
+#     boundary crossed, never a word - see `crossings.py`'s "THE BAND
+#     CROSSING" for the reasoning and `tests/test_crossings.py` for the
+#     control that renders every corpus persona's band rows and fails on a
+#     category word anywhere in the rendered text, independent of
+#     `scripts/boundary_gate.py`'s own deny list so the two do not share a
+#     blind spot.
+#
+#     `BAND_LEVELS` ARE ADOPTED, NOT INVENTED (G85) - see the sourced comment
+#     beside the constant in `crossings.py` for the fetched citation and why
+#     the ladder stops at three levels rather than the finer subdivision some
+#     secondary sources give the same scale.
+#
+#     A HEIGHT MUST BE EFFECTIVE-DATED, and this reuses `policy._in_force`'s
+#     own sort-and-pick-last machinery (`policy.height_on`, built on a new
+#     `policy._in_force_by` extracted from it) rather than a second one
+#     written beside it. A weight reading with no height yet in force
+#     contributes no ratio and mints nothing - never a ratio back-filled from
+#     a later height.
+CONTRACT_VERSION = "48"
 
 _TEXT_COLS = {"statistic", "answers",            # a slug, and REAL affinity would
               # A JSON map (#325), and every container column is TEXT for
@@ -966,16 +1007,19 @@ VERDICT_KEYS = ["week", "metric", "value", "target", "verdict", "goal",
 CONTRIBUTION_KEYS = ["date", "goal", "metric", "dataset", "period", "value",
                      "counted", "contribution", "headroom"]
 MILESTONE_KEYS = ["date", "goal", "period", "fraction", "value", "target", "label"]
-# #370: goal-independent, history-wide crossings - a round number crossed or
-# a personal best set. `value` is the notable number itself (the round-number
-# rung for `round_number`, the new extreme reading for `personal_first`), and
-# `previous_value`/`previous_date` are the evidence pair: for `round_number`,
-# the most recent reading already on the destination side of the level
-# (NOT the previous reading - see the module docstring in `crossings.py` for
-# why that distinction is the whole point), or null if the series was never
-# there before; for `personal_first`, the running extreme being beaten.
-# Without this pair a crossing is an assertion rather than a fact about the
-# series. See `crossings.py` for the full reasoning.
+# #370: goal-independent, history-wide crossings - a round number crossed, a
+# personal best set, or a population-reference ratio crossing a band boundary
+# (`kind == "band"`, contract 48). `value` is the notable number itself (the
+# round-number rung for `round_number`, the new extreme reading for
+# `personal_first`, the boundary crossed for `band` - a NUMBER, never a name;
+# see `crossings.py`'s "THE BAND CROSSING"), and `previous_value`/
+# `previous_date` are the evidence pair: for `round_number` and `band`, the
+# most recent reading already on the destination side of the level (NOT the
+# previous reading - see the module docstring in `crossings.py` for why that
+# distinction is the whole point), or null if the series was never there
+# before; for `personal_first`, the running extreme being beaten. Without
+# this pair a crossing is an assertion rather than a fact about the series.
+# See `crossings.py` for the full reasoning.
 CROSSING_KEYS = ["date", "kind", "metric", "value", "direction",
                  "previous_value", "previous_date"]
 CHURN_KEYS = ["date", "slug", "kind", "metric", "edit_no", "before", "after",

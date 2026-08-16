@@ -19,7 +19,8 @@ record and this file agree by construction.
 
 ## Body and build
 
-165 cm. Perimenopausal - the reason her sleep is what it is on certain
+165 cm (`measurements.jsonl`, one `height_cm` row dated the record's first
+day - #370). Perimenopausal - the reason her sleep is what it is on certain
 nights (`daily.jsonl`), never named as such anywhere data-facing in this
 record. Weight has genuinely drifted upward across the three years even
 though every attempt produces a real, modest improvement while it lasts.

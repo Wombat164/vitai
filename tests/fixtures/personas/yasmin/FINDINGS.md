@@ -1,7 +1,8 @@
 # yasmin: what this corpus is designed to break
 
-Findings below were exposed by yasmin@1 (see persona.toml; docs/persona-doctrine.md
-requires findings to record the persona version that exposed them).
+Findings below were exposed by yasmin@1 unless marked otherwise (see
+persona.toml; docs/persona-doctrine.md requires findings to record the
+persona version that exposed them).
 
 A persona whose record is clean and consistent tests almost nothing. Each
 item below names the machinery under test and the expected behaviour, in
@@ -45,6 +46,18 @@ constrains its own output; it never assesses her.
    the engine reads this as three honest restarts, never as one
    continuously failing programme, and carries no penalty or rate
    assumption across a restart boundary.
+7. **A band crossing exercised by real data, not only a unit test
+   (yasmin@2, #370).** One `height_cm` row (165 cm, dated the record's own
+   first day) turns her existing weight series into a BMI series that
+   crosses `crossings.BAND_LEVELS`' 30.0 boundary five times, alternating
+   direction, on 2027-08-09, 2028-05-15, 2028-05-29, 2029-10-01 and
+   2029-12-31 - verified by running `Vitai(root).crossings()` against this
+   corpus, not hand-computed (`yasmin-E7`). Before this, `height_cm` had
+   been a legal `MEASUREMENT_KINDS` value since contract 47 but no persona
+   in the corpus carried one, so a `band` crossing was exercised only by
+   `tests/test_crossings.py`'s own fixtures. Expected: five `kind: "band"`
+   rows, each carrying the boundary crossed (a number) and an evidence pair,
+   and no rendering surface - CLI, JSON, or MCP - ever names the boundary.
 
 ## Arc facts a reader should know
 
