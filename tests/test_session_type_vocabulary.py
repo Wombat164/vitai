@@ -276,3 +276,77 @@ def test_a_client_reads_both_vocabularies_with_one_shape():
     types = schema()["session_types"]["run"]
     assert isinstance(fields["aliases"], list)
     assert isinstance(types["aliases"], list)
+
+
+# --- a relay composes its own name into the vendor's string (#390) -------------
+
+
+def test_a_relayed_vendor_string_resolves_like_the_direct_one():
+    """THE REGRESSION #390 REPORTS. When a third-party app writes an exercise
+    to Fitbit, the Fitbit account export records the attribution INSIDE
+    `activityName` - so the archive holds "walking, general (MyFitnessPal)"
+    where the direct export holds "walking, general".
+
+    The vocabulary change that moved these eight strings under `myfitnesspal`
+    reasoned that "the vendor's export does not carry it and nothing here
+    composes one". Something does, so both spellings are real and dropping
+    either one reverts sessions to `other` on the next re-import.
+    """
+    from vitai.vocab import resolve_session_type
+
+    for direct, relayed in (
+        ("walking, general",
+         "Walking, general (MyFitnessPal)"),
+        ("running (jogging), 9 mph (6.5 min mile)",
+         "Running (jogging), 9 mph (6.5 min mile) (MyFitnessPal)"),
+        ("stationary bike, moderate effort (bicycling, cycling, biking)",
+         "Stationary bike, moderate effort (bicycling, cycling, biking) (MyFitnessPal)"),
+        ("strength training (weight lifting, weight training)",
+         "Strength training (weight lifting, weight training) (MyFitnessPal)"),
+    ):
+        assert resolve_session_type(direct) is not None, direct
+        assert resolve_session_type(relayed) == resolve_session_type(direct)
+
+
+def test_only_a_declared_source_is_stripped():
+    """THE SCOPE, and the whole difference between this and a regex over a
+    suffix - which is what the change that caused #390 rightly wanted to
+    avoid.
+
+    Two of the registry's own alias strings END in parentheses that are part
+    of the name. If the rule stripped any trailing group they would stop
+    resolving, which would be a worse regression than the one being fixed.
+    """
+    from vitai.vocab import resolve_session_type
+
+    assert resolve_session_type(
+        "running (jogging), 9 mph (6.5 min mile)") == "run"
+    assert resolve_session_type(
+        "bicycling, 12-14 mph, moderate (cycling, biking, bike riding)") == "cycle"
+    # A trailing group naming nothing the registries know is left alone, so an
+    # unrecognised activity stays unrecognised rather than being truncated
+    # into a match.
+    assert resolve_session_type("Competitive Zorbing (Blorbo)") is None
+
+
+def test_the_relay_rule_never_overrides_a_declared_value():
+    """Ordered last in `resolve`, so a string a registry declares outright can
+    never be reinterpreted through its parentheses. A vocabulary that changes
+    what an existing declared value means is not a widening."""
+    from vitai.vocab import resolve, resolve_session_type
+
+    assert resolve_session_type("walking, general") == "walk"
+    # The sources registry itself is exempt: it would recurse, and a source
+    # name does not carry a relay attribution because the relay IS a source.
+    assert resolve("sources", "sources", "MyFitnessPal") == "myfitnesspal"
+
+
+def test_a_declined_proposal_stays_declined_through_the_relay_form():
+    """`Elliptical, High Resistance` proposed `strength` off the word
+    Resistance and was declined. Arriving via a relay must not smuggle it in:
+    the rule removes an attribution, it does not soften matching."""
+    from vitai.vocab import resolve_session_type
+
+    assert resolve_session_type("Elliptical, High Resistance") is None
+    assert resolve_session_type(
+        "Elliptical, High Resistance (MyFitnessPal)") is None

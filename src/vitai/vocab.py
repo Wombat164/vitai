@@ -29,6 +29,7 @@ an error) and resolves forward to its replacement.
 
 from __future__ import annotations
 
+import re
 import tomllib
 from functools import lru_cache
 from importlib import resources
@@ -109,6 +110,51 @@ def values(name: str, section: str) -> list[str]:
     return sorted((registry(name).get(section) or {}))
 
 
+# A trailing parenthesised group, and nothing nested inside it. Used only to
+# offer a candidate to `_without_relay_suffix`, which decides whether it names
+# something before anything is stripped.
+_TRAILING_PAREN = re.compile(r"\s*\(([^()]*)\)\s*$")
+
+
+def _without_relay_suffix(name: str, text: str) -> str | None:
+    """`text` with a trailing relay attribution removed, or None.
+
+    A RELAY COMPOSES ITS OWN NAME INTO THE VENDOR'S STRING, which #390 found
+    the hard way. When a third-party app writes an exercise to Fitbit, the
+    Fitbit account export records the attribution INSIDE `activityName`, so
+    the archive contains the vendor's name with " (MyFitnessPal)" appended.
+    The direct export carries the bare name. Both are strings a real importer
+    meets, and matching should not depend on which one somebody thought of.
+
+    SCOPED TO NAMES THE REGISTRY ALREADY KNOWS, and that is the whole
+    difference between this and a regex over a suffix - which is what the
+    vocabulary change that caused #390 rightly wanted to avoid. The
+    parenthesised text has to resolve to a declared SOURCE before a single
+    character is removed, so this can only ever reach an entry the registries
+    already name. "(MyFitnessPal)" is stripped; "(6.5 min mile)" and
+    "(bicycling, cycling, biking)" are not, because no source is called that -
+    and those two are load-bearing parts of real alias strings sitting in the
+    registry right now.
+
+    NOT APPLIED TO THE SOURCES REGISTRY ITSELF. That would recurse, and a
+    source name does not carry a relay attribution anyway - the relay IS a
+    source.
+
+    One suffix, not a loop. Nothing observed composes two, and a loop here
+    would strip a trailing "(Strava)" off a hypothetical activity genuinely
+    called that, which is a worse failure than declining a case nobody has.
+    """
+    if name == "sources":
+        return None
+    m = _TRAILING_PAREN.search(text)
+    if not m or not m.group(1).strip():
+        return None
+    if resolve("sources", "sources", m.group(1)) is None:
+        return None
+    stripped = text[:m.start()].strip()
+    return stripped or None
+
+
 def resolve(name: str, section: str, written: object) -> str | None:
     """Canonical slug for whatever was written, or None if unrecognised.
 
@@ -116,13 +162,25 @@ def resolve(name: str, section: str, written: object) -> str | None:
     (`TrailRun`, `StandUpPaddling`) folds onto the same key as the slug that
     declares it. That is a spelling rule over exact declared values, not a
     fuzzy match: it can only ever reach an entry that already names it.
+
+    Then, and only if those fail, the same string with a trailing RELAY
+    ATTRIBUTION removed - see `_without_relay_suffix`. Ordered last so it can
+    never change what an already-resolving string means: a value that a
+    registry declares wins over any interpretation of its parentheses.
     """
     if written is None or str(written).strip() == "":
         return None
     index = _index(name, section)
     text = str(written)
-    return (index.get(_normalise(text))
-            or index.get(_normalise(_decamel(text))))
+    hit = (index.get(_normalise(text))
+           or index.get(_normalise(_decamel(text))))
+    if hit is not None:
+        return hit
+    bare = _without_relay_suffix(name, text)
+    if bare is None:
+        return None
+    return (index.get(_normalise(bare))
+            or index.get(_normalise(_decamel(bare))))
 
 
 def is_value(name: str, section: str, written: object) -> bool:
