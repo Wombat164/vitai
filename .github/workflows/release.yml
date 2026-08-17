@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.13"
-      - run: pip install build twine
+      - run: pip install -r requirements-release.txt
       - run: python -m build
       - run: twine check dist/*
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
@@ -41,4 +41,8 @@ jobs:
         with:
           name: dist
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      # SHA-PINNED like every other action here (#416). `release/v1` is a
+      # MOVING tag: the publisher repoints it, so what runs at release
+      # time is decided by somebody else, after the tag was cut, in the
+      # one job that holds an OIDC token.
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2

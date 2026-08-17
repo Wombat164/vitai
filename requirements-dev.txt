@@ -1,0 +1,23 @@
+# The development toolchain, pinned (#416).
+#
+# NOT runtime dependencies. `pyproject.toml`'s `dependencies` list stays empty
+# and CLAUDE.md's stdlib-only rule is unchanged - `scripts/dependency_gate.py`
+# enforces that, and it deliberately does not look at `tests/` or `scripts/`,
+# because what a USER installs and what a DEVELOPER installs are different
+# questions with different answers.
+#
+# Why a file rather than `pip install ruff pytest` in the workflow: an
+# unpinned install is an answer that can change with no commit. A ruff release
+# adding a rule inside the `E`/`F`/`W` prefixes turns `main` red with nothing
+# having changed, and the red is not attributable to anything in the history.
+#
+# Why THIS file rather than an extra in `pyproject.toml`: dependabot's `pip`
+# ecosystem reads requirements files in the directory it is pointed at, so
+# these get bumped and reviewed like everything else - which was the other
+# half of the complaint. It does NOT read `pip install` lines inside a
+# workflow, which is why the old shape could never have been noticed.
+#
+# `scripts/pin_gate.py` holds this file and every place that states it to each
+# other, and runs in `pytest` as well as in CI.
+ruff==0.16.3
+pytest==9.1.1

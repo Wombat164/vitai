@@ -7,8 +7,11 @@
 ## Checklist
 
 - [ ] Tests land with the change (synthetic data only) and `pytest -q` is green
-- [ ] `ruff check src tests` is clean
+- [ ] `ruff check .` is clean (everything, not just `src` and `tests`)
 - [ ] `python scripts/personal_gate.py` is clean (no private content)
+- [ ] The other gates are clean: `boundary_gate.py`, `contract_literal_gate.py`,
+      `dependency_gate.py`, `changelog_gate.py`, `pin_gate.py` - all under
+      `scripts/`, and all also run inside `pytest -q`
 - [ ] Schema changes (if any) updated `schema.py` + templates + emitting skills together, with a migration note
 - [ ] Docs updated where behavior changed (README / wiki page)
 - [ ] Honest scoping: anything specified but NOT done is called out below
