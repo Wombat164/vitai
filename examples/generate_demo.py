@@ -41,6 +41,16 @@ the coarser datasets structurally could not.
   indistinguishable from forgetting, and the fact that explained it lived one
   dataset away in `context`.
 
+- ALL SIX absence reason codes are now exercised, across all three datasets
+  that permit one (#427). Six published and one written meant five codes whose
+  rendering no client had been made to get right, and a client that renders
+  them identically has lost the distinction the contract exists to carry - it
+  is not a hypothetical, a downstream reader dropped every absence-only row
+  because the fixture it calibrates against had none. Each code sits where
+  this record EARNS it rather than where it was convenient: the scale that
+  stayed dark, the reading rejected as wrong, the clinic question left blank,
+  the hotel week nobody could recall, the distance lifting does not have.
+
 `artifacts` is deliberately absent: the manifest is a pointer to a blob store,
 so a demo of it means committing blobs and a store to put them in, and a
 manifest with nothing behind it would demonstrate the opposite of the point.
@@ -115,6 +125,48 @@ TOML = (
 
 def _jsonl(rows: list[dict]) -> str:
     return "\n".join(json.dumps(r) for r in rows) + "\n"
+
+
+def _state_absence(rows: list[dict], day: str, field: str, reason: str,
+                   note: str | None, *, where=lambda r: True,
+                   withdraw: bool = False) -> None:
+    """Say on one existing row that one field is absent, and why (contract 51).
+
+    AN EDIT RATHER THAN A SECOND ROW, on the pattern the ceiling breach below
+    already uses: this is the same day and the same witness, and a second row
+    would make it a resolution example instead of an absence one.
+
+    NO `rng` CALL, which is the constraint every addition to this generator
+    works under. The stream is seeded, so one extra draw shifts every value
+    after it and the regeneration diff stops being readable.
+
+    IT RAISES RATHER THAN MISSING. A generator that silently matched no row
+    would leave the demo without the code and leave the reason in a comment
+    nobody can check, which is the failure this whole issue is about.
+
+    `withdraw` IS THE HONEST NAME for the case where the loop above already
+    invented a value. The default refuses to write a reason beside one, because
+    contract 51 says a reason explains a hole and never fills one and a fixture
+    that trips its own validator is worse than no fixture. Withdrawing is
+    different from overriding: the generator is dropping a number IT made up
+    from a draw, on a day whose story says the athlete never supplied one, and
+    the flag makes that an argued exception rather than a silent overwrite.
+    """
+    found = [r for r in rows if r["date"] == day and where(r)]
+    assert len(found) == 1, (
+        f"expected exactly one {day} row to state {field!r} absent, "
+        f"found {len(found)}")
+    row = found[0]
+    assert withdraw or row.get(field) is None, (
+        f"{day} carries a value for {field!r}; a reason explains a hole and "
+        "never fills one, so this row cannot say it is absent")
+    assert not withdraw or row.get(field) is not None, (
+        f"{day} has no {field!r} to withdraw - drop the flag rather than "
+        "leaving it saying something untrue about this row")
+    row[field] = None
+    row.update({"absent_fields": field, "absent_reason": reason})
+    if note is not None:
+        row["note"] = note
 
 
 def _build(target: Path) -> None:
@@ -607,6 +659,65 @@ def _build(target: Path) -> None:
         if row["date"] == END.isoformat() and row.get("source") != "app":
             row["kcal_in"] = 2870
             row["note"] = "long ride and a birthday dinner on the same day"
+
+    # THE TWO CODES THAT NEED SOMEBODY TO HAVE ASKED (#427, contract 51).
+    #
+    # `asked-declined` and `asked-unknown` are the pair no instrument can
+    # produce: both need a question and an answer, and the answer is the fact.
+    # They go on `daily` because that is where this record holds the things the
+    # athlete reports rather than the things a device reports.
+    #
+    # `alcohol` ON 2030-06-27, the second DEXA day, so the asker is in the
+    # record rather than invented: the clinic intake form asks and the athlete
+    # leaves it blank. WOULD RATHER NOT SAY is a different fact from does not
+    # know and from nobody asked, and the field goes to null because contract
+    # 51 refuses a reason beside a value - a row saying "declined to answer"
+    # while carrying `false` is two claims with no way to choose.
+    #
+    # `sleep_h` ON 2030-05-28, the middle of the travel week, where the record
+    # already says the routine fell apart and two weigh-ins already say they
+    # did not happen. Asked at the weekly review how the hotel week slept, and
+    # the honest answer was that they did not know. DOES NOT KNOW rather than
+    # DECLINED, and the difference is the whole point: one is a boundary the
+    # reader must respect, the other is a gap a reader may reasonably offer to
+    # help fill. A client that renders them identically has lost that.
+    #
+    # THE WATCH ROW IS THE ONE EDITED, not the calorie app's. 2030-06-09 has
+    # two daily rows and its app row leaves `sleep_h` null already - stating an
+    # absence there would have been false, because the record does know: the
+    # watch row beside it carries the number.
+    _state_absence(daily, "2030-06-27", "alcohol", "asked-declined",
+                   "clinic intake asked about the last week and I left it "
+                   "blank", where=lambda r: r.get("source") != "app",
+                   withdraw=True)
+    _state_absence(daily, "2030-05-28", "sleep_h", "asked-unknown",
+                   "asked at the weekly review how the hotel week slept and "
+                   "I could not say", where=lambda r: r.get("source") != "app",
+                   withdraw=True)
+
+    # THE TWO A SESSION ROW CAN HOLD, and they are not the same shape (#427).
+    #
+    # `not-applicable` ON THE 2030-06-22 GYM SESSION's `distance_km`. Lifting
+    # covers no distance: the quantity does not apply to the row, which is a
+    # different fact from a distance nobody measured. TRUE OF EVERY STRENGTH
+    # ROW AND STATED ON ONE, on #423's own argument about the travel week - the
+    # state has to be expressible and exercised, and sixteen rows repeating it
+    # would drown the readings rather than teach anything a client does not
+    # learn from the first.
+    #
+    # `not-performed` ON THE ERG's `avg_hr`. The console records work and the
+    # athlete owns a watch that reads heart rate; they did not wear it to the
+    # gym, so THE MEASUREMENT WAS NEVER MADE. Deliberately not framed as the
+    # console being unable to read heart rate: an instrument that does not
+    # observe a quantity is contract 44's `competence: absent`, and `schema`
+    # says in as many words that it dropped FHIR's `unsupported` code to keep
+    # that fact in one place. This row is about the morning, not the machine.
+    _state_absence(sessions, "2030-06-22", "distance_km", "not-applicable",
+                   None, where=lambda r: r["type"] == "strength")
+    _state_absence(sessions, "2030-06-21", "avg_hr", "not-performed",
+                   "no strap - the console does not see heart rate and I did "
+                   "not wear the watch", where=lambda r: r["type"] == "row")
+
     daily.sort(key=lambda r: (r["date"], r.get("source") or ""))
     sessions.sort(key=lambda s: (s["date"], s["type"], s.get("source") or ""))
 
@@ -768,6 +879,53 @@ def _build(target: Path) -> None:
             # Logged the same evening as the rest of the day, like every other
             # gen-2 weigh-in above.
             "recorded_at": f"{_away}T21:{_offset % 60:02d}:00+02:00",
+            "_gen": CURRENT_GENERATION["weight"]})
+
+    # TWO MORE ABSENCES THE SCALE ITSELF PRODUCED (#427, contract 51).
+    #
+    # #423 gave this record its first stated absence and left five of the six
+    # codes unwritten. That is not a tidiness problem: a client can render all
+    # six as one grey square and pass every job it has, and one did - a
+    # downstream reader absorbed contract 51 and dropped every row whose only
+    # content was an absence, correct against its fixtures and wrong about the
+    # record. So the codes go where this record EARNS them, and the two below
+    # are the pair the travel week could not supply.
+    #
+    # `unable-to-obtain` ON 2030-06-25, and it is the one the athlete's own
+    # routine makes legible: they weigh daily by this point in the record, the
+    # 24th and the 26th both carry readings, and this morning they stood on the
+    # scale and it stayed dark. ATTEMPTED, AND NO VALUE CAME BACK - which is
+    # the distinction from the travel week, where nothing was attempted at all.
+    # `source` and `origin` are `scale` for exactly that reason: the channel
+    # existed and was used, unlike the away days where it did not exist.
+    #
+    # `error` ON 2030-06-03, the morning after the trip, whose context row says
+    # "home again". A VALUE CAME BACK AND WAS REJECTED, which is a third fact
+    # again: the record is not missing a reading here, it is refusing one it
+    # holds the number for. The reason is in the row rather than in this
+    # comment, because a consumer reading the record has only the row.
+    #
+    # `kg` STAYS NULL ON BOTH, which is contract 51's rule and not a stylistic
+    # choice: a reason explains a hole and never fills one, so the rejected
+    # 71.2 cannot sit in `kg` beside the reason that rejects it. It lives in
+    # `note`, where it is prose about the record rather than a reading in it -
+    # and `absence_problems` would refuse the row the other way round.
+    for _day, _reason, _note in (
+            ("2030-06-25", "unable-to-obtain",
+             "stood on it twice and the display never woke - flat batteries, "
+             "replaced that evening"),
+            ("2030-06-03", "error",
+             "first morning home: it read 71.2, which is five kilos under "
+             "Monday and five under Tuesday. The scale had been moved onto "
+             "the bath mat while we were away. Not a weigh-in")):
+        weight.append({
+            **{k: None for k in KEYS["weight"]},
+            "date": _day, "kg": None,
+            "source": "scale", "origin": "scale",
+            "path": "vendor-app>vendor-api",
+            "absent_fields": "kg", "absent_reason": _reason,
+            "note": _note,
+            "recorded_at": f"{_day}T21:30:00+02:00",
             "_gen": CURRENT_GENERATION["weight"]})
 
     # The provenance pair above appends out of order, and `recorded_at` is
