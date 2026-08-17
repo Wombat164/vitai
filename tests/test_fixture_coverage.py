@@ -517,3 +517,73 @@ def test_the_field_measurement_can_fail() -> None:
         "a dataset the demo deliberately omits is not exempted, so every field "
         "of it would be reported and the register would hold the same decision "
         "twice")
+
+
+# --- the corpus property the coverage count leans on (#428) -------------------
+#
+# `report.readings` counts a row as coverage unless the row STATES its values
+# absent, which is contract 51's rule and takes no decision about what a hole is
+# worth. It cannot see a SILENT hole - a null with no `absent_fields` beside it -
+# and that limit is only harmless while no fixture has one.
+#
+# So the limit is held here rather than asserted in a docstring. The narrow rule
+# and the fuller one (observed / explained-absent / silent, reported separately)
+# agree on every fixture this repo ships, and this is what says so. A fixture
+# that adds the first silent hole turns this red, which is the right moment to
+# take the decision rather than to discover the number has drifted again.
+
+
+def _silent_holes(rows: list[dict], field: str) -> list[dict]:
+    """Rows whose `field` is null and which say nothing about why.
+
+    A PURE FUNCTION over rows, on `_gap`'s pattern, so its own failure can be
+    shown against a row this repo does not contain.
+    """
+    from vitai.schema import absent_fields
+
+    return [r for r in rows
+            if r.get(field) is None and field not in absent_fields(r)]
+
+
+def _weight_rows() -> list[tuple[str, dict]]:
+    paths = (sorted((DEMO / "data").glob("weight.jsonl"))
+             + sorted((ROOT / "tests" / "fixtures" / "personas")
+                      .glob("*/data/weight.jsonl")))
+    out = []
+    for path in paths:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                out.append((str(path.relative_to(ROOT)), json.loads(line)))
+    return out
+
+
+def test_no_shipped_weigh_in_is_missing_without_saying_so() -> None:
+    """Every null `kg` in the corpus is EXPLAINED, which is what makes the
+    rollup's coverage count exact rather than merely better."""
+    silent = [(where, r) for where, r in _weight_rows()
+              if _silent_holes([r], "kg")]
+    assert not silent, (
+        f"{len(silent)} weight row(s) carry no `kg` and no `absent_fields` "
+        f"saying why: {[(w, r.get('date')) for w, r in silent][:5]}. The "
+        "rollup's `## Coverage` counts them as weigh-ins, because "
+        "`report.readings` subtracts STATED absence only. Either state the "
+        "absence on the row, or take #428's third option and report observed, "
+        "explained-absent and silent separately")
+
+
+def test_the_silent_hole_measurement_can_fail() -> None:
+    """THE CONTROL. Written against rows this repo does not contain, because a
+    check that only ever sees a clean corpus is a check nobody has watched
+    fail."""
+    stated = {"date": "2030-05-01", "kg": None, "absent_fields": "kg",
+              "absent_reason": "not-performed"}
+    silent = {"date": "2030-05-02", "kg": None}
+    other = {"date": "2030-05-03", "kg": None, "absent_fields": "source",
+             "absent_reason": "not-performed"}
+    present = {"date": "2030-05-04", "kg": 80.0}
+
+    assert _silent_holes([silent], "kg") == [silent], "a bare null is a hole"
+    assert _silent_holes([stated], "kg") == [], "a stated absence is not"
+    assert _silent_holes([other], "kg") == [other], (
+        "a reason about a DIFFERENT field explains nothing about this one")
+    assert _silent_holes([present], "kg") == [], "a reading is not a hole"
