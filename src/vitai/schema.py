@@ -1131,6 +1131,15 @@ def removal_problems(retirement: dict[str, dict[str, int]],
     silent because nothing else in the engine reads a removal generation. That
     is the same shape as the defect #126 opened with - right number, wrong
     linkage, nothing looks broken.
+
+    DISPATCHED FROM THE SUITE, NOT FROM `api.validate`, and stated here so the
+    next reader does not have to re-derive it (#418). It reads the schema's own
+    tables, which are the same in every install, so no record can make it say
+    anything a suite run has not already said - which is why the caller is
+    `tests/test_retirement_removal.py`, over the LIVE registers as well as
+    over the synthetic ones the branch coverage needs. It is listed in
+    `NOT_DISPATCHED_BY_VALIDATE` in `tests/test_validator_dispatch.py` with
+    that reason, which is what stops it being read as another forgotten one.
     """
     out: list[str] = []
     for dataset, retired in sorted(retirement.items()):
