@@ -18,6 +18,7 @@ from .clocks import (instrument_seam, protocol_seam, timing_caveat,
 from .composition import decompose, endpoints
 from .config import Config, phase_rate_for
 from .policy import all_comparable
+from .schema import absent_fields
 from .verdicts import open_day_in
 from .vocab import session_classes
 
@@ -54,6 +55,55 @@ def over_days(observed: int, window: int) -> str:
     if observed >= window or observed <= 0:
         return ""
     return f" over {observed} of the last {window} days"
+
+
+def readings(rows: list[dict]) -> int:
+    """Rows that observed something, which is what a coverage count claims
+    (#428).
+
+    A REASON EXPLAINS A HOLE AND NEVER FILLS ONE, and this line is where the
+    engine was reading one as a value. Contract 51 states that rule for a
+    consumer of a row; a coverage figure is a claim about how much of the
+    window the record actually observed, so a row that says its value is
+    ABSENT is the opposite of coverage and counting it up is the one direction
+    that misleads. Before #423 the demo's `weight: 62` was both a row count and
+    a reading count; two rows carrying `absent_fields: kg` made those two
+    different numbers and the section kept rendering the first one.
+
+    NO NEW POLICY, WHICH IS WHY THIS SHIPS BESIDE THE ROWS THAT EXPOSED IT
+    rather than after them. The existing rule is applied one line further out:
+    a row whose `kg` is absent is not a weigh-in, and `absent_fields` is the
+    record's own statement of that. Nothing here decides what a hole is worth.
+
+    IT DOES NOT SEE A SILENT HOLE, and that limit is stated rather than
+    papered over. A row with a null value and no `absent_fields` still counts,
+    so this measures explained absence only - the fuller shape, reporting
+    observed, explained-absent and silent separately, is #428's third option
+    and needs a per-dataset headline field the schema does not declare. What
+    the corpus says today: `absent_fields` is written on FOUR rows across the
+    demo and all fifteen personas, every one of them `weight.kg`, and there is
+    no weight row anywhere carrying a null `kg` without one. So the narrow
+    rule and the fuller one agree on every fixture this repo ships, and the
+    difference between them is a decision the coverage work can still take.
+
+    WHOLE ROWS, NOT NAMED FIELDS, for the datasets where the row IS the
+    observation. `daily` and `sessions` state no absence anywhere in the
+    corpus, so this changes nothing for them today; a day that named one of
+    its several fields absent would want a headline field to be counted
+    correctly, and that is the same decision deferred above.
+
+    THE KEY IS NAMED HERE AND THE SPLITTING IS NOT, on purpose and in both
+    directions. `schema.absent_fields` stays the only implementation of the
+    convention, so there is no second parser to drift. But the field register
+    in `test_field_population` measures a read as the KEY appearing in a
+    consumer, and `schema` declares `KEYS` and is therefore never credited as
+    a reader - so a consumer that only calls the helper is invisible to it,
+    and `weight.absent_fields` would have stayed on `UNREAD` while a real
+    reader existed. Naming the key narrows the rows the helper is asked
+    about, and it is what makes this read one the register can see.
+    """
+    carried = [r for r in rows if r.get("absent_fields") is not None]
+    return len(rows) - sum(1 for r in carried if absent_fields(r))
 
 
 def within_days(rows: list[dict], today: date, days: int,
@@ -583,8 +633,10 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
             L.append(f"- **{e.get('title')}** {when} "
                      f"({e.get('event_date')}){fixed}")
 
+    # READINGS, NOT ROWS (#428). `len` counted a stated absence as coverage.
     L += ["", "## Coverage", "",
-          f"- weight: {len(weight)} - daily: {len(daily)} - sessions: {len(sessions)}",
+          f"- weight: {readings(weight)} - daily: {readings(daily)}"
+          f" - sessions: {readings(sessions)}",
           "", "> Sparse and continuous beats rich and abandoned."]
     return "\n".join(
         ["# Weekly rollup", "",

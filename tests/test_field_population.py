@@ -266,21 +266,28 @@ UNREAD = (
     # that the evidence half has to exist before the reading half can. It
     # leaves this list the day a band is earned rather than assumed.
     "protocols.controls",
-    # WRITTEN AND NOT YET READ, and a decision rather than a backlog item
-    # (#402). `bea` records a shift day she chose not to weigh on, and nothing
-    # in the engine reads the reason.
+    # `weight.absent_fields` LEFT THIS REGISTER at #428, and the pair splitting
+    # is the finding rather than an untidiness. The entry used to say that both
+    # halves were blocked on the same evidence, and that was true of only one
+    # of them.
     #
-    # That is the shape this field was landed in. Its consumers are on the
-    # capture side - a client letting somebody tap a gap and explain it - and
-    # in the coverage work that would count explained holes separately from
-    # silent ones. Neither exists here, and a reader written now would have to
-    # decide what an unexplained hole is WORTH, which is #402's band question
-    # and is blocked on evidence no record holds.
+    # WHICH FIELDS are absent is now read by `report.readings`: the rollup's
+    # `## Coverage` line counts readings rather than rows, so a weigh-in the
+    # athlete states was not performed stops being counted as one. That needed
+    # no decision about what a hole is WORTH - it applies contract 51's own
+    # rule, that a reason explains a hole and never fills one, to the consumer
+    # that was reading one as a value.
     #
-    # The rule the field ships with is the reason it is safe to leave unread:
-    # a reason explains a hole and never fills one, so nothing downstream that
-    # ignores it reads a number that is not there.
-    "weight.absent_fields",
+    # WHY the reading is missing still has no reader, and the block is real
+    # rather than inherited. Every consumer of the reason grades holes against
+    # each other - an explained gap counted differently from a silent one, six
+    # codes ranked by how much they excuse - and that ranking is #402's band
+    # question, blocked on evidence no record holds. `bea` records a shift day
+    # she chose not to weigh on; the engine now knows to stop counting it, and
+    # still has no basis for saying what her reason is worth.
+    #
+    # So the coverage line reads exactly the half that needs no ranking, which
+    # is why one of these two moved and the other did not.
     "weight.absent_reason",
     # WRITTEN AND NOT YET READ. `otto` photographs the club ergometer's
     # console, so every artifact row says when the shutter went - which is a

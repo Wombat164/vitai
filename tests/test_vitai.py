@@ -219,6 +219,54 @@ def test_rate_ignores_stale_gap():
     assert "**Rate:**" in out
 
 
+# ---- coverage counts readings, not rows (#428) -------------------------------
+#
+# Contract 51's rule at the one place the engine was breaking it: a reason
+# explains a hole and never fills one, and `## Coverage` was reading one as a
+# value. The three below are the property, the control on the property, and the
+# control on the MEASUREMENT - the last written against a row this repo does not
+# contain, because a check exercised only by the corpus it measures is a check
+# whose failure nobody has seen.
+
+def _absent_weighin(day):
+    return {"date": day, "kg": None, "source": None, "note": None,
+            "absent_fields": "kg", "absent_reason": "not-performed"}
+
+
+def test_coverage_does_not_count_a_stated_absence_as_a_reading():
+    """The defect: two travel days the athlete states were not weighed on read
+    as two weigh-ins, silently, on a record the athlete is being shown."""
+    weight = _weights([80.0, 79.8]) + [_absent_weighin("2030-05-10")]
+    out = build_report(Config(), weight, [], [], today=TODAY)
+    assert "- weight: 2 - daily: 0 - sessions: 0" in out
+    assert "- weight: 3" not in out
+
+
+def test_coverage_counts_every_row_that_states_no_absence():
+    """The control. Nothing here narrows the count except a stated absence -
+    a fix that quietly dropped rows for some other reason would pass the test
+    above and fail this one."""
+    out = build_report(Config(), _weights([80.0, 79.8, 79.6]), [], [],
+                       today=TODAY)
+    assert "- weight: 3 - daily: 0 - sessions: 0" in out
+
+
+def test_a_row_naming_no_field_absent_is_still_a_reading():
+    """THE CONTROL ON THE MEASUREMENT. `absent_fields` is a parsed list and an
+    empty one names nothing, so a row carrying the key without content states
+    no absence and is a reading like any other. A count written on the key's
+    truthiness rather than on what it parses to would read this row as an
+    explained hole. Nothing in the demo or the fifteen personas has this shape,
+    which is exactly why it is written here."""
+    from vitai.report import readings
+
+    assert readings([{"date": "2030-05-01", "kg": 80.0,
+                      "absent_fields": "   "}]) == 1
+    assert readings([{"date": "2030-05-01", "kg": None,
+                      "absent_fields": "kg",
+                      "absent_reason": "not-performed"}]) == 0
+
+
 def test_report_easy_cap_flag():
     cfg = Config(easy_hr_cap=150)
     sessions = [{"date": "2030-05-05", "type": "run", "distance_km": 5.0,
