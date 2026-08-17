@@ -224,6 +224,12 @@ def registry_problems() -> list[str]:
     An off-vocabulary axis value must never silently create a new pattern or a
     new body site: the whole point of borrowing the vocabularies is that the
     two stay joinable, and a typo that invents `hindge` breaks that quietly.
+
+    THE TEST IS THE DISPATCH, and that is deliberate rather than forgotten
+    (#418). It takes no arguments and reads a TOML file shipped with the
+    engine, so it says the same thing in every install and there is nothing a
+    record could add - `api.validate` calling it would re-answer a question
+    already answered by `tests/test_exercises.py` on every run.
     """
     from .anatomy import resolve as resolve_site
     from .vocab import axis_values
@@ -369,7 +375,12 @@ def _is_session_type(written: object) -> bool:
 
 
 def validate_fixtures() -> list[str]:
-    """Every `fixture`/`kit` value on an exercise names a fixtures.toml slug."""
+    """Every `fixture`/`kit` value on an exercise names a fixtures.toml slug.
+
+    Dispatched from `tests/test_exercises.py`, for `registry_problems`' reason
+    above: two shipped tables checked against each other, with no record in
+    the question (#418).
+    """
     out: list[str] = []
     known_fx, known_kit = set(fixture_values()), set(kit_values())
     for slug, data in (registry(REGISTRY).get(SECTION) or {}).items():

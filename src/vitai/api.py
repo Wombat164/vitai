@@ -2747,6 +2747,7 @@ class Vitai:
                              impossible_claim_problems, recorded_at_problems,
                              overlap_evidence_problems,
                              overlap_timing_advisories,
+                             overlapping_instrument_problems,
                              period_advisories, polarity_advisories,
                              protocol_pin_advisories,
                              side_advisories,
@@ -2857,6 +2858,41 @@ class Vitai:
                 advisories += period_advisories(rows)
             if name == "medical":
                 advisories += side_advisories(rows)
+            if name == "instruments":
+                # CROSS-ROW, WITHIN ONE DATASET (#418), which is why it is
+                # here and not beside the two cross-DATASET checks after the
+                # loop: it needs one dataset's rows and they are in hand.
+                # Over the MERGED stream on purpose - two device files each
+                # registering the same origin is exactly the collision the
+                # union makes possible, and reading only `instruments.jsonl`
+                # would miss it.
+                #
+                # AN ADVISORY, and the split is #38's. Both intervals are
+                # legal lines already on disk, an append-only record cannot
+                # edit either, and the repair is to APPEND a `supersedes`
+                # correction - which this check already reads, so a corrected
+                # register goes quiet. Refusing the build until that append
+                # happens would fail a record for a shape the engine handles.
+                #
+                # The argument the other way is real and is why this comment
+                # is long: `policy.instrument` resolves a reading to an
+                # instrument by walking these rows and returning the first
+                # match, so inside an overlap it answers by FILE POSITION -
+                # a sort, a reformat or a device merge can change which
+                # instrument a reading is attributed to, silently. That is a
+                # wrong answer, not a cosmetic one. It is reported rather
+                # than refused because the record can be repaired without
+                # the build ever going red, and because ESCALATION IS THE
+                # CHEAP DIRECTION: an advisory that turns out to be common
+                # can become a problem later, where a problem that turns out
+                # to be common has already broken somebody's build.
+                #
+                # The condition for escalating, stated so it can be argued
+                # with: a record produces one of these and `policy.instrument`
+                # is observed answering differently before and after a
+                # reformat of the same file.
+                advisories += overlapping_instrument_problems(
+                    [rec for _n, rec in rows])
             # A missing track file is NOT a missing session: the session is
             # the fact and the track is an attachment, so a broken pointer is
             # reported and never fails the build (#43).

@@ -132,6 +132,114 @@ def test_a_retired_line_does_not_overlap_its_replacement():
     assert overlapping_instrument_problems([first, fixed]) == []
 
 
+# --- and the check is DISPATCHED, which for five contracts it was not (#418) --
+#
+# Every test above calls the function directly. That is what made the defect
+# invisible: the check passed its own tests, in five places, and `api.validate`
+# had never called it, so no record had ever been asked the question. The tests
+# below go through `Vitai.validate` and `vitai validate` instead, so they fail
+# if the dispatch is removed and the function is left standing.
+
+def _row(**values) -> dict:
+    """An `instruments` line carrying the whole registered shape.
+
+    Filled from `KEYS` rather than hand-written, because a row missing a
+    registered key is a validation PROBLEM in its own right - and a test that
+    wants to prove the overlap is only an advisory cannot afford to be
+    carrying eleven unrelated problems while it says so.
+    """
+    return {key: values.get(key) for key in KEYS["instruments"]} | values
+
+
+def _record_with(tmp_path, instruments: list[dict], name: str = "rec") -> Path:
+    """A record carrying exactly these instrument rows."""
+    root = tmp_path / name
+    (root / "data").mkdir(parents=True)
+    (root / "data" / "instruments.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in instruments), encoding="utf-8")
+    return root
+
+
+OVERLAPPING = [
+    _row(date="2026-01-01", origin="watch", from_date="2026-01-01",
+         to_date=None, name="the first watch"),
+    _row(date="2030-01-01", origin="watch", from_date="2030-01-01",
+         to_date=None, name="the second watch"),
+]
+
+
+def test_validate_reports_an_overlap_rather_than_calling_the_record_sound(tmp_path):
+    """The issue's evidence, turned into a test.
+
+    Before this dispatch, this exact record got `all data lines valid` out of
+    `vitai validate` while the function reported the ambiguity to anyone who
+    called it by hand.
+    """
+    report = Vitai(_record_with(tmp_path, OVERLAPPING)).validate()
+    assert any("claimed by two intervals at once" in a
+               for a in report["advisories"]), report
+
+
+def test_the_overlap_is_an_advisory_and_the_record_still_builds(tmp_path):
+    """#38: both lines are legal, already on disk, and unaeditable, and the
+    repair is an APPEND. Refusing the build would leave a record whose only
+    fault is a shape the engine handles with no legal path to green."""
+    report = Vitai(_record_with(tmp_path, OVERLAPPING)).validate()
+    assert report["ok"] is True
+    assert not any("claimed by two intervals" in p for p in report["problems"])
+
+
+def test_appending_the_correction_clears_the_advisory(tmp_path):
+    """The legal path to green, walked. This is the half that makes the
+    advisory fair rather than permanent noise."""
+    from vitai.jsonl import line_key
+
+    fixed = OVERLAPPING[0] | {
+        "date": "2030-02-01", "to_date": "2029-12-31",
+        "supersedes": line_key("instruments", OVERLAPPING[0])}
+    report = Vitai(_record_with(tmp_path, OVERLAPPING + [fixed])).validate()
+    assert not any("claimed by two intervals" in a
+                   for a in report["advisories"]), report
+
+
+def test_it_reads_the_union_of_every_device_file(tmp_path):
+    """Per-device files and a union merge (#105), so the two rows that collide
+    can be in two files - which is when a shared origin is LIKELIEST, and is
+    the case reading only `instruments.jsonl` would miss."""
+    root = tmp_path / "rec"
+    (root / "data").mkdir(parents=True)
+    (root / "data" / "instruments.jsonl").write_text(
+        json.dumps(OVERLAPPING[0]) + "\n", encoding="utf-8")
+    (root / "data" / "instruments.laptop.jsonl").write_text(
+        json.dumps(OVERLAPPING[1]) + "\n", encoding="utf-8")
+    report = Vitai(root).validate()
+    assert any("claimed by two intervals at once" in a
+               for a in report["advisories"]), report
+
+
+def test_the_shipped_corpus_produces_none(tmp_path):
+    """The number this change is worth, stated rather than implied: zero.
+
+    Dispatching a check that has never run is only news if something turns
+    red, so the answer belongs in the suite where it can stop being true. Every
+    record this repo ships - the demo and all sixteen persona fixtures - passes
+    the check that had never been asked, and if a future fixture stops doing
+    so this is where it says so.
+    """
+    import shutil
+
+    roots = [DEMO] + sorted(
+        p for p in (ROOT / "tests" / "fixtures" / "personas").iterdir()
+        if (p / "data").is_dir())
+    found = {}
+    for src in roots:
+        root = tmp_path / src.name
+        shutil.copytree(src, root)
+        found[src.name] = [a for a in Vitai(root).validate()["advisories"]
+                           if "claimed by two intervals" in a]
+    assert found and not any(found.values()), found
+
+
 # --- what a row must say ------------------------------------------------------
 
 @pytest.mark.parametrize("bad,expected", [
