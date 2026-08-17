@@ -1350,7 +1350,8 @@ class Vitai:
                                 goals=d["goals"], thresholds=d["thresholds"],
                                 medical=d["medical"],
                                 raw_daily=self.dataset("daily"),
-                                comparability=self.dataset("comparability"))
+                                comparability=self.dataset("comparability"),
+                                overlaps=self.dataset("overlaps"))
 
     def rollup(self, today: date | None = None) -> str:
         """The weekly report as Markdown - the same text `build` writes out.
@@ -1383,7 +1384,8 @@ class Vitai:
                             gates=self.gates(on),
                             escalations=self.urgent(on),
                             events=self.events(on),
-                            comparability=self.dataset("comparability"))
+                            comparability=self.dataset("comparability"),
+                            overlaps=self.dataset("overlaps"))
 
     def state(self, on: date | str) -> State:
         """The goals and thresholds in force on a date - as-of reconstruction.
@@ -1837,6 +1839,13 @@ class Vitai:
         itself rather than only by this docstring - and the row still EARNS NO
         BAND, because `offset` does not lift the instrument seam and the
         extremes of a sample are not a coverage interval over it.
+
+        `overlap` IS A THIRD KEY SINCE CONTRACT 53 (#413): the `overlaps` line
+        the record could hold, carrying the census - paired days, dropped days
+        and the two ends of the window. It is filled from here rather than by
+        `calibration` alone because this is the surface that knows which
+        dataset the readings came from; the module below is handed rows and
+        cannot tell.
         """
         from .calibration import overlap_calibration as _calibrate
 
@@ -1852,7 +1861,7 @@ class Vitai:
         if field not in KEYS[dataset]:
             raise KeyError(f"{dataset} has no field {field!r}")
         return _calibrate(self.dataset(dataset), field, origin_a, origin_b,
-                          on=on or self.on)
+                          on=on or self.on, dataset=dataset)
 
     def comparability(self, field: str, origin_a: str, origin_b: str,
                       on: date | str | None = None) -> dict:
@@ -1873,9 +1882,50 @@ class Vitai:
         exactly as asking about `(origin_b, origin_a)` would, because
         whether two instruments agree is one fact about the pair and not
         about which one a caller happened to name first.
+
+        THE CENSUS IS PASSED IN SINCE CONTRACT 53 (#413), because it is now one
+        of the two things that can earn a `comparable` or `offset` row. A row
+        whose overlap is counted in `overlaps` no longer needs the sentence in
+        `overlap_ref`, and a caller reaching `policy.comparability` without the
+        censuses would find such a row unearned and read it as silence.
         """
         return comparability(self.dataset("comparability"), field, origin_a,
-                             origin_b, on or self.on)
+                             origin_b, on or self.on,
+                             self.dataset("overlaps"))
+
+    def overlap(self, dataset: str, field: str, origin_a: str, origin_b: str,
+                on: date | str | None = None) -> dict | None:
+        """The counted paired-measurement window for this pair, or None (#413).
+
+        WHAT `overlap_ref` USED TO BE A SENTENCE ABOUT. A `comparability` row
+        declares that two origins may be read across and cites its evidence;
+        this is that evidence as data - how many days paired, how many were
+        dropped as ambiguous, and the two ends of the window - so a client
+        deciding whether to trust the figure can count rather than parse
+        English.
+
+        NONE MEANS NOBODY COUNTED ONE, and it is not the same as a window of
+        zero days. `comparability()` synthesises a row on silence because
+        silence there IS a decision the record has made; there is no such
+        default census, and inventing one would assert a measurement.
+
+        THE DATASET IS NAMED, `overlap_calibration`'s reason exactly: a field
+        name does not identify a dataset, and `distance_km` is a column of both
+        `daily` and `sessions`.
+
+        NOT THE PLACE THE STATISTICS LIVE. The median and the two ends of the
+        measured difference are on the `comparability` row, as `bias` and
+        `difference_lo`/`difference_hi` (contract 52). This dataset holds the
+        evidence about the derivation and deliberately does not restate them.
+        """
+        from .policy import overlap as resolve_overlap
+
+        if dataset not in KEYS:
+            raise KeyError(f"unknown dataset {dataset!r}; one of {sorted(KEYS)}")
+        if field not in KEYS[dataset]:
+            raise KeyError(f"{dataset} has no field {field!r}")
+        return resolve_overlap(self.dataset("overlaps"), dataset, field,
+                               origin_a, origin_b, on or self.on)
 
     def instrument(self, origin: str,
                    on: date | str | None = None) -> dict | None:
@@ -2120,7 +2170,8 @@ class Vitai:
                                     goals=d["goals"], thresholds=d["thresholds"],
                                     medical=d["medical"],
                                     raw_daily=self.dataset("daily"),
-                                    comparability=self.dataset("comparability"))
+                                    comparability=self.dataset("comparability"),
+                                    overlaps=self.dataset("overlaps"))
         on = (today or self.on).isoformat()
         return {
             "session_weeks": session_weeks(d["sessions"], on),
@@ -2242,7 +2293,8 @@ class Vitai:
                          escalations=urgent_now(derivations["escalations"],
                                                 on=on),
                          events=self.events(on),
-                         comparability=self.dataset("comparability")),
+                         comparability=self.dataset("comparability"),
+                         overlaps=self.dataset("overlaps")),
             encoding="utf-8", newline="\n")
         return db
 
@@ -2693,6 +2745,7 @@ class Vitai:
         from .schema import (corrections_awaiting_their_target,
                              corrections_that_did_not_apply,
                              impossible_claim_problems, recorded_at_problems,
+                             overlap_evidence_problems,
                              period_advisories, polarity_advisories,
                              protocol_pin_advisories,
                              side_advisories,
@@ -2817,6 +2870,22 @@ class Vitai:
         for ds in ("weight", "measurements"):
             advisories += protocol_pin_advisories(
                 ds, dataset_rows.get(ds, []), protocol_rows)
+
+        # EXACTLY ONE SHAPE OF EVIDENCE PER DECLARATION (#413). Deferred to
+        # here for `protocol_pin_advisories`' reason immediately above: it
+        # needs two datasets at once, and `overlaps` is registered into `KEYS`
+        # after `comparability`, so at the point in the loop where the
+        # declarations were read the censuses had not been.
+        #
+        # A PROBLEM RATHER THAN AN ADVISORY, both halves. A row naming its
+        # overlap nowhere is the requirement that moved out of
+        # `_comparability_problems` and it was a problem there; a row naming
+        # it twice is two carriers of one fact, and the fix is to delete a
+        # sentence, which is a legal edit to an unappended field rather than a
+        # migration the record cannot make.
+        problems += overlap_evidence_problems(
+            [rec for _n, rec in dataset_rows.get("comparability", [])],
+            [rec for _n, rec in dataset_rows.get("overlaps", [])])
 
         return {"problems": problems, "advisories": advisories,
                 "ok": not problems}

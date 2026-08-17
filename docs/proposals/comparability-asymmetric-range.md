@@ -252,7 +252,40 @@ schema boundary.
 
 ---
 
-## Option 3 - a separate `overlaps` dataset, cited by `overlap_ref`. LOSES NOW, MAY WIN LATER
+## Option 3 - a separate `overlaps` dataset, cited by `overlap_ref`. LOSES NOW, BUILT AT CONTRACT 53
+
+**Filed as #413 and built, with two of its parts refused.** What follows is the
+option as it was scored here; what shipped differs from it in three ways, and
+the differences are the useful part of the record.
+
+1. **The statistics are not in the dataset.** This option lists the median, the
+   low and the high among its columns. By the time it was built, option 1 had
+   put all three on the `comparability` row at contract 52, held to each other
+   by validation - so carrying them here as well would be one width stated in
+   two datasets. `comparability` DECLARES and holds the statistics; `overlaps`
+   COUNTS. What moved is only what the row could never hold: the pair count,
+   the dropped-day count and the two ends of the window.
+2. **`overlap_ref` did not become a key, and the breaking change below did not
+   happen.** A foreign key would have been a third spelling of the row's own
+   identity, since a `comparability` row already carries `field`,
+   `origin_a` and `origin_b` - which IS the window's identity. What the field
+   became instead is the fallback: exactly one of a counted window or a
+   sentence, never both, never neither. Existing rows keep validating.
+3. **The dataset names the dataset.** Not in this option's list and it had to
+   be: `distance_km` is a column of both `daily` and `sessions`, so a census
+   without it cannot be followed back to the readings - the sentence's own
+   defect one level down. `comparability` has the same ambiguity and it is
+   filed separately.
+
+The prerequisite this option states below - a second record with a measured
+overlap - was **not met and was not needed**. The corpus still has one measured
+window. What justifies the dataset is not a second row but the DIFFERENCE
+between two records that used to look identical: `vera`'s declaration rests on
+101 counted days, the demo's rests on two same-day readings and can never earn a
+census, and after this change that difference is data rather than a matter of
+reading two sentences carefully.
+
+## Option 3 as it was scored
 
 The full evidence of a paired-measurement window as its own dataset - pair
 count, ambiguous days, first and last date, median, low, high - with

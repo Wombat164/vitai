@@ -354,6 +354,14 @@ ARG_TAKING_OUT_OF_SCOPE = {
     # `bias`/`spread`/`basis`/`overlap_ref`) is precise-tier or otherwise
     # about the athlete rather than about the instruments.
     "comparability",
+    # #413 RETURNS A STORED ROW - the census line itself - the way `instrument`
+    # does, so it would belong in the covered set above; it is here because
+    # the sweep cannot call it, needing a dataset, a field and two origins
+    # first. `tests/test_overlaps.py` exercises it by name, and every field it
+    # can return (`dataset`/`field`/`origin_a`/`origin_b`/`paired_days`/
+    # `dropped_days`/`from_date`/`to_date`) is about the instruments and the
+    # size of the comparison rather than about the athlete.
+    "overlap",
     "check", "window", "ramp", "may", "project", "plan_for", "urgent",
     "safety_banner", "pending_checks", "gated", "session_weeks",
     "contributions", "milestones", "churn", "field_types", "schema",

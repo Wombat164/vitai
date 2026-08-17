@@ -288,7 +288,29 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # figures null and gains neither column; it re-stamps to `_gen: 4` and says
 # nothing new, which is the correct outcome for a row whose status forbids a
 # measured difference in the first place.
-AUTHORED_AGAINST_CONTRACT = "52"  # vitai.db.CONTRACT_VERSION is a string
+#
+# Re-pinned for #413's contract 53. ONE builder moves again and for the same
+# reason - `vera` is still the only persona with a measured overlap - but the
+# review here is NOT short, because a row loses a field rather than gaining
+# one. Her `comparability.overlap_ref` was "101 run(s) both instruments
+# recorded, 2030-01-06 to 2030-06-30", and that sentence is now the census in
+# `data/overlaps.jsonl`: 101 paired days, 0 dropped, the same two dates, over
+# `sessions.distance_km`. So the field goes null on her row and the counts go
+# into a new file. Nothing about the runs behind them changes - same seed,
+# same dates, same 101 differences - so `PERSONA_VERSION` does not move: this
+# is where a fact is written down, not what the record says happened.
+#
+# `overlaps` arrives at generation 1, not 3, and the difference is worth
+# reading. It is declared AFTER the blanket `recorded_at`/`device` blocks, so
+# those blocks never reach it and every one of its keys is founding - which is
+# right for a dataset that has never been in the wild, and is why it does not
+# look like `capabilities` or `comparability` above.
+#
+# `comparability` does NOT move. It loses no key: `overlap_ref` is still in
+# `KEYS` and still legal, and what changed is when it may be filled - which is
+# a rule about two datasets rather than a generation of one, so there is
+# nothing for a line stamp to carry.
+AUTHORED_AGAINST_CONTRACT = "53"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     # #171: a new dataset, empty for every persona. Generation 3 rather than 1
     # because every dataset gets the blanket `recorded_at` and `device`
@@ -305,6 +327,11 @@ AUTHORED_AGAINST_GENERATIONS = {
     # to 4: `difference_lo`/`difference_hi`, the two ends of a measured
     # difference that `bias` and `spread` between them could not express.
     "comparability": 4,
+    # #413: a new dataset, and the only one in this pin at generation 1 with a
+    # persona writing it. Generation 1 rather than 3 because it is declared
+    # after the blanket blocks, so every key of it is founding. `vera` carries
+    # the corpus's one census; every other persona gets an empty file.
+    "overlaps": 1,
     # #221: a new dataset, empty for every persona.
     "plans": 1,
     "achievements": 5,

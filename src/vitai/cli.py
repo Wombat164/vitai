@@ -352,7 +352,56 @@ def cmd_calibrate(args: argparse.Namespace) -> None:
     print("    this is evidence about two instruments, NOT a band on a "
           "reading: an offset does not lift the seam, and an observed range "
           "carries no coverage factor")
-    print(f"    overlap: {row['overlap_ref']}")
+    # THE CENSUS, NOT THE SENTENCE (#413). This line used to print
+    # `row['overlap_ref']`, which the writer built by describing the counts in
+    # English. The counts are now the `overlap` line, and printing them from
+    # there makes this command a real CONSUMER of `paired_days`, `dropped_days`
+    # and the two ends - the same distinction the `range` line above draws for
+    # contract 52's columns, and the one `test_field_population.py` measures.
+    census = out["overlap"]
+    print(f"    window:  {census['paired_days']} paired day(s), "
+          f"{census['dropped_days']} dropped, {census['from_date']} to "
+          f"{census['to_date']} ({census['dataset']}.{census['field']})")
+
+
+def cmd_overlap(args: argparse.Namespace) -> None:
+    """The counted paired-measurement window the record holds (#413).
+
+    NOTHING IS AN ANSWER and is printed as one. No census means nobody counted
+    a window for this pair, which is a different fact from a window of no days,
+    and a command that printed zeroes would state a measurement nobody made.
+    """
+    v = Vitai(_root(args))
+    if not (args.dataset and args.field and args.origin_a and args.origin_b):
+        sys.exit("overlap needs --dataset, --field, --origin-a and "
+                 "--origin-b: a window is between one pair of instruments on "
+                 "one field of one dataset, and a field name does not "
+                 "identify a dataset - `distance_km` is on both `daily` and "
+                 "`sessions`")
+    row = v.overlap(args.dataset, args.field, args.origin_a, args.origin_b,
+                    on=args.on)
+    if args.json:
+        print(json.dumps(row))
+        return
+    if row is None:
+        print(f"{args.origin_a} vs {args.origin_b}, "
+              f"{args.dataset}.{args.field}: no counted window in the record")
+        return
+    print(f"{row['origin_a']} vs {row['origin_b']}, "
+          f"{row['dataset']}.{row['field']}: {row['paired_days']} paired "
+          f"day(s), {row['from_date']} to {row['to_date']}")
+    print(f"    {row['dropped_days']} day(s) dropped as ambiguous - more than "
+          f"one reading from an origin, and no rule in the record for pairing "
+          f"them")
+    # WHAT THIS IS EVIDENCE FOR, AND WHAT IT IS NOT. A census says how much
+    # was compared; it says nothing about how far apart the two got, which is
+    # on the `comparability` row, and nothing about whether they may be read
+    # as one series, which is the athlete's declaration and not a count.
+    print("    this is the size of the comparison, not its result: the "
+          "measured difference is on the comparability row, and a count "
+          "earns no reading across the two")
+    if row.get("note"):
+        print(f"    {row['note']}")
 
 
 def cmd_comparability(args: argparse.Namespace) -> None:
@@ -1870,6 +1919,9 @@ def main(argv: list[str] | None = None) -> None:
         ("comparability", cmd_comparability,
          "are two instruments on the same footing for one field, earned by "
          "overlap and never assumed (#33)"),
+        ("overlap", cmd_overlap,
+         "the counted paired-measurement window the record holds for two "
+         "instruments (#413)"),
         ("instruments", cmd_instruments,
          "which instrument reported as each origin, on a date (#311)"),
         ("milestones", cmd_milestones,
@@ -2028,6 +2080,15 @@ def main(argv: list[str] | None = None) -> None:
                            help="viewpoint: ignore readings dated after this")
             p.add_argument("--json", action="store_true",
                            help="emit the measurement as JSON instead of prose")
+        if name == "overlap":
+            p.add_argument("--dataset", help="the dataset the readings live in")
+            p.add_argument("--field", help="the field both instruments record")
+            p.add_argument("--origin-a", help="the first instrument")
+            p.add_argument("--origin-b", help="the second instrument")
+            p.add_argument("--on", metavar="YYYY-MM-DD",
+                           help="viewpoint: the census in force on this date")
+            p.add_argument("--json", action="store_true",
+                           help="emit the census as JSON instead of prose")
         if name == "comparability":
             p.add_argument("--field", help="the field the two agree or not on")
             p.add_argument("--origin-a", help="the first instrument")

@@ -305,6 +305,16 @@ PINNED_FOUNDING = {
         "basis", "bias", "date", "field", "note", "origin_a", "origin_b",
         "overlap_ref", "source", "spread", "status", "supersedes",
     ],
+    # #413. Declared after the generation blocks, so EVERY key is founding
+    # including `recorded_at` and `device` - which is why this list is longer
+    # than `comparability`'s and why `overlaps` is absent from `PINNED` above:
+    # a dataset that has never existed has no history for those blocks to
+    # append to, so its registry is empty rather than carrying two entries.
+    "overlaps": [
+        "dataset", "date", "device", "dropped_days", "field", "from_date",
+        "note", "origin_a", "origin_b", "paired_days", "recorded_at",
+        "source", "supersedes", "to_date",
+    ],
     "artifacts": [
         "bytes", "captured_at", "date", "kind", "media_type", "note",
         "origin", "reason", "removed", "sha256"

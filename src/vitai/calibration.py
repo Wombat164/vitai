@@ -45,6 +45,15 @@ minimum and maximum of 101 differences are the two most sample-dependent numbers
 in the set and say nothing about the 102nd run. `observed` and `row` remain
 separate keys: the pair count, the dropped days and the dates are evidence about
 the derivation, and the row is what the record could hold.
+
+THE EVIDENCE NOW HAS A RECORD OF ITS OWN, AND THAT IS CONTRACT 53 (#413). The
+sentence above was true and was also the defect: "evidence about the derivation"
+had nowhere to be written down, so it reached the record as `overlap_ref`, a
+line of English restating the counts. `overlap` is a third key beside `row` -
+the `overlaps` line holding the census - and `overlap_ref` is no longer written
+here. The split is unchanged in substance: `comparability` DECLARES, `overlaps`
+COUNTS, and the statistics stay on the declaration where contract 52 put them
+rather than being restated in both.
 """
 
 from __future__ import annotations
@@ -52,22 +61,16 @@ from __future__ import annotations
 from datetime import date
 from statistics import median
 
-from .schema import OFFSET, is_number
+from .schema import MIN_PAIRS, OFFSET, is_number
 
-# The smallest overlap that can carry a spread at all.
-#
-# A DISTINCTION IN KIND, NOT A THRESHOLD PICKED TO FEEL SAFE, and the same
-# distinction `outage` draws between an anecdote and a cadence. One pair gives a
-# difference and no notion of how far apart the two USUALLY get; two pairs give
-# two differences, whose range is just the two of them and describes no
-# behaviour beyond the sample. Three is the smallest overlap for which "how far
-# apart did they get" is a statement about the pair rather than a restatement of
-# the observations.
-#
-# Below it this module emits no row. A `comparability` row with a spread nobody
-# measured is worse than an empty dataset, because the entire value of the
-# dataset is that a band resting on it can be trusted.
-MIN_PAIRS = 3
+# `MIN_PAIRS` MOVED TO `schema` AT CONTRACT 53 (#413) and is imported rather
+# than restated. It was this module's refusal threshold - below it nothing here
+# emits a row, because a `comparability` row with a spread nobody measured is
+# worse than an empty dataset - and it is now also the schema's, because an
+# `overlaps` row below it records a window the engine would have refused to
+# measure. One number with two enforcement points is one number; two copies of
+# it would be two, and the second would be moved a contract late.
+__all__ = ["MIN_PAIRS", "overlap_calibration"]
 
 
 def _paired(rows: list[dict], field: str, origin_a: str, origin_b: str,
@@ -113,7 +116,8 @@ def _paired(rows: list[dict], field: str, origin_a: str, origin_b: str,
 
 def overlap_calibration(rows: list[dict], field: str, origin_a: str,
                         origin_b: str, *, on: date | str | None = None,
-                        source: str = "derived") -> dict:
+                        source: str = "derived",
+                        dataset: str | None = None) -> dict:
     """What the overlap between two origins says, and what it cannot say.
 
     NEVER None, for `policy.comparability`'s reason one step upstream: a caller
@@ -164,7 +168,7 @@ def overlap_calibration(rows: list[dict], field: str, origin_a: str,
     pairs, ambiguous = _paired(rows, field, origin_a, origin_b, on)
     head = {"field": field, "origin_a": origin_a, "origin_b": origin_b,
             "pairs": len(pairs), "ambiguous_days": ambiguous,
-            "observed": None, "row": None, "refused": None}
+            "observed": None, "row": None, "overlap": None, "refused": None}
 
     if len(pairs) < MIN_PAIRS:
         head["refused"] = (
@@ -202,9 +206,41 @@ def overlap_calibration(rows: list[dict], field: str, origin_a: str,
         "difference_lo": low,
         "difference_hi": high,
         "basis": "overlap",
-        "overlap_ref": (f"{len(pairs)} day(s) both origins recorded "
-                        f"{field}, {pairs[0][0]} to {pairs[-1][0]}"),
+        # NO `overlap_ref` SINCE CONTRACT 53 (#413). It used to be built here,
+        # and what it said was the census in English: how many days, from when
+        # to when. That is the `overlap` line below, in columns, and writing
+        # both would be the two-carriers-of-one-fact defect
+        # `overlap_evidence_problems` now refuses - from the writer that
+        # produced both of them. What the sentence carried that the census
+        # cannot is the athlete's, and it goes on `note`.
+        "overlap_ref": None,
         "note": None,
         "source": source,
     }
+    # THE CENSUS, as the `overlaps` line the record could hold (#413). The
+    # counts and the dates were always measured here and reported in the head;
+    # what was missing was a shape the record could keep them in, so an athlete
+    # appending what this produced kept the statistics and lost the evidence
+    # about how they were derived.
+    #
+    # `dataset` IS THE CALLER'S TO STATE and is the one thing this function
+    # cannot work out. It is handed `rows` and never learns which dataset they
+    # came from, and `field` does not settle it - `distance_km` is a column of
+    # both `daily` and `sessions`. Where the caller does not say, no census is
+    # proposed, because a census that guessed which readings it counted would
+    # be unfollowable in exactly the way the sentence it replaces was.
+    if dataset is not None:
+        head["overlap"] = {
+            "date": pairs[-1][0],
+            "dataset": dataset,
+            "field": field,
+            "origin_a": origin_a,
+            "origin_b": origin_b,
+            "paired_days": len(pairs),
+            "dropped_days": len(ambiguous),
+            "from_date": pairs[0][0],
+            "to_date": pairs[-1][0],
+            "note": None,
+            "source": source,
+        }
     return head

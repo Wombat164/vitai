@@ -50,6 +50,16 @@ DEMO_OMITS = {
         "a regime is a bounded interval in which a figure means something "
         "else, and the demo is deliberately uneventful - inventing one would "
         "add a confound to the record that exists to be readable",
+    # THE HONEST ABSENCE, and the one worth reading. This is not a dataset the
+    # demo forgot; it is one the demo CANNOT write, and the reason is the rule
+    # itself rather than a gap in the fixture.
+    "overlaps":
+        "the demo's scale and DEXA overlap on two same-day readings and an "
+        "overlaps census needs three, so writing one would mean inventing a "
+        "third paired day to satisfy a fixture register - which is the "
+        "fabrication the whole dataset exists to refuse, arriving through a "
+        "test; the demo's comparability row keeps its `overlap_ref` sentence "
+        "for exactly this reason, and that pairing is the fact",
 }
 
 

@@ -1642,7 +1642,13 @@ def test_it_speaks_the_protocol(tmp_path):
          # #33: comparability earned by overlap, never asserted. An agent
          # cannot otherwise tell whether a refused instrument seam has ever
          # been declared safe to span.
-         "comparability"}
+         "comparability",
+         # #413: the census behind that declaration. An agent told two
+         # instruments are `offset` cannot otherwise judge whether to trust
+         # the figure - a hundred paired days or three - because before this
+         # the size of the comparison was a sentence in `overlap_ref` it
+         # would have had to parse.
+         "overlap"}
     payload = json.loads(replies[2]["result"]["content"][0]["text"])
     assert payload["contract"]
 

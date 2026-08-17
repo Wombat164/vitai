@@ -207,6 +207,14 @@ def _comparability(stamp: common.Stamper, end: date) -> list[dict]:
     `difference_lo`/`difference_hi` existed that shape reached a reader only
     through the `note` below, which is a sentence in English beside data
     contradicting it.
+
+    AND THE SENTENCE IS GONE (contract 53, #413). `overlap_ref` used to read
+    "101 run(s) both instruments recorded, 2030-01-06 to 2030-06-30", which is
+    the census in English beside the census - the same defect the `note` had
+    for the asymmetry, one field over. The counts are now `_overlap` below,
+    and `overlap_evidence_problems` refuses a row carrying both. What stays on
+    `note` is the half no census holds and no column ever will: which runs
+    they disagree on, and why.
     """
     runs = _runs(end)
     diffs = sorted(round(watch - phone, 6) for _d, _r, watch, phone in runs)
@@ -223,11 +231,40 @@ def _comparability(stamp: common.Stamper, end: date) -> list[dict]:
         spread=round(diffs[-1] - diffs[0], 6),
         difference_lo=diffs[0], difference_hi=diffs[-1],
         basis="overlap",
-        overlap_ref=(f"{len(runs)} run(s) both instruments recorded, "
-                     f"{runs[0][0].isoformat()} to {last.isoformat()}"),
         note="the road runs agree to within tens of metres; the forest loop "
              "is where they part, and it parts one way only",
         source="athlete", recorded_at=stamp.stamp(last))]
+
+
+def _overlap(stamp: common.Stamper, end: date) -> list[dict]:
+    """THE WINDOW HER DECLARATION RESTS ON, COUNTED (#413).
+
+    AUTHORED, NOT DERIVED, for `_comparability`'s reason exactly: the engine's
+    `overlap_calibration` counts the same window from her session claims, and
+    a row written by calling it would leave the corpus control comparing a
+    value with itself. She writes down what she counted; the engine counts it
+    again; `test_overlaps.py` asserts the two agree. That test is where the
+    "earned, never asserted" rule gets its teeth, because it is the only place
+    the census is checked against the readings it claims to be a census of -
+    validation sees one line and cannot re-count.
+
+    `dropped_days` IS ZERO AND IS WRITTEN ANYWAY. She runs once a day, so no
+    day carries two readings from either instrument and nothing was dropped as
+    ambiguous. A null there would say nobody looked; a zero says the window is
+    as thick as it looks, which is the fact a reader deciding whether to trust
+    the figure actually wants.
+
+    `dataset` IS `sessions` AND NOT `daily`, and this row is the reason that
+    column exists: `distance_km` is a column of both, and a census that did
+    not say which one it counted could not be followed back to the readings.
+    """
+    runs = _runs(end)
+    return [common.record(
+        "overlaps", date=runs[-1][0].isoformat(), dataset="sessions",
+        field="distance_km", origin_a="phone", origin_b="watch",
+        paired_days=len(runs), dropped_days=0,
+        from_date=runs[0][0].isoformat(), to_date=runs[-1][0].isoformat(),
+        source="athlete", recorded_at=stamp.stamp(runs[-1][0]))]
 
 
 def _expectations(end: date) -> list[dict]:
@@ -289,6 +326,7 @@ def build(end: date = DEFAULT_END) -> dict[str, str]:
     sessions = _sessions(common.Stamper(base_hour=8), end)
     instruments = _instruments(common.Stamper(base_hour=20))
     comparability = _comparability(common.Stamper(base_hour=21), end)
+    overlaps = _overlap(common.Stamper(base_hour=22), end)
     expectations = _expectations(end)
 
     return {
@@ -299,5 +337,6 @@ def build(end: date = DEFAULT_END) -> dict[str, str]:
             common.sort_rows(instruments)),
         "data/comparability.jsonl": common.jsonl_text(
             common.sort_rows(comparability)),
+        "data/overlaps.jsonl": common.jsonl_text(common.sort_rows(overlaps)),
         "expectations.jsonl": common.jsonl_text(expectations),
     }
