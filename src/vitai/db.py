@@ -989,7 +989,54 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     `absent_reason` already says that, `unsupported` because contract 44's
 #     `competence: absent` already carries it, and the numeric sentinels
 #     because smuggling a value through a type is the disease 49 cured.
-CONTRACT_VERSION = "51"
+# 52: `difference_lo` and `difference_hi` on `comparability` - the two ends of
+#     a measured disagreement, which the row could not write down.
+#
+#     `bias` is a point and `spread` a width, so the schema could say "they
+#     leaned this way by this much" and "they got this far apart" and could not
+#     say "further above than below". `vera` is the record that made that
+#     concrete: 101 paired runs of one field by two GPS sources, a median
+#     difference of 0.00 km, a low tail 0.03 km deep and a high tail 1.23 km
+#     deep, because a phone in a chest pocket loses fix under canopy and
+#     under-reads, and nothing makes it over-read to match. Before this the
+#     asymmetry reached a reader only as the sentence "it parts one way only"
+#     in the row's `note`.
+#
+#     Nothing required. Both are null on every existing row and old lines keep
+#     validating, so a client that ignores the columns behaves exactly as it
+#     does today.
+#
+#     **THEY DO NOT EARN A BAND.** Two independent reasons, either sufficient.
+#     `offset` still does not lift the instrument seam - `policy.comparability`
+#     and `all_comparable` are untouched by this - and a row that may not be
+#     read across is not a row a band derives from, whatever columns it
+#     carries. And observed extrema are not a coverage interval: the minimum
+#     and maximum of 101 differences are the two most sample-dependent numbers
+#     in the set, they can only widen as days arrive, and they say nothing
+#     about the 102nd run. A consumer must still not draw a band from a
+#     comparability row alone. What changed is that the record can hold what
+#     was measured without losing half of it.
+#
+#     OPTIONAL BESIDE `offset`, deliberately: requiring them would force a
+#     writer who knows a width and not its ends to invent the ends, which is
+#     the fabrication this dataset exists to refuse arriving through a
+#     validation rule. Forbidden beside `not_comparable` for `bias` and
+#     `spread`'s reason - nothing was measured to have a range. Both or
+#     neither; ordered; and where they are present `spread` is required and
+#     must equal their difference, which turns the redundancy between the two
+#     spellings of one width into a check rather than a place to drift.
+#
+#     Named for what they bound. Under this schema's own `_lo`/`_hi`
+#     convention `bias_lo`/`bias_hi` would read as bounds on the BIAS - a
+#     confidence interval on a median, the coverage claim #402 forbids
+#     inventing - and `spread_lo`/`spread_hi` as bounds on the WIDTH. These
+#     bound the DIFFERENCE, which names the row's implicit subject for the
+#     first time: `bias` and `spread` were always statistics OF the difference
+#     and nothing said so.
+#
+#     Options that lost, with what each forecloses:
+#     `docs/proposals/comparability-asymmetric-range.md`.
+CONTRACT_VERSION = "52"
 
 _TEXT_COLS = {"statistic", "answers",
               # #402. Both word-valued: a space-separated list of field

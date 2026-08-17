@@ -325,14 +325,33 @@ def cmd_calibrate(args: argparse.Namespace) -> None:
         print(f"    bias:    {row['bias']:g} (median difference)")
     print(f"    spread:  {row['spread']:g} (full observed width, NOT a "
           f"plus-or-minus)")
-    print(f"    range:   {seen['low']:g} to {seen['high']:g}")
+    # READ OFF THE ROW, NOT OFF `observed`, and the two carry the same numbers
+    # so this is a deliberate choice rather than a coin toss. The row is what
+    # the athlete would append, and printing the derivation's copy would show
+    # a range the record might not be able to keep - which is exactly the
+    # round-trip loss contract 52 removed. It also makes this command a real
+    # CONSUMER of the two columns rather than only their writer, which is the
+    # distinction `test_field_population.py` exists to draw and which its
+    # measure - a key name appearing anywhere outside `schema.py`/`db.py` -
+    # cannot itself see.
+    print(f"    range:   {row['difference_lo']:g} to "
+          f"{row['difference_hi']:g}")
     if seen["asymmetric"]:
-        # SAID OUT LOUD BECAUSE THE ROW CANNOT SAY IT. `bias` is a point and
-        # `spread` a width, so a reader reconstructing bias +/- spread/2 would
-        # be wrong on both sides at once.
-        print("    the range is ASYMMETRIC about the median, which no field "
-              "on the row can carry - read the range, not the spread, before "
-              "building anything on it")
+        # STILL SAID OUT LOUD, THOUGH THE ROW NOW CARRIES IT. Contract 52 gave
+        # the row `difference_lo`/`difference_hi`, so the shape is no longer
+        # lost on write - but a reader reconstructing bias +/- spread/2 is
+        # wrong on both sides at once, and the row being able to contradict
+        # them is not the same as their having read it.
+        print("    the range is ASYMMETRIC about the median - read the two "
+              "ends, never bias plus or minus half the spread, which is too "
+              "wide on the short side and too narrow on the long")
+    # THE LINE THAT MATTERS MOST, AND IT IS NOT ABOUT THE ASYMMETRY. Printed on
+    # every derived row, symmetric or not: the columns say what was measured,
+    # and measuring is not licensing. `offset` does not lift the instrument
+    # seam, and the extremes of a sample are not a coverage interval over it.
+    print("    this is evidence about two instruments, NOT a band on a "
+          "reading: an offset does not lift the seam, and an observed range "
+          "carries no coverage factor")
     print(f"    overlap: {row['overlap_ref']}")
 
 

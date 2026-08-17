@@ -73,21 +73,58 @@ def test_the_pair_is_normalised_so_the_sign_is_fixed():
     assert (one["row"]["origin_a"], one["row"]["origin_b"]) == ("phone", "watch")
 
 
-def test_the_asymmetry_is_reported_beside_the_row_not_inside_it():
-    """THE LIMIT THIS MODULE REFUSES TO HIDE. `bias` is a point and `spread` a
-    width, so a range running further one way than the other cannot be written
-    down. Folding it into a plus-or-minus would be wrong on both sides at once,
-    so the two tails are returned separately and the row carries neither."""
+def test_the_asymmetry_reaches_the_row():
+    """WHAT CONTRACT 52 CHANGED, and it is a round-trip property rather than a
+    field list. This test used to assert the opposite - that the row carried
+    neither tail - which was an honest statement of a real limit and made the
+    derivation lossy: `vitai calibrate` measured four numbers and an athlete
+    appending the proposed row could store two, so the shape of the
+    disagreement survived only in whatever prose she wrote beside it.
+
+    ASSERTED AS "THE ROW SAYS WHAT WAS OBSERVED", not as "the row has these
+    keys". A key-set assertion passes for a row carrying the two columns full
+    of nulls, which is the failure this is guarding against."""
     rows = pairs(6, diff=0.0) + [run("2030-03-01", "watch", 11.5),
                                  run("2030-03-01", "phone", 10.0)]
     out = overlap_calibration(rows, "distance_km", "watch", "phone")
     assert out["observed"]["asymmetric"] is True
-    assert out["observed"]["low"] == 0.0
-    assert out["observed"]["high"] == 1.5
-    # Nothing on the row can express that, and nothing pretends to.
-    assert set(out["row"]) == {
-        "date", "field", "origin_a", "origin_b", "status", "bias", "spread",
-        "basis", "overlap_ref", "note", "source"}
+    assert (out["observed"]["low"], out["observed"]["high"]) == (0.0, 1.5)
+    row = out["row"]
+    assert (row["difference_lo"], row["difference_hi"]) == (0.0, 1.5), (
+        "the row carries the two ends the derivation measured")
+    assert row["bias"] == 0.0 and row["spread"] == 1.5
+
+
+def test_the_row_is_still_not_a_plus_or_minus():
+    """The reconstruction the columns exist to make refutable, measured on the
+    shape that motivated them rather than asserted in prose.
+
+    `bias` plus or minus half of `spread` is wrong on BOTH sides at once here,
+    and the row can now show it: the low edge it invents sits below every
+    observation, and the high edge it imposes cuts off the run that is the
+    entire finding."""
+    rows = pairs(6, diff=0.0) + [run("2030-03-01", "watch", 11.5),
+                                 run("2030-03-01", "phone", 10.0)]
+    row = overlap_calibration(rows, "distance_km", "watch", "phone")["row"]
+    lo, hi = row["difference_lo"], row["difference_hi"]
+    guess_lo = row["bias"] - row["spread"] / 2
+    guess_hi = row["bias"] + row["spread"] / 2
+    assert guess_lo < lo, "too wide on the short side - it claims what nobody saw"
+    assert guess_hi < hi, "too narrow on the long side - it drops the finding"
+
+
+def test_the_row_it_proposes_still_validates():
+    """The columns are only worth adding if the row carrying them is one the
+    record accepts, and the rules they ship with are strict enough that this is
+    not a formality: `spread` must equal their difference and `bias` must lie
+    between them, both of which this derivation has to get right."""
+    from vitai.schema import validate_record
+
+    rows = pairs(6, diff=0.0) + [run("2030-03-01", "watch", 11.5),
+                                 run("2030-03-01", "phone", 10.0)]
+    row = dict(overlap_calibration(rows, "distance_km", "watch", "phone")["row"])
+    row.update({"supersedes": None, "recorded_at": None, "device": None})
+    assert validate_record("comparability", row) == []
 
 
 def test_a_symmetric_range_says_so():

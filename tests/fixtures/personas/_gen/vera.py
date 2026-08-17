@@ -196,7 +196,17 @@ def _comparability(stamp: common.Stamper, end: date) -> list[dict]:
 
     The numbers are computed here from the same runs the sessions are built
     from, by the plain arithmetic the row is supposed to state: the median of
-    the differences, and the full width they spanned.
+    the differences, the full width they spanned, and the two ends of that
+    width.
+
+    THE TWO ENDS ARE WHY THIS ROW EXISTS (contract 52). Her disagreement runs
+    one way: the low tail is a few centimetres and the high tail is over a
+    kilometre, so a reader halving the spread about the median would put an
+    edge six hundred metres below anything either instrument ever recorded and
+    cut off the twenty-odd canopy runs that are the whole finding. Until
+    `difference_lo`/`difference_hi` existed that shape reached a reader only
+    through the `note` below, which is a sentence in English beside data
+    contradicting it.
     """
     runs = _runs(end)
     diffs = sorted(round(watch - phone, 6) for _d, _r, watch, phone in runs)
@@ -211,6 +221,7 @@ def _comparability(stamp: common.Stamper, end: date) -> list[dict]:
         origin_a="phone", origin_b="watch",
         status="offset", bias=centre,
         spread=round(diffs[-1] - diffs[0], 6),
+        difference_lo=diffs[0], difference_hi=diffs[-1],
         basis="overlap",
         overlap_ref=(f"{len(runs)} run(s) both instruments recorded, "
                      f"{runs[0][0].isoformat()} to {last.isoformat()}"),
@@ -249,15 +260,16 @@ def _expectations(end: date) -> list[dict]:
          "truth": "the phone under-reads badly under canopy and never "
                   "over-reads by nearly as much, so the low tail is long and "
                   "the high tail is short",
-         "expect": "the asymmetry is REPORTED and not folded into `spread`. "
-                   "No field on a `comparability` row can hold a two-sided "
-                   "range, so a consumer reconstructing bias plus or minus "
-                   "half the spread would be wrong on both sides at once. "
-                   "This is a limit of the dataset, and the engine states it "
-                   "rather than papering over it",
-         "gap": "`comparability` has no field for an asymmetric range; #402 "
-                "has to decide whether to add one before a band can rest on "
-                "this evidence"},
+         "expect": "the asymmetry is RECORDED and not folded into `spread`. "
+                   "`difference_lo` and `difference_hi` (contract 52) hold "
+                   "the two observed ends, so the row keeps the shape the "
+                   "derivation measured; a consumer reconstructing bias plus "
+                   "or minus half the spread is wrong on both sides at once "
+                   "and the row now says so in data rather than in a note",
+         "gap": "the row can STATE the range and still earns no BAND: "
+                "`offset` does not lift the seam, and observed extrema carry "
+                "no coverage factor. Whether a client may ever render a band "
+                "from a measured overlap is #402's remaining open question"},
         {"id": "vera-E4", "kind": "behavior", "dataset": "sessions",
          "dates": [runs[-1][0].isoformat()],
          "claim": "nothing in the record is corrected by the measurement",

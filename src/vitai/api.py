@@ -1830,9 +1830,13 @@ class Vitai:
 
         Never None; `row` is None with `refused` saying why when the overlap
         cannot carry a figure. See `calibration.overlap_calibration` for what
-        the returned shape can and cannot express - in particular that an
-        asymmetric range does not fit in `spread` and is returned beside it
-        rather than folded into it.
+        the returned shape can and cannot express. Two things a caller has to
+        know: an asymmetric range NOW fits on the row, as
+        `difference_lo`/`difference_hi` (contract 52), so `bias` plus or minus
+        half of `spread` remains wrong and is now contradicted by the row
+        itself rather than only by this docstring - and the row still EARNS NO
+        BAND, because `offset` does not lift the instrument seam and the
+        extremes of a sample are not a coverage interval over it.
         """
         from .calibration import overlap_calibration as _calibrate
 

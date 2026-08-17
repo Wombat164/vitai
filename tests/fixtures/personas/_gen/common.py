@@ -275,7 +275,20 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # "failed attempts" record - while `tom` (175 cm) and `rachel` (162 cm) stay
 # above the topmost `BAND_LEVELS` edge at every weight they record and would
 # have needed invented numbers to exercise this feature at all.
-AUTHORED_AGAINST_CONTRACT = "51"  # vitai.db.CONTRACT_VERSION is a string
+# Re-pinned for #402's contract 52. ONE builder moves and the review is short,
+# because only one persona writes a `comparability` line at all: `vera` gains
+# `difference_lo`/`difference_hi` on her single row, filled by the same plain
+# arithmetic over the same unchanged runs that already produced `bias` and
+# `spread`. Her seed, her dates and every session value are untouched, so
+# `PERSONA_VERSION` does not move - this is a schema generation gaining a key,
+# not a history changing, the same call #409's `absent_reason` got one contract
+# ago across three datasets and ten personas.
+#
+# `comparability` goes 3 -> 4 below. The demo's row is `comparable` with both
+# figures null and gains neither column; it re-stamps to `_gen: 4` and says
+# nothing new, which is the correct outcome for a row whose status forbids a
+# measured difference in the first place.
+AUTHORED_AGAINST_CONTRACT = "52"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     # #171: a new dataset, empty for every persona. Generation 3 rather than 1
     # because every dataset gets the blanket `recorded_at` and `device`
@@ -286,9 +299,12 @@ AUTHORED_AGAINST_GENERATIONS = {
     # above - the blanket `recorded_at` and `device` blocks - and populated
     # for `ines` rather than empty everywhere.
     "instruments": 3,
-    # #33 item 2: a new dataset, empty for every persona, generation 3 for
-    # the same blanket-block reason as `capabilities` above.
-    "comparability": 3,
+    # #33 item 2: a new dataset, generation 3 for the same blanket-block
+    # reason as `capabilities` above - and no longer empty for every persona,
+    # since `vera` writes the corpus's only row. #402's contract 52 moves it
+    # to 4: `difference_lo`/`difference_hi`, the two ends of a measured
+    # difference that `bias` and `spread` between them could not express.
+    "comparability": 4,
     # #221: a new dataset, empty for every persona.
     "plans": 1,
     "achievements": 5,

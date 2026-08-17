@@ -830,7 +830,14 @@ def _build(target: Path) -> None:
     comparability = [
         {"date": "2030-05-20", "field": "kg", "origin_a": "scale",
          "origin_b": "dexa", "status": "comparable", "bias": None,
-         "spread": None, "basis": "overlap",
+         "spread": None,
+         # Null for the reason `bias` and `spread` are: this row says the two
+         # instruments are on the same footing, and the columns hold a MEASURED
+         # difference. Present rather than omitted because the line carries
+         # contract 52's generation and a line stamped at a generation owes
+         # every key registered at or below it (#402, #295).
+         "difference_lo": None, "difference_hi": None,
+         "basis": "overlap",
          "overlap_ref": "same-day scale and clinic readings, 2030-05-20 and "
                         "2030-06-27",
          "note": "the home scale and both clinic scans agree within their "

@@ -368,6 +368,17 @@ label = "in the units of the field being compared"
 unit_of = "field"
 label = "in the units of the field being compared"
 
+# The two ends of the same difference (#402, contract 52), so they resolve the
+# same way `bias` and `spread` do: a `kg` row's ends are in kilograms and a
+# `distance_km` row's are in kilometres.
+[unit.difference_lo]
+unit_of = "field"
+label = "in the units of the field being compared"
+
+[unit.difference_hi]
+unit_of = "field"
+label = "in the units of the field being compared"
+
 # `value` means three different things in three datasets, so it is resolved
 # per dataset below rather than here.
 [unit.value]
@@ -595,6 +606,8 @@ body_fat_hi = "body fat, upper bound"
 body_fat_lo = "body fat, lower bound"
 body_fat_pct = "body fat"
 carb_g = "carbohydrate"
+difference_hi = "difference, upper bound"
+difference_lo = "difference, lower bound"
 distance_km = "distance"
 duration_s = "duration"
 elevation_m = "elevation gain"

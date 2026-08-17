@@ -87,6 +87,13 @@ PINNED = {
         "status": "reference",
         "bias": "measurement",
         "spread": "measurement",
+        # #402's contract 52. MEASUREMENT for `bias`/`spread`'s own reason
+        # rather than by analogy: they are the two ends of the same measured
+        # cross-instrument quantity, in the same units, observed over the same
+        # overlap. Nothing about the athlete is in them that is not already in
+        # the width they bound.
+        "difference_lo": "measurement",
+        "difference_hi": "measurement",
         "basis": "provenance",
         "overlap_ref": "reference",
         "note": "narrative",

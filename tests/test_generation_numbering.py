@@ -63,6 +63,14 @@ PINNED = {
     "comparability": {
         "device": 3,
         "recorded_at": 2,
+        # #402's contract 52, and the first entry here this register DOES
+        # declare: the two ends of a measured difference, appended after the
+        # blanket blocks the way `absent_fields`/`absent_reason` were one
+        # contract ago. Generation 4 rather than 3, because 3 has shipped -
+        # `vera`'s row and the demo's are both stamped with it - and reusing
+        # it would suddenly owe two keys to lines that cannot have them.
+        "difference_lo": 4,
+        "difference_hi": 4,
     },
     "achievements": {
         "device": 4,

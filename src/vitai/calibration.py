@@ -23,15 +23,28 @@ case that motivated #402 has a median difference near zero and a wide spread,
 which is the finding "these two agree on average and disagree per activity" -
 and any design that collapsed the pair into one number would erase it.
 
-THE ASYMMETRY DOES NOT SURVIVE, AND SAYING SO IS PART OF THE OUTPUT. A range
-that runs further one way than the other cannot be written down here: `bias` and
-`spread` are each a single number, so the schema can say "they leaned this way
-by this much" and "they got this far apart" and cannot say "further above than
-below". `observed` therefore returns both tails, `row` carries only what the
-schema can hold, and the two are separate keys precisely so nobody mistakes the
-second for the first. Symmetrising the tails into a plus-or-minus would be the
-one thing this module must never do, because a band built from it would be wrong
-in both directions at once - too wide on the short side, too narrow on the long.
+THE ASYMMETRY NOW SURVIVES THE ROW, AND THAT IS CONTRACT 52 (#402). It did not
+before: `bias` is a point and `spread` a width, so the schema could say "they
+leaned this way by this much" and "they got this far apart" and could not say
+"further above than below", and the shape of the disagreement reached a reader
+only as a sentence in the row's `note`. `difference_lo` and `difference_hi`
+carry the two observed ends, so `row` no longer drops half of what was measured.
+
+WHAT THAT DID NOT CHANGE IS THE PART WORTH READING TWICE. Symmetrising the tails
+into a plus-or-minus is still the one thing this module must never do, and on
+the motivating shape it is wrong in both directions at once: `bias` plus or
+minus half of `spread` puts the low edge at -0.63 km where the deepest low
+reading in 101 runs is -0.03 and no observation at all falls below it, and cuts
+the high edge at +0.63 where twenty-one of the 101 runs lie above, out to +1.23.
+Six hundred metres of disagreement that never happened, and the finding missing.
+
+AND THE ROW STILL EARNS NO BAND. `offset` does not lift the instrument seam, so
+a row that may not be read across is not a row a band derives from whatever
+columns it carries; and observed extrema are not a coverage interval, since the
+minimum and maximum of 101 differences are the two most sample-dependent numbers
+in the set and say nothing about the 102nd run. `observed` and `row` remain
+separate keys: the pair count, the dropped days and the dates are evidence about
+the derivation, and the row is what the record could hold.
 """
 
 from __future__ import annotations
@@ -136,8 +149,16 @@ def overlap_calibration(rows: list[dict], field: str, origin_a: str,
     widest disagreement actually seen, not on a quartile that discards the days
     the two instruments diverged most - those days are the finding. A consumer
     must not read it as `bias` plus or minus `spread / 2`: where the range is
-    asymmetric that reconstruction is wrong on both sides, and `observed` is
-    where the two tails are readable.
+    asymmetric that reconstruction is wrong on both sides, and the two ends are
+    on the row itself as `difference_lo`/`difference_hi` (contract 52) as well
+    as in `observed`.
+
+    THE ROW IS STILL NOT A BAND, and the extra columns do not make it one. It
+    proposes `offset`, `offset` does not lift the seam, and the ends are the
+    extremes of a sample rather than a coverage interval over one. What a
+    consumer may honestly state from this is a sentence about two instruments
+    over a named overlap - not a plus-or-minus on any reading either of them
+    took.
     """
     origin_a, origin_b = sorted((origin_a, origin_b))
     pairs, ambiguous = _paired(rows, field, origin_a, origin_b, on)
@@ -172,6 +193,14 @@ def overlap_calibration(rows: list[dict], field: str, origin_a: str,
         "status": OFFSET,
         "bias": centre,
         "spread": round(high - low, 6),
+        # THE HALF THE ROW USED TO DROP (contract 52). The same two numbers
+        # `observed` reports, written where the record can keep them, so an
+        # athlete appending this line no longer destroys the asymmetry on
+        # write. `spread` stays, rather than being left for a reader to
+        # subtract: every existing consumer reads it, and schema validation
+        # holds the two spellings of the width to each other.
+        "difference_lo": low,
+        "difference_hi": high,
         "basis": "overlap",
         "overlap_ref": (f"{len(pairs)} day(s) both origins recorded "
                         f"{field}, {pairs[0][0]} to {pairs[-1][0]}"),
