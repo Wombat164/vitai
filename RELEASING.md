@@ -8,11 +8,24 @@ Two files carry the version and must match before tagging:
 
 ## Pre-release checks
 
+Everything CI's `hygiene` job runs, in the order it runs it. Three of these
+were missing from this list, which made them CI-only for anyone following it:
+
 ```bash
 pytest -q
-ruff check src tests
+ruff check .
 python scripts/personal_gate.py
+python scripts/boundary_gate.py
+python scripts/contract_literal_gate.py
+python scripts/dependency_gate.py
+python scripts/changelog_gate.py
+python scripts/pin_gate.py
 ```
+
+`pytest -q` already runs every one of these gates itself, so the list is a
+belt-and-braces for a reader who wants each answer separately.
+`scripts/pin_gate.py` is what holds this block to `ci.yml`, so a gate added to
+one and not the other fails rather than drifts.
 
 Update `CHANGELOG.md`: move entries from Unreleased into a dated version
 section.

@@ -16,7 +16,11 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.13"
-      - run: pip install ruff
+      # PINNED, and from a file dependabot can see (#416). `pip install
+      # ruff` meant a ruff release adding a rule inside the E/F/W
+      # prefixes turned `main` red with nothing having changed, and
+      # nothing in the history could be blamed for it.
+      - run: pip install -r requirements-dev.txt
       # EVERYTHING, not `src tests`. The narrower scope let a line sit over the
       # limit in `examples/` while CI reported the repo clean, so the lint said
       # something true about two directories and was read as a fact about the
@@ -33,6 +37,10 @@ jobs:
         run: python scripts/dependency_gate.py
       - name: Changelog fragment gate (blocking)
         run: python scripts/changelog_gate.py
+      # Also runs inside pytest (tests/test_pin_gate.py), so it fails
+      # before a push rather than after one - #389's rule.
+      - name: Pin gate (blocking)
+        run: python scripts/pin_gate.py
 
   tests:
     runs-on: ${{ matrix.os }}
@@ -45,7 +53,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: ${{ matrix.python }}
-      - run: pip install -e . pytest
+      - run: pip install -e . -r requirements-dev.txt
       - run: pytest -q
       # THE SUITE MUST NOT WRITE TO THE RECORD IT READS (#322).
       #

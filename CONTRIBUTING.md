@@ -9,10 +9,16 @@ deterministic engine / LLM skills), not that it adds surface.
 ```bash
 git clone https://github.com/Wombat164/vitai.git
 cd vitai
-pip install -e . pytest ruff
-pytest -q          # 17+ tests, seconds
-ruff check src tests
+pip install -e . -r requirements-dev.txt
+pytest -q          # 3000+ tests, ~2.5 minutes
+ruff check .       # everything, not just src and tests
 ```
+
+`requirements-dev.txt` pins `ruff` and `pytest` to the versions CI uses. Install
+from it rather than by name: a ruff release adding a rule turns `main` red with
+nothing having changed, and a lint you cannot reproduce locally is a lint you
+cannot fix locally. `python scripts/pin_gate.py` holds this block, the
+workflows and the requirements files to each other.
 
 Python >= 3.11, stdlib only at runtime - a PR that adds a runtime dependency
 needs a very good reason stated in the PR body.

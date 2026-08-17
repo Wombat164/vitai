@@ -9,22 +9,39 @@ name: deploy-wiki
 # workflow_dispatch only - a push trigger without Pages leaves a permanently
 # failing deploy job.
 
+# BUILT ON PULL REQUESTS, DEPLOYED ONLY FROM main (#416). There was no
+# `pull_request` trigger at all, so `wiki/quartz.*` and `wiki/components/*`
+# were never compiled before merge: the first thing that ran the TypeScript
+# config and the custom TSX components was the deploy on `main`, which is the
+# one place a failure is not a review comment. The build job's own comment
+# already says a missing component makes the layout import resolve to nothing
+# and the build fail - that is a compile error nobody could see coming.
 on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths: ["wiki/**", ".github/workflows/deploy-wiki.yml"]
+  pull_request:
     paths: ["wiki/**", ".github/workflows/deploy-wiki.yml"]
 
 permissions:
   contents: read
 
 concurrency:
-  group: pages
+  # PER REF once pull requests build here. A single `pages` group meant two
+  # runs would cancel each other, which is right for deploys - only one can
+  # be live - and wrong for a check, where a PR run cancelling main's deploy
+  # (or another PR's check) is a green tick nobody earned.
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    # `ubuntu-22.04` was a label GitHub retires on its own schedule, in a
+    # workflow with no PR trigger - so its retirement would have surfaced as a
+    # failed deploy on `main`. See `RUNNERS` in `scripts/pin_gate.py` for why
+    # the floating label is the one this repo accepts.
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout this repo (config + content)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -56,10 +73,19 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
-          node-version: 22
+          # EXACT (#416). `22` floats across every 22.x release, so the
+          # runtime that compiles the site could change with no commit.
+          # Nothing bumps this automatically - dependabot's github-actions
+          # ecosystem moves `uses:` refs, not action inputs - so it is a
+          # deliberate constant, and `scripts/pin_gate.py` is what stops it
+          # quietly becoming a float again.
+          node-version: 22.23.2
 
       - name: Install dependencies
         working-directory: .quartz-build
+        # `npm ci` is already exact and is not a float: it installs from the
+        # `package-lock.json` in the Quartz tree fetched at the pinned commit
+        # above, and refuses to run without one. Checked rather than assumed.
         run: npm ci
 
       - name: Build Quartz
@@ -67,12 +93,21 @@ jobs:
         run: npx quartz build
 
       - name: Upload Pages artifact
+        # Only what will be deployed. On a pull request the build IS the
+        # check, and uploading a Pages artifact from a branch would leave a
+        # deployable artifact for a commit nobody merged.
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0
         with:
           path: .quartz-build/public
 
   deploy:
     needs: build
+    # NEVER FROM A PULL REQUEST. The build above is what a PR gets: the same
+    # compile, on the same runner, with nothing published. A fork PR could not
+    # deploy anyway - it has no `pages: write` - and relying on that would be
+    # a permission model standing in for a decision.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       pages: write
