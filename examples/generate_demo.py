@@ -35,6 +35,12 @@ the coarser datasets structurally could not.
   declared lineage in a real record, and a value the engine can tell apart
   from an observation without being told twice.
 
+- `weight` also carries two weigh-ins that DID NOT HAPPEN and say so (#423,
+  contract 51): the travel week always had an eight-day hole, and now two of
+  those days name the absent field and the reason. The hole was previously
+  indistinguishable from forgetting, and the fact that explained it lived one
+  dataset away in `context`.
+
 `artifacts` is deliberately absent: the manifest is a pointer to a blob store,
 so a demo of it means committing blobs and a store to put them in, and a
 manifest with nothing behind it would demonstrate the opposite of the point.
@@ -716,6 +722,52 @@ def _build(target: Path) -> None:
             "capture": "connector", "read_by": None,
             "measured_at": "10:15",
             "recorded_at": f"{_day.isoformat()}T11:00:00+02:00",
+            "_gen": CURRENT_GENERATION["weight"]})
+
+    # TWO WEIGH-INS THAT DID NOT HAPPEN, AND SAY SO (#423, contract 51).
+    #
+    # The travel week already had no weigh-ins. What it did not have was a row
+    # saying why, so the eight-day hole in this file was indistinguishable from
+    # eight days of forgetting - and `context.jsonl` explaining the trip is a
+    # fact about the WEEK, one dataset away from the readings a consumer is
+    # rendering. That is the collapse contract 51 exists to undo: "nobody
+    # measured", "it was measured and rejected" and "the athlete declined" are
+    # different facts, and a null said only that nothing was there.
+    #
+    # WHY IT MATTERS THAT THE DEMO CARRIES IT AND NOT ONLY A PERSONA. This is
+    # the fixture downstream clients build from, deliberately - `vitai-lens`
+    # rebuilds it through the real engine rather than assembling one of its own.
+    # With no row here, a client could raise its pin to contract 53, render all
+    # six absence reasons as one grey square, and pass every job it has. A
+    # fixture that does not exercise a feature cannot prove a client handles it.
+    #
+    # `not-performed` RATHER THAN `unable-to-obtain`, and the record settles it
+    # rather than the author: the context row for 2030-05-27 says "work trip -
+    # no scale, no gym, hotel treadmill only". Nothing was attempted, so nothing
+    # failed to come back. `bea` reaches the same code from the opposite
+    # direction - her scale worked and she was standing next to it - which is
+    # the distinction the two personas together are worth.
+    #
+    # `source` STAYS NULL, which is where this differs from `bea`'s shape. It
+    # names the route a value took to reach this record and no value travelled;
+    # her rows carry `scale` because for her the channel existed and was idle.
+    # `origin`, `measured_at` and `protocol` are null for the same reason - and
+    # `protocol` also because no demo row sets one at all, which is what
+    # `test_fixture_coverage.DEMO_OMITS` says about the `protocols` dataset.
+    #
+    # TWO OF THE EIGHT, not all eight, on `bea`'s argument: the state has to be
+    # expressible and exercised, and a week of rows carrying no reading would
+    # drown the readings. The first and last morning away, so the pair brackets
+    # the trip instead of picking days out of the middle for no reason.
+    for _offset in TRAVEL_WEEK:
+        _away = (start + timedelta(days=_offset)).isoformat()
+        weight.append({
+            **{k: None for k in KEYS["weight"]},
+            "date": _away, "kg": None,
+            "absent_fields": "kg", "absent_reason": "not-performed",
+            # Logged the same evening as the rest of the day, like every other
+            # gen-2 weigh-in above.
+            "recorded_at": f"{_away}T21:{_offset % 60:02d}:00+02:00",
             "_gen": CURRENT_GENERATION["weight"]})
 
     # The provenance pair above appends out of order, and `recorded_at` is
