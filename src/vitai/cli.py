@@ -694,7 +694,7 @@ def cmd_dataset(args: argparse.Namespace) -> None:
 
     The default is a SUMMARY and `--json` is the rows, following every other
     read command here. It is deliberately not a rendering of the rows: there
-    are nineteen dataset shapes and inventing a line format for each would
+    are twenty-four dataset shapes and inventing a line format for each would
     put a lossy view where the record should be. What it reports instead is
     what a consumer checking its own reimplementation needs - how many rows
     survive, over what span, and what was quarantined on the way.

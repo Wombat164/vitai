@@ -1841,7 +1841,7 @@ def coarse(dataset: str, rec: dict) -> dict:
     drop = SENSITIVE.get(dataset)
     if not drop:
         # A COPY HERE TOO, and this branch is why the guarantee above was only
-        # three quarters true. Eighteen of the twenty datasets have no
+        # three quarters true. Twenty-two of the twenty-four datasets have no
         # sensitive field at all, so this is the branch nearly every row takes,
         # and it returned the caller's own object - reinstating for `weight`
         # and `daily` exactly the sharing the comment above says structurally
@@ -3147,20 +3147,32 @@ def _overlap_problems(rec: dict) -> list[str]:
                    f"themselves rather than a statement about the pair, which "
                    f"is why the engine refuses to measure one")
 
+    # PARSED THROUGH `_bad_date`, NOT MATCHED AGAINST `DATE_RE`, and the
+    # difference is a crash rather than a nicety. `DATE_RE` checks the SHAPE of
+    # a date and says nothing about whether one exists: `2030-02-30` matches it
+    # and `date.fromisoformat` raises on it, and so does `2030-06-30\n`, since
+    # the pattern ends in `$` and a JSON string may carry a trailing newline -
+    # the same hole the comment above `SLUG_RE` already warns about. A row like
+    # that parses, so `jsonl.load` does not quarantine it, and it arrives here
+    # intact. A validator that raises on the line it exists to describe takes
+    # down `validate` and `build` with it, which is worse than any verdict it
+    # could have got wrong. `_bad_date` is the guarded parse this file already
+    # uses for exactly this, and `_regime_problems` next door is the reason the
+    # defect was mine alone: it only ever string-compares.
     first, last = rec.get("from_date"), rec.get("to_date")
     for name, value, which in (("from_date", first, "first"),
                                ("to_date", last, "last")):
-        if not isinstance(value, str) or not DATE_RE.match(value):
+        if _bad_date(value):
             out.append(f"'{name}' is an ISO date - the {which} day that "
                        f"paired - got {value!r}")
-    if isinstance(first, str) and isinstance(last, str) and DATE_RE.match(
-            first) and DATE_RE.match(last):
+    if not (_bad_date(first) or _bad_date(last)):
         if last < first:
             out.append(f"'to_date' {last} is before 'from_date' {first}; a "
                        "window is an interval and an interval that ends "
                        "before it starts pairs nothing")
         elif _count(paired) and _count(dropped):
-            span = (date.fromisoformat(last) - date.fromisoformat(first)).days + 1
+            span = (date.fromisoformat(str(last))
+                    - date.fromisoformat(str(first))).days + 1
             if paired + dropped > span:
                 out.append(
                     f"{first} to {last} is {span} day(s), and this row counts "
@@ -3168,6 +3180,20 @@ def _overlap_problems(rec: dict) -> list[str]:
                     f"{dropped!r} dropped): a day either paired or was "
                     f"dropped, never both, so a window cannot hold more days "
                     f"than it has")
+    # A CENSUS CANNOT BE DATED BEFORE THE WINDOW IT COUNTED CLOSED. `date` is
+    # when the record made this statement, and `to_date` is the last day it
+    # claims to have counted, so a row dated first is evidence about days that
+    # had not happened when it was written. The engine's own writer always
+    # stamps them equal (`calibration` sets `date` to the last paired day);
+    # nothing checked that a hand-written line did, and `policy` resolves
+    # censuses AS OF a viewpoint, so a backdated one would earn a declaration
+    # for weeks its own window had not reached.
+    if not (_bad_date(rec.get("date")) or _bad_date(last)):
+        if str(rec.get("date")) < str(last):
+            out.append(
+                f"this row is dated {rec.get('date')} and counts a window "
+                f"ending {last}: a census cannot be written down before the "
+                "days it counted had happened")
     return out
 
 
@@ -3287,33 +3313,28 @@ def census_is_earned(row: dict) -> bool:
     instrument-seam refusal. A gate derived from data the record supplies has
     to distrust that data exactly as much as any other input does.
 
-    THE SAME CONDITIONS `_overlap_problems` REPORTS, asked as one boolean.
-    That duplication is deliberate and is `_earns_its_status`'s own: the
-    validator says what is wrong with a line to somebody reading `vitai
-    validate`, and this says whether a line may be acted on by a build that
-    never called the validator. Collapsing them would make the gate depend on
-    a call path it does not control.
+    ONLY A CENSUS THAT VALIDATES CAN EARN, and that is asked of the validator
+    rather than restated here. The first version of this WAS a restatement and
+    drifted inside one review: it left out the three checks on `dataset` and
+    `field`, so a census naming a dataset that does not exist was reported by
+    `vitai validate` and honoured by the seam gate at the same time - a row the
+    record calls malformed, lifting a refusal. A gate whose rules are a copy of
+    somebody else's rules is a gate that is one edit from disagreeing with
+    them, which is the defect this engine spends whole datasets refusing.
+
+    STILL A SEPARATE FUNCTION, because the two answer different questions on
+    different call paths: the validator says what is wrong with a line to
+    somebody reading `vitai validate`, and this says whether a line may be
+    ACTED ON by a build that never called the validator - `jsonl.load` to the
+    seam gate, which is the path a schema-invalid row reaches untouched.
+
+    STRICTER THAN `_earns_its_status` IS ON A COMPARABILITY ROW, deliberately.
+    That one asks two conditions of a dataset two clients are already pinned
+    to; this asks everything of a dataset nobody has habits about yet. Where
+    the two differ the answer is a refusal, which is the direction a gate is
+    allowed to be wrong in.
     """
-    if not all(isinstance(row.get(k), str) and str(row.get(k)).strip()
-               for k in ("dataset", "field", "origin_a", "origin_b")):
-        return False
-    if row.get("origin_a") == row.get("origin_b"):
-        return False
-    paired, dropped = row.get("paired_days"), row.get("dropped_days")
-    if not all(isinstance(v, int) and not isinstance(v, bool)
-               for v in (paired, dropped)):
-        return False
-    if paired < MIN_PAIRS or dropped < 0:
-        return False
-    first, last = row.get("from_date"), row.get("to_date")
-    if not all(isinstance(v, str) and DATE_RE.match(str(v))
-               for v in (first, last)):
-        return False
-    if last < first:
-        return False
-    span = (date.fromisoformat(str(last))
-            - date.fromisoformat(str(first))).days + 1
-    return paired + dropped <= span
+    return not validate_record("overlaps", row)
 
 
 def overlap_evidence_problems(comparability_rows: list[dict],
@@ -3382,6 +3403,65 @@ def overlap_evidence_problems(comparability_rows: list[dict],
                 f"by overlap, so a {status!r} row owes either an 'overlaps' "
                 f"row counting the window or an 'overlap_ref' saying in words "
                 f"what was compared over what period")
+    return out
+
+
+def overlap_timing_advisories(comparability_rows: list[dict],
+                              overlap_rows: list[dict]) -> list[str]:
+    """A declaration whose only evidence postdates it (#413).
+
+    THE HOLE THE MOVED REQUIREMENT OPENED, and it is stated rather than left
+    for somebody to find in a verdict table. `overlap_evidence_problems` asks
+    whether a census EXISTS; `policy.comparability` asks whether one was in
+    force ON THE DATE BEING JUDGED, and filters as-of for the right reason -
+    evidence arriving after the statement it supports is retroactive
+    reasoning. The two questions had one answer while the evidence was a
+    sentence, because a sentence travels on the row and is in force exactly
+    when the row is. A census is a separate line with its own date, and the
+    two answers can now differ.
+
+    So a record can be `validate`-green while every week before the census
+    reads the declaration as unevidenced and leaves the seam refused, with
+    nothing anywhere saying why. That is the shape a person gives up on: a
+    figure that is missing, a validator that says the record is fine, and no
+    third place to look.
+
+    AN ADVISORY AND NOT A PROBLEM. The row is legal, already on disk, and
+    append-only - the fix is to append a census the athlete has not yet
+    counted, or to accept that the earlier weeks were genuinely unevidenced,
+    and neither is something a build should refuse over (#38). It names the
+    date the declaration starts being honoured, because that is the fact a
+    reader is missing rather than the fact that two dates differ.
+    """
+    from .jsonl import line_key, target_of
+
+    def _live(dataset: str, rows: list[dict]) -> list[dict]:
+        retired = {t[0] for r in rows if (t := target_of(r)) is not None}
+        return [r for r in rows if line_key(dataset, r) not in retired]
+
+    censuses = [r for r in _live("overlaps", overlap_rows)
+                if census_is_earned(r)]
+    out = []
+    for row in _live("comparability", comparability_rows):
+        if row.get("status") not in (COMPARABLE, OFFSET):
+            continue
+        ref = row.get("overlap_ref")
+        if isinstance(ref, str) and ref.strip():
+            continue
+        want = frozenset({str(row.get("origin_a")), str(row.get("origin_b"))})
+        dates = sorted(
+            str(c.get("date")) for c in censuses
+            if str(c.get("field")) == str(row.get("field"))
+            and frozenset({str(c.get("origin_a")), str(c.get("origin_b"))})
+            == want)
+        if dates and dates[0] > str(row.get("date")):
+            out.append(
+                f"comparability: {row.get('field')!r} across "
+                f"{row.get('origin_a')!r} and {row.get('origin_b')!r} is dated "
+                f"{row.get('date')} and its only census is dated {dates[0]}. "
+                f"The declaration is honoured from {dates[0]} onward and reads "
+                "as unevidenced before it, so any window judged earlier still "
+                "sees the seam refused")
     return out
 
 

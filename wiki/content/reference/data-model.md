@@ -2,7 +2,7 @@
 title: Data model
 ---
 
-Sixteen datasets, one JSON object per line, keys never omitted (`null` for
+Twenty-four datasets, one JSON object per line, keys never omitted (`null` for
 unknown), units in the key name, ISO-8601 dates. Append-only: a line is never
 edited in place.
 

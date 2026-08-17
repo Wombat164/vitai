@@ -2746,6 +2746,7 @@ class Vitai:
                              corrections_that_did_not_apply,
                              impossible_claim_problems, recorded_at_problems,
                              overlap_evidence_problems,
+                             overlap_timing_advisories,
                              period_advisories, polarity_advisories,
                              protocol_pin_advisories,
                              side_advisories,
@@ -2883,9 +2884,13 @@ class Vitai:
         # it twice is two carriers of one fact, and the fix is to delete a
         # sentence, which is a legal edit to an unappended field rather than a
         # migration the record cannot make.
-        problems += overlap_evidence_problems(
-            [rec for _n, rec in dataset_rows.get("comparability", [])],
-            [rec for _n, rec in dataset_rows.get("overlaps", [])])
+        declarations = [rec for _n, rec in dataset_rows.get("comparability", [])]
+        censuses = [rec for _n, rec in dataset_rows.get("overlaps", [])]
+        problems += overlap_evidence_problems(declarations, censuses)
+        # AN ADVISORY BESIDE THE PROBLEM, and the split is the usual one: the
+        # row is legal and already on disk, and what it needs is a census
+        # nobody has counted yet rather than an edit. See the function.
+        advisories += overlap_timing_advisories(declarations, censuses)
 
         return {"problems": problems, "advisories": advisories,
                 "ok": not problems}

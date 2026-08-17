@@ -229,7 +229,8 @@ def _earns_its_status(row: dict, censuses: list[dict] | None = None) -> bool:
     SHAPES (#413). A counted window in `overlaps` is the better one; a sentence
     in `overlap_ref` is the one still available where no window could be
     measured, which is a real case rather than a legacy one - the demo record
-    declares two scales comparable on two same-day readings, and two is below
+    declares a home scale and a clinic DEXA comparable on two same-day
+    readings, and two is below
     the count the engine will measure a window at. Either earns. Neither is
     silence.
 

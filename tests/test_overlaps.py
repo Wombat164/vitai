@@ -41,7 +41,8 @@ from vitai.api import Vitai
 from vitai.calibration import overlap_calibration
 from vitai.policy import comparability, overlap
 from vitai.schema import (KEYS, MIN_PAIRS, census_is_earned,
-                          overlap_evidence_problems, validate_record)
+                          overlap_evidence_problems,
+                          overlap_timing_advisories, validate_record)
 
 ROOT = Path(__file__).resolve().parents[1]
 VERA = ROOT / "tests" / "fixtures" / "personas" / "vera"
@@ -221,6 +222,135 @@ def test_two_different_instruments_or_there_is_nothing_to_pair():
     assert not census_is_earned(same)
     assert any("origin_b" in p
                for p in validate_record("overlaps", row(origin_b=None)))
+
+
+def test_a_date_that_matches_the_shape_and_does_not_exist_is_reported():
+    """A VALIDATOR THAT RAISES ON THE LINE IT EXISTS TO DESCRIBE IS WORSE THAN
+    ONE THAT GETS THE LINE WRONG.
+
+    `DATE_RE` checks the SHAPE of a date. `2030-02-30` matches it and does not
+    exist; `"2030-06-30\n"` matches it too, because the pattern ends in `$` and
+    a JSON string may carry a trailing newline. Either one parses, so
+    `jsonl.load` will not quarantine it, and it reaches the validator and the
+    seam gate intact. The first version of this dataset called
+    `date.fromisoformat` on both and took down `vitai validate`, `vitai build`,
+    the verdicts and the rollup with a ValueError - every surface of the
+    record, from one line nobody could be told about.
+    """
+    for bad in ("2030-02-30", "2029-02-29", "2030-06-30\n", "2030-13-01"):
+        for field in ("from_date", "to_date", "date"):
+            rec = row(**{field: bad})
+            problems = validate_record("overlaps", rec)
+            assert problems, (field, bad)
+            assert census_is_earned(rec) is False, (field, bad)
+    # And the whole cross-dataset path stays a report rather than a crash.
+    assert overlap_evidence_problems([crow()], [row(from_date="2030-02-30")])
+
+
+def test_a_census_cannot_predate_the_window_it_counted():
+    """`date` is when the record made the statement and `to_date` is the last
+    day it claims to have counted, so a row dated first is evidence about days
+    that had not happened yet. The engine's writer always stamps them equal;
+    nothing checked that a hand-written line did, and `policy` resolves
+    censuses as-of a viewpoint - so a backdated one would earn a declaration
+    for weeks its own window had not reached."""
+    early = row(date="2030-03-01")
+    problems = validate_record("overlaps", early)
+    assert any("before the days it counted" in p for p in problems), problems
+    assert not census_is_earned(early)
+    # Dated ON the last paired day is what the engine writes, and is legal.
+    assert validate_record("overlaps", row(date="2030-06-30")) == []
+    # Later is legal too: counting a window up is an act with its own date.
+    assert validate_record("overlaps", row(date="2030-08-01")) == []
+
+
+def test_the_gate_refuses_every_input_the_validator_refuses():
+    """THE INVARIANT, ASSERTED RATHER THAN ASSUMED: only a census that
+    validates can earn.
+
+    The first version of `census_is_earned` restated the validator's rules
+    instead of asking it, and drifted inside one review - it left out the
+    checks on `dataset` and `field`, so a census naming a dataset that does
+    not exist was reported by `vitai validate` and honoured by the seam gate
+    at the same time. Every mutation below was green against the suite before
+    this test existed.
+    """
+    refused = [
+        row(dataset="banana"),                      # no such dataset
+        row(dataset="weight"),                      # field not on it
+        row(field="note"),                          # not a measurement
+        row(origin_a=""), row(origin_a=None),       # identity not a string
+        row(origin_a="watch"),                      # both the same
+        row(paired_days=101.0),                     # not a whole day
+        row(paired_days=True),                      # bool is not a count
+        row(paired_days="101"),                     # a numeral is not a number
+        row(dropped_days=None),                     # required
+        row(dropped_days=-1),                       # negative days
+        row(paired_days=2, from_date="2030-06-29"),  # below MIN_PAIRS
+        row(from_date="2030-07-01"),                # window runs backwards
+        row(from_date="banana"),                    # not a date at all
+        row(from_date="2030-06-01"),                # more days than it spans
+        row(date="2030-01-01"),                     # predates its own window
+    ]
+    for rec in refused:
+        assert validate_record("overlaps", rec), rec
+        assert census_is_earned(rec) is False, rec
+    # And the one that passes both.
+    assert validate_record("overlaps", row()) == []
+    assert census_is_earned(row()) is True
+
+
+def test_a_census_the_validator_rejects_lifts_nothing():
+    """The invariant above, at the surface that matters. A dataset name the
+    record does not have is not a hand-wave: it is the difference between a
+    census about her runs and a census about nothing."""
+    declared = crow(status="comparable", bias=None, spread=None,
+                    difference_lo=None, difference_hi=None)
+    for bad in (row(dataset="banana"), row(paired_days=101.0),
+                row(from_date="2030-02-30"), row(date="2030-01-01")):
+        assert comparability([declared], "distance_km", "phone", "watch",
+                             "2030-07-01", [bad])["status"] == "not_comparable"
+
+
+def test_a_record_carrying_an_impossible_date_still_validates_rather_than_dying():
+    """END TO END, because the crash this pins was not visible from any unit:
+    the line parses, so it reaches `validate` through the ordinary load path."""
+    import shutil
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "record"
+        shutil.copytree(VERA, root)
+        (root / "data" / "overlaps.jsonl").write_text(
+            json.dumps(row(from_date="2030-02-30", _gen=1)) + "\n",
+            encoding="utf-8")
+        report = Vitai(root).validate()
+        assert report["problems"], "the bad line has to be reported"
+        assert any("from_date" in p for p in report["problems"])
+
+
+def test_a_declaration_whose_only_census_postdates_it_is_flagged():
+    """`overlap_evidence_problems` asks whether a census EXISTS; `policy` asks
+    whether one was in force on the date being judged. Those were one question
+    while the evidence was a sentence, because a sentence travels on the row.
+    They can differ now, and the difference is silent without this."""
+    declared = crow(date="2030-06-30", status="comparable", bias=None,
+                    spread=None, difference_lo=None, difference_hi=None)
+    late = row(date="2030-07-15")
+    # Green on the problem side, which is correct: the row is legal.
+    assert overlap_evidence_problems([declared], [late]) == []
+    # And the seam really is refused before the census.
+    assert comparability([declared], "distance_km", "phone", "watch",
+                         "2030-07-01", [late])["status"] == "not_comparable"
+    # So the advisory says so, naming the date it starts being honoured.
+    said = overlap_timing_advisories([declared], [late])
+    assert any("2030-07-15" in a and "unevidenced before it" in a
+               for a in said), said
+    # A census dated with the declaration says nothing.
+    assert overlap_timing_advisories([declared], [row(date="2030-06-30")]) == []
+    # Nor does one on a row that carries its own sentence.
+    assert overlap_timing_advisories(
+        [crow(overlap_ref="a hundred paired runs")], [late]) == []
 
 
 # --- exactly one shape of evidence -------------------------------------------
@@ -497,8 +627,27 @@ def test_the_writer_proposes_no_census_where_it_cannot_name_the_dataset():
 def test_the_writer_no_longer_produces_the_sentence():
     """The writer used to build `overlap_ref` by describing the counts in
     English, so appending what it produced would now trip the both-carriers
-    rule from the engine's own output."""
+    rule from the engine's own output.
+
+    BOTH HALVES ARE STAMPED THROUGH THE APPEND DOOR before they are judged,
+    because what this function returns is a PROPOSAL and not a record line:
+    `supersedes`, `recorded_at` and `device` are machine-set and `append` fills
+    them from `KEYS`. `census_is_earned` asks the validator, and the validator
+    holds a line to every key its generation registers - so judging the
+    proposal directly would be judging a shape the record never holds.
+    """
     head = overlap_calibration(rows(VERA, "sessions"), "distance_km",
                                "phone", "watch", dataset="sessions")
     assert head["row"]["overlap_ref"] is None
-    assert overlap_evidence_problems([head["row"]], [head["overlap"]]) == []
+
+    def stamped(dataset: str, proposed: dict) -> dict:
+        line = {k: proposed.get(k) for k in KEYS[dataset]}
+        line["recorded_at"] = "2030-06-30T22:00:00+01:00"
+        return line
+
+    census = stamped("overlaps", head["overlap"])
+    declared = stamped("comparability", head["row"])
+    assert validate_record("overlaps", census) == []
+    assert census_is_earned(census)
+    assert overlap_evidence_problems([declared], [census]) == []
+    assert overlap_timing_advisories([declared], [census]) == []
