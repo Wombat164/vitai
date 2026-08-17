@@ -33,7 +33,7 @@ from pathlib import Path
 from vitai.api import Vitai
 from vitai.policy import all_comparable, comparability
 from vitai.schema import (COMPARABILITY_STATUSES, KEYS, OVERLAP_BASIS,
-                          validate_record)
+                          overlap_evidence_problems, validate_record)
 
 DEMO = Path(__file__).resolve().parents[1] / "examples" / "demo"
 
@@ -473,18 +473,37 @@ def test_the_ends_reach_the_read_model():
         con.close()
 
 
-def test_comparable_and_offset_require_an_overlap_ref():
+def test_comparable_and_offset_still_have_to_name_their_overlap():
+    """The requirement MOVED at contract 53 (#413); it did not weaken.
+
+    It used to be a single-line rule and could not stay one: the evidence a
+    `comparable` or `offset` row owes now has two legal shapes - a counted
+    window in `overlaps`, or the sentence where no window could be measured -
+    and one line cannot see the other dataset. So `validate_record` stops
+    asking, and `overlap_evidence_problems` asks with both in hand. This test
+    pins BOTH halves of that move, because the half that is easy to lose is
+    the one that used to work.
+    """
     for status in ("comparable", "offset"):
         rec = crow("2030-01-01", "kg", "scale", "dexa", status,
-                   basis=OVERLAP_BASIS, bias=0.5 if status == "offset" else None)
-        problems = validate_record("comparability", rec)
-        assert any("overlap_ref" in p for p in problems), (status, problems)
+                   basis=OVERLAP_BASIS,
+                   bias=0.5 if status == "offset" else None,
+                   spread=0.4 if status == "offset" else None)
+        # One line no longer knows, and says nothing about the overlap. This
+        # is the cost, asserted rather than left as a silence somebody finds.
+        assert not any("overlap" in p
+                       for p in validate_record("comparability", rec))
+        # Two datasets do.
+        problems = overlap_evidence_problems([rec], [])
+        assert any("names its overlap nowhere" in p for p in problems), (
+            status, problems)
 
     # not_comparable earns nothing and needs no OVERLAP_REF to assert -
     # `basis` still has to be `overlap`, the only route this dataset accepts.
     refusal = crow("2030-01-01", "kg", "scale", "dexa", "not_comparable",
                    basis=OVERLAP_BASIS)
     assert validate_record("comparability", refusal) == []
+    assert overlap_evidence_problems([refusal], []) == []
 
 
 def test_the_status_vocabulary_is_closed():

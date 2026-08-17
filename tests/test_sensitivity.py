@@ -102,6 +102,31 @@ PINNED = {
         "recorded_at": "temporal",
         "device": "provenance",
     },
+    # #413's census. `dataset`/`field` are REFERENCE - they name which
+    # column of which dataset was counted, which is the pointer role
+    # `session_ref` already carries. `origin_a`/`origin_b` are PROVENANCE
+    # beside `comparability`'s, the same two instruments. `paired_days` and
+    # `dropped_days` are MEASUREMENT: they are quantities, and the class is
+    # about what a field IS rather than about how revealing it feels - a count
+    # of days two devices both logged discloses no more than the readings it
+    # counted, which are already in the record. `from_date`/`to_date` are
+    # TEMPORAL beside `instruments`' interval, which is the same shape.
+    "overlaps": {
+        "date": "temporal",
+        "dataset": "reference",
+        "field": "reference",
+        "origin_a": "provenance",
+        "origin_b": "provenance",
+        "paired_days": "measurement",
+        "dropped_days": "measurement",
+        "from_date": "temporal",
+        "to_date": "temporal",
+        "source": "provenance",
+        "note": "narrative",
+        "supersedes": "reference",
+        "recorded_at": "temporal",
+        "device": "provenance",
+    },
     "achievements": {
         "date": "temporal", "title": "narrative", "goal": "reference",
         "source": "provenance", "note": "narrative", "occurred_date":

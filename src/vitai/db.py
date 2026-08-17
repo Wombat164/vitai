@@ -1036,7 +1036,52 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #
 #     Options that lost, with what each forecloses:
 #     `docs/proposals/comparability-asymmetric-range.md`.
-CONTRACT_VERSION = "52"
+#
+# 53: `overlaps` - the paired-measurement window as its own dataset, and
+#     `overlap_ref` demoted from the only carrier of the evidence to the
+#     fallback where no window could be counted (#413).
+#
+#     A NEW TABLE, `overlaps`, with columns `date`, `dataset`, `field`,
+#     `origin_a`, `origin_b`, `paired_days`, `dropped_days`, `from_date`,
+#     `to_date`, `source`, `note`, `supersedes`, `recorded_at`, `device`. It
+#     holds the census of an overlap: how many days both instruments carried
+#     exactly one reading, how many were dropped as ambiguous, and the first
+#     and last day that paired.
+#
+#     A consumer that ignores the table behaves as it does today. A consumer
+#     that reads `comparability.overlap_ref` must stop treating it as always
+#     present beside `comparable`/`offset`: where the record holds a census,
+#     the sentence is now REFUSED rather than merely redundant, so the field
+#     is null on exactly the rows carrying the better evidence. Read the
+#     census instead - it is the same facts as columns.
+#
+#     WHAT IT DELIBERATELY DOES NOT HOLD is the median, the low and the high
+#     of the paired differences, which the proposal that named this dataset
+#     listed among its columns. Contract 52 put all three on the
+#     `comparability` row one contract earlier, held to each other by
+#     validation. Carrying them here as well would be one width stated in two
+#     datasets, kept honest by a cross-dataset rule - a second spelling, which
+#     is what #412 refused when a fact contract 44 already carried was
+#     proposed a second field. So `comparability` DECLARES and carries the
+#     statistics; `overlaps` COUNTS.
+#
+#     `dataset` IS ON THE CENSUS AND NOT ON THE DECLARATION. A field name does
+#     not identify a dataset - `distance_km` is a column of both `daily` and
+#     `sessions` - so a census that did not say which readings it counted
+#     could not be followed back to them, which is the sentence's own defect
+#     one level down. `comparability` has the same ambiguity and it is a
+#     separate question, filed rather than fixed here.
+#
+#     A WINDOW IS EARNED. Fewer than three paired days is refused, because it
+#     is the count below which the engine will not measure a window at all;
+#     and `paired_days + dropped_days` may not exceed the days from
+#     `from_date` to `to_date` inclusive, because a day either paired or was
+#     dropped and a window cannot hold more days than it has. What validation
+#     cannot do from one line is re-count the readings, and that limit is
+#     stated rather than papered over: re-derivation is a corpus control, not
+#     a row check, because a check that re-counted would let lines appended
+#     later invalidate lines already written.
+CONTRACT_VERSION = "53"
 
 _TEXT_COLS = {"statistic", "answers",
               # #402. Both word-valued: a space-separated list of field

@@ -606,6 +606,23 @@ COMPARABILITY_STATUSES = {COMPARABLE, OFFSET, NOT_COMPARABLE}
 # datasheet, an athlete's say-so or a vendor's marketing figure, which is
 # exactly what this dataset exists to refuse - so nothing else validates.
 OVERLAP_BASIS = "overlap"
+
+# The smallest overlap that is a window at all.
+#
+# A DISTINCTION IN KIND, NOT A THRESHOLD PICKED TO FEEL SAFE, and the same
+# distinction `outage` draws between an anecdote and a cadence. One pair gives a
+# difference and no notion of how far apart the two USUALLY get; two pairs give
+# two differences, whose range is just the two of them and describes no
+# behaviour beyond the sample. Three is the smallest overlap for which "how far
+# apart did they get" is a statement about the pair rather than a restatement of
+# the observations.
+#
+# LIVES HERE RATHER THAN IN `calibration` SINCE #413. It was the measuring
+# module's refusal threshold and is now also the schema's: an `overlaps` row
+# below it is a window nobody could have measured, and `calibration` imports
+# this name rather than keeping a second copy of the number that would have to
+# be moved twice.
+MIN_PAIRS = 3
 # Sourced from semantics/settings.toml (#53): WHERE an activity happened, as
 # its own axis, so `other` + `outdoor` expresses the catchall a vendor would
 # pre-coordinate into `OTHER_OUTDOOR`. Retired values stay legal.
@@ -1364,11 +1381,57 @@ KEYS["plans"] = [
     "tier", "serves", "set_by", "requires", "outcome", "reason",
     "session_ref", "note", "supersedes", "recorded_at", "device",
 ]
-for _ds in ("protocols", "regimes", "emissions", "plans"):
+KEYS["overlaps"] = [
+    # THE CENSUS OF A PAIRED-MEASUREMENT WINDOW (#413), declared here for the
+    # reason `protocols` and `regimes` are: a dataset that has never existed
+    # has no history for the generation loops above to append to.
+    #
+    # `comparability` DECLARES that two origins may be read across and cites
+    # the evidence in `overlap_ref`. That citation is free prose, and a
+    # reference that is a sentence is not a reference: nothing can follow it,
+    # nothing can count it, and a reader deciding whether to trust the figure
+    # has to parse English or give up. This dataset is what the sentence was
+    # standing in for.
+    #
+    # WHAT IT HOLDS IS THE EVIDENCE ABOUT THE DERIVATION, and nothing else.
+    # `calibration.overlap_calibration` already draws exactly this line, and
+    # says so: "the pair count, the dropped days and the dates are evidence
+    # about the derivation, and the row is what the record could hold". The
+    # `row` half is `comparability`, which since contract 52 carries the
+    # median as `bias` and the two ends as `difference_lo`/`difference_hi`.
+    # The other half had nowhere to live.
+    #
+    # SO THE STATISTICS ARE REFUSED HERE, deliberately, and this is the one
+    # decision worth reading twice. Option 3 in
+    # `docs/proposals/comparability-asymmetric-range.md` lists the median, the
+    # low and the high among this dataset's columns. Contract 52 landed all
+    # three on the `comparability` row one contract ago, held to each other by
+    # `_difference_range_problems`. Adding them here would be one width stated
+    # in two datasets, kept honest by a cross-dataset consistency rule - the
+    # second spelling #412 refused when `competence: absent` already carried
+    # the fact a second field was proposed for.
+    #
+    # `dataset` IS HERE AND IS NOT ON `comparability`, which is not an
+    # oversight either way. A `field` does not name a dataset: `distance_km`
+    # is a column of both `daily` and `sessions`, so a census that did not say
+    # which one it counted could not be followed back to the readings - the
+    # same defect as the sentence, one level down. `comparability` has the
+    # same ambiguity and it is a separate question, filed rather than fixed
+    # here.
+    #
+    # IDENTITY IS THE MEASURAND AND THE PAIR, `comparability`'s own shape with
+    # the dataset in front of it: re-measuring a window later supersedes the
+    # census rather than appending a second one.
+    "date", "dataset", "field", "origin_a", "origin_b", "paired_days",
+    "dropped_days", "from_date", "to_date", "source", "note", "supersedes",
+    "recorded_at", "device",
+]
+for _ds in ("protocols", "regimes", "emissions", "plans", "overlaps"):
     CURRENT_GENERATION[_ds] = 1
 
 IDENTITY_KEY["protocols"] = "slug"
 IDENTITY_KEY["plans"] = "slug"
+IDENTITY_KEY["overlaps"] = ("dataset", "field", "origin_a", "origin_b")
 
 # WHAT MAKES RECORDING AN INTENTION SAFE (#221). If every plan counts equally,
 # writing down "maybe a run tonight" and not running damages an adherence
@@ -1778,7 +1841,7 @@ def coarse(dataset: str, rec: dict) -> dict:
     drop = SENSITIVE.get(dataset)
     if not drop:
         # A COPY HERE TOO, and this branch is why the guarantee above was only
-        # three quarters true. Eighteen of the twenty datasets have no
+        # three quarters true. Twenty-two of the twenty-four datasets have no
         # sensitive field at all, so this is the branch nearly every row takes,
         # and it returned the caller's own object - reinstating for `weight`
         # and `daily` exactly the sharing the comment above says structurally
@@ -1936,7 +1999,8 @@ for _cls, _names in {
         angle_deg lever_pos pad_pos seat_pos resistance_level tempo grams
         grams_lo grams_hi kcal_100g protein_100g carb_100g fat_100g fibre_100g
         sugar_100g sodium_mg_100g carb_g fat_g fibre_g sugar_g sodium_mg
-        bytes bias spread difference_lo difference_hi""",
+        bytes bias spread difference_lo difference_hi
+        paired_days dropped_days""",
 }.items():
     for _name in _names.split():
         _BY_NAME[_name] = _cls
@@ -2048,6 +2112,9 @@ PLAIN_WORDS = frozenset({
     # #33 item 2: the comparability dataset. Two ordinary words a person
     # reads as themselves.
     "bias", "spread",
+    # #413's dataset. A census counts the days that PAIRED and the days that
+    # were DROPPED, and all three read as themselves at a reader.
+    "paired", "dropped", "days",
     "about", "accountability", "activity", "alcohol", "anchored",
     "angle", "artifact", "at", "attempted", "basis", "block", "body",
     "build", "by", "bytes", "cadence", "capture", "captured", "change",
@@ -2467,6 +2534,10 @@ _TYPES: dict[str, tuple[type, ...]] = {
     # what stops `difference_hi: "banana"` reaching the comparisons below,
     # which would raise a TypeError instead of reporting a malformed row.
     "difference_lo": _NUMERIC, "difference_hi": _NUMERIC,
+    # #413. INTEGERS AND NOT `_NUMERIC`: these count days, and half a day
+    # neither paired nor dropped. `steps` and `active_min` are typed the same
+    # way for the same reason.
+    "paired_days": (int,), "dropped_days": (int,),
 }
 
 # extra keys that are always legal (the supersedes mechanic + schema generation)
@@ -2857,12 +2928,26 @@ def _comparability_problems(rec: dict) -> list[str]:
                    f"engine accepts to a comparability declaration - got "
                    f"{basis!r}")
 
+    # 'overlap_ref' IS NO LONGER REQUIRED FROM ONE LINE (#413), and moving the
+    # check is a cost taken deliberately rather than a rule dropped. What a
+    # `comparable` or `offset` row owes is EVIDENCE that names the overlap, and
+    # since contract 53 that evidence has two legal shapes: an `overlaps` row
+    # holding the census, or - where no window could be measured - this
+    # sentence. One line cannot see the other dataset, so one line cannot say
+    # which of the two is present, and a required-ness check that fires on the
+    # rows carrying the BETTER evidence would be worse than no check.
+    #
+    # It moves to `overlap_evidence_problems`, which sees both datasets, and it
+    # gains the other half there: exactly one of the two, never both. The
+    # load-bearing half does not move at all - `policy._earns_its_status` still
+    # refuses to honour a row that has named its overlap in neither shape, so
+    # an unevidenced row still cannot lift the instrument seam whatever
+    # `validate` reports.
     overlap_ref = rec.get("overlap_ref")
-    if status in (COMPARABLE, OFFSET) and not (
+    if overlap_ref is not None and not (
             isinstance(overlap_ref, str) and overlap_ref.strip()):
-        out.append(f"'overlap_ref' names the period the overlap was "
-                   f"observed in, and is required beside {status!r}: "
-                   "comparability earned by overlap has to name the overlap")
+        out.append(f"'overlap_ref' names the period the overlap was observed "
+                   f"in, in the athlete's own words, got {overlap_ref!r}")
 
     bias, spread = rec.get("bias"), rec.get("spread")
     if status == OFFSET:
@@ -2981,6 +3066,137 @@ def _difference_range_problems(rec: dict, status: object, bias: object,
     return out
 
 
+def _overlap_problems(rec: dict) -> list[str]:
+    """A window is EARNED, never asserted (#413).
+
+    THE SAME RULE `comparability` RESTS ON, one level down. A comparability row
+    exists because two origins were compared over dates both covered; a census
+    row exists because that comparison was actually counted. Neither exists
+    because somebody wanted it to.
+
+    WHAT VALIDATION CAN AND CANNOT DO HERE, stated plainly because it is the
+    weakest step in this dataset's argument. `validate_record` sees ONE LINE.
+    It cannot re-run the pairing rule over the observation rows, so it cannot
+    confirm that this record really shows 101 paired days of `distance_km` from
+    a phone and a watch. What it can do is refuse the census that could not
+    have come from any record:
+
+    - FEWER THAN `MIN_PAIRS` DAYS IS NOT A WINDOW. `calibration` already
+      refuses to measure one and emits no row; a hand-written line claiming two
+      paired days is claiming a measurement the engine would not have made.
+    - A WINDOW CANNOT HOLD MORE DAYS THAN IT HAS. Every day of the overlap
+      either paired or was dropped, never both, and there is at most one of
+      each per date - so `paired_days + dropped_days` cannot exceed the number
+      of days from `from_date` to `to_date` inclusive. This is the arithmetic
+      that separates a counted window from a number somebody liked.
+    - THE ENDS ARE PAIRED DAYS, so a window with pairs in it has both, in
+      order, and its span is at least one day.
+
+    The re-derivation - reading the named dataset back and counting again - was
+    considered and is NOT here. It would make an already-written row's validity
+    depend on lines appended AFTER it: a later observation inside the window
+    changes the count, and an append-only record whose history stops validating
+    when history is added to is not append-only. It belongs to the corpus
+    control that regenerates `vera`'s census from her own sessions, where the
+    answer is checked against the engine that produced it rather than against
+    whatever the record has become since.
+
+    `dataset`/`field` ARE CHECKED THE WAY `_regime_problems` CHECKS THEM, being
+    the same question - which column of which dataset is this row about - and
+    then narrowed the way `_comparability_problems` narrows it: a census counts
+    readings of a QUANTITY two instruments could disagree about, so the field
+    has to be one `sensitivity` classifies as a measurement.
+    """
+    out: list[str] = []
+    dataset, field = rec.get("dataset"), rec.get("field")
+    if dataset not in KEYS:
+        out.append(f"'dataset' names the dataset whose readings were paired, "
+                   f"got {dataset!r}")
+    elif field not in KEYS[str(dataset)]:
+        out.append(f"'field' {field!r} is not a column of {dataset}")
+    elif sensitivity(str(dataset), str(field)) != "measurement":
+        out.append(f"'field' names a quantity two instruments could disagree "
+                   f"about, not any column {dataset} has - got {field!r}")
+
+    origin_a, origin_b = rec.get("origin_a"), rec.get("origin_b")
+    for name, value in (("origin_a", origin_a), ("origin_b", origin_b)):
+        if not isinstance(value, str) or not value.strip():
+            out.append(f"'{name}' names one of the two instruments whose "
+                       f"readings were paired, got {value!r}")
+    if (isinstance(origin_a, str) and isinstance(origin_b, str)
+            and origin_a == origin_b):
+        out.append(f"'origin_a' and 'origin_b' both name {origin_a!r} - a "
+                   "window is a period two DIFFERENT instruments both covered")
+
+    paired, dropped = rec.get("paired_days"), rec.get("dropped_days")
+
+    def _count(v: object) -> bool:
+        return isinstance(v, int) and not isinstance(v, bool)
+
+    for name, value in (("paired_days", paired), ("dropped_days", dropped)):
+        if value is None:
+            out.append(f"'{name}' is required: a census that does not say how "
+                       f"many days it counted is the sentence this dataset "
+                       f"exists to replace")
+        elif _count(value) and value < 0:
+            out.append(f"'{name}' counts days and cannot be negative, got "
+                       f"{value!r}")
+    if _count(paired) and paired < MIN_PAIRS:
+        out.append(f"'paired_days' is {paired!r}, and a window needs at least "
+                   f"{MIN_PAIRS}: two differences are the observations "
+                   f"themselves rather than a statement about the pair, which "
+                   f"is why the engine refuses to measure one")
+
+    # PARSED THROUGH `_bad_date`, NOT MATCHED AGAINST `DATE_RE`, and the
+    # difference is a crash rather than a nicety. `DATE_RE` checks the SHAPE of
+    # a date and says nothing about whether one exists: `2030-02-30` matches it
+    # and `date.fromisoformat` raises on it, and so does `2030-06-30\n`, since
+    # the pattern ends in `$` and a JSON string may carry a trailing newline -
+    # the same hole the comment above `SLUG_RE` already warns about. A row like
+    # that parses, so `jsonl.load` does not quarantine it, and it arrives here
+    # intact. A validator that raises on the line it exists to describe takes
+    # down `validate` and `build` with it, which is worse than any verdict it
+    # could have got wrong. `_bad_date` is the guarded parse this file already
+    # uses for exactly this, and `_regime_problems` next door is the reason the
+    # defect was mine alone: it only ever string-compares.
+    first, last = rec.get("from_date"), rec.get("to_date")
+    for name, value, which in (("from_date", first, "first"),
+                               ("to_date", last, "last")):
+        if _bad_date(value):
+            out.append(f"'{name}' is an ISO date - the {which} day that "
+                       f"paired - got {value!r}")
+    if not (_bad_date(first) or _bad_date(last)):
+        if last < first:
+            out.append(f"'to_date' {last} is before 'from_date' {first}; a "
+                       "window is an interval and an interval that ends "
+                       "before it starts pairs nothing")
+        elif _count(paired) and _count(dropped):
+            span = (date.fromisoformat(str(last))
+                    - date.fromisoformat(str(first))).days + 1
+            if paired + dropped > span:
+                out.append(
+                    f"{first} to {last} is {span} day(s), and this row counts "
+                    f"{paired + dropped} of them ({paired!r} paired, "
+                    f"{dropped!r} dropped): a day either paired or was "
+                    f"dropped, never both, so a window cannot hold more days "
+                    f"than it has")
+    # A CENSUS CANNOT BE DATED BEFORE THE WINDOW IT COUNTED CLOSED. `date` is
+    # when the record made this statement, and `to_date` is the last day it
+    # claims to have counted, so a row dated first is evidence about days that
+    # had not happened when it was written. The engine's own writer always
+    # stamps them equal (`calibration` sets `date` to the last paired day);
+    # nothing checked that a hand-written line did, and `policy` resolves
+    # censuses AS OF a viewpoint, so a backdated one would earn a declaration
+    # for weeks its own window had not reached.
+    if not (_bad_date(rec.get("date")) or _bad_date(last)):
+        if str(rec.get("date")) < str(last):
+            out.append(
+                f"this row is dated {rec.get('date')} and counts a window "
+                f"ending {last}: a census cannot be written down before the "
+                "days it counted had happened")
+    return out
+
+
 def _regime_problems(rec: dict) -> list[str]:
     """A regime is a bounded interval, and the bounds are the whole point."""
     out = []
@@ -3084,6 +3300,171 @@ def overlapping_instrument_problems(rows: list[dict]) -> list[str]:
     return out
 
 
+def census_is_earned(row: dict) -> bool:
+    """Is this `overlaps` line a window somebody counted? (#413)
+
+    FAIL CLOSED, for `policy._earns_its_status`'s reason one dataset over and
+    with the same mechanics behind it. `jsonl.load` quarantines a line that
+    fails to PARSE and nothing else, and `verdicts` reads a dataset straight
+    off `load` rather than off `validate_record` - so a census that is
+    schema-invalid arrives at the seam gate untouched. Since contract 53 a
+    census is one of the two things that can EARN a comparability declaration,
+    which means a hand-written `overlaps` line is now a way to lift the
+    instrument-seam refusal. A gate derived from data the record supplies has
+    to distrust that data exactly as much as any other input does.
+
+    ONLY A CENSUS THAT VALIDATES CAN EARN, and that is asked of the validator
+    rather than restated here. The first version of this WAS a restatement and
+    drifted inside one review: it left out the three checks on `dataset` and
+    `field`, so a census naming a dataset that does not exist was reported by
+    `vitai validate` and honoured by the seam gate at the same time - a row the
+    record calls malformed, lifting a refusal. A gate whose rules are a copy of
+    somebody else's rules is a gate that is one edit from disagreeing with
+    them, which is the defect this engine spends whole datasets refusing.
+
+    STILL A SEPARATE FUNCTION, because the two answer different questions on
+    different call paths: the validator says what is wrong with a line to
+    somebody reading `vitai validate`, and this says whether a line may be
+    ACTED ON by a build that never called the validator - `jsonl.load` to the
+    seam gate, which is the path a schema-invalid row reaches untouched.
+
+    STRICTER THAN `_earns_its_status` IS ON A COMPARABILITY ROW, deliberately.
+    That one asks two conditions of a dataset two clients are already pinned
+    to; this asks everything of a dataset nobody has habits about yet. Where
+    the two differ the answer is a refusal, which is the direction a gate is
+    allowed to be wrong in.
+    """
+    return not validate_record("overlaps", row)
+
+
+def overlap_evidence_problems(comparability_rows: list[dict],
+                              overlap_rows: list[dict]) -> list[str]:
+    """Exactly one shape of evidence per declaration, never both (#413).
+
+    CROSS-DATASET, which is why it is not in `validate_record`: whether a
+    comparability row owes a sentence depends on whether another dataset holds
+    its census, and one line cannot see that.
+
+    THE RULE IS AN EXCLUSIVE OR, and both halves are the point.
+
+    - NEITHER is the old failure: comparability earned by overlap has to name
+      the overlap, and a row that names it nowhere is asserting the thing this
+      dataset exists to refuse. This is the requirement that used to live in
+      `_comparability_problems` and it is not weakened, only moved to where it
+      can see both shapes.
+    - BOTH is the failure #413 exists to close, arriving from the other side.
+      `vera`'s sentence read "101 run(s) both instruments recorded, 2030-01-06
+      to 2030-06-30" - which is the census, in English, beside the census. Two
+      carriers of one fact drift, and the prose copy is the one nothing can
+      check. Once the record holds the counted window, restating it in a
+      sentence is the defect with the numbers now sitting next to it.
+
+    What a sentence may still say is on `note`, which is where `vera` already
+    put the half no census carries: the forest loop is where they part.
+
+    RETIREMENT THROUGH THE EXISTING MACHINERY, `overlapping_instrument_
+    problems`' reason: a corrected line is read as retired here exactly as it
+    is everywhere else, rather than through a private idea of what is live.
+    """
+    from .jsonl import line_key, target_of
+
+    def _live(dataset: str, rows: list[dict]) -> list[dict]:
+        retired = {t[0] for r in rows if (t := target_of(r)) is not None}
+        return [r for r in rows if line_key(dataset, r) not in retired]
+
+    censuses = [r for r in _live("overlaps", overlap_rows)
+                if census_is_earned(r)]
+    counted = {(str(r["field"]), frozenset({str(r["origin_a"]),
+                                            str(r["origin_b"])}))
+               for r in censuses}
+
+    out = []
+    for row in _live("comparability", comparability_rows):
+        status = row.get("status")
+        if status not in (COMPARABLE, OFFSET):
+            continue
+        ref = row.get("overlap_ref")
+        stated = isinstance(ref, str) and bool(ref.strip())
+        pair = (str(row.get("field")),
+                frozenset({str(row.get("origin_a")), str(row.get("origin_b"))}))
+        where = (f"comparability: {row.get('field')!r} across "
+                 f"{row.get('origin_a')!r} and {row.get('origin_b')!r} "
+                 f"({row.get('date')})")
+        if pair in counted and stated:
+            out.append(
+                f"{where} carries both an 'overlaps' census and an "
+                f"'overlap_ref' sentence saying the same thing. The census is "
+                f"the reference; the sentence is a second spelling of it that "
+                f"nothing can check and that drifts the day one is edited. "
+                f"Anything the census cannot hold belongs on 'note'")
+        elif pair not in counted and not stated:
+            out.append(
+                f"{where} names its overlap nowhere. Comparability is earned "
+                f"by overlap, so a {status!r} row owes either an 'overlaps' "
+                f"row counting the window or an 'overlap_ref' saying in words "
+                f"what was compared over what period")
+    return out
+
+
+def overlap_timing_advisories(comparability_rows: list[dict],
+                              overlap_rows: list[dict]) -> list[str]:
+    """A declaration whose only evidence postdates it (#413).
+
+    THE HOLE THE MOVED REQUIREMENT OPENED, and it is stated rather than left
+    for somebody to find in a verdict table. `overlap_evidence_problems` asks
+    whether a census EXISTS; `policy.comparability` asks whether one was in
+    force ON THE DATE BEING JUDGED, and filters as-of for the right reason -
+    evidence arriving after the statement it supports is retroactive
+    reasoning. The two questions had one answer while the evidence was a
+    sentence, because a sentence travels on the row and is in force exactly
+    when the row is. A census is a separate line with its own date, and the
+    two answers can now differ.
+
+    So a record can be `validate`-green while every week before the census
+    reads the declaration as unevidenced and leaves the seam refused, with
+    nothing anywhere saying why. That is the shape a person gives up on: a
+    figure that is missing, a validator that says the record is fine, and no
+    third place to look.
+
+    AN ADVISORY AND NOT A PROBLEM. The row is legal, already on disk, and
+    append-only - the fix is to append a census the athlete has not yet
+    counted, or to accept that the earlier weeks were genuinely unevidenced,
+    and neither is something a build should refuse over (#38). It names the
+    date the declaration starts being honoured, because that is the fact a
+    reader is missing rather than the fact that two dates differ.
+    """
+    from .jsonl import line_key, target_of
+
+    def _live(dataset: str, rows: list[dict]) -> list[dict]:
+        retired = {t[0] for r in rows if (t := target_of(r)) is not None}
+        return [r for r in rows if line_key(dataset, r) not in retired]
+
+    censuses = [r for r in _live("overlaps", overlap_rows)
+                if census_is_earned(r)]
+    out = []
+    for row in _live("comparability", comparability_rows):
+        if row.get("status") not in (COMPARABLE, OFFSET):
+            continue
+        ref = row.get("overlap_ref")
+        if isinstance(ref, str) and ref.strip():
+            continue
+        want = frozenset({str(row.get("origin_a")), str(row.get("origin_b"))})
+        dates = sorted(
+            str(c.get("date")) for c in censuses
+            if str(c.get("field")) == str(row.get("field"))
+            and frozenset({str(c.get("origin_a")), str(c.get("origin_b"))})
+            == want)
+        if dates and dates[0] > str(row.get("date")):
+            out.append(
+                f"comparability: {row.get('field')!r} across "
+                f"{row.get('origin_a')!r} and {row.get('origin_b')!r} is dated "
+                f"{row.get('date')} and its only census is dated {dates[0]}. "
+                f"The declaration is honoured from {dates[0]} onward and reads "
+                "as unevidenced before it, so any window judged earlier still "
+                "sees the seam refused")
+    return out
+
+
 def validate_record(dataset: str, rec: dict) -> list[str]:
     """Problems with one record; empty list means valid."""
     problems: list[str] = []
@@ -3176,6 +3557,8 @@ def validate_record(dataset: str, rec: dict) -> list[str]:
         problems += _capability_problems(rec)
     if dataset == "comparability":
         problems += _comparability_problems(rec)
+    if dataset == "overlaps":
+        problems += _overlap_problems(rec)
     # THE FIELD THAT ALREADY HAD THE VOCABULARY AND NO VALIDATION (#212).
     # `for_phase` was checked by nothing, so a typo or a vendor's own spelling
     # sorted last and silently, and the sort key in `api.py` was the only place

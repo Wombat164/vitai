@@ -452,6 +452,22 @@ aliases = ["reps", "repetitions", "reps completed"]
 ucum = "{reps}"
 label = "repetitions"
 
+# #413's census. COUNTS OF DAYS, in UCUM's annotation form, and the annotation
+# is what keeps them honest: a paired day is not a duration and two windows'
+# day counts do not add. `paired_days` counts the days both instruments carried
+# exactly one usable reading; `dropped_days` the days both recorded and neither
+# could be paired, which is a different fact from a thin overlap and is the
+# reason the two are separate columns rather than one.
+[unit.paired_days]
+ucum = "{days}"
+label = "days"
+aliases = ["paired days", "pairs", "paired readings"]
+
+[unit.dropped_days]
+ucum = "{days}"
+label = "days"
+aliases = ["dropped days", "ambiguous days"]
+
 [unit.rir]
 ucum = "{reps}"
 label = "repetitions in reserve"

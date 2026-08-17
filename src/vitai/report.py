@@ -140,7 +140,8 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                  escalations: list[dict] | None = None,
                  events: list[dict] | None = None,
                  raw_daily: list[dict] | None = None,
-                 comparability: list[dict] | None = None) -> str:
+                 comparability: list[dict] | None = None,
+                 overlaps: list[dict] | None = None) -> str:
     today = today or date.today()
     # #186 SECTION 3, "wherever it is shown". The tripwire block does not read
     # the verdict rows - it re-derives its own seven-day figures from `daily` -
@@ -311,7 +312,13 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                         # (the week's Monday is before it), and the rollup
                         # says "losing" beside a table that permanently says
                         # `no_data`.
-                        _week_key(pts[-1][0])):
+                        _week_key(pts[-1][0]),
+                        # THE CENSUSES, for `compute_verdicts`' reason (#413):
+                        # a comparability row may name its overlap in
+                        # `overlaps` rather than in a sentence, and a caller
+                        # withholding them would read such a row as
+                        # unevidenced and refuse a seam the record lifted.
+                        overlaps or []):
                     # NO "WEIGH THE SAME WAY" LINE, because the athlete
                     # cannot. A scale is replaced once and the old readings
                     # are permanent; the rate returns when the fortnight no

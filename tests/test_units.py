@@ -52,7 +52,12 @@ from vitai.vocab import registry
 # difference are in whatever unit the row's own `field` column names - and two
 # curated display names, "difference, lower bound" and "difference, upper
 # bound", following `kg_lo`'s wording exactly.
-PINNED_DIGEST = "f1705cd848237f04"
+# Updated deliberately at #413's contract 53: `paired_days` and `dropped_days`
+# arrive with the `overlaps` dataset, both `{days}` in UCUM's annotation form
+# for the reason `steps` and `reps_completed` are annotated counts - a day
+# somebody paired is not a duration, and two windows' day counts do not add.
+# Both take the derived display name, so no `[name]` entry joins.
+PINNED_DIGEST = "b0e6ec087863822f"
 
 REGISTRY = Path(__file__).resolve().parents[1] / "src" / "vitai" / "semantics" / "units.toml"
 def _numeric_in_the_corpus() -> set[tuple[str, str]]:

@@ -498,7 +498,8 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
                      thresholds: list[dict] | None = None,
                      medical: list[dict] | None = None,
                      raw_daily: list[dict] | None = None,
-                     comparability: list[dict] | None = None) -> list[dict]:
+                     comparability: list[dict] | None = None,
+                     overlaps: list[dict] | None = None) -> list[dict]:
     """Deterministic weekly verdict rows across all configured metrics.
 
     `raw_daily` is the UNADJUDICATED daily rows, and only `coverage` is read
@@ -514,6 +515,14 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
     weight rate may be lifted. Defaults to none stated, which resolves every
     pair to `not_comparable` and leaves every seam refused exactly as it was
     before this parameter existed.
+
+    `overlaps` is the `overlaps.jsonl` rows (#413), passed alongside it
+    because a counted window is since contract 53 one of the two things
+    that can EARN a comparability declaration - the other being the
+    sentence in `overlap_ref`. Defaulting it to none is the fail-closed
+    direction: a row whose only evidence is a census the caller did not
+    hand over reads as unearned, and an unearned row leaves the seam
+    refused rather than lifting it.
     """
     rows: list[dict] = []
     weeks = _weeks_covered(weight, daily, sessions)
@@ -591,7 +600,8 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
         # instrument pair behind this window is on the same footing.
         seam = instrument_seam(window)
         if seam["seam"] and not all_comparable(
-                comparability or [], "kg", seam["instruments"], wk):
+                comparability or [], "kg", seam["instruments"], wk,
+                overlaps or []):
             rows.append(_row(wk, "weight_rate", rate, target, NODATA, goal,
                              reason=NOT_SUPPORTED, statistic=PERIOD_CHANGE))
             continue

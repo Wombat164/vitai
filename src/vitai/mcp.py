@@ -178,6 +178,30 @@ TOOLS: dict[str, dict] = {
         },
         "required": ["field", "origin_a", "origin_b"],
     },
+    # #413: the census behind a comparability declaration. An agent told that
+    # two instruments are `offset` has no way to judge whether to trust the
+    # figure without knowing how much was compared - a hundred paired days or
+    # three - and before this the answer was a sentence in `overlap_ref` it
+    # would have had to parse. Null is an answer and means nobody counted a
+    # window, which is not the same as a window of no days.
+    "overlap": {
+        "method": "overlap",
+        "properties": {
+            "dataset": {"type": "string",
+                        "description": "the dataset the paired readings live "
+                                       "in; a field name does not identify "
+                                       "one"},
+            "field": {"type": "string",
+                      "description": "the field both instruments recorded"},
+            "origin_a": {"type": "string",
+                        "description": "the first instrument"},
+            "origin_b": {"type": "string",
+                        "description": "the second instrument"},
+            "on": {"type": "string",
+                   "description": "valid-time viewpoint, ISO date"},
+        },
+        "required": ["dataset", "field", "origin_a", "origin_b"],
+    },
     "milestone_ladder": {
         "method": "milestone_ladder",
         "properties": {"slug": {"type": "string",

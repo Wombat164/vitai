@@ -162,6 +162,24 @@ UNWRITTEN = (
     "daily.absent_reason",
     "sessions.absent_fields",
     "sessions.absent_reason",
+    # #413, and a DECISION rather than a backlog item. `vera` writes the
+    # corpus's only census - 101 paired days over `sessions.distance_km`, none
+    # dropped - and there is nothing true to put in its `note`. Her window has
+    # no ambiguity to explain, no gap to account for and no bound the two
+    # dates do not already give, so a line here would be prose written to
+    # clear a register.
+    #
+    # That is the same refusal this dataset is built on, arriving one level
+    # up: the demo cannot write a census at all because its overlap is two
+    # days and three is the floor, and inventing a third paired day to satisfy
+    # `test_fixture_coverage` would be the fabrication in the data rather than
+    # in the narrative. Both absences are honest and both are recorded.
+    #
+    # It leaves this list the day a record holds a window that needs
+    # explaining - a stretch where one instrument was in a drawer, an overlap
+    # that ended for a reason the dates cannot show - which is exactly the
+    # case `note` exists for.
+    "overlaps.note",
     "daily.artifact",
     "daily.path",
     # `inferences.depends_on` and `inferences.note` LEFT THIS REGISTER (#386).

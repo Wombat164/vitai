@@ -38,7 +38,8 @@ from datetime import date, datetime, timedelta
 
 from .clocks import order_key
 from .schema import (COMPARABLE, IDENTITY_KEY, NOT_COMPARABLE, OFFSET,
-                     OVERLAP_BASIS, UNKNOWN_COMPETENCE, is_number)
+                     OVERLAP_BASIS, UNKNOWN_COMPETENCE, census_is_earned,
+                     is_number)
 
 HARD, SOFT = "hard", "soft"
 
@@ -192,7 +193,7 @@ def capability(rows: list[dict], origin: str, measures: str,
             "stated": False}
 
 
-def _earns_its_status(row: dict) -> bool:
+def _earns_its_status(row: dict, censuses: list[dict] | None = None) -> bool:
     """Is this row entitled to the weight `comparability` gives `comparable`
     and `offset` - LIFTING a refusal - or is it only entitled to whatever a
     `not_comparable` row already is, the record's default?
@@ -223,16 +224,45 @@ def _earns_its_status(row: dict) -> bool:
     it is honoured regardless of `basis` - `vitai validate` still reports it
     as malformed, which is a different question from whether the SEAM stays
     refused.
+
+    WHAT #171 REQUIRES IS A NAMED OVERLAP, AND SINCE CONTRACT 53 THAT HAS TWO
+    SHAPES (#413). A counted window in `overlaps` is the better one; a sentence
+    in `overlap_ref` is the one still available where no window could be
+    measured, which is a real case rather than a legacy one - the demo record
+    declares a home scale and a clinic DEXA comparable on two same-day
+    readings, and two is below
+    the count the engine will measure a window at. Either earns. Neither is
+    silence.
+
+    THE CENSUS HAS TO EARN ITSELF FIRST, which is why `censuses` is filtered
+    through `schema.census_is_earned` rather than matched on identity alone.
+    Accepting any line in `overlaps.jsonl` as evidence would turn lifting the
+    seam into a matter of writing four fields into a second file - the same
+    hand-written bypass the `basis: "stated"` row demonstrated in the #373
+    review, moved one dataset over and made easier.
+
+    `censuses` DEFAULTS TO NOTHING, so a caller that does not pass it behaves
+    exactly as this did before contract 53: only a sentence earns. That is the
+    fail-closed direction, and it is the reason the default is safe - what a
+    forgetful caller loses is a lift, never a refusal.
     """
     if row.get("status") not in (COMPARABLE, OFFSET):
         return True
+    if row.get("basis") != OVERLAP_BASIS:
+        return False
     overlap_ref = row.get("overlap_ref")
-    return (row.get("basis") == OVERLAP_BASIS
-           and isinstance(overlap_ref, str) and bool(overlap_ref.strip()))
+    if isinstance(overlap_ref, str) and overlap_ref.strip():
+        return True
+    want = frozenset({str(row.get("origin_a")), str(row.get("origin_b"))})
+    return any(
+        str(c.get("field")) == str(row.get("field"))
+        and frozenset({str(c.get("origin_a")), str(c.get("origin_b"))}) == want
+        and census_is_earned(c)
+        for c in (censuses or []))
 
 
 def comparability(rows: list[dict], field: str, origin_a: str, origin_b: str,
-                  on: str | date) -> dict:
+                  on: str | date, overlaps: list[dict] | None = None) -> dict:
     """Are these two instruments on the same footing for this field? (#33 item 2)
 
     Returns the comparability row in force, or a synthesised `not_comparable`
@@ -281,12 +311,18 @@ def comparability(rows: list[dict], field: str, origin_a: str, origin_b: str,
     """
     on_s = on.isoformat() if isinstance(on, date) else str(on)
     want = frozenset({str(origin_a), str(origin_b)})
+    # AS OF THE SAME VIEWPOINT as the declaration it is evidence for. A census
+    # recorded in July cannot earn a declaration being read as of March: the
+    # window had not been counted yet, and evidence that arrives after the
+    # statement it supports is the retroactive reasoning `state` exists to
+    # prevent one dataset over.
+    censuses = list(_in_force(overlaps or [], "overlaps", on_s).values())
     matches = [
         row for row in _in_force(rows, "comparability", on_s).values()
         if str(row.get("field")) == str(field)
         and frozenset({str(row.get("origin_a")), str(row.get("origin_b"))})
         == want
-        and _earns_its_status(row)]
+        and _earns_its_status(row, censuses)]
     if matches:
         return max(matches, key=order_key)
     return {"field": str(field), "origin_a": str(origin_a),
@@ -308,7 +344,7 @@ def comparability(rows: list[dict], field: str, origin_a: str, origin_b: str,
 
 
 def all_comparable(rows: list[dict], field: str, instruments: list[str],
-                   on: str | date) -> bool:
+                   on: str | date, overlaps: list[dict] | None = None) -> bool:
     """Does EVERY pair among `instruments` resolve to `comparable`? (#33 item 3)
 
     The gate the weight-rate seam refusal (`verdicts.compute_verdicts`) and
@@ -347,8 +383,44 @@ def all_comparable(rows: list[dict], field: str, instruments: list[str],
     from itertools import combinations
 
     named = sorted({str(i) for i in instruments})
-    return all(comparability(rows, field, a, b, on)["status"] == COMPARABLE
-              for a, b in combinations(named, 2))
+    return all(
+        comparability(rows, field, a, b, on, overlaps)["status"] == COMPARABLE
+        for a, b in combinations(named, 2))
+
+
+def overlap(rows: list[dict], dataset: str, field: str, origin_a: str,
+            origin_b: str, on: str | date) -> dict | None:
+    """The counted window in force for this pair, or None (#413).
+
+    NONE IS AN ANSWER HERE, and this is where it parts company with
+    `comparability` one dataset over. A comparability question always gets a
+    row back, synthesised as `not_comparable`, because silence about whether
+    two instruments may be read across is itself a decision the record has
+    made. Silence about a WINDOW is not: nobody counted one, and there is no
+    default census to fall back to. Synthesising a hollow row with zero pairs
+    would state that the two instruments never overlapped, which is a
+    measurement nobody made - the exact assertion this dataset exists to
+    refuse, arriving as a convenience for callers.
+
+    ORDER-INSENSITIVE IN THE PAIR, `comparability`'s reason exactly: whether
+    two instruments overlapped is one question regardless of which was named
+    first. The stored identity is not, so where both orders were written the
+    most recently dated in-force row wins - the same tie-break reapplied.
+
+    KEYED ON `dataset` TOO, which `comparability` is not. A `field` does not
+    name a dataset - `distance_km` is a column of both `daily` and `sessions`
+    - so a caller asking about a window has to say which readings it means.
+    """
+    on_s = on.isoformat() if isinstance(on, date) else str(on)
+    want = frozenset({str(origin_a), str(origin_b)})
+    matches = [
+        row for row in _in_force(rows, "overlaps", on_s).values()
+        if str(row.get("dataset")) == str(dataset)
+        and str(row.get("field")) == str(field)
+        and frozenset({str(row.get("origin_a")), str(row.get("origin_b"))})
+        == want
+        and census_is_earned(row)]
+    return max(matches, key=order_key) if matches else None
 
 
 def instrument(rows: list[dict], origin: str, on: str | date) -> dict | None:
