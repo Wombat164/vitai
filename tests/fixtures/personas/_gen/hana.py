@@ -13,7 +13,12 @@ three of the four are quiet at the horizon and only one of those is a question.
   `phone-app` is alive. It writes most days and is learned the same evening.
   Nothing to ask.
 
-  `old-band` is an ARCHIVE. She replaced a fitness band in the autumn and
+  `old-band` is an ARCHIVE, AND IT IS ALSO THE ONE INSTRUMENT IN THIS CORPUS
+  THAT LIED. Its last row carries a zero step count on the day its strap
+  perished, which is what a dying step counter writes and what
+  `false_zero_questions` exists to ask about - a rule whose true-positive path
+  no record could run until this one (#435). She replaced a fitness band in the
+  autumn and
   pulled its history off the old device once, months later, to recover the
   months before she started keeping this record. Ninety-odd dates spanning
   seven months of valid time, and ONE transaction day. It never had a rhythm
@@ -51,7 +56,10 @@ from . import common
 SEED = 127
 # Bumped only when the history could change an engine output
 # (docs/persona-doctrine.md); never for prose, typos, or findings.
-PERSONA_VERSION: int = 1
+# 2 at #435: the band's last row now carries a zero step count, which is a
+# HISTORY change rather than a schema one - it makes the engine emit a
+# `false_zero` question that no record in this corpus produced before.
+PERSONA_VERSION: int = 2
 
 START = date(2030, 1, 7)
 DEFAULT_END = date(2030, 6, 30)
@@ -183,9 +191,38 @@ def _backfill(rng: random.Random) -> list[dict]:
         hh = 22 + second // 3600
         mm = (second // 60) % 60
         ss = second % 60
+        # THE DAY THE STRAP PERISHED, AND THE BAND SAID SO WRONGLY (#435).
+        # `WORLD.md` has always said the band was worn "until the end of
+        # December, when the strap perished". Its last row now carries the
+        # zero a dying step counter writes: not a day she did not walk - she
+        # walks the long way to everything, which is the first line of her
+        # profile - but a day the device reported a count it did not have.
+        #
+        # THE ENGINE CLAIMS TO DETECT EXACTLY THIS and no record contained it.
+        # `false_zero_questions` asks about the first exact zero a source has
+        # never written before, and `false_zero_questions`' own docstring
+        # recorded that it "produced no true positive anywhere, because no
+        # corpus record contains the shape this kind exists for". A rule
+        # tightened twice against a corpus that cannot exercise it is a rule
+        # whose true-positive path has never run.
+        #
+        # WHY THIS BAND AND NOT A WATCH. The rule fires on a source
+        # contradicting ITSELF, so it needs a channel with a long unbroken
+        # habit of non-zero counts: this one has 105 of them before this day,
+        # and it counted steps and nothing else, which is the pure case for a
+        # register that holds exactly `steps`. The dying-watch shape the
+        # docstring describes - a zero step count beside a near-floor
+        # `kcal_out` - is NOT here and is not claimed to be, because this band
+        # never wrote a `kcal_out` to sit at the floor.
+        #
+        # THE DRAW STILL HAPPENS AND IS THEN DISCARDED. Skipping it would
+        # shift every value in the seeded stream after it; there is nothing
+        # after it, and doing it this way keeps that true whoever extends the
+        # block next.
+        drawn = rng.randrange(5400, 11800)
         rows.append(common.record(
             "daily", date=day.isoformat(),
-            steps=rng.randrange(5400, 11800),
+            steps=0 if day == BAND_TO else drawn,
             source="old-band", origin="old-band",
             # `file_export` is what an archive pull IS, and it is the
             # capture value that says so rather than a sync that never
@@ -248,6 +285,23 @@ def _expectations() -> list[dict]:
                    "established channel in the record and then like one that "
                    "died, which is the defect this row exists to hold shut",
          "gap": "none"},
+        {"id": "hana-E5", "kind": "behavior", "dataset": "daily",
+         "dates": [BAND_TO.isoformat()],
+         "claim": "`old-band` writes a zero step count on the day its strap "
+                  "perished",
+         "truth": "she walks the long way to everything and walked that day "
+                  "as she walked every other; the band had counted 105 "
+                  "non-zero days and then reported a count it did not have. "
+                  "The zero is the device failing, not the day being empty",
+         "expect": "a `false_zero` question names `old-band` for that date "
+                   "and resolves `steps`. It is the only such question in the "
+                   "corpus, and before this record carried it the rule's "
+                   "true-positive path had never run against anything",
+         "gap": "the zero is the whole signal. The dying-instrument shape the "
+                "engine describes also has a near-floor `kcal_out` beside it, "
+                "and this band never wrote one - it counted steps and nothing "
+                "else - so the uncatchable half of that shape is absent here "
+                "rather than exercised"},
         {"id": "hana-E2", "kind": "behavior", "dataset": "daily",
          "dates": [TREADMILL_LAST.isoformat()],
          "claim": "`club-treadmill` stops in February and its instrument row "
