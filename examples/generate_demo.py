@@ -82,6 +82,8 @@ DAYS = 84
 # Day offsets of the travel week (the ISO week beginning 2030-05-27), which the
 # athlete misses and then responds to by lowering the floor on 2030-06-06.
 TRAVEL_WEEK = (49, 55)
+# The one day inside the travel week the athlete logged nothing at all (#434).
+UNLOGGED_DAY = "2030-05-31"
 # Day offset from which the athlete's lines carry generation-2 provenance and
 # context fields. Before it they are founding-shape lines - deliberately, so
 # the committed demo proves both shapes coexist in one file.
@@ -292,6 +294,29 @@ def _build(target: Path) -> None:
                         "coverage": "partial" if _charge_day else "full"})
         else:
             row["hip_pain"] = pain
+        # ONE DAY WITH NO ROW AT ALL (#434), and the record already explains
+        # it. The travel week is where this athlete's evening routine falls
+        # apart - `context.jsonl` says "work trip - no scale, no gym, hotel
+        # treadmill only", two weigh-ins that week say they did not happen,
+        # and one says nobody could recall the sleep. A day she logged nothing
+        # is the same week's next honest fact.
+        #
+        # WHY THE DEMO NEEDS ONE. `daily: 84` over an 84-day block reads as 84
+        # days of calendar, and on this record it WAS: 84 rows, 84 dates, zero
+        # gaps. Across the personas it is not - `rachel` holds 170 rows over
+        # 423 days, `tom` holds 6 over 1,469, and 2,787 days corpus-wide have
+        # no row - so a client rendering the count as a stretch of calendar
+        # passed against the one fixture it calibrates on and was wrong about
+        # every record that mattered. A fixture that cannot produce the line
+        # cannot prove a client renders it, which is #427's rule.
+        #
+        # THE 31st, and the choice is measured rather than convenient: it is
+        # the only day of the trip carrying no session, so no session is
+        # orphaned onto a day the record has nothing else for, and it is far
+        # enough from the horizon that the seven-day tripwire windows do not
+        # move.
+        if d == UNLOGGED_DAY:
+            continue
         daily.append(row)
         # ONE WEEK WITH NO SESSIONS AT ALL (#274). Contract 28 emits a row for
         # every week in range including the ones holding nothing, and its own

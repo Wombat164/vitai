@@ -669,6 +669,32 @@ def test_the_demo_exercises_every_absence_reason() -> None:
         "a row the record earns, in the generator, rather than relaxing this")
 
 
+def test_the_demo_has_a_day_with_no_row(tmp_path) -> None:
+    """#427's rule, applied to a state that is the ABSENCE of a row (#434).
+
+    `daily: 84` over an 84-day block reads as 84 days of calendar, and on this
+    record it was: 84 rows, 84 dates, zero gaps. Across the personas it is not
+    - `rachel` holds 170 rows over 423 days, `tom` 6 over 1,469, 2,787 days
+    corpus-wide - so a client rendering the count as a stretch of calendar
+    passed against the one fixture it calibrates on and was wrong about every
+    record that mattered.
+
+    A FIXTURE THAT CANNOT PRODUCE THE LINE CANNOT PROVE A CLIENT RENDERS IT,
+    which is the whole argument of #423 and #427 pointed at a row that is not
+    there rather than a value that is not.
+    """
+    from vitai.report import unlogged_days
+
+    rows = [json.loads(line)
+            for line in (DEMO / "data" / "daily.jsonl")
+            .read_text(encoding="utf-8").splitlines() if line.strip()]
+    missing, span = unlogged_days(rows)
+    assert missing, (
+        f"every one of the {span} days this record spans carries a row, so "
+        "the rollup's gap line never renders and no client is made to handle "
+        "it")
+
+
 def test_the_demo_writes_no_reason_the_schema_does_not_publish() -> None:
     """The other direction, and it is not symmetry for its own sake: a typo
     would leave a published code unexercised while this file reported the set

@@ -398,6 +398,84 @@ def test_a_reason_about_another_field_does_not_cost_a_weigh_in():
     assert readings(rows, "kg") == 1
 
 
+# ---- and the days that have no row at all (#434) ------------------------------
+#
+# `daily: 84` reads as 84 days of calendar and is not. The count says how many
+# ROWS the record holds; the line below says how many days its own extent
+# covers that hold none. Measured before building it: 2,787 across the corpus,
+# and zero in the demo - which is why the number was never questioned.
+
+
+def _day(n):
+    return {"date": f"2030-05-{n:02d}", "steps": 9000}
+
+
+def test_the_rollup_says_how_many_days_have_no_row():
+    out = build_report(Config(), [], [_day(1), _day(2), _day(5)], [],
+                       today=TODAY)
+    assert "- daily: 3" in out
+    assert "- 2 of the 5 days this record spans have no row at all." in out
+
+
+def test_a_continuous_record_says_nothing():
+    """SILENT WHEN COMPLETE - `over_days`' rule in this module, and
+    `absence_line`'s beside it."""
+    out = build_report(Config(), [], [_day(1), _day(2), _day(3)], [],
+                       today=TODAY)
+    assert "- daily: 3" in out
+    assert "no row at all" not in out
+
+
+def test_the_gap_is_never_reported_as_unexplained():
+    """THE ONE THING THIS MUST NOT BECOME. Contract 51 attaches a reason to a
+    FIELD on a row, and a day with no row has nothing to hang one on - so
+    every missing day is silent by construction, and calling them unexplained
+    would be an accusation the record cannot answer. `absence_line` splits
+    where a row exists to carry the reason; this one may not."""
+    out = build_report(Config(), [], [_day(1), _day(5)], [], today=TODAY)
+    assert "no row at all" in out
+    line = next(ln for ln in out.splitlines() if "no row at all" in ln)
+    for word in ("unexplained", "explained", "silent", "missed", "forgot"):
+        assert word not in line.lower(), line
+
+
+def test_the_gap_measurement_can_fail():
+    """THE CONTROL, over the pure function, against records this repo does not
+    contain - so the plural, the singleton, the empty case and the one-row
+    case have been seen rather than assumed."""
+    from vitai.report import gap_line, unlogged_days
+
+    assert unlogged_days([_day(1), _day(2), _day(5)]) == (2, 5)
+    assert unlogged_days([_day(1), _day(2), _day(3)]) == (0, 3)
+    assert unlogged_days([_day(7)]) == (0, 1), "one row spans one day"
+    assert unlogged_days([]) == (0, 0), "no rows span nothing"
+    assert unlogged_days([_day(1), _day(1)]) == (0, 1), (
+        "two rows on one day are one day, not two")
+    assert unlogged_days([{"date": None}, _day(1)]) == (0, 1), (
+        "a row no window can date is not a day of the span")
+
+    assert gap_line([_day(1), _day(3)]) == [
+        "- 1 of the 3 days this record spans has no row at all."]
+    assert gap_line([_day(1), _day(4)]) == [
+        "- 2 of the 4 days this record spans have no row at all."]
+    assert gap_line([_day(1), _day(2)]) == []
+
+
+def test_the_count_and_the_span_move_together():
+    """The stated property: the extent rescopes as the record grows, and the
+    count beside it rescopes with it. A fixed window would drift away from the
+    number it sits under."""
+    from vitai.report import readings, unlogged_days
+
+    rows = [_day(1), _day(2), _day(5)]
+    missing, span = unlogged_days(rows)
+    assert readings(rows) + missing == span
+
+    rows.append(_day(9))
+    missing, span = unlogged_days(rows)
+    assert readings(rows) + missing == span
+
+
 def test_report_easy_cap_flag():
     cfg = Config(easy_hr_cap=150)
     sessions = [{"date": "2030-05-05", "type": "run", "distance_km": 5.0,
