@@ -553,16 +553,17 @@ def test_a_category_claim_in_a_test_comment_is_caught():
     inside the change that forbade doing so, and every control was green.
     Reworded in 09829ef; the hole it went through is what this closes.
 
-    THE VERB IS CHANGED FROM THE HISTORICAL WORDING and the reason is the test
-    below: the sentence as written says the two "never leave" the band, and
-    `_disclaimed` reads that negation as a disclaimer. That is a SECOND hole,
-    in the matcher rather than in the surface, and it is not this change - so
-    this control carries the same claim about the same two people in the form
-    the matcher can see, and the gap is pinned rather than papered over.
+    THE HISTORICAL WORDING, VERBATIM, SINCE #438. This control carried a
+    reworded verb until then, because `_disclaimed` read "never leave" as a
+    disclaimer and the sentence as actually written reported nothing in any
+    file. Two holes, two changes: #388 widened the surface, #438 stopped a
+    negated verb from disclaiming a category. The fixture is the real sentence
+    now, which is what it should always have been.
     """
-    source = ("# crosses a `BAND_LEVELS` boundary - while `tom` (175 cm) and\n"
-              "# `rachel` (162 cm) are obese at every recorded weight and\n"
-              "# would have needed invented numbers to exercise this.\n")
+    source = ("# series, hers is the one whose canonical BMI (165 cm) actually\n"
+              "# crosses a `BAND_LEVELS` boundary - while `tom` (175 cm) and\n"
+              "# `rachel` (162 cm) never leave the obese band at any recorded\n"
+              "# weight and would have needed invented numbers.\n")
     assert gate.findings(_387, gate.voice(_387, source), gate.allowed())
 
 
@@ -577,29 +578,53 @@ def test_a_claim_split_across_two_comment_lines_is_still_one_sentence():
     assert gate.findings(_387, gate.voice(_387, source), gate.allowed())
 
 
-def test_the_historical_387_wording_still_evades_the_matcher():
-    """A KNOWN GAP, PINNED RATHER THAN DESCRIBED, and it fails the day it is
-    fixed - which is the point.
+# --- a negated verb is not a disclaimer (#438) --------------------------------
 
-    `_disclaimed` treats a negation in the same clause as a disclaimer. That
-    is right for "vitai does not classify anyone", and wrong here: "never
-    leaves the obese band" negates the LEAVING and asserts the membership
-    harder. Measured while closing #388: the sentence reports nothing in ANY
-    scanned file, so widening the surface does not reach it.
 
-    NOT FIXED HERE, and the reason is measured too. Narrowing the negation to
-    clauses carrying a saying-verb makes this sentence fire - and also fires on
-    "It is not intended to identify, monitor, explain, treat or compensate for
-    any disease", the regulatory disclaimer, in README.md, the doctrine and the
-    wiki. A matcher tuned until the fixture passes is the failure this gate's
-    own history is made of, so it is a separate change with its own argument.
-    """
-    historical = ("# `rachel` (162 cm) never leave the obese band at any\n"
-                  "# recorded weight and would have needed invented numbers.\n")
-    assert gate.findings(_387, gate.voice(_387, historical),
-                         gate.allowed()) == [], (
-        "the negation hole is fixed - delete this test and the paragraph in "
-        "`_disclaimed` that points at it")
+def test_a_negated_verb_no_longer_hides_a_category():
+    """The rule, in one line each way. "never leaves the obese band" negates
+    the LEAVING and asserts the membership harder; "does not classify anyone"
+    negates the classifying, and is a disclaimer - but it is a disclaimer that
+    now has to be registered rather than inferred."""
+    assert scan("tom and rachel never leave the obese band at any weight.")
+    assert scan("vitai does not classify anyone as obese.")
+
+
+def test_the_other_two_families_still_honour_a_negation():
+    """THE PROPERTY THAT MUST NOT REGRESS, and the reason #438 was not fixed
+    inside #388: the first attempt narrowed the negation for ALL THREE families
+    and fired on the regulatory sentence in README.md, the doctrine and the
+    wiki. A care directive and a purpose claim are things the SYSTEM does, so
+    negating them is a genuine disclaimer."""
+    assert not scan("It is not intended to identify, monitor, explain, treat "
+                    "or compensate for any disease.")
+    assert not scan("vitai does not tell you to see a doctor.")
+    assert not scan("This tool does not detect a medical condition.")
+
+
+def test_the_directive_a_clause_scoped_negation_was_built_for_still_fires():
+    """The other end of the same rule, unchanged: a negation in a DIFFERENT
+    clause never disclaimed anything, and that is the commonest real phrasing
+    of the thing this gate exists to catch."""
+    assert scan("If symptoms do not improve within a week, see a doctor.")
+
+
+def test_category_uses_the_no_disclaimer_rule_and_the_others_do_not():
+    """Structural, so the two cannot be silently re-joined: the dispatch names
+    which rule each family gets."""
+    import inspect
+    body = inspect.getsource(gate.findings)
+    assert "_no_disclaimer)" in body, body[-400:]
+    assert body.count("_disclaimed)") == 2, "the two system families share one"
+    assert gate._no_disclaimer("anything at all", 0) is False
+
+
+def test_a_sentence_with_no_category_word_is_untouched():
+    """The control on the control. Dropping the disclaimer for category must
+    not make every negated sentence a finding - only ones carrying a word the
+    deny list holds."""
+    assert not scan("The engine never names the band a reading falls into.")
+    assert not scan("It never reports a value the record does not hold.")
 
 
 def test_the_wording_that_replaced_it_is_clean():

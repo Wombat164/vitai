@@ -451,8 +451,53 @@ _CLAUSE_BREAK_RE = re.compile(r"[,;:]|\b(?:if|when|unless|but|however|"
                               r"otherwise|should)\b", re.I)
 
 
+def _no_disclaimer(sentence: str, at: int) -> bool:
+    """A category claim is not disclaimed by a negation, ever (#438).
+
+    A NEGATED VERB IS NOT A DISCLAIMER. `_disclaimed` below suppresses a match
+    when the clause before it carries a negation token, and `never` is one -
+    which is right for "vitai does not classify anyone" and wrong for "tom and
+    rachel never leave the obese band at any recorded weight". The second
+    negates the LEAVING and asserts the membership harder than the bare form
+    does, and it is a category applied to two named people in a public repo.
+
+    IT IS THE INSTANCE #387 WROTE, and #388 could not reach it: the sentence
+    reported nothing in ANY scanned file, so widening the surface from eleven
+    entries to the whole tree did not touch it. Two changes, two holes, and
+    this is the one in the matcher.
+
+    WHY THE OTHER TWO FAMILIES KEEP THEIR NEGATION. A care directive and a
+    purpose claim are things the SYSTEM does, so a negation of them is a
+    genuine disclaimer and the commonest one in this repo is load-bearing: "It
+    is not intended to identify, monitor, explain, treat or compensate for any
+    disease" is the regulatory sentence, and it appears in README.md, the
+    doctrine and the wiki. A category is not something the system does - it is
+    something said ABOUT a person - so the negation lands on a different verb
+    and cannot be read the same way.
+
+    MEASURED BEFORE CHOOSING, which is what #438 asked for. Dropping the
+    disclaimer for category over the whole 424-file surface costs TWO findings,
+    both in `tests/test_boundary_gate.py` and both the quoting shape the
+    `EXEMPT` register already holds fourteen of. The alternative considered and
+    rejected - narrowing the negation to clauses carrying a saying-verb - fires
+    on the regulatory sentence above in three files, which is a matcher tuned
+    until the fixture passes.
+
+    A DISCLAIMER USING A CATEGORY WORD IS STILL WRITEABLE. "vitai does not
+    classify anyone as obese" is a finding now, and it belongs in `EXEMPT` with
+    the reason - which is the fail-closed direction: the default is that a
+    category word near a person is a claim, and saying otherwise is a decision
+    somebody records.
+    """
+    return False
+
+
 def _disclaimed(sentence: str, at: int) -> bool:
-    """Is the phrase at `at` inside a clause that negates it?"""
+    """Is the phrase at `at` inside a clause that negates it?
+
+    CARE DIRECTIVES AND PURPOSE CLAIMS ONLY. Category claims use
+    `_no_disclaimer` above, and the reason is there.
+    """
     lead = sentence[:at]
     breaks = [m.end() for m in _CLAUSE_BREAK_RE.finditer(lead)]
     clause = lead[breaks[-1]:] if breaks else lead
@@ -633,6 +678,37 @@ EXEMPT: dict[tuple[str, str], str] = {
      "7fbf8f1549f715f5ac2e1f842b364cb5c91e48dab71e30bac0f4d3f99676dae4"):
         "the release note for #388 quoting the directive its own controls "
         "must hold to prove the family fires",
+
+    # --- #438: the two sentences that lose their negation cover.
+    # Category claims stopped honouring `_disclaimed` - a negated verb is not
+    # a disclaimer - and these are the whole cost of that over 424 files. Both
+    # are the quoting shape the entries above already hold, in the file whose
+    # job is proving the rule.
+
+    ("tests/test_boundary_gate.py",
+     "a4c401d86f753647467783b0a8e2674d11e96ba81e067c6b7d9cb14a02f66499"):
+        "the control quoting the variable name that a word-boundary match "
+        "used to fire inside",
+    ("tests/test_boundary_gate.py",
+     "6b13103b6131c55f8e13cc1f8035ef080034f0439f28c34feeaac32986182b96"):
+        "the control naming both halves of the distinction this rule turns "
+        "on - the assertion it no longer spares and the disclaimer it "
+        "still does",
+
+    # --- #438's own release note, which cannot describe the rule without
+    # tripping it. The third instance of the doctrine shape in this register,
+    # and the one that proves the shape is inherent rather than a one-off: a
+    # note explaining that a negated category is now a finding has to quote a
+    # negated category.
+
+    ("changelog.d/438.fixed.md",
+     "faaf6fb6452e5f556a1e72f618a85b9f53a8e2130820c502b822a6ec5603cf89"):
+        "the release note quoting both sentences the rule turns on - the "
+        "one it stops sparing and the one it still spares",
+    ("changelog.d/438.fixed.md",
+     "7854c6e708c1173cce71ff0701a9819e0f2632c2ea02264200fedc1726a933c2"):
+        "the release note quoting the disclaimer that now has to be "
+        "registered rather than inferred",
 }
 
 
@@ -788,9 +864,9 @@ def findings(path: Path, text: str, spared: set[str]) -> list[str]:
         if digest in spared or (here, digest) in EXEMPT:
             continue
         probe = _match_form(sentence)
-        for label, search, candidates in (
-                ("care directive", _DIRECTIVE_RE.search, (probe,)),
-                ("purpose claim", _PURPOSE_RE.search, (probe,)),
+        for label, search, candidates, disclaims in (
+                ("care directive", _DIRECTIVE_RE.search, (probe,), _disclaimed),
+                ("purpose claim", _PURPOSE_RE.search, (probe,), _disclaimed),
                 # CATEGORY is built from `tight_sentence`, NOT `probe`: by
                 # the time `sentence` (and therefore `probe`) exists, its
                 # underscores are already gone - `sentences()` stripped them
@@ -805,11 +881,11 @@ def findings(path: Path, text: str, spared: set[str]) -> list[str]:
                 # touches `_` - see `_MARKUP_RE_TIGHT` above.
                 ("category claim", _category_search,
                  (tight_sentence, _match_form(tight_sentence),
-                  tight_sentence.replace("-", "")))):
+                  tight_sentence.replace("-", "")), _no_disclaimer)):
             hit = None
             for candidate in candidates:
                 hit = search(candidate)
-                if hit and not _disclaimed(candidate, hit.start()):
+                if hit and not disclaims(candidate, hit.start()):
                     break
                 hit = None
             if hit:
