@@ -175,14 +175,65 @@ def test_it_sits_beside_the_denominator_in_the_column_order():
     assert VERDICT_KEYS[8:11] == ["statistic", "window_days", "observed_days"]
 
 
+def _refusing_record(tmp_path: Path) -> Vitai:
+    """A record whose `weight_rate` has weeks with nothing to rate.
+
+    THE FIXTURE THE CHECK BELOW USED TO LACK. Its rows were three days of
+    12,000 steps against a step floor, which produce exactly one verdict and it
+    carries a value - so the `value is None` branch never opened and the
+    assertion inside it never ran (#424). A refusal needs a metric that is
+    SCORED and has no input, which means a configured phase and a week with no
+    weigh-in: `weight_rate` then emits `no_data` / `no_input` with a null value.
+    """
+    root = tmp_path / "refusing"
+    (root / "data").mkdir(parents=True)
+    (root / "vitai.toml").write_text(
+        '[athlete]\nname = "T"\n'
+        "[targets]\nphases = [[85.0, 70.0, 0.5]]\n"
+        "[tripwires]\nsteps_floor = 8000\n", encoding="utf-8")
+    (root / "data" / "daily.jsonl").write_text(
+        "".join(json.dumps(daily(f"2030-05-{d:02d}", steps=12000)) + "\n"
+                for d in range(1, 15)), encoding="utf-8")
+    # Weigh-ins in the FIRST week only, so the second week is scored and empty.
+    (root / "data" / "weight.jsonl").write_text(
+        "".join(json.dumps({"date": f"2030-05-{d:02d}", "kg": 80.0 - 0.1 * d,
+                            "source": "scale", "note": None, "_gen": 2}) + "\n"
+                for d in range(1, 8)), encoding="utf-8")
+    return Vitai(root)
+
+
 def test_a_refusal_carries_no_numerator(tmp_path):
     """`observed_days` describes a value. A row with no value has no
-    population to state, and filling it would be describing nothing."""
-    rows = [daily(f"2030-05-{d:02d}", steps=12000) for d in (1, 2, 3)]
-    v = record(tmp_path, rows, "[tripwires]\nsteps_floor = 8000\n")
-    for row in v.verdicts():
-        if row.get("value") is None:
-            assert row.get("observed_days") is None, row
+    population to state, and filling it would be describing nothing.
+
+    The count is asserted, not just the property. This check passed for two
+    years over zero refusals, and a fixture that stopped producing one would
+    put it straight back there without going red.
+    """
+    refusals = [r for r in _refusing_record(tmp_path).verdicts()
+                if r.get("value") is None]
+    assert len(refusals) >= 2, (
+        f"the fixture produced {len(refusals)} refusal(s), so the rule below "
+        "examined almost nothing - which is the state this check was rewritten "
+        "out of")
+    for row in refusals:
+        assert row.get("observed_days") is None, row
+
+
+def test_the_shipped_corpus_agrees_with_that(tmp_path):
+    """The same property over rows nobody wrote for this test. A synthetic
+    fixture proves the engine CAN refuse without a numerator; the corpus is
+    where it would show up if some other path filled one in."""
+    import shutil
+
+    root = tmp_path / "yasmin"
+    shutil.copytree(PERSONAS / "yasmin", root)
+    v = Vitai(root)
+    v.build()
+    refusals = [r for r in v.verdicts() if r.get("value") is None]
+    assert refusals, "this persona no longer refuses anything"
+    numerators = [r for r in refusals if r.get("observed_days") is not None]
+    assert not numerators, numerators[:3]
 
 
 def test_no_threshold_was_smuggled_in_with_it():
