@@ -75,16 +75,18 @@ def readings(rows: list[dict], field: str | None = None) -> int:
     a row whose `kg` is absent is not a weigh-in, and `absent_fields` is the
     record's own statement of that. Nothing here decides what a hole is worth.
 
-    IT DOES NOT SEE A SILENT HOLE, and that limit is stated rather than
-    papered over. A row with a null value and no `absent_fields` still counts,
-    so this measures explained absence only - the fuller shape, reporting
-    observed, explained-absent and silent separately, is #428's third option
-    and is still open. What the corpus says today: no weight row anywhere
-    carries a null `kg` without saying why, which is what
-    `test_no_shipped_weigh_in_is_missing_without_saying_so` holds. So the
-    narrow rule and the fuller one agree on every fixture this repo ships, and
-    the difference between them is a decision the coverage work can still
-    take.
+    IT COUNTS WHAT IS THERE, and until #428's third option landed it counted
+    rows that did not SAY they were absent - which is a different number the
+    moment a row is missing a value and says nothing. The two were
+    indistinguishable while no fixture had a silent hole, and the first
+    synthetic one showed the cost: four weigh-ins, two readings, one explained
+    absence and one silent, rendering as `weight: 3` above a line reporting
+    one unexplained hole. Two numbers on one record that cannot both be true.
+
+    So a hole is not an observation whether or not it is accounted for, and
+    the invariant is now checkable: observed plus explained plus unexplained
+    is every row. What the record failed to observe, and whether it said why,
+    is `holes` and the line `absence_line` renders beside this one.
 
     `field` NAMES WHAT THE COUNT IS ABOUT, and passing nothing means the ROW
     is. #428 deferred this and #427 forced it, which is the honest history: the
@@ -104,20 +106,91 @@ def readings(rows: list[dict], field: str | None = None) -> int:
     would be the outage shape, which contract 49's `false_zero` owns and no
     fixture writes.
 
-    THE KEY IS NAMED HERE AND THE SPLITTING IS NOT, on purpose and in both
-    directions. `schema.absent_fields` stays the only implementation of the
-    convention, so there is no second parser to drift. But the field register
-    in `test_field_population` measures a read as the KEY appearing in a
-    consumer, and `schema` declares `KEYS` and is therefore never credited as
-    a reader - so a consumer that only calls the helper is invisible to it,
-    and `weight.absent_fields` would have stayed on `UNREAD` while a real
-    reader existed. Naming the key narrows the rows the helper is asked
-    about, and it is what makes this read one the register can see.
     """
     if field is None:
         return len(rows)
-    carried = [r for r in rows if r.get("absent_fields") is not None]
-    return len(rows) - sum(1 for r in carried if field in absent_fields(r))
+    return sum(1 for r in rows if r.get(field) is not None)
+
+
+def holes(rows: list[dict], field: str) -> tuple[int, int]:
+    """(explained, unexplained) rows whose `field` carries no value (#428).
+
+    THE THIRD ANSWER #428 ASKED FOR, and the reason it was worth asking. The
+    count above says how much the record observed; it cannot say whether what
+    it did NOT observe was accounted for. Those are different facts to an
+    athlete: a morning they wrote down as a morning they did not weigh is a
+    decision, and a morning that is simply not there is a gap they can still
+    fill. Reporting one number for both told them nothing they could act on.
+
+    EXPLAINED MEANS THE ROW SAYS SO, and nothing here reads WHY. `absent_fields`
+    names the field, which is all this needs; `absent_reason` stays unread
+    because every consumer of the reason ranks holes against each other - an
+    excuse weighed against another excuse - and that ranking is #402's band
+    question, blocked on evidence no record holds. Counting explained apart
+    from silent ranks nothing.
+
+    A ROW WITH NEITHER A VALUE NOR A REASON IS THE UNEXPLAINED ONE, which is
+    the older hole #428 named and the narrow fix left untouched.
+    """
+    explained = unexplained = 0
+    for row in rows:
+        if row.get(field) is not None:
+            continue
+        # THE KEY IS NAMED HERE AND THE SPLITTING IS NOT, on purpose and in
+        # both directions. `schema.absent_fields` stays the only
+        # implementation of the convention, so there is no second parser to
+        # drift. But the field register in `test_field_population` measures a
+        # read as the KEY appearing in a consumer, and `schema` declares
+        # `KEYS` and is therefore never credited as one - so a module that
+        # only calls the helper is invisible to it, and `weight.absent_fields`
+        # would sit on `UNREAD` while a real reader existed. Naming the key
+        # narrows the rows the helper is asked about, and it is what makes
+        # this read one the register can see.
+        if row.get("absent_fields") is not None and field in absent_fields(row):
+            explained += 1
+        else:
+            unexplained += 1
+    return explained, unexplained
+
+
+def absence_line(rows: list[dict], field: str) -> list[str]:
+    """The absence half of the coverage section, or nothing to say.
+
+    SILENT WHEN THERE IS NOTHING TO REPORT, which is `over_days`' rule in this
+    same module and for the same reason: a phrase on every rollup is a phrase
+    nobody reads, and the marked minority is legible precisely because the
+    unmarked majority is quiet. A record whose every weigh-in produced a
+    reading gets the count and no second line.
+
+    NO ADJECTIVE AND NO THRESHOLD, also `over_days`' rule. It does not call a
+    record thorough or patchy: the engine has no published basis for where
+    patchy begins, and this repo has been bitten twice by cutoffs it invented.
+
+    SCOPED TO A DATASET WITH A HEADLINE FIELD, and `weight` is the only one.
+    A weigh-in is attempted for the sake of one number, so a weigh-in without
+    it is a hole; a day and a session ARE the observation, so a row of either
+    is never absent and the split would print two zeroes forever. The
+    equivalent for `daily` is a day with no row at all, which is a calendar
+    measurement rather than a field one - it needs a window, and inventing one
+    here is the cutoff-with-no-basis this module refuses twice already.
+    """
+    explained, unexplained = holes(rows, field)
+    if not (explained or unexplained):
+        return []
+    # THE VERBS AGREE, and getting that wrong is not a typo on a line an
+    # athlete reads every week. One weigh-in RECORDS and SAYS; two RECORD and
+    # SAY.
+    one = explained == 1
+    said = (f"{explained} weigh-in{'' if one else 's'} "
+            f"record{'s' if one else ''} no reading and "
+            f"say{'s' if one else ''} why"
+            if explained else "No weigh-in records a reason")
+    if unexplained:
+        rest = (f"{unexplained} more "
+                f"{'does' if unexplained == 1 else 'do'} not say")
+    else:
+        rest = "none is unexplained"
+    return [f"- {said}; {rest}."]
 
 
 def within_days(rows: list[dict], today: date, days: int,
@@ -652,8 +725,9 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
     # attempted for one number and a day is not (#427).
     L += ["", "## Coverage", "",
           f"- weight: {readings(weight, 'kg')} - daily: {readings(daily)}"
-          f" - sessions: {readings(sessions)}",
-          "", "> Sparse and continuous beats rich and abandoned."]
+          f" - sessions: {readings(sessions)}"]
+    L += absence_line(weight, "kg")
+    L += ["", "> Sparse and continuous beats rich and abandoned."]
     return "\n".join(
         ["# Weekly rollup", "",
          f"Generated {today.isoformat()} - derived, do not edit."]

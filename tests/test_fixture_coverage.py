@@ -526,18 +526,25 @@ def test_the_field_measurement_can_fail() -> None:
         "twice")
 
 
-# --- the corpus property the coverage count leans on (#428) -------------------
+# --- what a shipped fixture owes about its own holes (#428) -------------------
 #
-# `report.readings` counts a row as coverage unless the row STATES its values
-# absent, which is contract 51's rule and takes no decision about what a hole is
-# worth. It cannot see a SILENT hole - a null with no `absent_fields` beside it -
-# and that limit is only harmless while no fixture has one.
+# THE REASON FOR THIS CHANGED WHEN #428'S THIRD OPTION LANDED, and the entry is
+# rewritten rather than left standing on an argument that stopped being true.
+# It used to say the rollup would MISCOUNT a silent hole, because `readings`
+# subtracted stated absence only. It no longer does: the coverage section now
+# reports observed, explained-absent and silent apart, and a fixture with a
+# silent hole would render one - correctly.
 #
-# So the limit is held here rather than asserted in a docstring. The narrow rule
-# and the fuller one (observed / explained-absent / silent, reported separately)
-# agree on every fixture this repo ships, and this is what says so. A fixture
-# that adds the first silent hole turns this red, which is the right moment to
-# take the decision rather than to discover the number has drifted again.
+# What survives is a different and smaller claim, about the fixtures rather
+# than about the engine. `examples/demo` is what every conformance client
+# calibrates against, and a shipped record whose own holes go unexplained
+# teaches the shape this contract exists to end. The engine may report an
+# unexplained hole; a fixture should not have one to report.
+#
+# So this is no longer load-bearing for the count, and it is still worth
+# holding. It also keeps the corpus honest about the fact stated in
+# `test_the_absence_line_is_exercised_only_by_construction` below: the branch
+# that renders a silent hole cannot be reached from anything this repo ships.
 
 
 def _silent_holes(rows: list[dict], field: str) -> list[dict]:
@@ -565,17 +572,36 @@ def _weight_rows() -> list[tuple[str, dict]]:
 
 
 def test_no_shipped_weigh_in_is_missing_without_saying_so() -> None:
-    """Every null `kg` in the corpus is EXPLAINED, which is what makes the
-    rollup's coverage count exact rather than merely better."""
+    """Every null `kg` in the corpus is EXPLAINED."""
     silent = [(where, r) for where, r in _weight_rows()
               if _silent_holes([r], "kg")]
     assert not silent, (
         f"{len(silent)} weight row(s) carry no `kg` and no `absent_fields` "
         f"saying why: {[(w, r.get('date')) for w, r in silent][:5]}. The "
-        "rollup's `## Coverage` counts them as weigh-ins, because "
-        "`report.readings` subtracts STATED absence only. Either state the "
-        "absence on the row, or take #428's third option and report observed, "
-        "explained-absent and silent separately")
+        "rollup will report them as unexplained, which is correct and is not "
+        "the point: this corpus is what conformance clients calibrate "
+        "against, and a shipped record whose own holes go unexplained teaches "
+        "the shape contract 51 exists to end. State the absence on the row")
+
+
+def test_the_absence_line_is_exercised_only_by_construction() -> None:
+    """MEASURED, so the sentence above is a fact rather than a belief.
+
+    The rollup's absence line has a branch for a silent hole and nothing this
+    repo ships can reach it - which is #424's subject one file over, and the
+    reason `test_vitai.py` exercises that branch against rows written by hand.
+    If the corpus ever gains one, the test above goes red first and this says
+    why the synthetic case stopped being the only one.
+    """
+    from vitai.report import holes
+
+    rows = [r for _where, r in _weight_rows()]
+    explained, unexplained = holes(rows, "kg")
+    assert explained, "no shipped weigh-in states an absence at all"
+    assert not unexplained, (
+        f"{unexplained} silent hole(s) in the corpus - the branch is reachable "
+        "now, so the synthetic case in test_vitai.py is no longer the only "
+        "thing exercising it")
 
 
 def test_the_silent_hole_measurement_can_fail() -> None:
