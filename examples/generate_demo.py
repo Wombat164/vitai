@@ -1668,9 +1668,33 @@ def _policy(start: date) -> tuple[list[dict], list[dict], list[dict]]:
         {"date": d0, "key": "kcal_target", "value": 2150,
          "change_kind": "change", "set_by": "onboard",
          "reason": "deficit sized for the phase-1 rate", "note": None},
-        {"date": d0, "key": "protein_g_target", "value": 145,
+        # THE MIS-ENTRY, AND THE LINE THAT FIXES IT (#436). Typed with a
+        # trailing zero in the onboarding sitting and corrected in the same
+        # sitting, which is why both lines carry `d0`: no day of this record
+        # ever has 1450 g of protein in force, and the effective history is
+        # byte-identical to what it was before this pair existed.
+        #
+        # `correction` IS NOT `change`, AND THE ENGINE ACTS ON THE DIFFERENCE.
+        # `policy._edits` skips a line marked `correction` when it builds
+        # `plan_churn` (G31): fixing a mis-entry is not the athlete changing
+        # their mind, and counting it as churn manufactures a plan-stability
+        # problem that does not exist. Marked `change` this pair would report a
+        # tightening from 1450 to 145 on day one - the athlete's largest
+        # apparent policy swing, invented entirely by a typo.
+        #
+        # WHY THE CORPUS NEEDED IT. `CHANGE_KINDS` has two values and every
+        # threshold edit in the demo and all fifteen personas was a `change`,
+        # so the skip above had never run for this dataset and no client had
+        # been made to tell the two apart (#436). `goals.change_kind` already
+        # shows both, which is what says the shape is expressible and this
+        # dataset simply had no instance of it.
+        {"date": d0, "key": "protein_g_target", "value": 1450,
          "change_kind": "change", "set_by": "onboard",
          "reason": "1.8 g/kg at target weight", "note": None},
+        {"date": d0, "key": "protein_g_target", "value": 145,
+         "change_kind": "correction", "set_by": "onboard",
+         "reason": "typed with a trailing zero in the same sitting; 145 is "
+                   "what the interview said", "note": None},
         # A deliberate loosening, three days after a missed steps week. The
         # engine flags the TIMING; the stated reason is what makes it readable
         # as a deload rather than a retreat.

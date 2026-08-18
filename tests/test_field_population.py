@@ -865,12 +865,19 @@ VOCAB_SINGLE = (
      "no attendance moves the plans that were built backwards from it, which "
      "is a fixture change with its own argument.",
      ("events.outcome",)),
-    ("A GAP. `CHANGE_KINDS` is change/correction and every threshold edit in "
-     "the corpus is a `change`. A correction says the earlier number was "
-     "WRONG rather than superseded, which is the distinction an audit trail "
-     "exists to carry, and `goals.change_kind` already shows both - so the "
-     "shape is expressible and this dataset simply has no instance of it.",
-     ("thresholds.change_kind",)),
+    # `thresholds.change_kind` LEFT THIS REGISTER at #436, and it is the first
+    # entry here to leave by being FIXED rather than by being re-argued. It
+    # said the shape was expressible - `goals.change_kind` showed both - and
+    # that this dataset simply had no instance. The demo has one now: a protein
+    # target typed with a trailing zero in the onboarding sitting and corrected
+    # in the same sitting, so no day of the record ever held the wrong number
+    # and the effective history did not move.
+    #
+    # What the entry could not say, because nothing had run it: marked
+    # `change` instead, that pair reports `protein_g_target` LOOSENED on day
+    # one - the athlete's largest apparent policy retreat in the record,
+    # invented entirely by a typo. That is the churn G31 exists to keep out of
+    # the trail, and `policy._edits`' skip had never executed for this dataset.
 )
 
 
