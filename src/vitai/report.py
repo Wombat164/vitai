@@ -193,6 +193,66 @@ def absence_line(rows: list[dict], field: str) -> list[str]:
     return [f"- {said}; {rest}."]
 
 
+def unlogged_days(rows: list[dict]) -> tuple[int, int]:
+    """(days with no row, days the record spans) for a dated dataset (#434).
+
+    THE COVERAGE COUNT SAYS HOW MANY ROWS, AND THAT IS NOT HOW MANY DAYS.
+    `daily: 84` reads as 84 days of an 84-day block, and on the shipped demo it
+    is - which is exactly why the number was never questioned. Across the
+    personas it is not: `rachel` holds 170 rows spanning 423 days and `tom`
+    holds 6 spanning 1,469, and a client rendering the count as a stretch of
+    calendar is right about the fixture it calibrates against and wrong about
+    both of them. 2,787 days across the corpus have no row.
+
+    THE SPAN IS THE RECORD'S OWN EXTENT, WHICH IS NOT A WINDOW. #434 listed
+    three candidates and this is the first, chosen because it is the only one
+    that invents nothing. The report's last-N-days window would need an N, and
+    `over_days` in this module already refuses to name one - "the engine has no
+    published basis for where thin begins, and this repo has been bitten twice
+    by cutoffs it invented". A declared range would be honest and no record
+    declares one. First dated row to last is a FACT ABOUT THE RECORD rather
+    than a threshold about it.
+
+    IT CANNOT SEE A GAP AT EITHER END, and that is what extent means rather
+    than a defect it has: a record holds nothing before its first row, so
+    there is nothing there to count as missing. Stated because the number
+    would otherwise read as "days the athlete did not log", which is a bigger
+    claim than this makes.
+
+    IT RESCOPES AS THE RECORD GROWS, and so does the count beside it. 84 rows
+    over 84 days and 83 over 84 are two statements about one extent and they
+    move together; a fixed window would drift away from the count instead.
+
+    NO EXPLAINED-VERSUS-SILENT SPLIT, and this is the one thing it must not
+    become. Contract 51 attaches a reason to a FIELD on a row, and a day with
+    no row has nothing to hang one on - so every missing day here is silent by
+    construction, and reporting them as UNEXPLAINED would read as an
+    accusation the record has no way to answer. `absence_line` above splits
+    exactly where a row exists to carry the reason.
+    """
+    days = {str(r.get("date")) for r in rows if _as_day(r.get("date"))}
+    if not days:
+        return 0, 0
+    first, last = min(days), max(days)
+    span = (_as_day(last) - _as_day(first)).days + 1
+    return span - len(days), span
+
+
+def gap_line(rows: list[dict]) -> list[str]:
+    """The days-with-no-row half of the coverage section, or nothing to say.
+
+    SILENT WHEN THE RECORD IS CONTINUOUS, which is `over_days`' rule in this
+    module and `absence_line`'s beside it: a phrase on every rollup is a
+    phrase nobody reads. NO ADJECTIVE AND NO THRESHOLD either - it states the
+    fraction and stops, which is the same docstring's other half.
+    """
+    missing, span = unlogged_days(rows)
+    if not missing:
+        return []
+    return [f"- {missing} of the {span} days this record spans "
+            f"{'has' if missing == 1 else 'have'} no row at all."]
+
+
 def within_days(rows: list[dict], today: date, days: int,
                 field: str) -> list[dict]:
     """Rows carrying `field`, within `days` CALENDAR days of `today` (G30).
@@ -727,6 +787,7 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
           f"- weight: {readings(weight, 'kg')} - daily: {readings(daily)}"
           f" - sessions: {readings(sessions)}"]
     L += absence_line(weight, "kg")
+    L += gap_line(daily)
     L += ["", "> Sparse and continuous beats rich and abandoned."]
     return "\n".join(
         ["# Weekly rollup", "",
