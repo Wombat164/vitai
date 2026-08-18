@@ -349,7 +349,7 @@ def check_gates_are_runnable_locally() -> list[str]:
             out.append(
                 f"{rel} is run by CI and by no test, so `pytest -q` is green "
                 f"whether it passes or not. Add a test that runs it over this "
-                f"repo - four of the five gates already have one")
+                f"repo - every other gate already has one")
 
     # One ruff invocation, everywhere. The scope is the whole argument: `ruff
     # check src tests` let a line sit over the limit in `examples/` while CI

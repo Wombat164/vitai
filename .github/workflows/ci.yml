@@ -79,6 +79,28 @@ jobs:
       - name: the suite left the working tree clean
         run: git diff --exit-code
 
+  vacuity:
+    # A test that runs, passes and executes none of its own assertions reports
+    # "pass" for a property nobody looked at (#424). Three were found by hand
+    # and every one had been green for months, including a SAFETY guard keyed
+    # to a string the rollup had stopped emitting.
+    #
+    # ITS OWN JOB, and that is the cost #424 named when it deferred this gate:
+    # measuring needs the suite under coverage, and putting it in `tests`
+    # would make the four-leg matrix pay for one answer four times. It is also
+    # the one gate `pytest -q` cannot run, because its input is the completed
+    # run it would be part of.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.13"
+      - run: pip install -e . -r requirements-dev.txt
+      - run: coverage run --source=tests -m pytest -q
+      - name: Vacuity gate (blocking)
+        run: python scripts/vacuity_gate.py
+
   demo:
     # "Demo or it didn't happen": the committed demo data must match the
     # generator (determinism) and must build into a rollup with real markers.
