@@ -695,6 +695,84 @@ def test_the_demo_has_a_day_with_no_row(tmp_path) -> None:
         "it")
 
 
+# --- a threshold edit that fixes a typo, and is not churn (#436) --------------
+#
+# `CHANGE_KINDS` is change/correction, and every threshold edit in the demo and
+# all fifteen personas was a `change` - so `policy._edits`' skip for a
+# correction had never executed for this dataset and no client had been made to
+# tell the two apart. `goals.change_kind` already showed both, which is what
+# said the shape was expressible and this dataset simply had no instance.
+
+
+def _demo_thresholds() -> list[dict]:
+    return [json.loads(line) for line
+            in (DEMO / "data" / "thresholds.jsonl")
+            .read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def test_the_demo_corrects_a_mis_entered_threshold() -> None:
+    """The vocabulary half: both values of a two-value vocabulary appear."""
+    kinds = {str(r.get("change_kind")) for r in _demo_thresholds()}
+    assert kinds == {"change", "correction"}, kinds
+    corrections = [r for r in _demo_thresholds()
+                   if r.get("change_kind") == "correction"]
+    assert len(corrections) == 1, corrections
+    assert corrections[0].get("reason"), (
+        "a correction with no reason cannot be told from a quiet retreat")
+
+
+def test_the_correction_never_held_a_wrong_number_in_force(tmp_path) -> None:
+    """Both lines carry the same date, so the mis-entry is superseded on the
+    day it was written and no day of the record ever resolves to 1450. That is
+    what lets this exercise the vocabulary without moving the demo's story."""
+    from vitai.api import Vitai
+
+    rows = [r for r in _demo_thresholds()
+            if r.get("key") == "protein_g_target"]
+    assert len({r["date"] for r in rows}) == 1, rows
+    v = Vitai(DEMO)
+    for day in ("2030-04-08", "2030-04-09", "2030-06-30"):
+        held = v.state(on=day).thresholds.get("protein_g_target")
+        assert held == 145, (day, held)
+
+
+def test_the_correction_is_kept_out_of_the_churn_trail(tmp_path) -> None:
+    """THE BEHAVIOUR, BOTH DIRECTIONS, ON THE SHIPPED FIXTURE.
+
+    A correction fixes a mis-entry and is not the athlete changing their mind,
+    so `plan_churn` must not carry it (G31). Marked `change` instead, this pair
+    reports `protein_g_target` LOOSENED on day one - the largest apparent
+    policy retreat in the record, invented entirely by a typo, and exactly the
+    manufactured plan-stability problem the field exists to prevent.
+    """
+    import shutil
+    import sqlite3
+
+    from vitai.api import Vitai
+
+    def churned(mark: str) -> list[str]:
+        root = tmp_path / mark
+        shutil.copytree(DEMO, root)
+        path = root / "data" / "thresholds.jsonl"
+        rows = [json.loads(x) for x in
+                path.read_text(encoding="utf-8").splitlines() if x.strip()]
+        for row in rows:
+            if row.get("change_kind") == "correction":
+                row["change_kind"] = mark
+        path.write_text("".join(json.dumps(r) + "\n" for r in rows),
+                        encoding="utf-8")
+        Vitai(root).build()
+        con = sqlite3.connect(root / "derived" / "health.db")
+        return sorted(s for (s,) in con.execute(
+            "SELECT slug FROM plan_churn WHERE kind = 'threshold'"))
+
+    assert "protein_g_target" not in churned("correction"), (
+        "a typo entered the churn trail as a policy retreat")
+    assert "protein_g_target" in churned("change"), (
+        "the pair produces no churn either way, so `correction` is not what "
+        "keeps it out and this test proves nothing")
+
+
 def test_the_demo_writes_no_reason_the_schema_does_not_publish() -> None:
     """The other direction, and it is not symmetry for its own sake: a typo
     would leave a published code unexercised while this file reported the set

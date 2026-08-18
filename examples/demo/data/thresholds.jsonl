@@ -1,4 +1,5 @@
 {"date": "2030-04-08", "key": "steps_floor", "value": 9000, "change_kind": "change", "set_by": "onboard", "reason": "starting floor from the onboarding interview", "note": null}
 {"date": "2030-04-08", "key": "kcal_target", "value": 2150, "change_kind": "change", "set_by": "onboard", "reason": "deficit sized for the phase-1 rate", "note": null}
-{"date": "2030-04-08", "key": "protein_g_target", "value": 145, "change_kind": "change", "set_by": "onboard", "reason": "1.8 g/kg at target weight", "note": null}
+{"date": "2030-04-08", "key": "protein_g_target", "value": 1450, "change_kind": "change", "set_by": "onboard", "reason": "1.8 g/kg at target weight", "note": null}
+{"date": "2030-04-08", "key": "protein_g_target", "value": 145, "change_kind": "correction", "set_by": "onboard", "reason": "typed with a trailing zero in the same sitting; 145 is what the interview said", "note": null}
 {"date": "2030-06-06", "key": "steps_floor", "value": 8000, "change_kind": "change", "set_by": "athlete", "reason": "travel week, protecting the run block instead", "note": null}
