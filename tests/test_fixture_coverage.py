@@ -695,6 +695,81 @@ def test_the_demo_has_a_day_with_no_row(tmp_path) -> None:
         "it")
 
 
+# --- a fixture that arrived, and one the athlete did not start (#436) ---------
+#
+# `EVENT_OUTCOMES` is took_place/did_not_attend, and every fixture in the demo
+# and all fifteen personas took place - so a client that READS the outcome and
+# one that assumes it were indistinguishable over this corpus. The pair matters
+# more than most: the field's own doctrine warns that rendering an unanswered
+# outcome as a miss "accuses an athlete of skipping a race that has not happened
+# yet", and nothing here could have caught a client that did.
+
+
+def _demo_events() -> list[dict]:
+    return [json.loads(line) for line
+            in (DEMO / "data" / "events.jsonl")
+            .read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def test_the_demo_holds_both_event_outcomes() -> None:
+    from vitai.schema import EVENT_OUTCOMES
+
+    written = {r["outcome"] for r in _demo_events() if r.get("outcome")}
+    assert written == EVENT_OUTCOMES, sorted(EVENT_OUTCOMES - written)
+
+
+def test_the_two_outcomes_sit_on_different_fixtures() -> None:
+    """One row cannot carry both, and a corpus where the same slug flips is a
+    correction rather than the two states a consumer has to render."""
+    by_outcome = {r["outcome"]: r["slug"]
+                  for r in _demo_events() if r.get("outcome")}
+    assert by_outcome["took_place"] != by_outcome["did_not_attend"], by_outcome
+
+
+def test_the_unattended_fixture_plans_nothing_backwards_from_it() -> None:
+    """WHY THIS EVENT AND NOT THE OTHERS, held as a property rather than left
+    in a comment. The demo's two existing fixtures are the date the whole block
+    is planned backwards from and the hard date a goal points at; giving either
+    a did-not-attend would move the plans this demo exists to show. Nothing
+    points at the club race, which is what makes it free to skip."""
+    from vitai.schema import KEYS
+
+    skipped = next(r["slug"] for r in _demo_events()
+                   if r.get("outcome") == "did_not_attend")
+    for name in ("goals", "plans"):
+        path = DEMO / "data" / f"{name}.jsonl"
+        if not path.exists():
+            continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            for field in KEYS[name]:
+                assert row.get(field) != skipped, (name, field, row)
+
+
+def test_an_absent_outcome_is_a_day_that_had_not_arrived() -> None:
+    """The doctrine's own warning, held over the fixture rather than described.
+
+    "ABSENT MEANS NOBODY HAS SAID [...] It must never be read as 'did not
+    happen': a consumer that renders an unanswered outcome as a miss accuses an
+    athlete of skipping a race that has not happened yet."
+
+    So every outcome-less row in the demo must be one written BEFORE its
+    fixture arrived - which is the same rule `_validate_event_outcome` enforces
+    from the other side, and what makes null unreadable as a miss. Three rows
+    qualify, including the club 10k's own declaration: entered in April for a
+    June date, with nothing yet to say about it.
+    """
+    unanswered = [r for r in _demo_events() if r.get("outcome") is None]
+    assert len(unanswered) >= 3, unanswered
+    early = [r for r in unanswered if r["date"] > r["event_date"]]
+    assert not early, (
+        "a demo row leaves `outcome` null on a fixture that had already "
+        f"arrived, so null here reads as a miss rather than as silence: "
+        f"{[(r['slug'], r['date'], r['event_date']) for r in early]}")
+
+
 # --- a threshold edit that fixes a typo, and is not churn (#436) --------------
 #
 # `CHANGE_KINDS` is change/correction, and every threshold edit in the demo and

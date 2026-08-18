@@ -1468,7 +1468,8 @@ def _plans(start: date, sessions: list[dict]) -> list[dict]:
 
 def _events(start: date) -> list[dict]:
     """Dated fixtures: the one the block is built around, one that is simply
-    true and constrains it (G86), and one restated with its outcome."""
+    true and constrains it (G86), and two restated with their outcomes - one
+    that happened and one the athlete did not start."""
     d0 = start.isoformat()
     return [
         _event(d0, "autumn-half", "The autumn half marathon", "competition",
@@ -1482,13 +1483,48 @@ def _events(start: date) -> list[dict]:
         # record holds no session for it, which is the common case rather than
         # the exotic one: a race day is exactly when logging is least likely.
         # Without this row the demo could not tell that apart from a race the
-        # athlete skipped, and neither could any consumer built against it.
+        # athlete skipped, and neither could any consumer built against it -
+        # which is what the club 10k below is for. The two rows are the pair:
+        # same shape, same silence in `sessions`, opposite outcomes.
         _event((start + timedelta(days=40)).isoformat(), "spring-5k-race",
                "The spring 5k", "competition", "2030-05-15", priority="b",
                place="the park circuit", outcome="took_place",
                note="ran it; the watch was left at home, so there is no "
                     "session row and that is a gap in the log rather than "
                     "in the running"),
+        # A DATE THAT ARRIVED AND THE ATHLETE DID NOT START (#436). Entered in
+        # April; the work trip landed on the same weekend, and the record
+        # already says so from three other directions - `context.jsonl` calls
+        # the week travel, the weigh-in that morning says it did not happen,
+        # and the day before it has no row at all.
+        #
+        # `EVENT_OUTCOMES` HAS TWO VALUES AND EVERY FIXTURE IN THE CORPUS TOOK
+        # PLACE, so a client reading the outcome and a client assuming it were
+        # indistinguishable over this record. This is the half that tells them
+        # apart, and it is the case that matters: rendering `did_not_attend` as
+        # a miss the athlete owes an explanation for, or worse rendering an
+        # ABSENT outcome that way, is the accusation the field's own doctrine
+        # warns about.
+        #
+        # PRIORITY `c` AND NOTHING PLANS BACKWARDS FROM IT, deliberately. The
+        # autumn half is the date the block is built around and the 5k is the
+        # hard date a goal points at; a third fixture carrying either weight
+        # would move the plans this demo exists to show. A club race the
+        # athlete entered and skipped moves nothing.
+        #
+        # THE WHY IS IN `note`, NOT `reason`. `reason` explains a fixture that
+        # was CANCELLED or MOVED - `maja`'s gym closure, called off when the
+        # works were postponed - and this one went ahead without her. The
+        # took_place row above puts its why in `note` for the same reason.
+        _event(d0, "club-10k", "The club 10k", "competition",
+               "2030-06-02", priority="c", place="the coast road",
+               note="entered in April, before the trip was booked"),
+        _event((start + timedelta(days=56)).isoformat(), "club-10k",
+               "The club 10k", "competition", "2030-06-02", priority="c",
+               place="the coast road", outcome="did_not_attend",
+               note="away for work that weekend; the race went ahead without "
+                    "me. Nothing here is a judgement about the athlete - the "
+                    "record says where she was"),
         _event((start + timedelta(days=30)).isoformat(), "hip-scan",
                "Hip imaging follow-up", "clinical", "2030-07-10",
                priority="c", immovable=True,

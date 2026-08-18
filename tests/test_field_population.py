@@ -857,14 +857,18 @@ VOCAB_SINGLE = (
      "because a default the engine wrote and a number the athlete chose are "
      "facts a reader must tell apart.",
      ("achievements.source", "checks.source", "events.set_by", "plans.set_by")),
-    ("A GAP. `EVENT_OUTCOMES` is took_place/did_not_attend and every fixture "
-     "event took place. The missing half is an entered race the athlete did "
-     "not start, which is the case a consumer most needs to get right - a "
-     "fixture whose every event happened cannot tell a client that reads the "
-     "outcome from one that assumes it. Not filled here because an event with "
-     "no attendance moves the plans that were built backwards from it, which "
-     "is a fixture change with its own argument.",
-     ("events.outcome",)),
+    # `events.outcome` LEFT THIS REGISTER at #436, the second to leave by being
+    # fixed. The entry said an event with no attendance "moves the plans that
+    # were built backwards from it", and the argument it was waiting for turned
+    # out to be about WHICH event rather than whether: the demo's two existing
+    # fixtures are the date the whole block is planned backwards from and the
+    # hard date a goal points at, and either would have moved. A priority-`c`
+    # club 10k that nothing plans backwards from moves nothing - the rollup's
+    # "Coming up" does not list it, because it is in the past.
+    #
+    # What the entry was right about is why it mattered: a corpus whose every
+    # fixture happened cannot tell a client that READS the outcome from one
+    # that assumes it.
     # `thresholds.change_kind` LEFT THIS REGISTER at #436, and it is the first
     # entry here to leave by being FIXED rather than by being re-argued. It
     # said the shape was expressible - `goals.change_kind` showed both - and
