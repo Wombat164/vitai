@@ -279,6 +279,81 @@ def test_every_exemption_records_why_and_where():
         assert (gate.ROOT / where).exists(), where
 
 
+# --- the surface is now a default, not a list of places to look (#440) --------
+
+
+def test_every_tracked_file_is_scanned_or_named():
+    """THE HALF AN ALLOWLIST COULD NOT HAVE. `SURFACE` said where to look, so a
+    directory nobody thought of was outside the gate for as long as nobody
+    thought of it - which is how `tests/` stayed unscanned for the life of the
+    project (#388). The default is IN now, and this is what holds it: every
+    file git tracks with a scannable suffix is either read or named in
+    `NOT_SCANNED` with a reason.
+
+    ASKED OF GIT HERE AND NOT IN THE GATE, deliberately. A gate that shells out
+    does not run in a source tarball; a test may, because git is there and a
+    mismatch is a finding rather than a crash.
+    """
+    import subprocess
+
+    tracked = subprocess.run(
+        ["git", "ls-files"], cwd=gate.ROOT, capture_output=True, text=True,
+        check=True).stdout.split()
+    scanned = {p.relative_to(gate.ROOT).as_posix() for p in gate.files()}
+    missed = sorted(
+        f for f in tracked
+        if Path(f).suffix in gate.SUFFIXES
+        and f not in scanned
+        and not gate._skipped(f)
+        and (gate.ROOT / f).resolve() != gate._SELF)
+    assert not missed, (
+        f"{len(missed)} tracked file(s) are neither scanned nor named in "
+        f"NOT_SCANNED: {missed[:8]}")
+
+
+def test_a_new_directory_is_in_scope_without_anyone_remembering():
+    """The property the inversion buys, stated as a test rather than as a
+    comment: a path nobody has thought of is scanned, not skipped."""
+    assert not gate._skipped("some/new/directory/notes.md")
+    assert gate._skipped(".venv/lib/x.py")
+    assert gate._skipped(".venv")
+
+
+def test_nothing_is_skipped_without_a_reason():
+    """`NOT_SCANNED` is a register, so it carries the same burden every other
+    register here does."""
+    assert gate.NOT_SCANNED
+    for entry, reason in gate.NOT_SCANNED.items():
+        assert len(reason) > 30, (entry, reason)
+        assert not entry.startswith("/") and not entry.endswith("/"), entry
+    reasons = list(gate.NOT_SCANNED.values())
+    assert len(set(reasons)) == len(reasons), "two entries share a reason"
+
+
+def test_the_gate_does_not_read_its_own_source():
+    """This file IS the deny list, so scanning it reports the words it exists
+    to hold. A RULE and not an entry in `NOT_SCANNED`, because it is not a
+    decision anybody may extend to a second file - and its TESTS are not
+    spared: they carry fourteen per-sentence entries in `EXEMPT`."""
+    scanned = {p.resolve() for p in gate.files()}
+    assert gate._SELF not in scanned
+    assert gate._SELF.name == "boundary_gate.py"
+    assert (gate.ROOT / "tests" / "test_boundary_gate.py").resolve() in scanned, (
+        "the controls must stay reviewed even though the gate is not")
+    assert any(where == "tests/test_boundary_gate.py"
+               for where, _ in gate.EXEMPT)
+
+
+def test_the_files_that_used_to_be_outside_are_inside_now():
+    """Named rather than counted, so this says what changed rather than
+    tracking a number that moves with every commit."""
+    scanned = {p.relative_to(gate.ROOT).as_posix() for p in gate.files()}
+    for rel in ("CHANGELOG.md", "CLAUDE.md", "RELEASING.md",
+                "CODE_OF_CONDUCT.md", ".github/PULL_REQUEST_TEMPLATE.md",
+                "scripts/changelog_gate.py", "changelog.d/README.md"):
+        assert rel in scanned, rel
+
+
 def test_no_two_exemptions_share_a_reason():
     """THE ANSWER TO "WHAT HAPPENS WHEN THE 63RD CASE ARRIVES" (#388).
 
@@ -361,8 +436,10 @@ def test_the_gate_actually_fails_on_a_violation(tmp_path, monkeypatch):
     would have left the suite green while CI silently stopped gating."""
     bad = tmp_path / "README.md"
     bad.write_text("If it persists, see a doctor about it.\n", encoding="utf-8")
+    # No SURFACE to scope any more (#440): `files()` walks ROOT, and ROOT is
+    # the tmp tree - which is a better end-to-end test than it was, because it
+    # exercises the walk rather than a one-entry allowlist.
     monkeypatch.setattr(gate, "ROOT", tmp_path)
-    monkeypatch.setattr(gate, "SURFACE", ("README.md",))
     assert gate.main() == 1
 
 
@@ -370,8 +447,10 @@ def test_the_gate_passes_on_a_clean_tree(tmp_path, monkeypatch):
     ok = tmp_path / "README.md"
     ok.write_text("The engine states what it observed and stops.\n",
                   encoding="utf-8")
+    # No SURFACE to scope any more (#440): `files()` walks ROOT, and ROOT is
+    # the tmp tree - which is a better end-to-end test than it was, because it
+    # exercises the walk rather than a one-entry allowlist.
     monkeypatch.setattr(gate, "ROOT", tmp_path)
-    monkeypatch.setattr(gate, "SURFACE", ("README.md",))
     assert gate.main() == 0
 
 
