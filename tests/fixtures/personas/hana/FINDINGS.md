@@ -1,8 +1,9 @@
 # hana: what this corpus is designed to break
 
-Findings below were exposed by hana@1 (see persona.toml;
+Findings below were exposed by hana@1 and hana@2 (see persona.toml;
 docs/persona-doctrine.md requires findings to record the persona version that
-exposed them).
+exposed them). hana@2 added one row's worth of history: the band's last day,
+which carries the zero a dying step counter writes.
 
 She exists because of a defect that had already shipped. `outage` (#398)
 measured a source's cadence in VALID time, and the first question it produced
@@ -26,18 +27,36 @@ layer underneath it untested.
 its instrument row closes on the day of the last session. Silence after a
 closed `to_date` is the expected state.
 
-**An undeclared end IS a question, and this record contains exactly one.**
-`chest-strap` reports every second morning until 2030-04-14 and then stops,
-with its instrument row still open. The engine asks about it and about nothing
-else here. A corpus in which all three quiet channels were suppressed would
-satisfy every refusal and prove only that the rule cannot fire.
+**An undeclared end IS a question.** `chest-strap` reports every second
+morning until 2030-04-14 and then stops, with its instrument row still open.
+A corpus in which all three quiet channels were suppressed would satisfy every
+refusal and prove only that the rule cannot fire.
+
+**A device that keeps reporting can still be broken, and that is the other
+question (hana@2).** `old-band` counted steps and nothing else for 105 days and
+then wrote a zero on 2029-12-30, the day its strap perished. She walks the long
+way to everything and walked that day as she walked every other; the zero is
+the instrument failing, not the day being empty. `false_zero_questions` was
+built for exactly this, tightened twice, and until this row existed its
+docstring recorded that it "produced no true positive anywhere, because no
+corpus record contains the shape this kind exists for". A rule argued against a
+corpus that cannot exercise it is a rule whose detection nobody has watched
+work.
+
+So the archive is now a REFUSAL and a DETECTION at once: no `outage` question
+names it, because a one-time import never had a cadence to break, and a
+`false_zero` question does, because it reported a count it did not have. The
+two failure modes of one channel, in one record, asked about differently.
 
 ## What she rules out
 
 When `outage` is wrong on some other record, hers says which half is wrong.
-Three of her four channels are quiet and only one is asked about, so a change
-that silences her question has broken the detection, and a change that adds a
-second has broken a refusal - and the two failures name themselves.
+Three of her four channels are quiet and exactly one of them is an `outage`
+question, so a change that silences it has broken the detection and a change
+that adds another has broken a refusal. The `false_zero` question is the same
+control for the other rule: one true positive, in a record whose other 105
+days from the same source are ordinary, so a change that stops asking and a
+change that starts asking twice both name themselves.
 
 ## Not a finding
 

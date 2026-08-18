@@ -111,8 +111,10 @@ def test_a_field_that_is_ordinarily_zero_is_never_asked_about(tmp_path):
     issue's reasoning that a zero out of family could be spotted from the
     field's own distribution. Against the shipped corpus it produced four
     questions, all false positives - three first-ordinary-day `pain` zeros and
-    one `sugar_g` - and no true positive anywhere. `ZERO_MEANS_UNOBSERVED` is
-    the correction, so a dry Tuesday and a day without sugar stay silent.
+    one `sugar_g` - and, at the time, no true positive anywhere.
+    `ZERO_MEANS_UNOBSERVED` is the correction, so a dry Tuesday and a day
+    without sugar stay silent. The true positive exists now (#435) and is
+    asserted by the corpus anchor below; this stays the refusal half.
     """
     rows = [row(START + timedelta(days=i), steps=9000 + i,
                 alcohol=0, pain=0, sugar_g=0) for i in range(14)]
@@ -120,24 +122,33 @@ def test_a_field_that_is_ordinarily_zero_is_never_asked_about(tmp_path):
     assert kinds(v, "2030-06-14") == []
 
 
-def test_the_corpus_asks_exactly_one_instrument_question(tmp_path):
+def test_the_corpus_asks_exactly_the_two_instrument_questions(tmp_path):
     """BOTH DIRECTIONS, ON THE SHIPPED CORPUS, AND THIS IS THE ANCHOR.
 
-    An earlier version of this asserted the corpus asks NOTHING, which was
-    true and half a control: it guarded every refusal and could not tell a
-    working rule from one that never fires. `hana` closes that. Her record
-    carries four daily channels and three of them are quiet at the horizon:
+    An earlier version asserted the corpus asks NOTHING, which was true and
+    half a control: it guarded every refusal and could not tell a working rule
+    from one that never fires. Then it asserted ONE, which guarded `outage`'s
+    detection and left `false_zero`'s unrun - the rule was tightened twice
+    against a corpus that could not exercise it (#435).
+
+    Two now, one of each kind, and `hana` carries both because her record is
+    the one about channels that stop:
 
       `old-band`   an archive, 106 dates at ONE transaction day - the shape
-                   that produced the false positive #405 was filed for
+                   that produced the false positive #405 was filed for - AND
+                   a zero step count on the day its strap perished, which is
+                   `false_zero`'s true positive
       `club-treadmill`  stopped in February, with `instruments.to_date`
                    closed on the day of the last session
       `chest-strap`     stopped in April with its instrument row still open,
                    and nothing in the record accounting for it
 
-    Exactly one of those is a question. A change that silences it has broken
-    the detection; a change that adds a second has broken a refusal; and
-    because the three sit in one record, each failure names itself.
+    So the archive is a REFUSAL and a DETECTION at once: no `outage` question
+    names it, because it never had a transaction cadence to break, and a
+    `false_zero` question does, because it wrote a count it did not have. A
+    change that silences either has broken a detection; a change that adds a
+    third has broken a refusal; and because all of it sits in one record, each
+    failure names itself.
     """
     roots = [p for p in sorted(Path("tests/fixtures/personas").iterdir())
              if (p / "vitai.toml").exists()]
@@ -148,7 +159,10 @@ def test_the_corpus_asks_exactly_one_instrument_question(tmp_path):
         for q in Vitai(root).questions():
             if q["kind"] in ("outage", "false_zero"):
                 asked.append((root.name, q["kind"], q["subject"], q["for_date"]))
-    assert asked == [("hana", "outage", "chest-strap", "2030-04-15")], asked
+    assert asked == [
+        ("hana", "false_zero", "old-band", "2029-12-30"),
+        ("hana", "outage", "chest-strap", "2030-04-15"),
+    ], asked
 
 
 def test_hana_holds_all_three_shapes(tmp_path):

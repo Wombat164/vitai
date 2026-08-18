@@ -14,8 +14,9 @@ construction.
 ## The hardware, in the order it entered her life
 
 - **The band.** Worn from the previous June until the end of December, when
-  the strap perished. It counted steps and nothing else. It went in a drawer
-  and stayed there.
+  the strap perished. It counted steps and nothing else. Its last day, the
+  30th, records zero steps - she walked it like any other day, and the band
+  wrote a count it did not have. Then it went in a drawer and stayed there.
 - **The phone app.** From the first week of January, and the reason the record
   exists at all. Steps and sleep, typed in the evening.
 - **The chest strap.** Bought in the first week of January for resting heart
@@ -29,6 +30,9 @@ construction.
 
 ## The calendar
 
+- 2029-12-30: the band's last day. It reports zero steps, which is the device
+  failing rather than the day being empty, and nothing marks it until the
+  archive is imported six months later.
 - 2030-01-07: the record starts.
 - 2030-02-26: last treadmill session; the membership is not renewed.
 - 2030-04-14: last chest-strap morning. Nothing marks it.

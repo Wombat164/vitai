@@ -431,8 +431,11 @@ def false_zero_questions(daily: list[dict], on: date) -> list[dict]:
     from the distribution alone. Run against the shipped corpus it produced
     FOUR questions and every one was a false positive - three on `pain` and
     one on `sugar_g`, each simply the first ordinary day somebody had no pain
-    or ate no sugar - and it produced no true positive anywhere, because no
-    corpus record contains the shape this kind exists for.
+    or ate no sugar - and it produced no true positive anywhere, because at
+    the time no corpus record contained the shape this kind exists for. One
+    does now (#435): `hana`'s band counted steps and nothing else for 105
+    days and then wrote a zero on the day its strap perished, which is this
+    rule's true-positive path and the first thing ever to run it.
 
     A second attempt failed the same way: "the source writes this field on
     every day it appears" separates a wearable's step count from an occasional
