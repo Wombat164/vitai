@@ -44,7 +44,8 @@ from .clocks import comparable, day_phase, is_aware, ordering_rule, phase_rule
 # module: `cmd_phases` prints a wall-clock time and slicing characters
 # off an offset-aware stamp prints "00+00" instead of one.
 from .clocks import parse_time as parse_time
-from .jsonl import EVENT_DATASETS, append, append_many, load
+from .jsonl import (EVENT_DATASETS, append, append_many, classify_pending,
+                    load)
 from . import query
 from .policy import (State, capability, comparability, context_on,
                      days_between, events_on, plan_churn, state)
@@ -427,6 +428,33 @@ class Vitai:
         self._forget()
         return [coarse(name, r) for r in append_many(
             self.root / "data", name, records, device=self.config.device)]
+
+    def classify_pending(self, name: str, records: list[dict]) -> list[dict]:
+        """What `append_many` would make of these rows, asked first (#425).
+
+        One dict per row - `row`, `verdict`, `target`, `reason` - where the
+        verdict is one of `jsonl.PENDING_VERDICTS`. An importer holding rows
+        it has not written yet asks this instead of comparing timestamps,
+        which is what #425 found it could not do: a pending row may not carry
+        `recorded_at`, so the field that orders it does not exist at the
+        moment the ordering question gets asked.
+
+        A restatement that names no target comes back `restatement` rather
+        than `correction`, and that is the answer rather than a shortfall in
+        it. Inferring the intent from a clock is the thing the record refuses
+        to let a caller do; `supersedes` is how a correction says what it is.
+
+        NOTHING IS WRITTEN and no stored row comes back - a verdict word, the
+        reference the author wrote, and prose. It reads the record through the
+        same files `append_many` would, stamps the pending rows in memory to
+        answer the ordering half, and opens nothing for writing.
+        """
+        if name in EVENT_DATASETS:
+            raise ValueError(
+                f"{name} is written by `assert_delivery`, so there is no "
+                f"generic append here to classify against")
+        return classify_pending(self.root / "data", name, records,
+                                device=self.config.device)
 
     @property
     def artifacts(self):

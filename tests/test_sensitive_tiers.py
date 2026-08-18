@@ -371,6 +371,12 @@ ARG_TAKING_OUT_OF_SCOPE = {
     # Route and track helpers. They take a session row FROM the caller and
     # answer about it; they read nothing back out of the record.
     "route", "same_route", "session_route", "session_track",
+    # #425 takes rows the caller has not written yet and answers what the
+    # append would make of them. Every field it returns is about the WRITE -
+    # a row number, a verdict word, the `supersedes` the caller itself wrote,
+    # and prose about ordering. No stored row passes through it in either
+    # direction, so there is nothing here for a tier to apply to.
+    "classify_pending",
 }
 
 
