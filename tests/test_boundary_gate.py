@@ -279,6 +279,24 @@ def test_every_exemption_records_why_and_where():
         assert (gate.ROOT / where).exists(), where
 
 
+def test_no_two_exemptions_share_a_reason():
+    """THE ANSWER TO "WHAT HAPPENS WHEN THE 63RD CASE ARRIVES" (#388).
+
+    A hash keyed by file with a written reason already stops an exemption
+    being pasted elsewhere or outliving its sentence. What it did not stop was
+    BULK: fifty entries carrying one copy-pasted sentence would satisfy every
+    rule above and be indistinguishable from someone exempting a directory.
+
+    So each reason has to say what THAT sentence quotes. Nineteen entries,
+    nineteen reasons - and the next one has to be written rather than pasted,
+    which is the cost that makes an exemption a decision.
+    """
+    seen: dict[str, tuple[str, str]] = {}
+    for (where, digest), reason in gate.EXEMPT.items():
+        assert reason not in seen, (where, seen.get(reason))
+        seen[reason] = (where, digest)
+
+
 def test_an_exemption_is_scoped_to_the_file_it_was_granted_for():
     """Copying an exempt sentence somewhere else must not carry the pass with
     it. The exemption is a statement about one place, not about a form of
@@ -420,13 +438,150 @@ def test_hyphen_folding_does_not_move_the_exemption_digests():
 
 def test_no_exemption_outlives_the_sentence_it_spares():
     """A hash with nothing behind it is an exemption nobody can review: the
-    reason beside it describes a sentence that is no longer in the file."""
+    reason beside it describes a sentence that is no longer in the file.
+
+    THROUGH `voice()`, which is what the gate itself reads (#388). Comparing
+    against the whole file would let an exemption keyed to a sentence the gate
+    can no longer see look live - and it caught exactly that here, when the
+    twelve `tests/` entries were first written against the full text.
+    """
     import hashlib
     for (path, digest) in gate.EXEMPT:
+        here = Path(path)
         live = {hashlib.sha256(gate._norm(s).encode()).hexdigest()
-                for s in gate.sentences(
-                    (gate.ROOT / path).read_text(encoding="utf-8"))}
+                for s in gate.sentences(gate.voice(
+                    here, (gate.ROOT / path).read_text(encoding="utf-8")))}
         assert digest in live, f"{path}: no live sentence hashes to {digest}"
+
+
+# --- what the gate can see in tests/, and what it deliberately cannot (#388) ---
+#
+# The repo is public, so a class (c) claim in `tests/` is as published as one in
+# `src/`. What makes this hard is that the controls in THIS file must contain
+# forbidden wording to prove the gate catches it, so the naive fix - adding
+# `tests` to SURFACE - reports 62 findings and gets the directory exempted
+# forever. The split is use versus mention, drawn on Python's own grammar: a
+# string literal is the test's material, a comment or a docstring is the file
+# talking.
+
+
+_387 = Path("tests/fixtures/personas/_gen/common.py")
+
+
+def test_a_category_claim_in_a_test_comment_is_caught():
+    """THE FIXTURE IS REAL AND IS WHY THIS ISSUE EXISTS. #387's own diff
+    explained a persona selection with a category applied to two named people,
+    inside the change that forbade doing so, and every control was green.
+    Reworded in 09829ef; the hole it went through is what this closes.
+
+    THE VERB IS CHANGED FROM THE HISTORICAL WORDING and the reason is the test
+    below: the sentence as written says the two "never leave" the band, and
+    `_disclaimed` reads that negation as a disclaimer. That is a SECOND hole,
+    in the matcher rather than in the surface, and it is not this change - so
+    this control carries the same claim about the same two people in the form
+    the matcher can see, and the gap is pinned rather than papered over.
+    """
+    source = ("# crosses a `BAND_LEVELS` boundary - while `tom` (175 cm) and\n"
+              "# `rachel` (162 cm) are obese at every recorded weight and\n"
+              "# would have needed invented numbers to exercise this.\n")
+    assert gate.findings(_387, gate.voice(_387, source), gate.allowed())
+
+
+def test_a_claim_split_across_two_comment_lines_is_still_one_sentence():
+    """Consecutive comment lines are ONE paragraph. Emitting each line
+    separately cut the wrapped sentence into fragments and the claim matched
+    nothing - which is how the first cut of this change passed its own
+    fixture."""
+    source = ("# `rachel` (162 cm) is obese at every\n"
+              "# recorded weight in her file.\n")
+    assert len(gate.sentences(gate.voice(_387, source))) == 1
+    assert gate.findings(_387, gate.voice(_387, source), gate.allowed())
+
+
+def test_the_historical_387_wording_still_evades_the_matcher():
+    """A KNOWN GAP, PINNED RATHER THAN DESCRIBED, and it fails the day it is
+    fixed - which is the point.
+
+    `_disclaimed` treats a negation in the same clause as a disclaimer. That
+    is right for "vitai does not classify anyone", and wrong here: "never
+    leaves the obese band" negates the LEAVING and asserts the membership
+    harder. Measured while closing #388: the sentence reports nothing in ANY
+    scanned file, so widening the surface does not reach it.
+
+    NOT FIXED HERE, and the reason is measured too. Narrowing the negation to
+    clauses carrying a saying-verb makes this sentence fire - and also fires on
+    "It is not intended to identify, monitor, explain, treat or compensate for
+    any disease", the regulatory disclaimer, in README.md, the doctrine and the
+    wiki. A matcher tuned until the fixture passes is the failure this gate's
+    own history is made of, so it is a separate change with its own argument.
+    """
+    historical = ("# `rachel` (162 cm) never leave the obese band at any\n"
+                  "# recorded weight and would have needed invented numbers.\n")
+    assert gate.findings(_387, gate.voice(_387, historical),
+                         gate.allowed()) == [], (
+        "the negation hole is fixed - delete this test and the paragraph in "
+        "`_disclaimed` that points at it")
+
+
+def test_the_wording_that_replaced_it_is_clean():
+    """The control on the control: the compliant form was already in use
+    elsewhere in the same PR, so the gate must not fire on the fix."""
+    source = (
+        "# `rachel` (162 cm) stay above the topmost `BAND_LEVELS` edge at\n"
+        "# every weight they record and would have needed invented numbers.\n")
+    here = Path("tests/fixtures/personas/_gen/common.py")
+    assert gate.findings(here, gate.voice(here, source), gate.allowed()) == []
+
+
+def test_a_forbidden_phrase_as_test_material_is_not_a_finding():
+    """The other direction, and the one that makes the gate keepable. A
+    directive inside a string literal is the INPUT a control checks."""
+    here = Path("tests/test_something.py")
+    source = 'def test_it():\n    assert scan("If it persists, see a doctor.")\n'
+    assert gate.findings(here, gate.voice(here, source), gate.allowed()) == []
+
+
+def test_a_docstring_is_voice_and_not_material():
+    """A docstring is a string literal to the parser and prose to a reader,
+    and the reader is who this gate is about. Exempting it with the rest of
+    the literals would have left the commonest place for an explanation
+    unscanned."""
+    here = Path("tests/test_something.py")
+    source = ('def test_it():\n'
+              '    """Both personas sit in the obese band throughout."""\n'
+              '    assert True\n')
+    assert gate.findings(here, gate.voice(here, source), gate.allowed())
+
+
+def test_the_same_literal_in_src_is_still_scanned():
+    """THE PROPERTY THAT MUST NOT REGRESS. `src` is not TEST_MATERIAL, because
+    a string literal there is what the product SAYS - `safety.ACUTE` is string
+    literals, and they are the most important thing this gate reads."""
+    source = 'MESSAGE = "If it persists, see a doctor."\n'
+    assert "src" not in gate.TEST_MATERIAL and "examples" not in gate.TEST_MATERIAL
+    here = Path("src/vitai/whatever.py")
+    assert gate.voice(here, source) == source
+    assert gate.findings(here, gate.voice(here, source), gate.allowed())
+
+
+def test_a_test_file_that_will_not_parse_is_read_whole():
+    """Fail-safe: a syntax error must not be a way to hide a sentence from the
+    gate."""
+    here = Path("tests/test_broken.py")
+    source = 'def test_it(:\n    # both of them are obese in every row\n'
+    assert gate.voice(here, source) == source
+    assert gate.findings(here, gate.voice(here, source), gate.allowed())
+
+
+def test_the_non_python_fixtures_are_scanned_whole():
+    """`tests/fixtures/personas/*/WORLD.md` is narrative prose about a person,
+    which is the likeliest place in the repo for a category claim - and it was
+    outside SURFACE entirely. 77 markdown and 30 toml files come into scope
+    with this change and none of them reports anything today."""
+    here = Path("tests/fixtures/personas/tom/WORLD.md")
+    source = "He is obese at every weight his file records.\n"
+    assert gate.voice(here, source) == source
+    assert gate.findings(here, source, gate.allowed())
 
 
 def test_an_addressee_with_no_profession_is_still_an_addressee():

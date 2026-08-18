@@ -64,9 +64,12 @@ applies, so the two guards agree rather than drifting apart.
 
 from __future__ import annotations
 
+import ast
 import hashlib
+import io
 import re
 import sys
+import tokenize
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -86,7 +89,41 @@ ROOT = Path(__file__).resolve().parents[1]
 # while README.md was inside it, which is the wrong way round.
 SURFACE = ("README.md", "SECURITY.md", "ARCHITECTURE.md", "CONTRIBUTING.md",
            "pyproject.toml", "assets", "docs", "wiki", "skills", "src",
-           "examples")
+           "examples", "tests")
+
+# Roots where a Python STRING LITERAL is material rather than something the
+# product says (#388).
+#
+# THE REPO IS PUBLIC, so a class (c) claim in `tests/` is exactly as published
+# as one in `src/` - and `tests/` was outside `SURFACE` until now. #387 wrote
+# one: a generator comment explaining a persona selection by saying two named
+# personas "never leave the obese band at any recorded weight", inside the
+# change that forbade doing so, with the compliant wording already in use
+# elsewhere in the same diff. Prose drifting where nothing checks it.
+#
+# ADDING `tests` ALONE PRODUCES 62 FINDINGS, and nearly all are the controls'
+# own material: `test_boundary_gate.py` MUST contain "see a doctor" to prove
+# the directive family fires, `test_crossings.py`'s deny list must contain the
+# category word it scans for, `test_safety.py` must quote the acute tier it
+# pins. A gate that fires on the tests proving it works is worse than no gate,
+# because the first thing anyone does is exempt the directory - and then it is
+# exempt forever.
+#
+# SO THE SPLIT IS USE VERSUS MENTION, AND IT IS STRUCTURAL. In a test, a
+# forbidden phrase inside a string literal is the INPUT the test exists to
+# check; the same phrase in a comment or a docstring is the file talking in its
+# own voice. That is the difference between quoting a violation and asserting
+# one, and Python's own grammar draws it. 62 findings become 12.
+#
+# DOCSTRINGS ARE VOICE, NOT DATA, even though the parser calls them string
+# literals. A docstring is prose addressed to a reader, which is exactly what
+# `tests/` was missing a check on.
+#
+# `src` AND `examples` ARE NOT HERE, deliberately and load-bearingly. A string
+# literal there is what the product SAYS - `safety.ACUTE`'s messages are string
+# literals, and they are the single most important thing this gate reads.
+# Applying the split to them would switch the gate off where it matters most.
+TEST_MATERIAL = ("tests",)
 
 SUFFIXES = {".md", ".py", ".toml", ".txt", ".rst", ".yml", ".yaml", ".json"}
 
@@ -399,6 +436,72 @@ EXEMPT: dict[tuple[str, str], str] = {
     # exempted because they described a clinician-review exit that #110 had
     # already removed, which made them false as well as over the line. They
     # are reworded now, so there is nothing left to spare.
+
+    # --- #388: the boundary controls, quoting the forms they exist to catch.
+    # Same shape as the doctrine entries above and the same justification:
+    # prose explaining a constraint trips the constraint. These are what
+    # survives the use/mention split in `voice()` - 62 findings from adding
+    # `tests` to SURFACE become these, and every one is a sentence ABOUT a
+    # forbidden phrasing, in a file whose job is proving the gate catches it.
+    # None applies a category to a person or tells a reader to obtain care,
+    # which is the pair no syntactic split can separate on its own.
+
+    ("tests/test_boundary_gate.py",
+     "5871624d94dcd5d6b1eb66ed6d35c440187095326f9dc133cf33fea0fb24138c"):
+        "the control pinning that a generic collocation needs a body- "
+        "composition noun within reach, quoting the pair",
+    ("tests/test_boundary_gate.py",
+     "3e4869443181d8f04fceb6a331d6a55b0206a2ecd29d86974d7077af7c0cf50d"):
+        "the control explaining why the hyphenated clinical spelling must "
+        "fold to the fused one on the deny list",
+    ("tests/test_boundary_gate.py",
+     "1bf260380a192dedc9b2e4500eceb29a269100e7e2aa87908abd498d28e2ecb3"):
+        "the control quoting the collocation-plus-noun example that the "
+        "proximity scoping had to keep firing on",
+    ("tests/test_boundary_gate.py",
+     "259ce8d7de22b1e8ca9448d9e2b97c8c92ba6b4d8fd9c54c213cdbc4a93db5d9"):
+        "the control explaining why the -ity noun is not on the deny list "
+        "while the adjective is",
+    ("tests/test_boundary_gate.py",
+     "cea7308468e96fdb48cb5fb9716eccdd5fffba301be204bb67e2694736f87f89"):
+        "the control explaining why three collocations need a nearby noun "
+        "and five clinical words stay bare",
+    ("tests/test_boundary_gate.py",
+     "69da8b693212c1b6d9a2ef4be2013f9a85454616404f9ad29fd071fd402ec61b"):
+        "the control recording that the identifier-preserving pass is "
+        "CATEGORY-only, quoting the families that still read the prose form",
+    ("tests/test_boundary_gate.py",
+     "39f3e5815788737834c57fb55453ca6365994af2f9be23f796a385beba5e780e"):
+        "the control explaining which collocations are narrow enough to "
+        "scan the whole repo with, quoting each",
+    ("tests/test_boundary_gate.py",
+     "0244eeff0f07ff87c3a6577bbdfb18f10cc8ed21ae8ef53028ea1b1589f663b4"):
+        "the control quoting the exact directive that a whole-sentence "
+        "negation check used to suppress",
+    ("tests/test_boundary_gate.py",
+     "53cdeeb7d1d25b59fc17dad3477ba30928fadcc5586e060e101c3a25cee7814e"):
+        "the control quoting the hyphenated directive that evaded a spaces- "
+        "only deny list across every content repo",
+    ("tests/test_boundary_gate.py",
+     "f8932021cd0b415a93d2d1399381dbf364627163ae59819f1ba85bf596fa0764"):
+        "the control quoting the addressee-with-no-profession phrasing that "
+        "read as safe because it named nobody",
+    ("tests/test_boundary_gate.py",
+     "84da57a9008ac5b5376419cc83edef5cf1606ae1e364a1835204a7e044267b4c"):
+        "the control quoting the self-assigned duty-to-watch sentence that "
+        "argues a wellness tool into being a device",
+    ("tests/test_safety.py",
+     "fcc7b2130f8208c6faa791d900f80d3570a87767913d278e389177a765001b27"):
+        "the control quoting the removed routing claim that #110 took off "
+        "every escalation surface",
+    ("tests/test_safety.py",
+     "00234ae963db7789e578281d3e66765587fe0024fed49f15c1567806febd4efc"):
+        "the control quoting the ordinary directive it contrasts the acute "
+        "tier against",
+    ("tests/test_safety.py",
+     "d1038a54005583471466b19e225ce6f8ed199e89b97d1f3573f17522960e5589"):
+        "the control recording that a MESSAGES-only sweep let the removed "
+        "routing claim print through a green build, quoting it",
 }
 
 
@@ -425,6 +528,53 @@ def allowed() -> set[str]:
 
 def _norm(text: str) -> str:
     return " ".join(text.split()).lower()
+
+
+def voice(path: Path, text: str) -> str:
+    """The text a file says in its OWN VOICE, which is what this gate reads.
+
+    Everything outside `TEST_MATERIAL` is its own voice entire, unchanged. A
+    Python file inside it contributes its comments and docstrings, and none of
+    its other string literals - see `TEST_MATERIAL` for why that line and not
+    a directory exemption.
+
+    A FILE THAT WILL NOT PARSE IS READ WHOLE, which is the fail-safe direction:
+    a syntax error must not be a way to hide a sentence from the gate.
+    """
+    if path.suffix != ".py" or not any(
+            path.as_posix().startswith(f"{root}/") for root in TEST_MATERIAL):
+        return text
+    spoken: list[str] = []
+    block: list[str] = []
+    previous = -2
+    try:
+        for token in tokenize.generate_tokens(io.StringIO(text).readline):
+            if token.type != tokenize.COMMENT:
+                continue
+            # CONSECUTIVE COMMENT LINES ARE ONE PARAGRAPH, and getting this
+            # wrong is not cosmetic: `_segment` splits on blank lines, so
+            # emitting each line separately cut a wrapped sentence into fragments
+            # and the claim that spanned two lines matched nothing. A reader
+            # sees a comment block as a paragraph, and so must this.
+            if token.start[0] != previous + 1 and block:
+                spoken.append(" ".join(block))
+                block = []
+            block.append(token.string.lstrip("#").strip())
+            previous = token.start[0]
+        if block:
+            spoken.append(" ".join(block))
+        tree = ast.parse(text)
+    except (SyntaxError, tokenize.TokenError, ValueError):
+        return text
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                             ast.AsyncFunctionDef)):
+            if (doc := ast.get_docstring(node, clean=True)):
+                spoken.append(doc)
+    # A BLANK LINE BETWEEN THEM, because `_segment` treats one as a paragraph
+    # break and joining two unrelated comments would invent adjacency between
+    # them - the same reason that function splits on blank lines.
+    return "\n\n".join(spoken)
 
 
 def files() -> list[Path]:
@@ -530,8 +680,9 @@ def main() -> int:
             text = path.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
-        for problem in findings(path.relative_to(ROOT), text, spared):
-            print(f"BOUNDARY GATE: {path.relative_to(ROOT)}: {problem}")
+        here = path.relative_to(ROOT)
+        for problem in findings(here, voice(here, text), spared):
+            print(f"BOUNDARY GATE: {here}: {problem}")
             bad += 1
     if bad:
         print(f"FAILED: {bad} finding(s).\n"
