@@ -438,14 +438,17 @@ def load_report(data_dir: Path, name: str,
 EVENT_DATASETS = frozenset({"emissions"})
 
 
-def _spell(ref: tuple[str, int | None]) -> str:
-    """A (key, position) reference as a person would write it in a message."""
-    key, pos = ref
-    return repr(key) if pos is None else f"{key!r} position {pos}"
+def _spell(ref: tuple[str, int | None, str | None]) -> str:
+    """A (key, position, machine) reference as a person would write it."""
+    key, pos, actor = ref
+    if pos is None:
+        return repr(key)
+    written = f"{key!r} position {pos}"
+    return written if actor is None else f"{written} on {actor!r}"
 
 
 def _targets_retired(dataset: str,
-                     rows: list[dict]) -> set[tuple[str, int | None]]:
+                     rows: list[dict]) -> set[tuple[str, int | None, str | None]]:
     """The references whose actual TARGET went, not merely whose ref was spent.
 
     `retire` reports a reference as applied when it retires ANY row, including
@@ -461,12 +464,12 @@ def _targets_retired(dataset: str,
     unusable is not a check anybody keeps.
     """
     gone = {id(r) for r in rows} - {id(r) for r in retire(dataset, rows)}
-    out: set[tuple[str, int | None]] = set()
+    out: set[tuple[str, int | None, str | None]] = set()
     for row in rows:
         if id(row) not in gone:
             continue
         if not row.get("supersedes"):
-            out.add((line_key(dataset, row), None))
+            out.add((line_key(dataset, row), None, None))
         # AND UNDER ITS POSITION, where it has one, WITHOUT the `supersedes`
         # guard above (#239). That guard exists because a bare reference cannot
         # tell "the target went" from "an earlier dead correction of the same
@@ -476,7 +479,13 @@ def _targets_retired(dataset: str,
         # correction aimed at a row that itself corrects a DIFFERENT key looked
         # unspent, refusing a write that was about to apply.
         if (pos := position_of(row)) is not None:
-            out.add((line_key(dataset, row), pos))
+            # BOTH SPELLINGS OF THE SAME RETIREMENT (#391). A correction may
+            # name the position alone or the position and the machine, and the
+            # row that went answers either - so a reference is looked up as it
+            # was written rather than normalised, which would make the answer
+            # depend on a form nobody chose.
+            out.add((line_key(dataset, row), pos, None))
+            out.add((line_key(dataset, row), pos, row.get("device")))
     return out
 
 
@@ -525,9 +534,14 @@ def _corrections_that_would_not_apply(data_dir: Path, name: str,
         correction itself, and a reference whose target has not synced looked
         present. That turned the offline-first case into a refusal.
         """
-        key, pos = ref
+        key, pos, actor = ref
         return any(line_key(name, r) == key
                    and (pos is None or position_of(r) == pos)
+                   # #391: a correction naming a machine is answered only by
+                   # that machine's row. A peer's row at the same position was
+                   # never its target, so counting it here would report the
+                   # target as present and skip the offline-first case.
+                   and (actor is None or r.get("device") == actor)
                    and target_of(r) != ref
                    for r in held + pending)
 
@@ -559,10 +573,12 @@ def _corrections_that_would_not_apply(data_dir: Path, name: str,
     for ref in sorted(refs, key=lambda t: (t[0], t[1] is not None, t[1] or 0)):
         if ref in retired:
             continue
-        key, pos = ref
+        key, pos, actor = ref
         blocking = max((str(r.get("recorded_at") or "") for r in held
                         if line_key(name, r) == key
-                        and (pos is None or position_of(r) == pos)), default="")
+                        and (pos is None or position_of(r) == pos)
+                        and (actor is None or r.get("device") == actor)),
+                       default="")
         stamps = ", ".join(sorted(str(r.get("recorded_at")) for r in pending
                                   if target_of(r) == ref))
         out.append(
@@ -582,8 +598,17 @@ def position_of(rec: dict) -> int | None:
     return seq if isinstance(seq, int) and not isinstance(seq, bool) else None
 
 
-def target_of(rec: dict) -> tuple[str, int | None] | None:
-    """What a row's `supersedes` names: a key, and optionally a position.
+def target_of(rec: dict) -> tuple[str, int | None, str | None] | None:
+    """What a row's `supersedes` names: a key, optionally a position, and
+    optionally the actor that wrote the row at it (#391).
+
+    THE ACTOR IS THE THIRD FIELD FOR THE REASON THE POSITION WAS THE SECOND.
+    `seq` is stamped from what the appending machine can SEE, and actor-per-file
+    means two devices offline together stamp the same one - so a position can be
+    occupied twice and a reference to it names two rows. `supersedes_device`
+    says which, and it is a separate field rather than a suffix for exactly the
+    argument below: a device slug in a parsed reference could not be told apart
+    from a bare key containing the separator.
 
     TWO FIELDS AND NEVER A PARSED SUFFIX. The obvious shape is to spell the
     position into the reference as `K#n` and ask the reader to take it apart.
@@ -607,9 +632,55 @@ def target_of(rec: dict) -> tuple[str, int | None] | None:
     if not str(ref or "").strip():
         return None
     narrow = rec.get("supersedes_seq")
+    actor = rec.get("supersedes_device")
     return (str(ref),
             narrow if isinstance(narrow, int) and not isinstance(narrow, bool)
-            else None)
+            else None,
+            str(actor) if str(actor or "").strip() else None)
+
+
+def _addressed(target: tuple[str, int | None, str | None],
+               writer: str | None,
+               occupants: dict[tuple[str, int], list[str | None]],
+               ) -> tuple[str, int, str | None] | None:
+    """Which occupant of a seat a narrowed correction retires, or None (#391).
+
+    FOUR RULES, IN ORDER, AND THE ORDER IS THE ARGUMENT.
+
+    1. `supersedes_device` NAMES ONE. An author who means a peer's row says so,
+       and the answer cannot change as files arrive because the actor is written
+       on the correction rather than read off the record.
+    2. A SEAT WITH ONE OCCUPANT IS THAT OCCUPANT, whatever wrote it. This is
+       every record written before this contract and every single-device record
+       after it, unchanged.
+    3. OTHERWISE THE CORRECTION'S OWN DEVICE. A correction is authored on a
+       machine, about a row that machine can see, and the row it means is
+       overwhelmingly the one it wrote itself. This is the rule that makes the
+       new field unnecessary for the ordinary case - and it AGREES with rule 2
+       before the peer syncs, so the same correction retires the same row
+       before and after, which is the property the whole topology exists for.
+    4. ANYTHING ELSE RETIRES NOTHING. A device-less writer at a contested seat,
+       or a correction whose own machine wrote no row there, has not said which
+       row it means and no rule can invent it. Refusing is visible - `validate`
+       reports it and the value stays - where guessing deletes a peer's
+       observation silently.
+
+    WHAT IS NOT HERE IS A CLOCK. Ordering the occupants by `recorded_at` would
+    pick one, and #210 settled that `recorded_at` is machine-set and is not
+    something a rule may reach across devices for. The device slug is a
+    tiebreak that does not read a clock; wall time is not, whoever stamped it.
+    """
+    ref, pos, actor = target
+    if pos is None:
+        return None
+    seated = occupants.get((ref, pos), [])
+    if actor is not None:
+        return (ref, pos, actor) if actor in seated else None
+    if len(seated) == 1:
+        return (ref, pos, seated[0])
+    if seated.count(writer) == 1:
+        return (ref, pos, writer)
+    return None
 
 
 def retire(dataset: str, rows: list[dict], applied: set | None = None
@@ -677,14 +748,25 @@ def retire(dataset: str, rows: list[dict], applied: set | None = None
     # `supersedes` itself is untouched in every record and every reading, and
     # that is a property of the SHAPE rather than of care taken here: nothing
     # is parsed, so nothing can be parsed wrongly.
+    # WHO SITS AT EACH POSITION, computed before the walk (#391). Two devices
+    # offline together stamp the same `seq`, so a seat can hold more than one
+    # row and a reference to it names more than one. `occupants_of` is what
+    # `_addressed` resolves against.
+    occupants: dict[tuple[str, int], list[str | None]] = {}
+    for r in rows:
+        if (pos := position_of(r)) is not None:
+            occupants.setdefault((line_key(dataset, r), pos), []).append(
+                r.get("device"))
+
     records: list[dict] = []
     one: dict[str, int] = {}
-    want: dict[tuple[str, int], int] = {}
-    chained: set[tuple[str, int | None]] = set()
-    spent: set[tuple[str, int | None]] = set()
+    want: dict[tuple[str, int, str | None], int] = {}
+    chained: set[tuple[str, int | None, str | None]] = set()
+    spent: set[tuple[str, int | None, str | None]] = set()
     for r in reversed(rows):
         base = line_key(dataset, r)
-        seat = (base, pos) if (pos := position_of(r)) is not None else None
+        seat = ((base, pos, r.get("device"))
+                if (pos := position_of(r)) is not None else None)
         target = target_of(r)
         ref = target[0] if target else None
         # THE WHOLE TARGET, NOT THE KEY (#239). "Two corrections naming one
@@ -701,10 +783,10 @@ def retire(dataset: str, rows: list[dict], applied: set | None = None
             dropped, consumed = True, target
         elif seat is not None and want.get(seat, 0) > 0:
             want[seat] -= 1
-            dropped, consumed = True, (base, pos)
+            dropped, consumed = True, (base, pos, r.get("device"))
         elif ref != base and one.get(base, 0) > 0:
             one[base] -= 1
-            dropped, consumed = True, (base, None)
+            dropped, consumed = True, (base, None, None)
         else:
             dropped = False
         # A correction retired as a duplicate of a later one does not also
@@ -715,7 +797,15 @@ def retire(dataset: str, rows: list[dict], applied: set | None = None
         if target is not None and not superseded_correction:
             chained.add(target)
             if target[1] is not None:
-                want[target] = want.get(target, 0) + 1
+                # WHICH OCCUPANT, resolved from the correction rather than from
+                # whichever row the merge happened to put last. An unresolvable
+                # seat adds no want, so the correction retires nothing and
+                # `supersedes_problems` says why - refusing beats guessing,
+                # because a guess reads differently once a peer's file arrives
+                # and brings back what it retired.
+                addressed = _addressed(target, r.get("device"), occupants)
+                if addressed is not None:
+                    want[addressed] = want.get(addressed, 0) + 1
             else:
                 one[ref] = one.get(ref, 0) + 1
         if not dropped:

@@ -197,7 +197,7 @@ def _applied(dataset: str, rows: list[dict]) -> list[tuple[int, int]]:
     for position, rec in enumerate(rows):
         if (aimed := target_of(rec)) is None:
             continue
-        ref, narrow = aimed
+        ref, narrow, actor = aimed
         candidates = by_key.get(ref, ())
         if narrow is not None:
             # A NARROWED CORRECTION NAMES ONE ROW (#239), so the pairing is a
@@ -205,6 +205,13 @@ def _applied(dataset: str, rows: list[dict]) -> list[tuple[int, int]]:
             # whose whole job is "what a correction actually did" omitted every
             # correction written the way `validate` advises.
             candidates = [c for c in candidates if position_of(rows[c]) == narrow]
+            # AND WHICH MACHINE WROTE IT, where the correction says (#391). A
+            # position can be occupied twice, so pairing on position alone
+            # would report this correction against a peer's row - naming the
+            # wrong line in the one surface whose job is saying what happened.
+            if actor is not None:
+                candidates = [c for c in candidates
+                              if rows[c].get("device") == actor]
         cut = bisect_left(candidates, position)
         if not cut:
             continue                  # names nothing earlier; `validate` says so

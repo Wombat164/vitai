@@ -310,7 +310,27 @@ VITAI_VERSION_AT_AUTHORING = "0.2.3"  # provenance only, never compared
 # `KEYS` and still legal, and what changed is when it may be filled - which is
 # a rule about two datasets rather than a generation of one, so there is
 # nothing for a line stamp to carry.
-AUTHORED_AGAINST_CONTRACT = "53"  # vitai.db.CONTRACT_VERSION is a string
+#
+# Re-pinned for #391's contract 54, and NO BUILDER MOVES. The review the gate
+# demands, stated rather than implied: `supersedes_device` is a META key beside
+# `supersedes` and `supersedes_seq`, so it belongs to no dataset and carries no
+# generation - there is nothing for `AUTHORED_AGAINST_GENERATIONS` to hold and
+# no persona line shape changes.
+#
+# The behaviour it changes is what a correction retires at a CONTESTED position
+# - one two machines stamped the same number for - so the question this pin has
+# to answer is whether any corpus here has one. Measured, and the first two
+# answers were wrong before the third was checked: `hana` is NOT single-actor
+# (`data/daily.old-band.jsonl`, 106 rows carrying `device: laptop`), so "no
+# persona has two writers" would have been a false claim in a file whose whole
+# job is recording what was reviewed.
+#
+# What is true: across all fifteen personas and the demo, over every sequenced
+# dataset, ZERO positions are occupied twice. `hana`'s two streams write
+# different days, so her union contests nothing. Every correction in the corpus
+# therefore resolves by the rule that a seat with one occupant is that
+# occupant, which is the behaviour those rows already had.
+AUTHORED_AGAINST_CONTRACT = "54"  # vitai.db.CONTRACT_VERSION is a string
 AUTHORED_AGAINST_GENERATIONS = {
     # #171: a new dataset, empty for every persona. Generation 3 rather than 1
     # because every dataset gets the blanket `recorded_at` and `device`
