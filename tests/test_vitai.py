@@ -285,6 +285,108 @@ def test_a_day_that_happened_counts_however_one_of_its_fields_reads():
     assert readings([declined], "alcohol") == 0
 
 
+# ---- and what it did NOT observe, said apart (#428, third option) ------------
+#
+# The count above says how much the record observed. It cannot say whether what
+# it did NOT observe was accounted for, and those are different facts to an
+# athlete: a morning written down as one they did not weigh is a decision, and
+# a morning simply not there is a gap they can still fill. One number for both
+# told them nothing they could act on, which is why #428 called this the only
+# answer that gives an athlete a reason to fill a gap in.
+#
+# THE UNEXPLAINED BRANCH CANNOT BE REACHED FROM THE CORPUS. Measured: across
+# the demo and all fifteen personas, `weight.kg` is 2,284 observed, 6 explained
+# and 0 silent, and `test_no_shipped_weigh_in_is_missing_without_saying_so`
+# holds that. So the branch that reports a silent hole is exercised here or
+# nowhere - which is the whole subject of #424, one file over.
+
+
+def _silent_weighin(day):
+    return {"date": day, "kg": None, "source": None, "note": None}
+
+
+def test_the_rollup_says_how_many_absences_were_explained():
+    out = build_report(Config(), _weights([80.0, 79.8])
+                       + [_absent_weighin("2030-05-10")], [], [], today=TODAY)
+    assert "- weight: 2 - daily: 0 - sessions: 0" in out
+    assert "- 1 weigh-in records no reading and says why; none is unexplained." in out
+
+
+def test_the_rollup_counts_an_unexplained_hole_apart_from_an_explained_one():
+    """The branch no fixture in this repo can produce, and the one the athlete
+    is meant to act on."""
+    weight = (_weights([80.0, 79.8]) + [_absent_weighin("2030-05-10"),
+                                        _silent_weighin("2030-05-11")])
+    out = build_report(Config(), weight, [], [], today=TODAY)
+    assert "- weight: 2 - daily: 0 - sessions: 0" in out
+    assert "- 1 weigh-in records no reading and says why; 1 more does not say." in out
+
+
+def test_a_record_with_nothing_missing_says_nothing():
+    """SILENT WHEN COMPLETE - `over_days`' rule in the same module. A phrase on
+    every rollup is a phrase nobody reads, and a line saying "0 explained, 0
+    unexplained" on every complete record is how the marked case stops being
+    legible."""
+    out = build_report(Config(), _weights([80.0, 79.8, 79.6]), [], [],
+                       today=TODAY)
+    assert "## Coverage" in out
+    assert "unexplained" not in out and "record no reading" not in out
+
+
+def test_the_two_numbers_account_for_every_row():
+    """THE INVARIANT THE FIRST DRAFT BROKE, and it is the defect #428 was filed
+    about pointed at this change: `readings` counted rows that did not SAY they
+    were absent, so four weigh-ins holding two readings, one explained absence
+    and one silent rendered as `weight: 3` above a line reporting one
+    unexplained hole. Two numbers on one record that cannot both be true.
+
+    Held over shapes rather than over one example, because the pair only
+    disagrees when a silent hole exists and no fixture in this repo has one.
+    """
+    from vitai.report import holes, readings
+
+    rows = [{"date": "2030-05-01", "kg": 80.0},
+            {"date": "2030-05-02", "kg": None, "absent_fields": "kg",
+             "absent_reason": "not-performed"},
+            {"date": "2030-05-03", "kg": None},
+            {"date": "2030-05-04", "kg": 79.0, "absent_fields": "source",
+             "absent_reason": "error"}]
+    for n in range(len(rows) + 1):
+        window = rows[:n]
+        explained, unexplained = holes(window, "kg")
+        assert readings(window, "kg") + explained + unexplained == len(window), (
+            window)
+
+
+def test_the_hole_count_can_fail():
+    """THE CONTROL, over the pure function, against rows this repo does not
+    contain - so the plural, the singular and each of the three states have
+    been seen rather than assumed."""
+    from vitai.report import absence_line, holes
+
+    observed = {"date": "2030-05-01", "kg": 80.0}
+    explained = {"date": "2030-05-02", "kg": None, "absent_fields": "kg",
+                 "absent_reason": "not-performed"}
+    silent = {"date": "2030-05-03", "kg": None}
+    elsewhere = {"date": "2030-05-04", "kg": 79.5, "source": None,
+                 "absent_fields": "source", "absent_reason": "error"}
+
+    assert holes([observed, explained, silent], "kg") == (1, 1)
+    assert holes([observed], "kg") == (0, 0)
+    assert holes([silent, silent], "kg") == (0, 2)
+    assert holes([elsewhere], "kg") == (0, 0), (
+        "a reason about another field is not a hole in this one, and a row "
+        "carrying a reading is not a hole at all")
+
+    assert absence_line([observed], "kg") == [], "nothing to say, nothing said"
+    assert absence_line([explained], "kg") == [
+        "- 1 weigh-in records no reading and says why; none is unexplained."]
+    assert absence_line([explained, explained, silent], "kg") == [
+        "- 2 weigh-ins record no reading and say why; 1 more does not say."]
+    assert absence_line([silent, silent], "kg") == [
+        "- No weigh-in records a reason; 2 more do not say."]
+
+
 def test_a_reason_about_another_field_does_not_cost_a_weigh_in():
     """A weigh-in that produced a reading and explains something else about
     itself is still a weigh-in. The first version of this subtracted any stated
