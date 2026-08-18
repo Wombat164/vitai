@@ -89,6 +89,75 @@ def append_many(data_dir: Path, name: str, records: list[dict],
     5. VALIDATES EVERY ROW BEFORE WRITING ANY. An append-only file cannot be
        un-appended, so a batch with one bad row writes nothing at all rather
        than leaving a caller to work out how far it got.
+
+    The stamping and validation above are `_prepared`, split out so that
+    `pending_problems` can ask what this write would refuse WITHOUT
+    performing it - see #425. Steps 1 to 5 happen there and are described
+    here because this is the door callers use.
+    """
+    path, rows = _prepared(data_dir, name, records, now, device)
+
+    # A CORRECTION THAT WOULD RETIRE NOTHING IS REFUSED HERE, before it is
+    # written (#210).
+    #
+    # The failure this closes is silent in all three of its recorded
+    # instances: the correction lands, `retire` walks past it, both rows stay
+    # live, and `validate` reports an ADVISORY - so the write reports success
+    # and the old value is what every reader sees. It is reachable through
+    # this path, not only through hand-written lines: a row another writer
+    # stamped ahead of this machine's clock is a target a correction written
+    # now sorts BEFORE, and nothing said so.
+    #
+    # The direction of the harm is always the same. A correction that does
+    # nothing leaves the value it was meant to replace in place, and a caller
+    # cannot tell that from success.
+    #
+    # ASKED OF `retire` RATHER THAN RE-DERIVED, which is that function's own
+    # recorded lesson: working the ordering rules out a second time got three
+    # cases wrong, and asking is exact.
+    if rows:
+        problems = _corrections_that_would_not_apply(data_dir, name, rows)
+        if problems:
+            raise DataError(
+                f"refusing to append to {name}: " + "; ".join(problems))
+
+    if rows:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8", newline="\n") as fh:
+            fh.write("".join(json.dumps(r) + "\n" for r in rows))
+    return rows
+
+
+def _prepared(data_dir: Path, name: str, records: list[dict],
+              now: datetime | None = None,
+              device: str | None = None) -> tuple[Path, list[dict]]:
+    """The rows `append_many` would write, and the file it would write them to.
+
+    Split out of `append_many` for #425. A caller preparing rows cannot supply
+    `recorded_at` - it is the one clock in the record that may not be authored
+    - so a pending row has no ordering field, and every check that ORDERS it
+    was being asked a question about a value that does not exist yet. It
+    answered "this correction sorts before its target" for every legal pending
+    row, which is the wrong answer to a question nobody could have asked
+    correctly.
+
+    THE STAMP IS MODELLED, NOT GUESSED. `now_stamp(now, after=high_water)` over
+    this device's file is not an estimate of what the append will assign, it is
+    the assignment - the same code, over the same file, reached the same way.
+    Anything that re-derived "the stamp will be roughly now" would be a second
+    implementation of the rule, which is the mistake `_targets_retired` has
+    already recorded once.
+
+    HIGH WATER FROM THIS DEVICE'S FILE ALONE, exactly as the write does (#105).
+    Taking it from the MERGED record would stamp this row past a peer's row and
+    silence the guard that exists for that case - a correction would look
+    applicable here and inapplicable on the peer that syncs it, which is #391's
+    view-dependence arriving from the other side. The modelled stamp is allowed
+    to be earlier than a peer's, because the real one will be.
+
+    NOTHING IS WRITTEN HERE. The directory is not created and the file is not
+    opened; `path` is returned so the caller that does write does not compute
+    it twice.
     """
     if name not in KEYS:
         raise KeyError(f"unknown dataset {name!r}; one of {sorted(KEYS)}")
@@ -215,36 +284,7 @@ def append_many(data_dir: Path, name: str, records: list[dict],
                    if len(records) > 1 else "")
                 + ": " + "; ".join(problems))
         rows.append(row)
-
-    # A CORRECTION THAT WOULD RETIRE NOTHING IS REFUSED HERE, before it is
-    # written (#210).
-    #
-    # The failure this closes is silent in all three of its recorded
-    # instances: the correction lands, `retire` walks past it, both rows stay
-    # live, and `validate` reports an ADVISORY - so the write reports success
-    # and the old value is what every reader sees. It is reachable through
-    # this path, not only through hand-written lines: a row another writer
-    # stamped ahead of this machine's clock is a target a correction written
-    # now sorts BEFORE, and nothing said so.
-    #
-    # The direction of the harm is always the same. A correction that does
-    # nothing leaves the value it was meant to replace in place, and a caller
-    # cannot tell that from success.
-    #
-    # ASKED OF `retire` RATHER THAN RE-DERIVED, which is that function's own
-    # recorded lesson: working the ordering rules out a second time got three
-    # cases wrong, and asking is exact.
-    if rows:
-        problems = _corrections_that_would_not_apply(data_dir, name, rows)
-        if problems:
-            raise DataError(
-                f"refusing to append to {name}: " + "; ".join(problems))
-
-    if rows:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8", newline="\n") as fh:
-            fh.write("".join(json.dumps(r) + "\n" for r in rows))
-    return rows
+    return path, rows
 
 
 # Datasets whose identity fields spell a null as an empty string rather than
