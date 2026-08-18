@@ -12,6 +12,9 @@
 - [ ] The other gates are clean: `boundary_gate.py`, `contract_literal_gate.py`,
       `dependency_gate.py`, `changelog_gate.py`, `pin_gate.py` - all under
       `scripts/`, and all also run inside `pytest -q`
+- [ ] `scripts/vacuity_gate.py` is clean - the one gate `pytest -q` cannot run,
+      so run `coverage run --source=tests -m pytest -q` first. A new test that
+      executes none of its own assertions passes and guards nothing (#424)
 - [ ] Schema changes (if any) updated `schema.py` + templates + emitting skills together, with a migration note
 - [ ] Docs updated where behavior changed (README / wiki page)
 - [ ] Honest scoping: anything specified but NOT done is called out below

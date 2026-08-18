@@ -49,8 +49,13 @@ needs a very good reason stated in the PR body.
 
 - Branch from `main`, keep the PR a single reviewable unit.
 - Fill the PR template honestly - say what is NOT done as plainly as what is.
-- CI must be green: hygiene (ruff + personal gate) and the test matrix
-  (Linux + Windows, Python 3.11/3.13).
+- CI must be green: hygiene (ruff + personal gate), the test matrix
+  (Linux + Windows, Python 3.11/3.13), and `vacuity`.
+- **`scripts/vacuity_gate.py` is the one gate `pytest -q` does not run**, since
+  it measures the completed run. If you add a test, run it once locally:
+  `coverage run --source=tests -m pytest -q && python scripts/vacuity_gate.py`.
+  It reports a test that ran and executed none of its own assertions - which
+  passes, and says nothing about the property it names (#424).
 - Squash-merge is the repo policy; write the PR title as the future commit.
 - **Do not edit `CHANGELOG.md`.** Add `changelog.d/<issue>.<category>.md`
   instead - one file per change, named for the issue the PR closes. Every PR

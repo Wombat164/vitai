@@ -21,3 +21,7 @@
 # other, and runs in `pytest` as well as in CI.
 ruff==0.16.3
 pytest==9.1.1
+# Read only by `scripts/vacuity_gate.py`, which needs a completed suite run
+# to measure. It is not a runtime dependency and not a test dependency:
+# `pytest -q` never imports it.
+coverage==7.15.4

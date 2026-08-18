@@ -4,6 +4,9 @@ __pycache__/
 dist/
 build/
 .ruff_cache/
+# Written by the vacuity gate's own input run (#424).
+.coverage
+.coverage.*
 .venv/
 examples/demo/derived/
 
