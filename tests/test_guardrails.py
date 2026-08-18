@@ -21,6 +21,7 @@ Sweep 1 (2026-07-29): docs/validation-personas.md
 from __future__ import annotations
 
 import json
+import re
 
 from vitai.api import Vitai
 
@@ -183,15 +184,101 @@ def test_deviceless_athlete_gets_a_useful_rollup(tmp_path):
 # G69 - no bare signed quantity whose plain reading inverts its meaning
 # --------------------------------------------------------------------------
 
+# G69 was guarded by `if "kg/week" in text`, and the rollup stopped emitting
+# that string on this fixture: it renders `**Rate:** losing over 13 days, a
+# thin sample (no phase targets configured)`. So the guard never opened, the
+# assertion under it never ran, and the suite reported a SAFETY property as
+# covered while nothing held it (#424).
+#
+# THE PROPERTY, NOT THE SPELLING. A guard keyed to one rendering of the output
+# is a guard the next rendering change silently retires - which is what
+# happened here, twice over: #185 removed the figure from the direction line
+# and nothing noticed that the check had been switched off. So this reads the
+# line the rollup actually emits and asks what G69 asks: is the reader handed a
+# signed quantity whose plain reading inverts its meaning?
+
+# "losing 0.4" reads as a loss; "+0.40" reads as a gain, and here positive
+# means losing. The words are the message and the sign is a detail.
+_DIRECTION_WORDS = ("losing", "gaining", "holding")
+# A sign glued to a digit: `+1.10`, `-0.4`, `+ 2`. Not a hyphen between words,
+# which is why the digit is required - every refusal line contains " - ".
+_SIGNED_QUANTITY = re.compile(r"[+-]\s*\d")
+# An explicit refusal states no rate at all, so it owes no direction word.
+_REFUSALS = ("not readable", "not comparable")
+
+
+def g69_problem(line: str) -> str | None:
+    """What is wrong with one rendered `**Rate:**` line, or None.
+
+    A PURE FUNCTION over the line, so its failure can be shown against the
+    exact string that caused the finding - see the control below. The version
+    that only reads a live rollup is the version that stopped firing.
+    """
+    body = line.split("**Rate:**", 1)[-1].strip().lower()
+    refused = any(r in body for r in _REFUSALS)
+    directed = any(w in body for w in _DIRECTION_WORDS)
+    if _SIGNED_QUANTITY.search(body) and not directed:
+        return "a signed quantity with no direction word beside it"
+    if not directed and not refused:
+        return "neither a direction word nor a stated refusal"
+    return None
+
+
+def _rate_lines(root) -> list[str]:
+    v = Vitai(root)
+    v.build()
+    return [ln for ln in v.rollup().splitlines() if "**Rate:**" in ln]
+
+
 def test_rate_states_its_direction_in_words(tmp_path):
     """The rollup rendered `+1.10 kg/week` for an athlete who LOST 1.5 kg.
-    For a scale-anxious under-eater that misreading is actively dangerous."""
-    v = Vitai(nursing_mother(tmp_path))
-    v.build()
-    text = v.rollup().lower()
-    if "kg/week" in text:
-        assert ("losing" in text or "gaining" in text or "loss" in text), (
-            "a signed rate was rendered without stating its direction in words")
+    For a scale-anxious under-eater that misreading is actively dangerous.
+
+    Two fixtures, because one shape proves nothing about the other: the nursing
+    mother's line states a direction and the GLP-1 athlete's refuses outright,
+    and a check that only met the second would pass on a rollup that had
+    stopped putting words on the first.
+    """
+    checked = 0
+    for build in (nursing_mother, glp1_athlete):
+        home = tmp_path / build.__name__
+        home.mkdir()
+        root = build(home)
+        for line in _rate_lines(root):
+            checked += 1
+            assert g69_problem(line) is None, (build.__name__, line)
+    # NON-VACUITY, ASSERTED. This is the whole finding: the check it replaces
+    # was green over zero lines, and nothing said so.
+    assert checked >= 2, (
+        f"only {checked} rate line(s) were examined - a rollup that stopped "
+        "emitting the line would leave this passing over nothing, which is the "
+        "state this check was rewritten out of")
+
+
+def test_the_g69_measurement_can_fail():
+    """THE CONTROL, written against the string from the original finding.
+
+    A guard nobody has watched fail is a guard nobody knows the shape of.
+    """
+    assert g69_problem("**Rate:** +1.10 kg/week"), (
+        "the exact line G69 was written about must not pass")
+    assert g69_problem("**Rate:** -0.4 kg/week over 7 days")
+    assert g69_problem("**Rate:** 0.45 kg/week") == (
+        "neither a direction word nor a stated refusal")
+
+    assert g69_problem("**Rate:** losing over 13 days, a thin sample "
+                       "(no phase targets configured)") is None
+    assert g69_problem("**Rate:** losing, against a target of losing 0.50 "
+                       "kg/week - **ON TARGET**") is None
+    assert g69_problem("**Rate:** NOT READABLE - the two readings behind this "
+                       "are 27 days apart, so there is no week to compute a "
+                       "weekly rate over.") is None, (
+        "a refusal states no rate, so it owes no direction word - and the "
+        "hyphens in it must not read as signs")
+    assert g69_problem("**Rate:** NOT COMPARABLE - the weigh-in protocol "
+                       "changed over this window (fasted then fed), so the "
+                       "two ends measure different things.") is None
+    assert g69_problem("**Rate:** holding steady over 9 days") is None
 
 
 # --------------------------------------------------------------------------

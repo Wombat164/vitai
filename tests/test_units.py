@@ -176,13 +176,112 @@ def test_a_reference_names_a_field_that_exists_in_that_dataset():
                         f"which {dataset} does not have")
 
 
+# --- the named scales, where they actually live (#424) -------------------------
+#
+# THIS CHECK RAN, PASSED, AND EXAMINED NOTHING for as long as it existed. It
+# read `units(ds, f).get("scale")`, and NO ENTRY IN THE UNITS REGISTRY USES THE
+# KEY `scale`: the keys in use are `ucum`, `label`, `ordinal`, `scale_of`,
+# `unit_of`, `unit_in`, `machine_scoped` and `unstated`. The guard could not
+# open, so the assertion under it never ran, and the suite reported the property
+# as covered.
+#
+# WHERE THE SLUG REALLY IS. `units()` publishes `scale_of` - the name of the
+# FIELD that names this row's scale - because which scale a rating is on is a
+# fact about the ROW, not about the column: two athletes' `rpe` sit on different
+# Borg scales in one corpus, and a spec-level answer would have to pick one and
+# be wrong about the other. So the slug is in the data, and the data is where
+# 690 of them are.
+#
+# The registry key `scale` is left alone rather than removed. `units()` lists it
+# as one of the shapes a spec may take and no entry takes it today; that is the
+# schema's decision to revisit, not this test's, and the check below no longer
+# claims to be watching it.
+
+
+def _scale_naming_fields() -> set[tuple[str, str]]:
+    """(dataset, field) pairs whose values are scale slugs.
+
+    DERIVED FROM `scale_of` rather than from the `_scale` suffix, because a
+    suffix is the naming convention this whole module exists to stop trusting -
+    and a field renamed out of the convention would silently leave the check.
+    """
+    return {(dataset, units(dataset, field)["scale_of"])
+            for dataset in KEYS for field in KEYS[dataset]
+            if "scale_of" in units(dataset, field)}
+
+
+def _unknown_scales(rows: list[dict], field: str,
+                    known: set[str]) -> set[str]:
+    """Slugs in `field` that the registry does not define.
+
+    A PURE FUNCTION over rows, so its failure can be shown against a slug this
+    corpus does not contain - see the control below. The version that reads the
+    real fixtures inline is a version nobody has watched fail, which is how the
+    check it replaces stayed vacuous for two years.
+    """
+    return {row[field] for row in rows
+            if row.get(field) is not None and row[field] not in known}
+
+
+def _corpus_rows(dataset: str) -> list[dict]:
+    root = Path(__file__).resolve().parents[1]
+    rows = []
+    for path in (sorted(root.glob(f"tests/fixtures/personas/*/data/{dataset}.jsonl"))
+                 + [root / "examples" / "demo" / "data" / f"{dataset}.jsonl"]):
+        if not path.exists():
+            continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                rows.append(json.loads(line))
+    return rows
+
+
 def test_a_named_scale_is_one_the_scale_registry_knows():
+    """Every scale slug the corpus writes is one `registry("scales")` defines.
+
+    A row saying `rpe: 6, rpe_scale: "borg-19"` states a number against a scale
+    nothing can resolve, and a client rendering "6/10" against it has invented
+    the denominator - which is the failure #246 added the field to prevent.
+    """
     known = set(registry("scales")["scales"])
-    for dataset in KEYS:
-        for field in KEYS[dataset]:
-            named = units(dataset, field).get("scale")
-            if named:
-                assert named in known, f"{dataset}.{field} -> {named}"
+    seen = 0
+    for dataset, field in sorted(_scale_naming_fields()):
+        rows = _corpus_rows(dataset)
+        seen += sum(1 for r in rows if r.get(field) is not None)
+        unknown = _unknown_scales(rows, field, known)
+        assert not unknown, (
+            f"{dataset}.{field} names {sorted(unknown)}, which "
+            f"registry('scales') does not define")
+    # NON-VACUITY, ASSERTED RATHER THAN HOPED. The check this replaces passed
+    # over zero values; a corpus that stopped writing scale names would put this
+    # one back in exactly that state without a single test going red.
+    assert seen > 0, (
+        "no corpus row names a scale, so the rule above examined nothing - "
+        "which is the state this check was rewritten out of")
+
+
+def test_the_scale_measurement_can_fail():
+    """THE CONTROL. Written against a slug this repo does not contain, because
+    a measurement exercised only by the corpus it measures is a measurement
+    whose failure nobody has seen."""
+    known = {"nrs-0-10", "borg-cr10"}
+    rows = [{"rpe_scale": "borg-cr10"}, {"rpe_scale": None},
+            {"rpe_scale": "borg-19"}, {}]
+
+    assert _unknown_scales(rows, "rpe_scale", known) == {"borg-19"}
+    assert _unknown_scales(rows[:2], "rpe_scale", known) == set(), (
+        "a known slug, a null and a missing key are all fine")
+    assert _unknown_scales([], "rpe_scale", known) == set()
+
+
+def test_the_scale_naming_fields_are_the_ones_the_registry_points_at():
+    """The other half of the derivation: if `scale_of` stopped naming any field
+    the loop above would iterate nothing and still pass."""
+    fields = _scale_naming_fields()
+    assert fields, "no field carries a scale slug, so the check above is empty"
+    assert ("sessions", "rpe_scale") in fields, (
+        "the corpus's largest scale-bearing field is no longer reachable from "
+        "`scale_of`, so the check above stopped looking at it")
 
 
 # --- what the codes are -------------------------------------------------------

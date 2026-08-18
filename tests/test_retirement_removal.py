@@ -175,6 +175,59 @@ def test_a_schedule_still_ahead_is_not_a_finding() -> None:
 
 
 # --- the precondition, measured rather than asserted --------------------------
+#
+# THE RULE IS A FUNCTION AND THE CORPUS IS ITS INPUT (#424). The scan below was
+# an inline loop over the live register, every entry of which is unscheduled -
+# so the loop body never ran, the assertion inside it never executed, and the
+# suite reported the rule as covered. That is the same shape the three controls
+# above are built to avoid, and it was the one check here without one.
+#
+# Nothing is pinned about WHICH entries are scheduled: the module docstring's
+# rule stands, and scheduling a removal must not fail a test whose name says
+# nothing about scheduling. What the control asserts is that the rule fires -
+# against a register this repo does not contain.
+
+
+def _scheduled_and_still_written(removals: dict,
+                                 carried: dict[tuple[str, str], int]) -> list[str]:
+    """Keys promised for removal that the corpus has not stopped writing.
+
+    Removing a key from `KEYS` makes every line carrying it fail with an
+    unknown-field error, so this pairing is a promise to break the corpus at
+    that release.
+    """
+    return [f"{dataset}.{key}"
+            for dataset, keys in sorted(removals.items())
+            for key, (gen, _why) in sorted(keys.items())
+            if gen is not None and carried.get((dataset, key), 0) > 0]
+
+
+def test_the_schedule_scan_can_fail() -> None:
+    """THE CONTROL THE OTHER THREE HAD AND THIS ONE DID NOT.
+
+    Written against a scheduled removal, which `KEY_REMOVAL` has none of - so
+    the branch the live scan cannot reach is reached here, and its failure has
+    been seen at least once.
+    """
+    scheduled = {"daily": {"hip_pain": (14, "x" * 80)}}
+    unscheduled = {"daily": {"hip_pain": (None, "x" * 80)}}
+
+    assert _scheduled_and_still_written(
+        scheduled, {("daily", "hip_pain"): 91}) == ["daily.hip_pain"], (
+        "a scheduled key the corpus still writes is the whole finding")
+    assert _scheduled_and_still_written(
+        scheduled, {("daily", "hip_pain"): 0}) == [], (
+        "a schedule the corpus has already been migrated off is fine")
+    assert _scheduled_and_still_written(
+        unscheduled, {("daily", "hip_pain"): 91}) == [], (
+        "an unscheduled entry promises nothing, which is why the live scan "
+        "examines nothing today")
+    assert _scheduled_and_still_written(scheduled, {}) == [], (
+        "a key no measurement reached counts as unwritten, so a broken corpus "
+        "reader cannot manufacture a finding - the reverse direction is what "
+        "`test_the_corpus_really_does_still_write_retired_keys` holds")
+
+
 
 def test_a_key_the_shipped_corpus_still_writes_is_not_scheduled() -> None:
     """The engine cannot see anyone else's record, but it can see this one.
@@ -185,14 +238,12 @@ def test_a_key_the_shipped_corpus_still_writes_is_not_scheduled() -> None:
     release - and it would be found by the persona suite going red much later,
     with nothing pointing back here.
     """
-    for dataset, keys in sorted(KEY_REMOVAL.items()):
-        for key, (gen, _why) in sorted(keys.items()):
-            if gen is None:
-                continue
-            assert _carried(dataset, key) == 0, (
-                f"{dataset}.{key} is scheduled for removal at generation "
-                f"{gen} and {_carried(dataset, key)} corpus rows still write "
-                f"it. Migrate the corpus first, or drop the schedule")
+    broken = _scheduled_and_still_written(
+        KEY_REMOVAL, {(ds, k): _carried(ds, k)
+                      for ds, keys in KEY_REMOVAL.items() for k in keys})
+    assert broken == [], (
+        f"{broken} are scheduled for removal and the corpus still writes them. "
+        "Migrate the corpus first, or drop the schedule")
 
 
 def test_the_corpus_really_does_still_write_retired_keys() -> None:
