@@ -1081,7 +1081,39 @@ from .weeks import SESSION_WEEK_KEYS as _SESSION_WEEK_KEYS
 #     stated rather than papered over: re-derivation is a corpus control, not
 #     a row check, because a check that re-counted would let lines appended
 #     later invalidate lines already written.
-CONTRACT_VERSION = "53"
+# 54: `supersedes_device` beside `supersedes_seq` - which MACHINE wrote the
+#     row at the position a correction names (#391).
+#
+#     `seq` is stamped from the union the appending machine can SEE, and
+#     actor-per-file (#105) is what makes a union merge safe by removing the
+#     shared counter that kept it unique. Two devices, both offline, both
+#     appending to one `line_key`, compute the same next position - so a seat
+#     can hold two live rows and `supersedes_seq` addresses a row BY that
+#     seat. Nothing is corrupted and no write is lost; what breaks is that a
+#     written correction stops meaning one thing, which `jsonl.target_of`
+#     already names as the property an append-only record depends on.
+#
+#     WHICH OCCUPANT A CORRECTION RETIRES, in order: the machine
+#     `supersedes_device` names; or the only occupant, where there is one; or
+#     the correction's OWN machine, which is what a correction authored on a
+#     laptop about a row that laptop wrote means; or nothing at all, reported
+#     rather than guessed. The third rule is why almost no correction needs
+#     the new field, and it AGREES with the second before a peer's file
+#     arrives - so one correction retires one row before and after a sync,
+#     which is the property actor-per-file exists to produce.
+#
+#     A CLOCK IS NOT IN IT. Ordering the occupants by `recorded_at` would pick
+#     one, and contract 26 settled that `recorded_at` is machine-set and is
+#     not something a rule may reach across devices for. A device slug is a
+#     tiebreak that reads no clock.
+#
+#     A consumer that ignores the field behaves as it does today, and every
+#     record written before it does too: a position occupied once resolves by
+#     the second rule, which is what every single-actor record has. What
+#     changes for an existing reader is that a contested seat now REFUSES
+#     rather than retiring whichever row sorted last, and `validate` names the
+#     field to write.
+CONTRACT_VERSION = "54"
 
 _TEXT_COLS = {"statistic", "answers",
               # #402. Both word-valued: a space-separated list of field

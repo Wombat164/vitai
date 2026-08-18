@@ -445,7 +445,13 @@ def test_zero_is_a_position_and_not_an_absence():
 
     assert validate_record("sessions", row) == []
     assert position_of(row) == 0
-    assert target_of({"supersedes": "k", "supersedes_seq": 0}) == ("k", 0)
+    # THREE FIELDS SINCE #391: the address gained the machine that wrote the
+    # row at that position, because two devices offline together stamp the
+    # same one. The falsy-zero property this test is about is unchanged, and
+    # an absent actor is None rather than a spelling of "any".
+    assert target_of({"supersedes": "k", "supersedes_seq": 0}) == ("k", 0, None)
+    assert target_of({"supersedes": "k", "supersedes_seq": 0,
+                      "supersedes_device": "phone"}) == ("k", 0, "phone")
 
 
 # --- the #210 refusal, over the new shape ---------------------------------

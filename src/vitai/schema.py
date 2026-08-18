@@ -2552,7 +2552,13 @@ _TYPES: dict[str, tuple[type, ...]] = {
 # extra keys that are always legal (the supersedes mechanic + schema generation)
 # `supersedes_seq` NARROWS `supersedes` and is meta for the same reason: it
 # describes the correction rather than valuing the row (#239).
-META_KEYS = {"supersedes", "supersedes_seq", "_gen"}
+# `supersedes_device` narrows it further and is meta for the same reason again
+# (#391): it says WHICH machine wrote the row at that position, which two
+# devices offline together can both stamp. It is AUTHORED, unlike `device`
+# beside it - `device` is machine-set and names the writer of this line, and
+# this names the writer of the line being corrected, which the author knows and
+# the machine cannot infer.
+META_KEYS = {"supersedes", "supersedes_seq", "supersedes_device", "_gen"}
 
 
 def _bad_date(v: object) -> bool:
@@ -3744,6 +3750,28 @@ def _position_problems(dataset: str, rec: dict) -> list[str]:
             out.append(
                 "'supersedes_seq' NARROWS 'supersedes' and cannot stand alone: "
                 "a position with no key names a position in nothing")
+    if (actor := rec.get("supersedes_device")) is not None:
+        from .devices import is_slug
+
+        # `isinstance` BEFORE `is_slug`, because `is_slug` stringifies and
+        # `7` would pass as the slug "7" - the same shape `is_number` guards
+        # against for `True`. A device slug is a name, and a JSON number in
+        # that position is a malformed row rather than a machine called 7.
+        if not isinstance(actor, str) or not is_slug(actor):
+            out.append(
+                f"'supersedes_device' names the machine that wrote the row "
+                f"being corrected, so it is a device slug, got {actor!r}")
+        # BOTH, NOT EITHER. This narrows a POSITION, and the reason it exists
+        # is that a position can be occupied twice (#391). Standing alone it
+        # would be a second way to address a row - "the newest row this device
+        # wrote under that key" - which is a different feature with its own
+        # argument, and giving it a meaning here would settle that question by
+        # accident. Refused now, and relaxable later; the reverse is not true.
+        if rec.get("supersedes_seq") is None:
+            out.append(
+                "'supersedes_device' narrows 'supersedes_seq' and cannot "
+                "stand alone: it says which machine wrote the row at a "
+                "position, so there has to be a position")
     return out
 
 
@@ -4809,7 +4837,7 @@ def supersedes_problems(dataset: str, rows: list[tuple[int, dict]]) -> list[str]
     engine cannot know which was meant, and the fix is a vendor identity on
     the rows - which only reaches rows written after an importer supplies it.
     """
-    from .jsonl import line_key, position_of, target_of
+    from .jsonl import _addressed, line_key, position_of, target_of
     problems: list[str] = []
     by_key: dict[str, list[int]] = {}
     seat: dict[int, int | None] = {}
@@ -4837,6 +4865,36 @@ def supersedes_problems(dataset: str, rows: list[tuple[int, dict]]) -> list[str]
                if m != n and (narrow is not None or m not in superseding)]
         if narrow is not None:
             hit = [m for m in hit if seat[m] == narrow]
+            if len(hit) > 1:
+                # A CONTESTED SEAT, AND THE ADVICE IS NOW ACTIONABLE (#391).
+                # Two machines offline together stamp one position, so a
+                # narrowed reference names both rows. `_addressed` is the same
+                # resolution `retire` runs - asked rather than restated, for
+                # `_dud_corrections`' reason - and it answers for the common
+                # case without the author writing anything: a correction
+                # retires the row its own machine wrote. Only where that fails
+                # is there something to say, and what to say is a field name
+                # rather than "restate the value on a new line".
+                occupants: dict = {}
+                for _, m_row in rows:
+                    if (mpos := position_of(m_row)) is not None:
+                        occupants.setdefault(
+                            (line_key(dataset, m_row), mpos), []).append(
+                                m_row.get("device"))
+                if _addressed(target_of(r), r.get("device"), occupants):
+                    continue
+                named = sorted({str(dict(rows)[m].get("device"))
+                                for m in hit})
+                problems.append(
+                    f"{dataset}.jsonl line {n}: 'supersedes' {ref!r} position "
+                    f"{narrow} is occupied by {len(hit)} lines "
+                    f"({', '.join(map(str, hit))}) and this correction names "
+                    "none of them. Two machines that could not see each other "
+                    "stamped the same position, and nothing on the correction "
+                    "says which row it means - it carries no 'device' of its "
+                    "own, or its machine wrote no row there. Name the writer "
+                    "with 'supersedes_device': " + ", ".join(named))
+                continue
         if len(hit) > 1:
             # AMBIGUOUS AND NAMEABLE, versus ambiguous and not, because the two
             # need different sentences (#239). Where the matched rows carry
@@ -4928,28 +4986,46 @@ def _relabelled_values(dataset: str, retired: dict, correction: dict) -> list[st
 
 
 def _unnameable(dataset: str, rows: list[tuple[int, dict]]) -> list[str]:
-    """Rows that share a stored position, which is the one collision left.
+    """Rows sharing a stored position that NO reference can tell apart.
 
     `seq` is counted across every stream at append and takes the higher of the
     count and the highest position already visible, so one machine never hands
     out a number twice and neither does a machine that can SEE the rows. Two
-    that cannot see each other at all will, and this says so rather than
-    leaving a reference that silently retires whichever sorted last. Reported
-    once per key, because it is one fact about a pair.
+    that cannot see each other at all will, and this said so.
+
+    WHAT IT USED TO SAY WAS "no correction can name one of them", AND #391
+    MADE THAT FALSE. `supersedes_device` names the writer of the row at a
+    position, so a contested seat whose occupants were written by DIFFERENT
+    machines is now perfectly addressable, and telling an author to restate
+    the value on a new line would be advice they no longer need to take.
+
+    What survives is the case the new field cannot reach: two occupants that
+    carry the same `device`, or none at all. A record written before devices
+    existed is the ordinary example, and there the old sentence is still the
+    right one. Reported once per key, because it is one fact about a pair.
     """
     from .jsonl import line_key, position_of
 
-    seen: dict[tuple[str, int], list[int]] = {}
+    seen: dict[tuple[str, int], list[tuple[int, str | None]]] = {}
     for n, r in rows:
         if (pos := position_of(r)) is not None:
-            seen.setdefault((line_key(dataset, r), pos), []).append(n)
-    return [
-        f"{dataset}.jsonl lines {', '.join(map(str, lines))}: all carry key "
-        f"{key!r} at position {pos}, so no correction can name one of them. "
-        "Two machines that could not see each other's rows stamped the same "
-        "position. Restate the value on a new line rather than correcting "
-        "these"
-        for (key, pos), lines in sorted(seen.items()) if len(lines) > 1]
+            seen.setdefault((line_key(dataset, r), pos), []).append(
+                (n, r.get("device")))
+    out = []
+    for (key, pos), held in sorted(seen.items()):
+        if len(held) < 2:
+            continue
+        devices = [device for _n, device in held]
+        if len(set(devices)) == len(devices) and None not in devices:
+            continue                  # addressable with `supersedes_device`
+        out.append(
+            f"{dataset}.jsonl lines "
+            f"{', '.join(str(n) for n, _d in held)}: all carry key "
+            f"{key!r} at position {pos}, and no correction can name one of "
+            "them: they were written by one machine or by none, so "
+            "'supersedes_device' cannot tell them apart either. Restate the "
+            "value on a new line rather than correcting these")
+    return out
 
 
 def corrections_awaiting_their_target(dataset: str,
@@ -5027,7 +5103,7 @@ def _dud_corrections(dataset: str, rows: list[tuple[int, dict]]
         # about the same row. Two contradictory instructions for one line.
         if (target := target_of(r)) is None:
             continue
-        ref, narrow = target
+        ref, narrow, _actor = target
         # ASKED OF `retire`, not inferred from what survived (#239). The old
         # check counted anything still alive under the reference as proof the
         # correction did nothing - which was sound while one reference retired
@@ -5050,7 +5126,12 @@ def _dud_corrections(dataset: str, rows: list[tuple[int, dict]]
         # sees, and no amount of waiting changes it.
         here = [other for other in lines if not other.get("supersedes")
                 and line_key(dataset, other) == ref
-                and (narrow is None or position_of(other) == narrow)]
+                and (narrow is None or position_of(other) == narrow)
+                # #391: a correction naming a machine is not defeated by a
+                # peer's row at the same position - that row was never its
+                # target, and reporting it here would tell the author to fix a
+                # clock about a correction that named the wrong actor.
+                and (_actor is None or other.get("device") == _actor)]
         if here:
             out.append(
                 f"{dataset}: a correction of {_name(ref, narrow)} did NOT "
