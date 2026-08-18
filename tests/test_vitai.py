@@ -261,10 +261,39 @@ def test_a_row_naming_no_field_absent_is_still_a_reading():
     from vitai.report import readings
 
     assert readings([{"date": "2030-05-01", "kg": 80.0,
-                      "absent_fields": "   "}]) == 1
+                      "absent_fields": "   "}], "kg") == 1
     assert readings([{"date": "2030-05-01", "kg": None,
                       "absent_fields": "kg",
-                      "absent_reason": "not-performed"}]) == 0
+                      "absent_reason": "not-performed"}], "kg") == 0
+
+
+def test_a_day_that_happened_counts_however_one_of_its_fields_reads():
+    """THE CASE #427 CREATED AND #428 HAD DEFERRED. A weigh-in is attempted for
+    the sake of one number, so a weigh-in with no `kg` is not one. A DAY is not:
+    contract 51's own words are "a day that happened [...] with a field missing
+    from it", and the demo now has one - the clinic asked about alcohol and the
+    athlete declined. Subtracting it took `daily: 84` to 82 and dropped a day
+    the athlete lived and logged out of a coverage figure, which is the same
+    class of wrong number #428 was filed about, pointing the other way."""
+    from vitai.report import readings
+
+    declined = {"date": "2030-05-01", "steps": 9000, "alcohol": None,
+                "absent_fields": "alcohol", "absent_reason": "asked-declined"}
+    assert readings([declined]) == 1, "the day happened"
+    # And the row-shaped count is not simply blind to the field: asked for the
+    # one the row names, it still subtracts.
+    assert readings([declined], "alcohol") == 0
+
+
+def test_a_reason_about_another_field_does_not_cost_a_weigh_in():
+    """A weigh-in that produced a reading and explains something else about
+    itself is still a weigh-in. The first version of this subtracted any stated
+    absence, which would have read this row as a hole."""
+    from vitai.report import readings
+
+    rows = [{"date": "2030-05-01", "kg": 80.0, "source": None,
+             "absent_fields": "source", "absent_reason": "unable-to-obtain"}]
+    assert readings(rows, "kg") == 1
 
 
 def test_report_easy_cap_flag():

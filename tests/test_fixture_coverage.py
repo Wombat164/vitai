@@ -323,12 +323,19 @@ DEMO_FIELD_OMITS: tuple[tuple[str, tuple[str, ...]], ...] = (
      "and the demo's goals carry the argument for existing in `rationale` "
      "instead of a second free-prose field beside it.",
      ("goals.accountability", "goals.note")),
-    ("A DECISION, and the same argument the `protocols` entry makes: what this "
-     "athlete says ABOUT weighing is a journal row - 'I weigh myself every "
-     "morning, same time, before anything else' - which is a claim about "
-     "practice, and the record contradicts it on purpose. A per-weigh-in "
-     "`note` would be prose about a number rather than the number.",
-     ("weight.note",)),
+    # `weight.note` LEFT THIS REGISTER at #427, and what it turned on is worth
+    # keeping. The entry said a per-weigh-in `note` would be "prose about a
+    # number rather than the number", and that was right for every row this
+    # record then had: on a row carrying `kg`, a sentence beside the reading is
+    # a second, unvalidatable account of it.
+    #
+    # It stops being true on a row carrying NO reading. The morning the scale
+    # read 71.2 and the record rejected it has no number to be prose about -
+    # `absent_reason: error` says the class of failure and cannot say that the
+    # scale had been moved onto the bath mat, and contract 51 forbids parking
+    # the rejected value in `kg` where a reader would take it for a weigh-in.
+    # So the note is the only place the fact can live, and the register's own
+    # argument is what says where it may not.
     # --- and now the gaps, said as gaps -----------------------------------
     ("A GAP, NOT A DECISION, and the sharpest one here. The demo writes the "
      "RETIRED spelling of the goal-standing axis: every goals line carries "
@@ -587,3 +594,76 @@ def test_the_silent_hole_measurement_can_fail() -> None:
     assert _silent_holes([other], "kg") == [other], (
         "a reason about a DIFFERENT field explains nothing about this one")
     assert _silent_holes([present], "kg") == [], "a reading is not a hole"
+
+
+# --- every published code, in the artifact clients read (#427) ----------------
+#
+# THE RULE, AND IT IS NOT "MORE COVERAGE": a field the engine publishes must
+# appear in the artifact every conformance client reads, IN EVERY FORM IT CAN
+# TAKE. Six absence codes published and one exercised is five codes whose
+# rendering no client has ever been forced to get right, and the first one to
+# appear in a real record appears in production.
+#
+# THIS ALREADY HAPPENED, which is why the bar here is every value rather than
+# `test_a_vocabulary_field_shows_more_than_one_of_its_values`'s more-than-one.
+# A downstream client absorbed contract 51 and dropped every row whose only
+# content was an absence, because nothing in the demo it calibrates against had
+# one. It was correct against its fixtures and wrong about the record. The
+# general register one file over holds the floor for forty vocabularies; this
+# holds the ceiling for the one that has already cost something.
+#
+# SCOPED TO THE DEMO, deliberately. A persona proves the engine can hold the
+# state; only the demo proves a client meeting it has been made to render it,
+# because the demo is what `vitai-lens` rebuilds through the real engine.
+
+
+def _demo_absence_reasons() -> dict[str, set[str]]:
+    """Reason codes the demo writes, per dataset."""
+    out: dict[str, set[str]] = {}
+    for path in sorted((DEMO / "data").glob("*.jsonl")):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            reason = json.loads(line).get("absent_reason")
+            if reason is not None:
+                out.setdefault(path.stem, set()).add(reason)
+    return out
+
+
+def test_the_demo_exercises_every_absence_reason() -> None:
+    """All six, or the ones missing are states no client has been tested on."""
+    from vitai.schema import ABSENT_REASONS
+
+    written = set().union(*_demo_absence_reasons().values() or [set()])
+    missing = sorted(ABSENT_REASONS - written)
+    assert not missing, (
+        f"{len(missing)} of {len(ABSENT_REASONS)} absence reasons never appear "
+        f"in examples/demo: {missing}. A client can render them as the same "
+        "grey square and pass every job it has - which is what happened. Write "
+        "a row the record earns, in the generator, rather than relaxing this")
+
+
+def test_the_demo_writes_no_reason_the_schema_does_not_publish() -> None:
+    """The other direction, and it is not symmetry for its own sake: a typo
+    would leave a published code unexercised while this file reported the set
+    complete."""
+    from vitai.schema import ABSENT_REASONS
+
+    written = set().union(*_demo_absence_reasons().values() or [set()])
+    assert not written - ABSENT_REASONS, sorted(written - ABSENT_REASONS)
+
+
+def test_each_contract_51_dataset_states_an_absence() -> None:
+    """`weight`, `daily` and `sessions` are the three datasets that permit a
+    row whose values are null, and a client renders each of them separately.
+    Six codes all landing on one dataset would leave the other two exactly as
+    untested as before."""
+    from vitai.schema import KEYS
+
+    permitted = {ds for ds in ("weight", "daily", "sessions")
+                 if "absent_reason" in KEYS[ds]}
+    written = _demo_absence_reasons()
+    missing = sorted(permitted - set(written))
+    assert not missing, (
+        f"{missing} permit a stated absence and the demo states none there, so "
+        "a client's rendering of that dataset's holes is untested")

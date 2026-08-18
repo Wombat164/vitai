@@ -147,21 +147,21 @@ UNWRITTEN = (
     # observed rather than chosen. The register worked exactly as intended:
     # it held the fields empty until a record could fill them honestly.
 
-    # #402, on the two datasets whose absence case belongs to another change.
-    # `weight` carries the mechanism: `bea` records a shift day she chose not
-    # to weigh on, which is the state this field exists for and the one her
-    # own protocol already described in prose.
+    # `daily` and `sessions` absence LEFT THIS REGISTER at #427, and the entry
+    # was right until the argument for it stopped being true. It said the two
+    # cases were the OUTAGE shape - a watch that stops reporting steps,
+    # distance and heart rate together - which contract 49's `false_zero` and
+    # #405's `outage` question kind own, and that writing an outage-shaped day
+    # here would be inventing the fixture that work needs ahead of the work.
     #
-    # The `daily` and `sessions` cases are the OUTAGE shape - a watch that
-    # stopped reporting takes steps, distance and heart rate together - and
-    # contract 49's `false_zero` and #405's `outage` question kind are the
-    # change that owns detecting it. Writing an outage-shaped day here to
-    # populate this register would be inventing the fixture that work needs,
-    # ahead of the work, in a corpus somebody else is editing.
-    "daily.absent_fields",
-    "daily.absent_reason",
-    "sessions.absent_fields",
-    "sessions.absent_reason",
+    # That reasoning held for the outage case and was read as covering the
+    # whole field. It did not. `daily` now states the two codes NOBODY'S
+    # INSTRUMENT CAN PRODUCE - a clinic intake asked about alcohol and the
+    # athlete declined, the weekly review asked about the hotel week's sleep
+    # and the athlete did not know - and `sessions` states a distance that does
+    # not apply to lifting and a heart rate nobody measured. None of those is
+    # an outage, none needs the false-zero machinery, and none was blocked on
+    # it. The outage day is still unwritten and still belongs to that work.
     # #413, and a DECISION rather than a backlog item. `vera` writes the
     # corpus's only census - 101 paired days over `sessions.distance_km`, none
     # dropped - and there is nothing true to put in its `note`. Her window has
@@ -288,6 +288,15 @@ UNREAD = (
     #
     # So the coverage line reads exactly the half that needs no ranking, which
     # is why one of these two moved and the other did not.
+    #
+    # `daily` and `sessions` JOINED at #427, on the same argument and from the
+    # opposite direction: they left `UNWRITTEN` the moment the demo stated an
+    # absence on each, and arrive here because the reason still has no reader
+    # anywhere. Their `absent_fields` halves are NOT here - `report.readings`
+    # takes all three lists, so giving those two datasets their first stated
+    # absence gave the existing consumer its first rows to read on them.
+    "daily.absent_reason",
+    "sessions.absent_reason",
     "weight.absent_reason",
     # WRITTEN AND NOT YET READ. `otto` photographs the club ergometer's
     # console, so every artifact row says when the shutter went - which is a
@@ -795,7 +804,158 @@ def test_the_two_role_modules_are_found_by_what_they_do():
         "reading what it writes and this gate would be back where it started")
 
 
-# --- the fixture corollary --------------------------------------------------
+# --- the fixture corollary, generalised (#427) --------------------------------
+#
+# THIS WAS A ONE-ELEMENT TUPLE. The rule below has been stated in general terms
+# since #204 - "a fixture holding a single value of a closed vocabulary proves
+# nothing about the distinction the field exists to draw" - and it was checked
+# for `daily.coverage` and for nothing else. Its own docstring said it was
+# "stated in the general form for the vocabularies that follow", and forty of
+# them followed.
+#
+# WHY THAT MATTERED RATHER THAN BEING UNTIDY. `absent_reason` shipped six codes
+# and the whole corpus wrote one, so a client could render all six as the same
+# grey square and pass every job it had - and one did. The distinction a
+# vocabulary exists to carry is only tested by a fixture that presents more
+# than one of its values, and nothing measured which vocabularies did.
+#
+# So the sites are DERIVED FROM THE SCHEMA rather than listed here. Every
+# `_enum(rec, "<field>", VOCAB)` call is one closed-vocabulary check, and the
+# dataset is the `if dataset == "..."` guard it sits under or the per-dataset
+# validator it sits in. A new vocabulary field arrives in this measurement by
+# being written, not by somebody remembering this file.
+#
+# THE LIMIT, STATED, and it is the reason `VOCAB_UNCHECKED` exists: a
+# vocabulary validated some other way is invisible to the derivation. There are
+# four such fields today and they are named below rather than left out.
+
+# Validators that take one dataset's rows and so carry no `dataset ==` guard.
+VOCAB_VALIDATORS = {"_validate_medical": "medical", "_validate_plan": "plans"}
+
+# Closed vocabularies the schema checks somewhere other than `_enum`, named
+# here because the derivation cannot see them. Each is a real check:
+# `absence_problems` tests `absent_reason` against `ABSENT_REASONS`, and
+# `validate_record` tests `sessions.type` against `SESSION_TYPES` inline.
+VOCAB_UNCHECKED = (
+    ("weight", "absent_reason", "ABSENT_REASONS"),
+    ("daily", "absent_reason", "ABSENT_REASONS"),
+    ("sessions", "absent_reason", "ABSENT_REASONS"),
+    ("sessions", "type", "SESSION_TYPES"),
+)
+
+# A vocabulary field the corpus presents ONE value of, with the reason. Same
+# contract as the registers above: an entry is a decision somebody made, it
+# has to say what the decision is, and a field that gains a second value has
+# to leave. Grouped by reason, because four of these are one fact.
+VOCAB_SINGLE = (
+    ("A DECISION. `AUTHORS` is athlete/coach/derived/onboard, and no record in "
+     "this corpus has a coach. Every persona is somebody tracking themselves, "
+     "which is the product this engine is - so a second author would be a "
+     "fixture inventing a relationship none of these athletes has. The "
+     "distinction is exercised where the engine actually turns on it: "
+     "`goals.set_by` and `thresholds.set_by` carry `onboard` beside `athlete`, "
+     "because a default the engine wrote and a number the athlete chose are "
+     "facts a reader must tell apart.",
+     ("achievements.source", "checks.source", "events.set_by", "plans.set_by")),
+    ("A GAP. `EVENT_OUTCOMES` is took_place/did_not_attend and every fixture "
+     "event took place. The missing half is an entered race the athlete did "
+     "not start, which is the case a consumer most needs to get right - a "
+     "fixture whose every event happened cannot tell a client that reads the "
+     "outcome from one that assumes it. Not filled here because an event with "
+     "no attendance moves the plans that were built backwards from it, which "
+     "is a fixture change with its own argument.",
+     ("events.outcome",)),
+    ("A GAP. `CHANGE_KINDS` is change/correction and every threshold edit in "
+     "the corpus is a `change`. A correction says the earlier number was "
+     "WRONG rather than superseded, which is the distinction an audit trail "
+     "exists to carry, and `goals.change_kind` already shows both - so the "
+     "shape is expressible and this dataset simply has no instance of it.",
+     ("thresholds.change_kind",)),
+)
+
+
+def _vocabulary_sites() -> set[tuple[str, str, str]]:
+    """(dataset, field, vocabulary) for every closed-vocabulary check.
+
+    DERIVED, NOT DECLARED, for the reason `_measure` is: a list of sites is a
+    list somebody has to remember to extend, and this repo has now been bitten
+    twice by a check whose scope was narrower than the sentence describing it.
+    """
+    root = pathlib.Path(__file__).resolve().parents[1]
+    tree = ast.parse((root / "src" / "vitai" / "schema.py")
+                     .read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        for child in ast.iter_child_nodes(node):
+            child.parent = node
+
+    def owner(node) -> str | None:
+        dataset = function = None
+        parent = getattr(node, "parent", None)
+        while parent is not None:
+            if isinstance(parent, ast.If) and dataset is None:
+                test = parent.test
+                for part in (test.values if isinstance(test, ast.BoolOp)
+                             else [test]):
+                    if isinstance(part, ast.Compare) \
+                            and isinstance(part.left, ast.Name) \
+                            and part.left.id == "dataset" \
+                            and isinstance(part.ops[0], ast.Eq) \
+                            and isinstance(part.comparators[0], ast.Constant):
+                        dataset = part.comparators[0].value
+            if isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef)) \
+                    and function is None:
+                function = parent.name
+            parent = getattr(parent, "parent", None)
+        return dataset or VOCAB_VALIDATORS.get(function)
+
+    sites, orphans = set(), []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id == "_enum" and len(node.args) >= 3 \
+                and isinstance(node.args[1], ast.Constant) \
+                and isinstance(node.args[2], ast.Name):
+            dataset = owner(node)
+            if dataset is None:
+                orphans.append((node.args[1].value, node.lineno))
+            else:
+                sites.add((dataset, node.args[1].value, node.args[2].id))
+    # FAILS CLOSED. A check the derivation cannot attribute is a check this
+    # measurement would silently drop, which is the failure mode the whole file
+    # is about. Raising here rather than skipping is the difference between a
+    # gate and a decoration.
+    assert not orphans, (
+        f"{len(orphans)} `_enum` call(s) sit under no `dataset ==` guard and "
+        f"in no validator named in VOCAB_VALIDATORS: {orphans}. Add the "
+        "validator to that table - do not let the site drop out of the "
+        "measurement")
+    return sites | set(VOCAB_UNCHECKED)
+
+
+def _vocabulary_values() -> dict[str, set]:
+    """Values each vocabulary field actually carries, over the whole corpus."""
+    root = pathlib.Path(__file__).resolve().parents[1]
+    seen: dict[str, set] = {}
+    for dataset, field, _vocab in _vocabulary_sites():
+        values: set = set()
+        for f in (glob.glob(str(root / f"tests/fixtures/personas/*/data/"
+                                 f"{dataset}.jsonl"))
+                  + [str(root / f"examples/demo/data/{dataset}.jsonl")]):
+            path = pathlib.Path(f)
+            if not path.exists():
+                continue
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                value = json.loads(line).get(field)
+                if value is not None:
+                    values.add(value)
+        seen[f"{dataset}.{field}"] = values
+    return seen
+
+
+def _flat_vocab_single() -> list[str]:
+    return [f for _reason, fields in VOCAB_SINGLE for f in fields]
+
 
 def test_a_vocabulary_field_shows_more_than_one_of_its_values():
     """A fixture that only holds the populated case proves nothing about the
@@ -805,20 +965,59 @@ def test_a_vocabulary_field_shows_more_than_one_of_its_values():
     The demo stamped `coverage: full` on every row it wrote, so `partial`
     never appeared and the field's first consumer would have been tested
     against a constant - validating the schema rather than the behaviour.
-    Corrected since; pinned here so it stays corrected, and stated in the
-    general form for the vocabularies that follow.
+    Corrected since, and now held for every vocabulary rather than that one.
     """
-    root = pathlib.Path(__file__).resolve().parents[1]
-    seen: dict[str, set] = {}
-    for f in (glob.glob(str(root / "tests/fixtures/personas/*/data/daily.jsonl"))
-              + [str(root / "examples/demo/data/daily.jsonl")]):
-        for line in pathlib.Path(f).read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            row = json.loads(line)
-            for key in ("coverage",):
-                if row.get(key) is not None:
-                    seen.setdefault(key, set()).add(row[key])
-    assert len(seen.get("coverage", set())) > 1, (
-        "every populated `coverage` row carries one value, so the states the "
-        "field exists to distinguish are untested")
+    seen = _vocabulary_values()
+    registered = set(_flat_vocab_single())
+    thin = sorted(name for name, values in seen.items()
+                  if len(values) < 2 and name not in registered
+                  # A field NOTHING writes is `UNWRITTEN`'s business. Counting
+                  # it here too would put one fact in two registers, which is
+                  # the rot `test_the_two_registers_stay_disjoint` exists to
+                  # stop one file over.
+                  and values)
+    assert not thin, (
+        f"{len(thin)} vocabulary field(s) carry one value across the whole "
+        f"corpus: {thin}. The states the field exists to distinguish are "
+        "untested, and a client that renders them identically passes. Either "
+        "write a second value in the demo or a persona, or add the field to "
+        "VOCAB_SINGLE with the reason")
+
+
+def test_the_vocabulary_register_does_not_keep_what_has_been_fixed():
+    """A field that gains a second value has to leave, or the register rots
+    into the list of excuses the ones above are careful not to be."""
+    seen = _vocabulary_values()
+    stale = sorted(name for name in _flat_vocab_single()
+                   if len(seen.get(name, set())) > 1)
+    assert not stale, (
+        f"{stale} now carry more than one value - remove them from "
+        "VOCAB_SINGLE")
+
+
+def test_the_vocabulary_register_names_real_sites():
+    """A typo exempts nothing and hides a real gap - `test_the_registers_name_
+    real_fields` one register over, for the same reason."""
+    sites = {f"{ds}.{f}" for ds, f, _v in _vocabulary_sites()}
+    unknown = sorted(set(_flat_vocab_single()) - sites)
+    assert not unknown, f"{unknown} name no closed-vocabulary field"
+
+
+def test_no_two_vocabulary_absences_share_a_reason():
+    """The copy-paste case, held the same way `DEMO_FIELD_OMITS` holds it: a
+    group added by duplicating the one above it inherits an explanation that
+    was true of something else."""
+    seen: dict[str, tuple[str, ...]] = {}
+    for reason, fields in VOCAB_SINGLE:
+        assert reason not in seen, (fields, seen.get(reason))
+        assert reason.startswith(("A DECISION", "A GAP")), (
+            f"{fields} must commit: an entry that says neither is an excuse "
+            "with better prose")
+        seen[reason] = fields
+
+
+def test_no_vocabulary_field_is_registered_twice() -> None:
+    """One fact, one entry - so moving one out of a group cannot leave a copy
+    behind in another."""
+    flat = _flat_vocab_single()
+    assert len(flat) == len(set(flat)), sorted(flat)

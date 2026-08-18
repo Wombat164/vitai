@@ -57,7 +57,7 @@ def over_days(observed: int, window: int) -> str:
     return f" over {observed} of the last {window} days"
 
 
-def readings(rows: list[dict]) -> int:
+def readings(rows: list[dict], field: str | None = None) -> int:
     """Rows that observed something, which is what a coverage count claims
     (#428).
 
@@ -79,18 +79,30 @@ def readings(rows: list[dict]) -> int:
     papered over. A row with a null value and no `absent_fields` still counts,
     so this measures explained absence only - the fuller shape, reporting
     observed, explained-absent and silent separately, is #428's third option
-    and needs a per-dataset headline field the schema does not declare. What
-    the corpus says today: `absent_fields` is written on FOUR rows across the
-    demo and all fifteen personas, every one of them `weight.kg`, and there is
-    no weight row anywhere carrying a null `kg` without one. So the narrow
-    rule and the fuller one agree on every fixture this repo ships, and the
-    difference between them is a decision the coverage work can still take.
+    and is still open. What the corpus says today: no weight row anywhere
+    carries a null `kg` without saying why, which is what
+    `test_no_shipped_weigh_in_is_missing_without_saying_so` holds. So the
+    narrow rule and the fuller one agree on every fixture this repo ships, and
+    the difference between them is a decision the coverage work can still
+    take.
 
-    WHOLE ROWS, NOT NAMED FIELDS, for the datasets where the row IS the
-    observation. `daily` and `sessions` state no absence anywhere in the
-    corpus, so this changes nothing for them today; a day that named one of
-    its several fields absent would want a headline field to be counted
-    correctly, and that is the same decision deferred above.
+    `field` NAMES WHAT THE COUNT IS ABOUT, and passing nothing means the ROW
+    is. #428 deferred this and #427 forced it, which is the honest history: the
+    first version subtracted any stated absence, `daily` and `sessions` stated
+    none, and the two rules were indistinguishable over every fixture that
+    existed. Then the demo gained a day whose `alcohol` the athlete declined to
+    give and a gym session with no distance, and subtracting those took the
+    count from 84 days to 82 - a day the athlete lived and logged, dropped from
+    a coverage figure because one of its forty fields carried a reason.
+
+    THE SCHEMA ALREADY SAYS WHICH IS WHICH, so this invents nothing: contract
+    51 permits "a day that happened, a weigh-in ATTEMPTED, a session recorded,
+    with a field missing from it". A weigh-in is attempted for the sake of one
+    number, so `readings(weight, "kg")` counts weigh-ins that produced one. A
+    day and a session are the observation themselves, so their rows count
+    whatever a field on them says - and a row whose values were ALL absent
+    would be the outage shape, which contract 49's `false_zero` owns and no
+    fixture writes.
 
     THE KEY IS NAMED HERE AND THE SPLITTING IS NOT, on purpose and in both
     directions. `schema.absent_fields` stays the only implementation of the
@@ -102,8 +114,10 @@ def readings(rows: list[dict]) -> int:
     reader existed. Naming the key narrows the rows the helper is asked
     about, and it is what makes this read one the register can see.
     """
+    if field is None:
+        return len(rows)
     carried = [r for r in rows if r.get("absent_fields") is not None]
-    return len(rows) - sum(1 for r in carried if absent_fields(r))
+    return len(rows) - sum(1 for r in carried if field in absent_fields(r))
 
 
 def within_days(rows: list[dict], today: date, days: int,
@@ -634,8 +648,10 @@ def build_report(cfg: Config, weight: list[dict], daily: list[dict],
                      f"({e.get('event_date')}){fixed}")
 
     # READINGS, NOT ROWS (#428). `len` counted a stated absence as coverage.
+    # `kg` on the weigh-ins and nothing on the other two, because a weigh-in is
+    # attempted for one number and a day is not (#427).
     L += ["", "## Coverage", "",
-          f"- weight: {readings(weight)} - daily: {readings(daily)}"
+          f"- weight: {readings(weight, 'kg')} - daily: {readings(daily)}"
           f" - sessions: {readings(sessions)}",
           "", "> Sparse and continuous beats rich and abandoned."]
     return "\n".join(
