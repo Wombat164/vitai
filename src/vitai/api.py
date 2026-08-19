@@ -49,6 +49,7 @@ from .clocks import parse_time as parse_time
 from .jsonl import (EVENT_DATASETS, PENDING_VERDICTS, append, append_many,
                     classify_pending, load)
 from . import query
+from .agreement import compute_agreement
 from .outlook import compute_outlook
 from .policy import (State, all_comparable, capability, comparability,
                      context_on, days_between, events_on, plan_churn, state)
@@ -1843,27 +1844,64 @@ class Vitai:
         """
         rows = [r for r in (self.canonical("weight") or [])
                 if r.get("kg") is not None]
-        refused = None
-        if rows:
-            if protocol_seam(rows)["seam"]:
-                refused = (
-                    "a protocol change sits under this series, so its readings "
-                    "are not repeated observations of one measurand")
-            else:
-                seam = instrument_seam(rows)
-                if seam["seam"] and not all_comparable(
-                        self.dataset("comparability"), "kg",
-                        seam["instruments"], self.on.isoformat(),
-                        self.dataset("overlaps")):
-                    refused = (
-                        "an instrument change sits under this series and no "
-                        "comparability row declares the pair one series, so "
-                        f"the step at the seam is indistinguishable from real "
-                        f"change: {', '.join(seam['instruments'])}")
+        refused = self._weight_series_seam(rows)
         series = sorted((date.fromisoformat(r["date"]), float(r["kg"]))
                         for r in rows)
         return compute_outlook(series, upto=days, refused=refused,
                                build=__version__)
+
+    def energy_agreement(self, days: int = 7) -> dict:
+        """Does this record's energy balance explain its weight change? (#458)
+
+        The instrument that decides whether a MODELLED centre for the forward
+        band could be earned. It never states a centre and never applies a
+        model - see `agreement.py` for why measuring first said the centre
+        cannot be stated, and `docs/proposals/weight-outlook.md` for the
+        numbers.
+
+        THE SAME SERIES AND THE SAME REFUSALS as `weight_outlook`, reusing its
+        predicates rather than forming a second opinion: a protocol change or
+        an undeclared instrument change under the weight series means the two
+        ends of a window are not two readings of one measurand, so the change
+        across it is not a change and no model can be scored against it.
+
+        `daily` is read CANONICAL, like the weight series, so a day resolved
+        from two competing sources counts once on both sides of the question.
+        """
+        rows = [r for r in (self.canonical("weight") or [])
+                if r.get("kg") is not None]
+        refused = self._weight_series_seam(rows)
+        series = sorted((date.fromisoformat(r["date"]), float(r["kg"]))
+                        for r in rows)
+        if refused is None and len(series) < 2:
+            refused = ("fewer than two weigh-ins resolve on this record, and "
+                       "one reading spans no window")
+        daily = {date.fromisoformat(r["date"]): r
+                 for r in (self.canonical("daily") or [])}
+        return compute_agreement(series, daily, days=days, refused=refused,
+                                 build=__version__)
+
+    def _weight_series_seam(self, rows: list[dict]) -> str | None:
+        """Why the weight series is not one series, or None if it is.
+
+        SHARED BY `weight_outlook` AND `energy_agreement` (#458) rather than
+        written twice. Two copies of a refusal drift, and the one that drifts
+        is whichever is read less often.
+        """
+        if not rows:
+            return None
+        if protocol_seam(rows)["seam"]:
+            return ("a protocol change sits under this series, so its "
+                    "readings are not repeated observations of one measurand")
+        seam = instrument_seam(rows)
+        if seam["seam"] and not all_comparable(
+                self.dataset("comparability"), "kg", seam["instruments"],
+                self.on.isoformat(), self.dataset("overlaps")):
+            return ("an instrument change sits under this series and no "
+                    "comparability row declares the pair one series, so the "
+                    "step at the seam is indistinguishable from real change: "
+                    + ", ".join(seam["instruments"]))
+        return None
 
     def capability(self, origin: str, measures: str,
                    on: date | str | None = None,

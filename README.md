@@ -100,6 +100,13 @@ for why the width cannot come from `kcal_out`, why the centre is not a
 forecast, and how the seven-day spread is held against the band `weight_rate`
 is judged in.
 
+**There is no modelled centre, and that is a decision rather than a gap**
+(#458). `vitai energy-agreement` asks whether a record's own energy balance
+explains its own weight change better than its own median does, with the
+energy density fitted to that record rather than borrowed, and scored on
+windows the fit never saw. It answers no on every record here, and says which
+records cannot be asked at all. It never states a centre.
+
 ## The three layers
 
 ```

@@ -454,6 +454,36 @@ def cmd_milestones(args: argparse.Namespace) -> None:
                   f" = {r['value']:g}{when}")
 
 
+def cmd_energy_agreement(args: argparse.Namespace) -> None:
+    """Does this record's energy balance explain its weight change? (#458)"""
+    out = Vitai(_root(args)).energy_agreement(days=args.days)
+    if args.json:
+        print(json.dumps(out))
+        return
+    if out["refused"]:
+        print(f"cannot say: {out['refused']}")
+        return
+    print(f"{out['complete']} fully-logged {out['days']}-day window(s) of "
+          f"{out['possible']} weighed, in {out['windows']} disjoint stretch(es)")
+    print(f"  correlation of balance with change   {out['correlation']:+.3f}")
+    print(f"  energy density the fit implies       "
+          f"{out['implied_kcal_per_kg']} kcal/kg")
+    print(f"  spread using the record's own median {out['null_spread']:.3f} kg")
+    print(f"  spread using the fitted model        "
+          f"{out['fitted_spread']:.3f} kg")
+    if out["explains"]:
+        print("The balance explains the change better than the median does. "
+              "That is the condition #458 names for a modelled centre to be "
+              "worth stating; it is not on its own permission to state one.")
+    else:
+        print("The balance does NOT explain the change better than the "
+              "record's own median does, so a modelled centre on this record "
+              "would be worse than reporting what it did (#458).")
+    print("Nothing here is a forecast. The fitted model is scored and thrown "
+          "away; the implied density is a slope, and beside a correlation "
+          "near zero it is a slope through noise.")
+
+
 def cmd_outlook(args: argparse.Namespace) -> None:
     """What this record's weight has done over an elapsed interval (#372)."""
     out = Vitai(_root(args)).weight_outlook(days=args.days)
@@ -2123,6 +2153,9 @@ def main(argv: list[str] | None = None) -> None:
         ("crossings", cmd_crossings,
          "round-number, personal-first and boundary milestones over the "
          "weight series, no goal required (#370)"),
+        ("energy-agreement", cmd_energy_agreement,
+         "whether this record's own energy balance explains its own weight "
+         "change better than its own median does (#458)"),
         ("outlook", cmd_outlook,
          "what this record's own weight has done over an elapsed interval, "
          "with the coverage behind each horizon (#372)"),
@@ -2303,6 +2336,12 @@ def main(argv: list[str] | None = None) -> None:
         if name == "crossings":
             p.add_argument("--json", action="store_true",
                            help="emit crossing rows as JSONL instead of prose")
+        if name == "energy-agreement":
+            p.add_argument("--days", type=int, default=7,
+                           help="the window length to ask over (default 7, "
+                                "the unit a weekly rate is judged on)")
+            p.add_argument("--json", action="store_true",
+                           help="emit the whole answer as one JSON object")
         if name == "outlook":
             p.add_argument("--days", type=int, default=None,
                            help="cap the longest horizon; omitted, the table "
