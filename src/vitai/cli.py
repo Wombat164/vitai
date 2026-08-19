@@ -2011,6 +2011,14 @@ def cmd_contract_impact(args: argparse.Namespace) -> None:
         for row in verdict["not_yours"]:
             print(f"  ignored: {row['surface']:<25} {row['change']:<9} "
                   f"contract {row['contract']}  (you do not read it)")
+        # THE PAYLOAD, SAID OUT LOUD (#453). Printed whether or not the client
+        # declared a payload read: one that did would otherwise see its reads
+        # in neither `because` nor `ignored` and conclude the verdict covered
+        # them, and one that did not is exactly the client that has not
+        # noticed the payload moves on a clock of its own.
+        print(f"  payload  {verdict['payload_digest']}  "
+              f"({len(verdict['payload_reads'])} of your reads; not "
+              f"contract-versioned, so re-read it when this digest changes)")
     if verdict["must_move"]:
         raise SystemExit(1)
 
