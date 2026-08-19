@@ -133,3 +133,144 @@ by roughly an order of magnitude and a reader in a hurry would not notice.
   and timing drift is one of the things making the spread what it is. A record
   weighed at scattered hours gets a wider outlook, which is the honest
   consequence rather than a refusal.
+
+---
+
+# The centre: it cannot be stated, and here is what would change that
+
+**Status: DECIDED against, on measurement. #458.** What ships instead is the
+instrument that decides - `api.Vitai.energy_agreement` / `vitai
+energy-agreement` - which never states a centre.
+
+#458 filed two undecided things and an acceptance gate. Measuring first, which
+is what the width half was for, says one of them is answerable and moot, one is
+not answerable at all, and a third that was not filed dominates both.
+
+## 1. The intake coverage floor: answerable, and it never gets a turn
+
+A floor is easy and needs no new numbers - the two `outlook.py` already
+derives. A window needs `kcal_in` and `kcal_out` on all its days and a weigh-in
+at each end; eleven such windows is the smallest sample in which a tenth
+percentile is interior, and three disjoint stretches is `overlaps`' floor.
+
+It is also not the binding constraint. Across the sixteen records this
+repository holds:
+
+| | records |
+|---|---|
+| not one complete seven-day window | **13** |
+| enough to ask the question | 3 (`examples/demo` 40, `nora` 844, `stefan` 98) |
+
+Thirteen of sixteen fail before a floor could be applied to them. Stating one
+unblocks nothing.
+
+## 2. The selection bias: not answerable, and worse than #458 wrote
+
+#458 says a floor does not fix it. The obvious repair - measure the bias as the
+median of the model's residuals on this record - **cannot work, and the reason
+is the same one that makes the bias a problem**: residuals only exist on days
+that were logged, which is exactly the sample the bias lives in. A record where
+intake is logged on the days eating went to plan produces residuals from those
+days, and their median is the bias on good days, not the bias.
+
+Nothing inside the record can reach it. What could: logging coverage high
+enough that the unlogged remainder cannot carry the bias, which is a fact about
+the athlete's behaviour rather than about the schema, and is therefore not
+something the engine can build its way to.
+
+## 3. The one not filed, which decides it
+
+**No record in this repository can validate a centre, and the reason is in the
+generators.** `examples/generate_demo.py` walks weight with
+
+    kg -= 0.05 * (0.7 + 0.6 * rng.random())
+
+and draws the two energy figures from `rng.gauss(2850, 220)` and
+`rng.gauss(2065, 260)` - three unrelated streams. `nora` draws `kcal_in` from
+`rng.uniform(2050, 2200)` beside a weight series it never sees.
+
+So the correlation is zero **by construction**, and the acceptance gate #458
+proposed is uninformative in *both* directions: a good model fails it here and
+a bad one does too. A model that passed would have passed against noise.
+
+Measured on the three records that can be asked at all, with the energy density
+**fitted to each record** rather than taken from the literature - the most
+generous test the family admits:
+
+| record | complete windows | correlation | implied kcal/kg | median-only spread | model spread |
+|---|---|---|---|---|---|
+| `examples/demo` | 40 | -0.055 | 40,307 | 0.900 kg | 1.022 kg |
+| `nora` | 844 | +0.022 | -65,198 | 1.300 kg | 1.299 kg |
+| `stefan` | 98 | +0.304 | -8,469 | 0.500 kg | 0.545 kg |
+
+Two of the three imply a **negative** energy density. None beats the record's
+own median.
+
+## The argument that does not depend on the fixtures
+
+Even with a perfect corpus, the centre needs an error term on `kcal_out` that
+does not exist - the same finding that killed it as a *width* term on
+2026-08-12, applied to the centre. It is not that the error is small and
+unmeasured; it is unquantified and plausibly larger than the signal.
+
+On the demo's own daily figures: mean `kcal_out` 2,823 and a mean balance of
+665 kcal/day, so a seven-day window carries a signal of **0.60 kg**. The JMIR
+2022 review puts wrist expenditure at a MAPE above 30 per cent, which is 847
+kcal/day on that mean:
+
+- if the error averaged out across days: **0.29 kg** over the window;
+- if it does not, which is what a per-device bias means: **0.77 kg**, larger
+  than the signal.
+
+Nothing in the literature says which, because the daily figure has never been
+validated for this device class. A centre stated on that input is a number
+whose error is unknown and may exceed it.
+
+## So: the centre cannot be stated
+
+Not "not built yet". Three independent reasons, any one sufficient: the input
+error is unquantified and may exceed the signal; the selection bias is
+unreachable from inside the record; and nothing here can tell a model that
+works from one that does not.
+
+**What would change it, in the order it would have to happen:**
+
+1. A record with at least eleven fully-logged windows in three disjoint
+   stretches. `vitai energy-agreement` reports both counts and says which is
+   missing, so a record can be asked rather than assumed.
+2. Logging coverage high enough that the unlogged days cannot carry the bias.
+   No number is proposed here; it is a behavioural fact and it needs its own
+   evidence.
+3. That record answering `explains: true` - the model, fitted to it and scored
+   out of sample, beating its own median. That is the gate #458 wanted, made
+   runnable.
+4. And even then, a stated centre needs an honest error term. Today that means
+   the residual spread on that record, which is the same trick the width uses
+   and needs no device figure at all.
+
+## The instrument, and the mistake it caught in its own first draft
+
+`energy_agreement` compares the spread of the model's error against the spread
+the record's own median already achieves - the null being #457's answer,
+because that is what a client has today.
+
+**The first version scored the fit on the data it was fitted to, and reported
+that the demo's energy balance EXPLAINS its weight change** - on the record
+whose generator draws the two from unrelated streams. A least-squares slope
+always narrows the spread of its own training data, so `fitted < null` was true
+by construction and the surface answered yes to the one question it could only
+honestly answer no to.
+
+Every residual now comes from a fit that never saw the window it scores, and
+never saw a window overlapping it either - blocked rather than plain
+leave-one-out, because a seven-day window starting on Monday shares six
+readings with Tuesday's and leaving out one leaves six near-copies behind.
+
+**And `explains` requires the implied density to be positive before it looks at
+the spreads at all.** That is a domain constraint rather than a threshold: a
+record whose weight rises with its deficit has not produced a weak model, it
+has produced a contradiction. It is also what keeps the comparison off a knife
+edge - a fit with no slope predicts the mean, which is what the null does, so
+its spread lands within a gram of the null's. `nora` sat at 1.299 against 1.300
+across 844 windows. Requiring the sign removes that tie without inventing a
+margin.
