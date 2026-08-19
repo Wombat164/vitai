@@ -40,6 +40,19 @@
 # payload and be told, in the same verdict, that the contract cannot answer
 # for it and `payload_digest` can.
 #
+# A CONDITION ON A ROW (#464). `unless = "<name>"` says the change is real for
+# some records and not others. Contract 54 is the case: what narrowed is a
+# CONTESTED position, and a position can only be contested where two machines
+# wrote it, so a single-writer record is unaffected - which its own migration
+# note says and the surface table said the opposite of for seventy lines.
+#
+# IT NEVER SOFTENS THE VERDICT BY ITSELF. The row keeps forcing a move until
+# the condition has been evaluated against a real record, because "does not
+# apply to you" is the answer that costs a CLIENT nothing and is the mirror of
+# the `yes` this file has no field for. Names resolve against
+# `contracts.CONDITIONS`, each of which is a public read on `Vitai` plus a
+# predicate over its answer, so the vocabulary cannot grow into prose.
+#
 # CHANGE KINDS. Three, closed, each with a mechanical consequence rather than
 # a description. `retired` and `meaning` were drafted and dropped because
 # nothing between 47 and 54 exercises them, and an unused member of a closed
@@ -106,5 +119,11 @@ touches = [
 [54]
 touches = [
   { surface = "meta:supersedes_device", change = "added" },
-  { surface = "meta:supersedes_seq", change = "narrowed" },
+  # CONDITIONAL (#464). What narrowed is a CONTESTED position, and a position
+  # can only be contested where two machines wrote it - so a single-writer
+  # record meets rule 2 of `jsonl._addressed` unchanged, which is what this
+  # contract's own migration note says and what the surface table said the
+  # opposite of for seventy lines. Still forces a move until the condition is
+  # evaluated against a record; silence never excuses.
+  { surface = "meta:supersedes_seq", change = "narrowed", unless = "one-writer" },
 ]

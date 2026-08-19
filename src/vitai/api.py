@@ -1852,6 +1852,41 @@ class Vitai:
         return compute_outlook(series, upto=days, refused=refused,
                                build=__version__)
 
+    def contract_impact(self, since: int, upto: int | None = None,
+                        reads: list[str] | None = None) -> dict:
+        """Must THIS record's author move, having evaluated the conditions?
+
+        #464. The rootless `api.contract_impact` cannot excuse a conditional
+        row, because it has no record to evaluate the condition against - so
+        it does not, and says so. This one can.
+
+        THE ONLY THING IT MAY DO IS EXCUSE. Everything else in the verdict is
+        the rootless answer unchanged, so the two doors cannot come to differ
+        about anything but the question this one is able to ask. A condition
+        that cannot be evaluated - because the read it names raises on this
+        record - leaves the row forcing a move, which is the same direction
+        every other unknown takes here.
+        """
+        verdict = _contracts.assess(
+            since, int(CONTRACT_VERSION) if upto is None else upto, reads)
+        excused = []
+        for row in list(verdict["because"]):
+            name = row.get("unless")
+            if not name or _contracts.unresolved_condition(name):
+                continue
+            spec = _contracts.CONDITIONS[name]
+            try:
+                answer = getattr(self, spec["asks"])()
+            except Exception:
+                continue
+            if spec["holds"](answer):
+                excused.append({**row, "answered": answer})
+                verdict["because"].remove(row)
+        verdict["excused"] = excused
+        verdict["must_move"] = (bool(verdict["because"])
+                                or not verdict["reads_stated"])
+        return verdict
+
     def rate_uncertainty(self) -> dict:
         """Can this record support a weekly weight rate as a NUMBER? (#460)
 

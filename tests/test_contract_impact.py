@@ -312,6 +312,12 @@ DOC_PATHS = ("README.md", "wiki/content/explanation/platform.md")
 
 def _rendered_row(entry: dict) -> str:
     verdict = "**must move**" if entry["forces_move"] else "need not move"
+    # A CONDITION IS PART OF THE VERDICT (#464), not a footnote. A published
+    # row reading `must move` beside a declaration that says `must move unless
+    # one-writer` is the disagreement this issue was raised for, one table
+    # over - so the rendering carries it and this gate holds the two together.
+    if entry.get("unless"):
+        verdict += f" unless `{entry['unless']}`"
     return (f"| `{entry['surface']}` | {entry['change']} | "
             f"{entry['contract']} | {verdict} |")
 
