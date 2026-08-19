@@ -32,6 +32,7 @@ from pathlib import Path
 
 from vitai.api import Vitai
 from vitai.resolution import restatement_runs
+from vitai.verdicts import RATE_DECISION_BAND
 from vitai.vocab import registry
 
 PERSONAS = Path(__file__).parent / "fixtures" / "personas"
@@ -231,9 +232,25 @@ def test_the_two_routes_to_this_finding_do_not_name_the_same_set():
 
     A subset relation rather than an equality is the honest statement of how
     two measurements of neighbouring phenomena relate.
+
+    #457'S SET IS RECOMPUTED HERE rather than imported from its test module.
+    Importing it would make the two agree because one copied the other, and
+    the claim is that two measurements agree - so this runs the other
+    measurement again. (The import also only resolved locally: `tests` is not
+    a package, and CI said so.)
     """
-    from tests.test_weight_outlook import SMOOTHER_THAN_THE_DECISION_BAND
-    assert SMOOTHER_THAN_THE_DECISION_BAND < set(BELOW_THE_FLOOR)
+    smooth = set()
+    for root in sorted(PERSONAS.iterdir()):
+        if not root.is_dir() or root.name == "_gen":
+            continue
+        week = [r for r in Vitai(root).weight_outlook(days=7)["horizons"]
+                if r["days"] == 7]
+        if week and (week[0]["change_p90"] - week[0]["change_p10"]
+                     ) <= 2 * RATE_DECISION_BAND:
+            smooth.add(root.name)
+    assert smooth, "the other measurement found nothing, so this asserts nothing"
+    assert smooth < set(BELOW_THE_FLOOR), (sorted(smooth),
+                                           sorted(BELOW_THE_FLOOR))
 
 
 def test_the_measurement_can_fail():
