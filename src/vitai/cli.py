@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
 from datetime import date, datetime
 from pathlib import Path
 
@@ -583,19 +584,25 @@ def cmd_pin_policy(args: argparse.Namespace) -> None:
         print(json.dumps(row))
 
 
-def cmd_append(args: argparse.Namespace) -> None:
-    """Append a JSON object to a dataset, with the clocks stamped for you.
+def _rows_from_stdin() -> list[dict]:
+    """The JSONL an operator pipes in, as rows - ONE reader for every command
+    that takes rows it has not written yet (#448).
 
-    Reads JSONL from stdin - one object per line - so it composes with the
-    scripts that actually write this record, and so a bulk import is one
-    invocation rather than one per row. A single object on its own is the
-    same thing with one line.
+    `append` and `classify-pending` are the write and the dry run of the same
+    write, and the dry run is only worth anything if it answered about the
+    rows the write will consume. Two readers is two answers waiting to
+    diverge: the day one of them starts skipping a line the other keeps, the
+    dry run reports on a batch that is not the one that lands, and it reports
+    it confidently. So the leniency here - blank lines, `//` comments, a
+    single object on one line - is defined once and both commands inherit it.
 
-    The rows written are echoed back, stamps included, so a script can log
-    exactly what it committed rather than what it intended to. Nothing is
-    written unless every row validates.
+    THIS IS ALSO WHY NEITHER TAKES A PATH. `append` reads stdin and reads it
+    nowhere else, and a `--from FILE` on the dry run alone would be an input
+    door the write does not have: a file classified through it could not be
+    appended by the same means, and the two commands in one shell sentence
+    would be pointed at their input by two different mechanisms. `< file` is
+    already the shell's answer to this.
     """
-    root = _root(args)
     recs = []
     for n, line in enumerate(sys.stdin.read().splitlines(), 1):
         if not (line := line.strip()) or line.startswith("//"):
@@ -609,11 +616,112 @@ def cmd_append(args: argparse.Namespace) -> None:
         recs.append(rec)
     if not recs:
         sys.exit("nothing on stdin - expected one JSON object per line")
+    return recs
+
+
+def cmd_append(args: argparse.Namespace) -> None:
+    """Append a JSON object to a dataset, with the clocks stamped for you.
+
+    Reads JSONL from stdin - one object per line - so it composes with the
+    scripts that actually write this record, and so a bulk import is one
+    invocation rather than one per row. A single object on its own is the
+    same thing with one line.
+
+    The rows written are echoed back, stamps included, so a script can log
+    exactly what it committed rather than what it intended to. Nothing is
+    written unless every row validates. `vitai classify-pending` is the same
+    input through the same reader, answered instead of written (#448).
+    """
+    root = _root(args)
+    recs = _rows_from_stdin()
     try:
         for row in Vitai(root).append_many(args.dataset, recs):
             print(json.dumps(row))
     except (ValueError, KeyError, DataError) as e:
         sys.exit(str(e).strip("'"))
+
+
+def cmd_classify_pending(args: argparse.Namespace) -> None:
+    """A harness over `Vitai.classify_pending()`. What the append would make
+    of these rows, asked before it makes it (#448).
+
+    THE CALLER THIS IS FOR RUNS IN A SHELL. #425 built the answer and left it
+    reachable only from Python, and the importer that needs it spools a file
+    and appends it - so the natural shape is to pipe the same file through the
+    dry run first and read the verdicts. Same reader as `append`
+    (`_rows_from_stdin`), same API method a library consumer calls, no second
+    path: P9 in the form it is actually about.
+
+    THE PROSE PRINTS BY DEFAULT, AND UNDER THE TABLE. The reasons on refused
+    rows are the sentences `append_many` will RAISE with - `pending_problems`
+    returns that same list - and a dry run whose default output is quieter
+    than the failure it predicts is not a dry run: the operator would read
+    `refused` and have to run the real write to find out why. They are not
+    decoration on the other verdicts either; `restatement`'s reason is the
+    sentence that says to set `supersedes`, which is the whole action this
+    command exists to prompt. But a verdict is a word and a reason is a
+    paragraph, so the verdicts stay a table and the paragraphs go beneath it
+    keyed by row - a column wide enough for prose is neither.
+
+    AND A REFUSAL EXITS 2, the status `may` and `safety` already use for "the
+    answer is no". `append_many` is all-or-nothing, so one refused row means
+    no row lands - which a table of verdicts does not say - and the status
+    makes `vitai classify-pending daily < day.jsonl && vitai append daily <
+    day.jsonl` the correct shell sentence instead of something a script has
+    to parse JSON to decide. `--json` still emits every row before it exits:
+    the status is for the shell, the rows are for the consumer, and exiting
+    first would blind the machine-readable mode in the one case it is for.
+    """
+    rows = _rows_from_stdin()
+    try:
+        answers = Vitai(_root(args)).classify_pending(args.dataset, rows)
+    except (ValueError, KeyError, DataError) as e:
+        sys.exit(str(e).strip("'"))
+
+    refused = [a for a in answers if a["verdict"] == "refused"]
+    if args.json:
+        for answer in answers:
+            print(json.dumps(answer, sort_keys=True))
+        if refused:
+            raise SystemExit(2)
+        return
+
+    counts = Counter(a["verdict"] for a in answers)
+    # ORDERED BY THE PUBLISHED VOCABULARY, not by the batch, so two runs over
+    # the same rows in a different order read the same. Taken from `schema()`
+    # rather than from `jsonl.PENDING_VERDICTS` because the CLI may not know a
+    # word an agent cannot enumerate (#158).
+    tally = ", ".join(f"{counts[v]} {v}"
+                      for v in schema()["pending_verdicts"] if counts[v])
+    print(f"{args.dataset}: {len(answers)} pending row(s) - {tally}")
+    width = max(3, len(str(len(answers))))
+    print(f"{'row':>{width}}  {'verdict':<12} target")
+    for answer in answers:
+        print(f"{answer['row']:>{width}}  {answer['verdict']:<12} "
+              f"{answer['target'] or '-'}")
+    # GROUPED BY SENTENCE, not printed per row. One refusal covers every row
+    # naming the same reference - `pending_problems` returns it once and
+    # `classify_pending` hands the same string back on each of them - so a
+    # paragraph per row would print the loudest thing in the output twice and
+    # read as two faults where the write reports one. Grouped rather than
+    # deduplicated because which rows it is about is the part a person acts on.
+    said: dict[str, list[int]] = {}
+    for answer in answers:
+        if answer["reason"]:
+            said.setdefault(answer["reason"], []).append(answer["row"])
+    if said:
+        print()
+        for reason, rows_ in said.items():
+            label = "row" if len(rows_) == 1 else "rows"
+            print(f"{label} {', '.join(map(str, rows_))}: {reason}")
+    print()
+    if refused:
+        print(f"REFUSED: `vitai append {args.dataset}` would raise over "
+              f"{len(refused)} of {len(answers)} row(s), and no row would "
+              f"land - the append is all-or-nothing")
+        raise SystemExit(2)
+    print(f"nothing here is written - pipe the same rows to `vitai append "
+          f"{args.dataset}` to write them")
 
 
 def cmd_derived(args: argparse.Namespace) -> None:
@@ -1931,6 +2039,10 @@ def main(argv: list[str] | None = None) -> None:
          "weight series, no goal required (#370)"),
         ("append", cmd_append,
          "append JSONL rows from stdin, stamping recorded_at and _gen"),
+        ("classify-pending", cmd_classify_pending,
+         "what `append` would make of JSONL rows on stdin, before it makes "
+         "it: a verdict per row, and the sentences the write would raise "
+         "(#448)"),
         ("pin-policy", cmd_pin_policy,
          "date the toml's thresholds into the record so history stops moving"),
         ("dataset", cmd_dataset,
@@ -2104,6 +2216,15 @@ def main(argv: list[str] | None = None) -> None:
                            help="emit crossing rows as JSONL instead of prose")
         if name == "append":
             p.add_argument("dataset", help="which dataset to append to")
+        if name == "classify-pending":
+            # The choices come from the engine, the way `dataset` takes them,
+            # so an unknown name is refused with the real list rather than by
+            # a KeyError after a root has already been resolved.
+            p.add_argument("dataset", choices=sorted(KEYS),
+                           help="which dataset the rows would be appended to")
+            p.add_argument("--json", action="store_true",
+                           help="emit one JSON object per row, as the API "
+                                "returns them")
         if name == "key":
             p.add_argument("action", choices=("new", "check"))
             p.add_argument("phrase", nargs="*",
