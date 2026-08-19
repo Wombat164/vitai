@@ -44,7 +44,7 @@ from vitai.schema import KEYS, PLAIN_WORDS, aliases_for, display_name, units
 # only needs to know which words derivation may pass through.
 CURATED_WORDS = frozenset({
     "100", "active", "as", "average", "band", "bound", "carbohydrate",
-    "content", "derivation", "distance", "duration", "elevation", "energy",
+    "content", "derivation", "distance", "elevation", "energy",
     "exertion", "fat", "fibre", "g", "gain", "guard", "hash", "heart", "id",
     "identifier", "in", "lever", "lower", "maximum", "minutes", "of", "out",
     "pad", "per", "perceived", "position", "power", "precise", "protein",
@@ -59,6 +59,17 @@ CURATED_WORDS = frozenset({
     # "bound" are already blessed by the weight and goal bands; only the noun
     # is new, and it is the row's subject named out loud for the first time.
     "difference",
+    # #400: `duration_s` -> "elapsed" and `fat_g` -> "dietary fat". Both
+    # replace a LABEL that named more than one measurand - "duration" was a
+    # session, a set and a night's sleep, "fat" was grams eaten and a body
+    # percentage - and both replacements were already aliases, so the word a
+    # client prints is still one the recognition index holds.
+    #
+    # "duration" LEFT this list in the same change, and that is the back
+    # pressure working rather than tidying: no curated name says it any more,
+    # and a word that outlives the name that earned it is how the list this
+    # replaced rotted. "fat" stays, earned by "body fat" and "dietary fat".
+    "dietary", "elapsed",
 })
 BLESSED = PLAIN_WORDS | CURATED_WORDS
 
@@ -98,7 +109,11 @@ def test_it_is_not_the_first_alias():
     for field, sorted_head in (("kcal_out", "burned"),
                                ("sleep_h", "hours slept"),
                                ("rir", "left in the tank"),
-                               ("kcal_in", "calories")):
+                               # "calories" left `aliases` in #400 - it named
+                               # what was EATEN while `session calories` named
+                               # what was BURNED. The claim this test makes is
+                               # unchanged: the sorted head is still not a name.
+                               ("kcal_in", "calories eaten")):
         assert sorted(aliases_for(field))[0] == sorted_head, field
         assert display_name("daily", field) != sorted_head, field
 

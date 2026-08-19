@@ -625,9 +625,17 @@ carb_g = "carbohydrate"
 difference_hi = "difference, upper bound"
 difference_lo = "difference, lower bound"
 distance_km = "distance"
-duration_s = "duration"
+# "duration" and "fat" were the names here until #400, and both are now
+# published ambiguities: "duration" names a session, a set AND a night's
+# sleep, and "fat" names grams eaten AND a body-composition percentage. A
+# LABEL a person reads is a stronger claim than an alias, not a weaker one -
+# a client printing "fat: 82" beside "body fat: 21%" has told the athlete
+# those are the same kind of number. Both replacements are already aliases,
+# so the recognition index still contains what the client prints, which is
+# what `test_the_name_is_still_a_word_people_use_for_it` exists to hold.
+duration_s = "elapsed"
 elevation_m = "elevation gain"
-fat_g = "fat"
+fat_g = "dietary fat"
 fibre_g = "fibre"
 grams_hi = "grams, upper bound"
 grams_lo = "grams, lower bound"

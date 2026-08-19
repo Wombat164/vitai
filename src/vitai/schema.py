@@ -2066,6 +2066,68 @@ def units(dataset: str, field: str) -> dict:
     return {k: v for k, v in entry.items() if k != "aliases"}
 
 
+def _registry_aliases(field: str) -> list[str]:
+    """What `semantics/units.toml` lists for this field, ambiguity included."""
+    from .vocab import registry
+
+    entry = registry("units").get("unit", {}).get(field) or {}
+    return [str(a) for a in entry.get("aliases") or []]
+
+
+def ambiguous_aliases() -> dict[str, list[str]]:
+    """Words the registry publishes that name more than one measurand (#400).
+
+    DERIVED, NEVER CURATED, and that is the whole reason this is a function
+    rather than a list in the TOML. A hand-kept list of "words to be careful
+    about" is a judgement somebody makes once and nobody revisits, and the
+    next field that collides is added to the vocabulary by someone who was not
+    thinking about this. The rule below is mechanical and applies to a field
+    that does not exist yet.
+
+    THE RULE: a BARE alias of one field whose words are the tail of a
+    QUALIFIED alias of another field names both. The qualifier is what does
+    the disambiguating - `resting pulse` is unambiguous and `pulse` is the
+    same word with the disambiguator removed - so the bare form is not a
+    synonym of either field, it is a question about which one is meant.
+
+    Six words are in that state today and `pulse`, which #400 was filed for,
+    is not the worst of them: `calories` resolved to what was EATEN while
+    `session calories` resolves to what was BURNED, and `fat` resolved to
+    grams of dietary fat while `body fat` resolves to a body-composition
+    percentage. Every one of them answered confidently about the wrong
+    quantity.
+
+    WHY THIS IS NOT `aliases` WITH A FLAG. An alias is published for
+    RECOGNITION: a consumer matching it has been told by this engine that the
+    word and the field are the same question. That claim is false for these
+    six, so they leave `aliases` rather than staying with a caveat nobody is
+    obliged to read. A consumer that never learns about this map stops
+    matching six words, which returns "I do not know" - the honest failure -
+    where it used to return a confident wrong measurand.
+
+    Field NAMES rather than `dataset.field`: the registry is keyed by field
+    name, `distance_km` is one field that two datasets carry, and naming the
+    pairs here would publish one fact several times. `fields` says which
+    datasets hold it.
+    """
+    from .vocab import registry
+
+    owner: dict[str, set[str]] = {}
+    for name, entry in registry("units").get("unit", {}).items():
+        for alias in entry.get("aliases") or []:
+            owner.setdefault(str(alias), set()).add(name)
+
+    out: dict[str, set[str]] = {}
+    for alias, fields in owner.items():
+        tail = alias.split()
+        for other, others in owner.items():
+            tokens = other.split()
+            if (len(tokens) > len(tail) and tokens[-len(tail):] == tail
+                    and fields != others):
+                out.setdefault(alias, set()).update(fields | others)
+    return {alias: sorted(fields) for alias, fields in sorted(out.items())}
+
+
 def aliases_for(field: str) -> list[str]:
     """The words a person uses for this field, or an empty list.
 
@@ -2073,11 +2135,16 @@ def aliases_for(field: str) -> list[str]:
     and a client that hand-maintains this map is maintaining a copy of the
     engine's vocabulary that fails silently when it drifts: a question naming a
     metric the list has forgotten matches no topic at all.
-    """
-    from .vocab import registry
 
-    entry = registry("units").get("unit", {}).get(field) or {}
-    return [str(a) for a in entry.get("aliases") or []]
+    WORDS THAT NAME MORE THAN ONE MEASURAND ARE NOT HERE (#400). They are in
+    `ambiguous_aliases()` with their candidates named, because a word in this
+    list is a claim that it and the field are the same question, and for those
+    six the claim is false. The gate one file over states the rule this
+    enforces - "a word that routes to two fields routes to neither" - and
+    compared whole strings, so `pulse` beside `resting pulse` walked past it.
+    """
+    ambiguous = ambiguous_aliases()
+    return [a for a in _registry_aliases(field) if a not in ambiguous]
 
 
 # The tokens a field name can carry that a person does not say out loud. A

@@ -27,7 +27,7 @@ from pathlib import Path
 import pytest
 
 from vitai.api import field_types
-from vitai.schema import KEYS, aliases_for, units
+from vitai.schema import KEYS, aliases_for, ambiguous_aliases, units
 from vitai.vocab import registry
 
 # The whole table, hashed, so a change to ANY key of ANY entry has to be
@@ -57,7 +57,10 @@ from vitai.vocab import registry
 # for the reason `steps` and `reps_completed` are annotated counts - a day
 # somebody paired is not a duration, and two windows' day counts do not add.
 # Both take the derived display name, so no `[name]` entry joins.
-PINNED_DIGEST = "b0e6ec087863822f"
+# Moved deliberately for #400: two [name] entries changed, `duration_s`
+# "duration" -> "elapsed" and `fat_g` "fat" -> "dietary fat", because both
+# labels named more than one measurand. No unit and no reference moved.
+PINNED_DIGEST = "e76bac2308471e10"
 
 REGISTRY = Path(__file__).resolve().parents[1] / "src" / "vitai" / "semantics" / "units.toml"
 def _numeric_in_the_corpus() -> set[tuple[str, str]]:
@@ -394,9 +397,21 @@ def test_the_words_people_actually_use_are_published():
     and the client copy of it failed silently."""
     assert "resting heart rate" in aliases_for("rhr")
     assert "sleep" in aliases_for("sleep_h")
-    assert "calories" in aliases_for("kcal_in")
     assert "weight" in aliases_for("kg")
     assert "body fat" in aliases_for("body_fat_pct")
+
+    # THIS LINE ASSERTED THE DEFECT (#400). It was `"calories" in
+    # aliases_for("kcal_in")`, and it passed for months while the registry
+    # also published `session calories` on `kcal` - so the bare word resolved
+    # to what was EATEN and its qualified sibling to what was BURNED, and this
+    # test called that publishing the words people use.
+    #
+    # The word is still recognised. `calories eaten` carries the athlete's
+    # question with the disambiguator the bare form lacks, and the bare form
+    # is published as a question rather than as an answer.
+    assert "calories eaten" in aliases_for("kcal_in")
+    assert "calories" not in aliases_for("kcal_in")
+    assert ambiguous_aliases()["calories"] == ["kcal", "kcal_in"]
 
 
 def test_a_field_nobody_asks_about_has_no_aliases_rather_than_a_guess():
@@ -415,6 +430,62 @@ def test_no_alias_collides_with_another_field():
         for alias in entry.get("aliases") or []:
             assert alias not in seen, f"{alias!r}: {seen[alias]} and {name}"
             seen[alias] = name
+
+
+def test_no_published_alias_is_the_unqualified_form_of_another_fields():  # noqa: E501
+    """THE GATE ABOVE STATES THE RIGHT RULE AND COULD NOT SEE THE LIVE CASE (#400).
+
+    "A word that routes to two fields routes to neither, and it would do so
+    silently" is exactly right, and it compares whole strings. `pulse` on
+    `avg_hr` and `resting pulse` on `rhr` are not equal, so it passed - while
+    the failure it names was live for six words, because the QUALIFIER is what
+    disambiguates and the bare form has none of it.
+
+    `pulse`, which #400 was filed for, was not the worst: `calories` resolved
+    to what was EATEN while `session calories` resolves to what was BURNED,
+    and `fat` resolved to grams of dietary fat while `body fat` resolves to a
+    body-composition percentage.
+
+    CHECKED ON WHAT IS PUBLISHED, not on the registry file. A consumer reads
+    `aliases_for` through `schema()`; the registry is where the words are
+    kept, and keeping an ambiguous word there is correct - it is how the
+    ambiguity map knows the word exists at all.
+    """
+    published: dict[str, set[str]] = {}
+    for name in registry("units")["unit"]:
+        for alias in aliases_for(name):
+            published.setdefault(alias, set()).add(name)
+
+    live = {}
+    for alias, fields in published.items():
+        tail = alias.split()
+        for other, others in published.items():
+            tokens = other.split()
+            if (len(tokens) > len(tail) and tokens[-len(tail):] == tail
+                    and fields != others):
+                live.setdefault(alias, set()).update(fields | others)
+
+    assert not live, (
+        "these bare aliases are published as synonyms of one field while a "
+        "qualified form of the same words names another, so a consumer "
+        "resolving them answers about a measurand the record will not vouch "
+        f"for: { {a: sorted(f) for a, f in sorted(live.items())} }. They "
+        "belong in ambiguous_aliases(), not in `aliases`.")
+
+
+def test_every_registry_word_is_published_or_declared_ambiguous():
+    """NOTHING MAY BE DROPPED SILENTLY, which is the risk the fix above
+    introduces. A word that leaves `aliases` and reaches no other published
+    surface is a word the athlete can still say and nothing can recognise -
+    and it would look exactly like the fix working."""
+    from vitai.schema import ambiguous_aliases
+
+    ambiguous = set(ambiguous_aliases())
+    for name, entry in registry("units")["unit"].items():
+        for alias in entry.get("aliases") or []:
+            assert alias in aliases_for(name) or alias in ambiguous, (
+                f"{alias!r} is in the registry under {name} and reaches no "
+                f"published surface at all")
 
 
 def test_no_alias_is_a_field_name_belonging_to_something_else():

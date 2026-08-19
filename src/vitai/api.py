@@ -56,6 +56,7 @@ from .safety import (
     DISCLAIMER, active_episodes, banner, escalations, gates_on, hold_gates,
     is_gated, may, urgent_now,
 )
+from .schema import ambiguous_aliases
 from .schema import (CURRENT_GENERATION, KEYS, aliases_for, coarse,
                      day_phases, units)
 from .verdicts import compute_verdicts
@@ -3782,6 +3783,19 @@ def schema() -> dict:
         # surface an agent has no door onto. A consumer that has to guess the
         # vocabulary of a verdict will branch on the two words it has seen.
         "pending_verdicts": list(PENDING_VERDICTS),
+        # THE WORDS THAT NAME MORE THAN ONE MEASURAND (#400), beside
+        # `fields` because they are the other half of the same vocabulary: a
+        # consumer resolving a word needs to look here FIRST and refuse, and
+        # only then fall through to a field's `aliases`.
+        #
+        # Published as the engine's refusal rather than left to each client to
+        # discover. Two clients disagreed about what `pulse` meant - one had
+        # it on `avg_hr` because this engine published it there, the other on
+        # `rhr` - and neither marked the choice as a choice. Naming the
+        # candidates lets a client ask which was meant, with `display_name`
+        # for each, instead of answering about a measurand this record will
+        # not vouch for.
+        "ambiguous_aliases": ambiguous_aliases(),
         # WHAT EACH CONTRACT TOUCHED (#451), by the route `fields`,
         # `ordering`, `phase_rule` and `session_types` all took, and for the
         # reason #257 gave: a separate accessor is a new place for parity to
