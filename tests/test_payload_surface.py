@@ -113,19 +113,24 @@ def test_the_payload_is_nameable():
     `aliases`, `units` and `display_name` a client renders. None of it could
     be written down before this.
     """
+    # One catalogue for the eight, which is what the `cat` argument is for:
+    # building it reads the whole published payload, and eight of those is
+    # eight seconds.
+    cat = contracts.catalogue()
     for named in ("payload:fields", "payload:fields.aliases",
                   "payload:fields.display_name", "payload:fields.units",
                   "payload:session_types", "payload:ambiguous_aliases",
                   "payload:impact.floor", "payload:builds.released"):
-        assert contracts.unresolved(named) is None, named
+        assert contracts.unresolved(named, cat) is None, named
 
 
 def test_a_payload_name_that_is_not_published_is_refused():
     """Fail-closed, and per top-level key rather than over one flat pile: a
     sub-name that exists under `impact` must not resolve under `fields`."""
-    assert contracts.unresolved("payload:no_such_key") is not None
-    assert contracts.unresolved("payload:fields.no_such_spec") is not None
-    assert contracts.unresolved("payload:fields.floor") is not None
+    cat = contracts.catalogue()
+    assert contracts.unresolved("payload:no_such_key", cat) is not None
+    assert contracts.unresolved("payload:fields.no_such_spec", cat) is not None
+    assert contracts.unresolved("payload:fields.floor", cat) is not None
 
 
 def test_the_payload_names_come_from_the_payload():

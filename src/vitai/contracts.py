@@ -230,8 +230,13 @@ def assess(since: int, upto: int, reads: list[str] | None) -> dict:
     # would be computed over 29 surfaces and read as the answer for 30. This
     # is the rule the floor already states - a partial answer to "may I stay"
     # has the same shape as a wrong one.
+    payload = None
     if stated:
-        cat = catalogue()
+        from .api import schema
+        # ONE BUILD, shared by the catalogue and the digest. Asking for both
+        # separately paid for `schema()` twice on every verdict.
+        payload = schema()
+        cat = catalogue(payload)
         bad = [(r, unresolved(r, cat)) for r in reads if r and r.strip()]
         bad = [(r, why) for r, why in bad if why]
         if bad:
@@ -266,11 +271,12 @@ def assess(since: int, upto: int, reads: list[str] | None) -> dict:
         # CARRIED ON EVERY VERDICT, including one where no payload read was
         # declared, because the client that has not thought about the payload
         # is the one that needs telling it moves on its own clock.
-        "payload_digest": payload_digest(),
+        "payload_digest": (payload_digest() if payload is None
+                           else _digest_of(payload)),
     }
 
 
-def catalogue() -> dict[str, set[str]]:
+def catalogue(payload: dict | None = None) -> dict:
     """Every surface a client can reach, by namespace.
 
     DERIVED FROM THE ENGINE'S OWN DECLARATIONS rather than restated here, for
@@ -295,20 +301,34 @@ def catalogue() -> dict[str, set[str]]:
       other. Derived from the payload for the reason the rest of this is
       derived: a list kept beside it would agree with it and catch nothing.
     """
-    from .db import DERIVED_TABLES
-    from .schema import KEYS, META_KEYS
+    return {ns: _namespace_catalogue(ns, payload) for ns in AUDIENCE}
 
-    tables = {name: set(cols) for name, cols in KEYS.items()}
-    for name, cols in DERIVED_TABLES.items():
-        tables.setdefault(name, set()).update(cols)
 
-    from .api import Vitai, schema
-    report = {name for name in dir(Vitai)
-              if not name.startswith("_")
-              and not isinstance(getattr(Vitai, name, None), (str, int))}
-    payload = {key: _keys_under(value) for key, value in schema().items()}
-    return {"table": tables, "meta": set(META_KEYS),
-            "report": report, "payload": payload}
+def _namespace_catalogue(ns: str, payload: dict | None = None):
+    """One namespace of the catalogue, built on its own.
+
+    ONE AT A TIME because the payload one is not free: `api.schema()` costs
+    about a second, almost all of it `field_types` over 208 fields, and
+    resolving a table surface has no business paying for it. Resolving one
+    surface built the whole catalogue at first, which turned a 24-test file
+    into an 83-second one.
+    """
+    if ns == "table":
+        from .db import DERIVED_TABLES
+        from .schema import KEYS
+        tables = {name: set(cols) for name, cols in KEYS.items()}
+        for name, cols in DERIVED_TABLES.items():
+            tables.setdefault(name, set()).update(cols)
+        return tables
+    if ns == "meta":
+        from .schema import META_KEYS
+        return set(META_KEYS)
+    if ns == "report":
+        from .api import Vitai
+        return {name for name in dir(Vitai) if not name.startswith("_")}
+    from .api import schema
+    body = schema() if payload is None else payload
+    return {key: _keys_under(value) for key, value in body.items()}
 
 
 def _keys_under(value) -> set[str]:
@@ -383,8 +403,9 @@ def unresolved(surface: str, cat: dict | None = None) -> str | None:
     building it reads the whole published payload, and doing that once per read
     turned a verdict into a hundred of them.
     """
-    cat = catalogue() if cat is None else cat
     ns = _namespace(surface)
+    if cat is None:
+        cat = {ns: _namespace_catalogue(ns)}
     body = surface.split(":", 1)[1] if ns != "table" else surface
 
     # A namespace written bare names all of itself, which `_covers` has always
