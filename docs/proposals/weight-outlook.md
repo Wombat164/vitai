@@ -61,10 +61,12 @@ it is why building the width first is not a detour.
 ## The consistency gate against `weight_rate`
 
 `verdicts.ANSWERS_BY_METRIC` scores `weight_rate` as a DIRECTION and not a
-number, because this project's pre-registered run measured the median 95 per
-cent half-width of a week-over-week rate at **1.74 times the entire decision
-half-band**, with more than half of scored weeks admitting no verdict word at
-all.
+number, because this project's pre-registered run measured the median
+`u_rate / half-band` of a week-over-week rate at **1.74**, with more than half
+of scored weeks admitting no verdict word at all. (This document first called
+1.74 a 95 per cent half-width, copying a mislabel in `verdicts.py`; #460
+corrected both. It is a standard uncertainty ratio, so the 95 per cent
+half-width is about 3.4 half-bands.)
 
 An outlook drawing a seven-day band NARROWER than that decision band would be
 the same engine claiming, one surface over, a resolution it had already
@@ -72,9 +74,16 @@ measured away. So `verdicts.RATE_DECISION_BAND` is named rather than inline,
 and `test_weight_outlook.py` asserts the seven-day spread against it.
 
 On the shipped demo the seven-day spread is **0.90 kg against a 0.50 kg
-decision band - 1.8 times it**, which corroborates the pre-registered 1.74 by
-a route sharing no arithmetic with it. Different record, different estimator,
-same finding.
+decision band - 1.8 times it**.
+
+**That 1.8 is not the same statistic as the pre-registered 1.74 and this
+document first implied it was** (#460). One is a p10..p90 width of observed
+seven-day changes against the whole band; the other is a standard uncertainty
+of a weekly mean against the half-band. They landed near each other by
+coincidence. What survives, and it is the part that mattered, is the
+inequality: a week of this record's own change does not fit inside the band a
+weekly rate is judged in. `vitai rate-uncertainty` now runs the pre-registered
+estimator itself, and on this demo it returns 0.68 rather than 1.74.
 
 ## Where the two DO conflict, stated rather than smoothed over
 

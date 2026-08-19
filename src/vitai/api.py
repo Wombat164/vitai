@@ -25,7 +25,8 @@ from pathlib import Path
 from statistics import mean
 
 from . import __version__
-from .config import Config, load_config, policy_digest
+from .config import (Config, load_config, overlay, phase_rate_for,
+                     policy_digest)
 from .contributions import (_standing, compute_contributions,
                             goal_progress)
 from .crossings import compute_band_crossings, compute_crossings
@@ -51,6 +52,7 @@ from .jsonl import (EVENT_DATASETS, PENDING_VERDICTS, append, append_many,
 from . import query
 from .agreement import compute_agreement
 from .outlook import compute_outlook
+from .rate_uncertainty import compute as compute_rate_uncertainty
 from .policy import (State, all_comparable, capability, comparability,
                      context_on, days_between, events_on, plan_churn, state)
 from .report import build_report
@@ -1849,6 +1851,38 @@ class Vitai:
                         for r in rows)
         return compute_outlook(series, upto=days, refused=refused,
                                build=__version__)
+
+    def rate_uncertainty(self) -> dict:
+        """Can this record support a weekly weight rate as a NUMBER? (#460)
+
+        The phase-0 measurement behind `weight_rate`'s direction-only scoring,
+        reproduced so a second record can be asked. See
+        `rate_uncertainty.py` for the estimator, which is the one
+        `docs/proposals/uncertainty/00-phase0-experiment.md` wrote down before
+        the run, and for why both ratios are published.
+
+        CANONICAL, and the same policy overlay `compute_verdicts` uses, so the
+        target this is judged against is the target the verdict is judged
+        against rather than a second reading of the config.
+
+        NO SEAM REFUSAL, unlike `weight_outlook`. This does not state anything
+        about the athlete's weight - it states the dispersion of their
+        weigh-ins - and a protocol or instrument change is one of the things
+        making that dispersion what it is. Refusing here would hide the very
+        records whose rate is least supportable.
+        """
+        rows = [r for r in (self.canonical("weight") or [])
+                if r.get("kg") is not None]
+        series = sorted((str(r["date"]), float(r["kg"])) for r in rows)
+        goals = self.dataset("goals")
+        thresholds = self.dataset("thresholds")
+
+        def target_for(mean_kg: float, week: str):
+            as_of = state(goals or [], thresholds or [], week)
+            return phase_rate_for(overlay(self.config, as_of.thresholds),
+                                  mean_kg)
+
+        return compute_rate_uncertainty(series, target_for, build=__version__)
 
     def energy_agreement(self, days: int = 7) -> dict:
         """Does this record's energy balance explain its weight change? (#458)

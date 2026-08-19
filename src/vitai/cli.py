@@ -454,6 +454,32 @@ def cmd_milestones(args: argparse.Namespace) -> None:
                   f" = {r['value']:g}{when}")
 
 
+def cmd_rate_uncertainty(args: argparse.Namespace) -> None:
+    """Can this record support a weekly weight rate as a number? (#460)"""
+    out = Vitai(_root(args)).rate_uncertainty()
+    if args.json:
+        print(json.dumps(out))
+        return
+    print(f"{out['weeks']} week(s) with a weigh-in, {out['scored']} scorable, "
+          f"{out['measurable']} measurable, {out['judged']} judgeable")
+    if out["refused"]:
+        print(f"cannot say: {out['refused']}")
+        return
+    print(f"  pooled within-week SD              {out['pooled_sd']:.3f} kg")
+    print(f"  median u_rate / half-band          {out['median_ratio']:.2f}")
+    print(f"  median 95% half-width / half-band  "
+          f"{out['median_expanded_ratio']:.2f}")
+    if out["judged"]:
+        print(f"  weeks whose interval crosses an edge   "
+              f"{out['refusal_rate']:.0%}")
+        print(f"  weeks whose interval covers the band   "
+              f"{out['straddle_rate']:.0%}")
+    print("The pre-registered run that made `weight_rate` a direction rather "
+          "than a number measured 1.74 on one record. This is that "
+          "measurement on this one; see docs/proposals/uncertainty/"
+          "00-phase0-experiment.md for the estimator.")
+
+
 def cmd_energy_agreement(args: argparse.Namespace) -> None:
     """Does this record's energy balance explain its weight change? (#458)"""
     out = Vitai(_root(args)).energy_agreement(days=args.days)
@@ -2153,6 +2179,9 @@ def main(argv: list[str] | None = None) -> None:
         ("crossings", cmd_crossings,
          "round-number, personal-first and boundary milestones over the "
          "weight series, no goal required (#370)"),
+        ("rate-uncertainty", cmd_rate_uncertainty,
+         "the phase-0 measurement behind `weight_rate` being a direction "
+         "rather than a number, run on this record (#460)"),
         ("energy-agreement", cmd_energy_agreement,
          "whether this record's own energy balance explains its own weight "
          "change better than its own median does (#458)"),
@@ -2336,6 +2365,9 @@ def main(argv: list[str] | None = None) -> None:
         if name == "crossings":
             p.add_argument("--json", action="store_true",
                            help="emit crossing rows as JSONL instead of prose")
+        if name == "rate-uncertainty":
+            p.add_argument("--json", action="store_true",
+                           help="emit the whole answer as one JSON object")
         if name == "energy-agreement":
             p.add_argument("--days", type=int, default=7,
                            help="the window length to ask over (default 7, "
