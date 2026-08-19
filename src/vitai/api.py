@@ -32,6 +32,7 @@ from .contributions import (_standing, compute_contributions,
 from .crossings import compute_band_crossings, compute_crossings
 from .db import CONTRACT_VERSION, DERIVED_TABLES, build_db
 from . import contracts as _contracts
+from . import bands as _bands
 from . import builds as _builds
 # Re-exported deliberately: the CLI reads them from here and the MCP adapter
 # reaches a rootless tool by `getattr` on this module, so the API surface is
@@ -3965,6 +3966,17 @@ def schema() -> dict:
         # for each, instead of answering about a measurand this record will
         # not vouch for.
         "ambiguous_aliases": ambiguous_aliases(),
+        # WHAT EVERY INTERVAL-SHAPED FIELD CLAIMS (#402), beside `fields`
+        # because it qualifies them: `lo`/`hi` name no coverage, so a client
+        # meeting `kg_lo` beside `grams_lo` sees one convention over two
+        # different claims. Each entry says where the width came from and what
+        # it covers, and the two that are NOT bands say so rather than being
+        # left out of a list a consumer would read as complete.
+        #
+        # A field absent from here has no declared width, which is #402's
+        # third state - estimated, width unknown - and is the honest answer for
+        # nearly every field including the one the issue was raised about.
+        "bands": _bands.declaration(),
         # WHAT EACH CONTRACT TOUCHED (#451), by the route `fields`,
         # `ordering`, `phase_rule` and `session_types` all took, and for the
         # reason #257 gave: a separate accessor is a new place for parity to

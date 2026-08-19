@@ -454,6 +454,24 @@ def cmd_milestones(args: argparse.Namespace) -> None:
                   f" = {r['value']:g}{when}")
 
 
+def cmd_bands(args: argparse.Namespace) -> None:
+    """What every interval-shaped field claims, and where its width came
+    from (#402)."""
+    rows = schema()["bands"]
+    if args.json:
+        print(json.dumps(rows))
+        return
+    for name, entry in rows.items():
+        if entry["kind"] != "band":
+            print(f"{name}  NOT A BAND: {entry['says']}")
+            continue
+        print(f"{name}  {entry['covers']} ({entry['covers_says']})")
+        print(f"{'':<{len(name) + 2}}from {entry['basis']}: {entry['says']}")
+    print("A field absent from this list has no declared width. That is the "
+          "honest state and not a gap: a width nobody measured is not "
+          "supplied here at any coverage.")
+
+
 def cmd_rate_uncertainty(args: argparse.Namespace) -> None:
     """Can this record support a weekly weight rate as a number? (#460)"""
     out = Vitai(_root(args)).rate_uncertainty()
@@ -2553,6 +2571,13 @@ def main(argv: list[str] | None = None) -> None:
         help="the contract version and dataset generations this engine emits")
     p.add_argument("--json", action="store_true")
     p.set_defaults(fn=cmd_schema)
+
+    # Rootless: what an interval claims is a property of the schema.
+    p = sub.add_parser(
+        "bands", help="what every interval-shaped field claims, and where "
+                      "its width came from")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(fn=cmd_bands)
 
     # Rootless for the same reason: what each contract touched is a property
     # of the installed engine.
