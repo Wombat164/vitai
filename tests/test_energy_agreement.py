@@ -17,7 +17,6 @@ balance is constructed here, and the measurement has to find it.
 from __future__ import annotations
 
 import json
-import statistics as st
 import subprocess
 import sys
 from datetime import date, timedelta
