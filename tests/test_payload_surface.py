@@ -23,6 +23,7 @@ So this file gates three things:
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 
@@ -222,11 +223,14 @@ def test_the_digest_stands_still_for_provenance(monkeypatch):
 def test_the_digest_is_the_same_in_a_second_process():
     """Set iteration and hash randomisation are how a digest becomes a coin
     toss, and a flapping digest is a stale-payload alarm that means nothing."""
-    code = ("import sys; sys.path.insert(0, 'src');"
-            "from vitai import contracts; print(contracts.payload_digest())")
+    code = "from vitai import contracts; print(contracts.payload_digest())"
+    # The parent environment plus one variable, never a hand-built one: a bare
+    # env with a POSIX PATH in it starts no interpreter on Windows, and this
+    # suite runs there.
     runs = {subprocess.run([sys.executable, "-c", code], capture_output=True,
-                           text=True, env={"PYTHONHASHSEED": seed, "PATH": "/usr/bin"},
-                           check=True).stdout.strip()
+                           text=True, check=True,
+                           env={**os.environ, "PYTHONHASHSEED": seed}
+                           ).stdout.strip()
             for seed in ("0", "1", "12345")}
     assert len(runs) == 1, runs
     assert runs == {contracts.payload_digest()}
