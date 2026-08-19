@@ -75,6 +75,31 @@ game or dashboard consumes:
 {"week": "2030-04-22", "metric": "weight_rate", "value": 0.36, "target": 0.35, "verdict": "on_target"}
 ```
 
+`vitai outlook --root examples/demo --days 7` says what this record's own
+weight has actually done over an elapsed interval, so a client drawing a drift
+cone does not have to choose its width:
+
+```
+62 weigh-in(s) over 83 days, 2030-04-08 to 2030-06-30, anchored at 75.5 kg
+  days      kg   p10..p90        pairs  windows
+     1   75.40    74.95..75.80       48       48
+     7   75.12    74.70..75.60       40        9
+p10 and p90 are where this record's own changes have fallen over that many
+days. They are not a prediction interval, and nothing here is modelled.
+```
+
+**Nothing is modelled and no physiological model is involved** - the figures
+are order statistics of readings the record holds (#372). `windows` counts
+DISJOINT stretches rather than overlapping pairs, because pairs at a fortnight
+horizon share almost all their readings and a pair count is not a sample size.
+A horizon without eleven observed changes and three disjoint stretches behind
+it is absent rather than narrow, and a protocol or undeclared instrument change
+under the series refuses the whole thing - the same two refusals `weight_rate`
+makes. See [docs/proposals/weight-outlook.md](docs/proposals/weight-outlook.md)
+for why the width cannot come from `kcal_out`, why the centre is not a
+forecast, and how the seven-day spread is held against the band `weight_rate`
+is judged in.
+
 ## The three layers
 
 ```

@@ -195,6 +195,18 @@ PERIOD_CHANGE = "period-over-period-change"
 #
 # Everything else is one logged or measured quantity against a stated policy,
 # which is the shape that does survive.
+# HOW CLOSE TO TARGET COUNTS AS ON TARGET, for a weekly weight rate.
+#
+# NAMED rather than left inline because a second surface has to agree with it.
+# `api.Vitai.weight_outlook` states what this record's weight has actually
+# done over an elapsed interval, and a seven-day band NARROWER than the band a
+# weekly rate is judged in would be the engine claiming, one surface over, the
+# resolution it has already measured away here - the pre-registered run put
+# the median 95 per cent half-width of a week-over-week rate at 1.74 times
+# this half-band. `test_weight_outlook.py` holds the two together, and it can
+# only do that against the constant itself rather than a copy of it.
+RATE_DECISION_BAND = 0.25
+
 ANSWERS_BY_METRIC = {
     # One logged or measured quantity against a stated policy - the shape
     # that survives. Self-report under-reports, but one-signed and into a
@@ -611,7 +623,7 @@ def compute_verdicts(cfg: Config, weight: list[dict], daily: list[dict],
             rows.append(_row(wk, "weight_rate", rate, target, NODATA, goal,
                              reason=NOT_SUPPORTED, statistic=PERIOD_CHANGE))
             continue
-        if abs(rate - target) <= 0.25:
+        if abs(rate - target) <= RATE_DECISION_BAND:
             verdict = ON
         else:
             verdict = AHEAD if rate > target else BEHIND
