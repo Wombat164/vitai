@@ -16,6 +16,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from . import __version__
+from .api import contract_impact
 from .api import (Vitai, absence, can_emit, init, parse_time, schema,
                   this_build)
 from .jsonl import DataError
@@ -1966,6 +1967,54 @@ def cmd_can_emit(args: argparse.Namespace) -> None:
               "which build wrote that row. Nothing does.")
 
 
+def cmd_contract_impact(args: argparse.Namespace) -> None:
+    """A harness over `api.contract_impact()`.
+
+    THE CLIENT CI STEP. Exit 0 means the pin may stay where it is; exit 1
+    means a surface this client reads moved under it and it has to look. The
+    exit code is the whole point: a step that only prints has to be read by a
+    person, which is the thing this replaces.
+
+    Rootless, for `cmd_schema`'s reason.
+    """
+    reads = None
+    if args.reads is not None:
+        reads = [r.strip() for r in args.reads.split(",") if r.strip()]
+    try:
+        verdict = contract_impact(args.since, args.upto, reads)
+    except ValueError as exc:
+        # EXIT 2, not 1. "I cannot answer" and "you must move" are different
+        # facts and a CI step should be able to tell them apart; both are
+        # non-zero, so the safe direction holds either way.
+        print(str(exc), file=sys.stderr)
+        raise SystemExit(2) from exc
+    if args.json:
+        print(json.dumps(verdict, indent=2, sort_keys=True))
+    else:
+        span = f"{verdict['contract_from']} -> {verdict['contract_to']}"
+        if not verdict["touched"]:
+            print(f"contract {span}: nothing declared, nothing to absorb")
+        elif not verdict["reads_stated"]:
+            print(f"contract {span}: MOVE. No read-set was stated, so this "
+                  f"cannot say you may stay. Pass --reads.")
+            for row in verdict["touched"]:
+                print(f"  {row['surface']:<34} {row['change']:<9} "
+                      f"contract {row['contract']}")
+        elif verdict["must_move"]:
+            print(f"contract {span}: MOVE. "
+                  f"{len(verdict['because'])} surface(s) you read changed:")
+            for row in verdict["because"]:
+                print(f"  {row['surface']:<34} {row['change']:<9} "
+                      f"contract {row['contract']}  ({row['audience']})")
+        else:
+            print(f"contract {span}: STAY. Nothing you read was touched.")
+        for row in verdict["not_yours"]:
+            print(f"  ignored: {row['surface']:<25} {row['change']:<9} "
+                  f"contract {row['contract']}  (you do not read it)")
+    if verdict["must_move"]:
+        raise SystemExit(1)
+
+
 def cmd_schema(args: argparse.Namespace) -> None:
     """A harness over `api.schema()`.
 
@@ -2369,6 +2418,24 @@ def main(argv: list[str] | None = None) -> None:
         help="the contract version and dataset generations this engine emits")
     p.add_argument("--json", action="store_true")
     p.set_defaults(fn=cmd_schema)
+
+    # Rootless for the same reason: what each contract touched is a property
+    # of the installed engine.
+    p = sub.add_parser(
+        "contract-impact",
+        help="whether a client pinned at a contract has to move, given what "
+             "it reads")
+    p.add_argument("--since", type=int, required=True,
+                   help="the contract this client is pinned at")
+    p.add_argument("--upto", type=int, default=None,
+                   help="the contract to move to; defaults to this engine's")
+    p.add_argument("--reads", default=None,
+                   help="comma-separated surfaces this client reads, e.g. "
+                        "'weight,sessions,crossings.kind'. OMITTING IT MEANS "
+                        "MOVE - a verdict of 'you may stay' is not reachable "
+                        "without one")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(fn=cmd_contract_impact)
 
     # Rootless for the same reason.
     p = sub.add_parser(
