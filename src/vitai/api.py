@@ -40,7 +40,8 @@ from .builds import ABSENCE_MEANINGS
 from .builds import absence as absence
 from .builds import can_emit as can_emit
 from .builds import this_build as this_build
-from .clocks import comparable, day_phase, is_aware, ordering_rule, phase_rule
+from .clocks import (comparable, day_phase, instrument_seam, is_aware,
+                     ordering_rule, phase_rule, protocol_seam)
 # Re-exported for the CLI, which must reach the engine only through this
 # module: `cmd_phases` prints a wall-clock time and slicing characters
 # off an offset-aware stamp prints "00+00" instead of one.
@@ -48,8 +49,9 @@ from .clocks import parse_time as parse_time
 from .jsonl import (EVENT_DATASETS, PENDING_VERDICTS, append, append_many,
                     classify_pending, load)
 from . import query
-from .policy import (State, capability, comparability, context_on,
-                     days_between, events_on, plan_churn, state)
+from .outlook import compute_outlook
+from .policy import (State, all_comparable, capability, comparability,
+                     context_on, days_between, events_on, plan_churn, state)
 from .report import build_report
 from .resolution import live_inferences, resolve, retractions
 from .safety import (
@@ -1802,6 +1804,66 @@ class Vitai:
                                        self.canonical("measurements")))
         out.sort(key=lambda r: (r["date"], r["kind"], r["direction"], r["value"]))
         return out
+
+    def weight_outlook(self, days: int | None = None) -> dict:
+        """What this record's own weight has done over an elapsed interval.
+
+        #372, and the surface a client needs to draw a drift cone without
+        choosing its width. See `outlook.py` for the two measurements that set
+        this shape - why the width cannot come from `kcal_out`, and why the
+        centre is an order statistic rather than a physiological model.
+
+        CANONICAL, NOT RAW, for `crossings()`' reason: one row per date, the
+        same adjudicated series `report.py`'s trend reads, so a day resolved
+        from two competing sources counts once.
+
+        THE THREE REFUSALS ARE `weight_rate`'S, and deliberately the same
+        three rather than a second opinion about the same seams:
+
+        A PROTOCOL CHANGE under the series. Two readings taken under different
+        protocols are not two samples of one measurand, and the scatter
+        between them is the protocol rather than the athlete. Declined without
+        a size, because saying how much a clothed evening weigh-in adds is a
+        per-protocol accuracy claim this engine has no basis for.
+
+        AN INSTRUMENT CHANGE under it, unless the record has DECLARED the pair
+        comparable. Never lifted by silence and never by `offset`: a stated
+        offset is a measured difference and not a licence to span it.
+
+        WHAT IS NOT REFUSED, and it is worth saying because `weight_rate`
+        refuses on it: weigh-in TIMING drift. That predicate asks whether a
+        particular rate could be explained by when the athlete stood on the
+        scale. This surface makes no such claim - it reports the spread, and
+        timing drift is one of the things making the spread what it is. A
+        record weighed at scattered hours gets a wider outlook, which is the
+        honest consequence rather than a refusal.
+
+        `days` caps the longest horizon. Omitted, the table runs as far as the
+        record's own span can support.
+        """
+        rows = [r for r in (self.canonical("weight") or [])
+                if r.get("kg") is not None]
+        refused = None
+        if rows:
+            if protocol_seam(rows)["seam"]:
+                refused = (
+                    "a protocol change sits under this series, so its readings "
+                    "are not repeated observations of one measurand")
+            else:
+                seam = instrument_seam(rows)
+                if seam["seam"] and not all_comparable(
+                        self.dataset("comparability"), "kg",
+                        seam["instruments"], self.on.isoformat(),
+                        self.dataset("overlaps")):
+                    refused = (
+                        "an instrument change sits under this series and no "
+                        "comparability row declares the pair one series, so "
+                        f"the step at the seam is indistinguishable from real "
+                        f"change: {', '.join(seam['instruments'])}")
+        series = sorted((date.fromisoformat(r["date"]), float(r["kg"]))
+                        for r in rows)
+        return compute_outlook(series, upto=days, refused=refused,
+                               build=__version__)
 
     def capability(self, origin: str, measures: str,
                    on: date | str | None = None,

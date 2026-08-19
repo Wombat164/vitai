@@ -454,6 +454,35 @@ def cmd_milestones(args: argparse.Namespace) -> None:
                   f" = {r['value']:g}{when}")
 
 
+def cmd_outlook(args: argparse.Namespace) -> None:
+    """What this record's weight has done over an elapsed interval (#372)."""
+    out = Vitai(_root(args)).weight_outlook(days=args.days)
+    if args.json:
+        print(json.dumps(out))
+        return
+    if out["refused"]:
+        print(f"no outlook: {out['refused']}")
+        return
+    print(f"{out['readings']} weigh-in(s) over {out['span_days']} days, "
+          f"{out['from']} to {out['as_of']}, anchored at "
+          f"{out['anchor_kg']} kg")
+    if not out["horizons"]:
+        print("no horizon has enough of this record behind it to state")
+        return
+    print("  days      kg   p10..p90        pairs  windows")
+    for row in out["horizons"]:
+        print(f"  {row['days']:4d}  {row['kg']:6.2f}   "
+              f"{row['kg_p10']:6.2f}..{row['kg_p90']:<6.2f}  "
+              f"{row['observed']:6d}  {row['windows']:7d}")
+    # SAID EVERY TIME, not once in a doc. These are order statistics of what
+    # this record has already done, and a reader who takes the pair for a
+    # coverage interval has been told the wrong thing by a table that looks
+    # like every other error bar they have seen.
+    print("p10 and p90 are where this record's own changes have fallen over "
+          "that many days. They are not a prediction interval, and nothing "
+          "here is modelled.")
+
+
 def cmd_crossings(args: argparse.Namespace) -> None:
     """Round-number, personal-first and band milestones: no goal required
     (#370)."""
@@ -2094,6 +2123,9 @@ def main(argv: list[str] | None = None) -> None:
         ("crossings", cmd_crossings,
          "round-number, personal-first and boundary milestones over the "
          "weight series, no goal required (#370)"),
+        ("outlook", cmd_outlook,
+         "what this record's own weight has done over an elapsed interval, "
+         "with the coverage behind each horizon (#372)"),
         ("append", cmd_append,
          "append JSONL rows from stdin, stamping recorded_at and _gen"),
         ("classify-pending", cmd_classify_pending,
@@ -2271,6 +2303,12 @@ def main(argv: list[str] | None = None) -> None:
         if name == "crossings":
             p.add_argument("--json", action="store_true",
                            help="emit crossing rows as JSONL instead of prose")
+        if name == "outlook":
+            p.add_argument("--days", type=int, default=None,
+                           help="cap the longest horizon; omitted, the table "
+                                "runs as far as the record's span supports")
+            p.add_argument("--json", action="store_true",
+                           help="emit the whole answer as one JSON object")
         if name == "append":
             p.add_argument("dataset", help="which dataset to append to")
         if name == "classify-pending":
