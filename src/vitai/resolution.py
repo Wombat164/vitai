@@ -1703,9 +1703,40 @@ def restatement_runs(canonical: dict) -> list[dict]:
     return out
 
 
+# Two readings are a pair; three are a series. The floor `overlaps` sets
+# (contract 53), reused rather than restated.
+PAIR_IS_NOT_A_SERIES = 3
+
+
+
 def _runs_in(dataset: str, field: str, rows: list[dict],
              rule: dict) -> list[dict]:
-    """Every constant run of this field long enough to be worth saying."""
+    """Every stretch of this field flat enough to be worth saying.
+
+    FLAT MEANS BELOW THE DECLARED FLOOR, not exactly constant, and the
+    difference is the whole of #459. `semantics/variation.toml` states
+    `min_spread_abs` for each field it lists - 0.2 kg for weight, with its own
+    reason - and this function read `window_days` and the note and never that.
+    So what it implemented was EXACT EQUALITY, which is strictly stronger than
+    the rule the registry states, and a series creeping by a gram a day walked
+    past a detector whose own comment says it should not.
+
+    It had already cost something. Four persona weight series in this
+    repository are ramps - `vera` runs 59.18, 59.14, 59.14, 59.13 - four times
+    flatter across any five days than the floor allows, and no two readings in
+    any of them are equal, so nothing said a word for as long as they have
+    existed.
+
+    A SPREAD OF ZERO ALWAYS FIRES, stated as its own clause rather than left
+    to a boundary convention. A rule that omits `min_spread_abs` gets a floor
+    of zero, and `spread < 0.0` would then be false for the constant run that
+    is the least arguable case there is - so the behaviour that existed before
+    this is written down rather than inherited from an inequality.
+
+    STRICTLY BELOW, for the rest, because the registry's own sentence is that
+    a series which "does not move by even this much" is too flat: travelling
+    exactly the floor is moving by this much.
+    """
     dated = sorted(
         ((str(r.get("date")), r.get(field)) for r in rows
          if r.get("date") and r.get(field) is not None),
@@ -1713,29 +1744,94 @@ def _runs_in(dataset: str, field: str, rows: list[dict],
     if not dated:
         return []
     window = int(rule.get("window_days", 5))
+    floor = float(rule.get("min_spread_abs", 0.0))
+
     out, start = [], 0
-    for i in range(1, len(dated) + 1):
-        same = i < len(dated) and dated[i][1] == dated[start][1]
-        if same:
-            continue
-        first, last = dated[start][0], dated[i - 1][0]
+    low = high = dated[0][1]
+    index = 1
+    while index <= len(dated):
+        if index < len(dated):
+            value = dated[index][1]
+            # `is_number` and not a local predicate: a record holding a
+            # string where a number belongs is not hypothetical - it is what
+            # `validate()` exists to report, and the report has to survive it.
+            # The first draft wrote its own copy of this, which is the fourth
+            # time that has happened to a function whose docstring is about
+            # the previous three. `test_no_rule_is_implemented_twice` said so.
+            if is_number(low) and is_number(high) and is_number(value):
+                wider_low, wider_high = min(low, value), max(high, value)
+                travel = wider_high - wider_low
+                extend = travel < floor or travel == 0
+            else:
+                # A VALUE THIS FIELD CANNOT SUBTRACT still has one thing worth
+                # saying about it, and only one: whether it repeated. A record
+                # holding a string where a number belongs reaches here - and
+                # it reaches here BECAUSE it is malformed, so this is exactly
+                # the path that must not raise. `validate()` is deliberately
+                # non-raising and a brief that crashed is holding, on the one
+                # record that needed it.
+                wider_low, wider_high = low, high
+                extend = value == low == high
+            if extend:
+                low, high = wider_low, wider_high
+                index += 1
+                continue
+        first, last = dated[start][0], dated[index - 1][0]
         # SPAN IN DAYS, not row count. Three readings on one morning are one
         # observation restated twice, not three days of agreement, and a
         # row-count rule would have called that a flat week.
-        if i - start >= 2 and _days_between(first, last) + 1 >= window:
+        span = _days_between(first, last) + 1
+        # HOW MUCH OBSERVATION A STRETCH NEEDS, and the two clauses do not
+        # need the same amount.
+        #
+        # An EXACTLY CONSTANT pair is evidence on its own: two mornings
+        # reporting the identical number a fortnight apart is what a value
+        # carried forward looks like, and that is the case this detector was
+        # built for.
+        #
+        # An EXACTLY CONSTANT stretch needs three, and TWO WAS THE OLD RULE.
+        # Measured over this repository's own corpus, the two-reading version
+        # produced 49 runs across five personas and 46 of them rested on two
+        # or three readings - `tom` alone had 23 pairs. His weight carries
+        # `rng.gauss(0, 0.35)` of real noise and is rounded to 0.1 kg, so two
+        # of his 326 readings landing on the same tick a week apart is a
+        # coincidence at that scale, not a value carried forward. Three is the
+        # floor `overlaps` already sets, for the reason contract 53 gives:
+        # below it the observations are the statement rather than a statement
+        # about them.
+        #
+        # A BELOW-FLOOR stretch needs a whole declared window, because "close"
+        # is far likelier by chance than "identical". `window_days` distinct
+        # DATES, counted the way the span is - three readings in one morning
+        # are one observation restated twice. Without this the first version
+        # of #459 fired on eleven of the thirteen records here, including the
+        # shipped demo, whose weight series was generated WITH day-to-day
+        # noise.
+        observed = len({when for when, _ in dated[start:index]})
+        moved = (high - low) if is_number(low) and is_number(high) else 0
+        enough = observed >= (PAIR_IS_NOT_A_SERIES if moved == 0 else window)
+        if enough and span >= window:
+            what = (f"held exactly {low}" if moved == 0
+                    else f"moved only {round(moved, 3)} - "
+                         f"from {low} to {high}")
             out.append({
                 "date": first,
                 "kind": "constant_value_run",
                 "severity": "review",
                 "detail": (
-                    f"{dataset}.{field} held exactly {dated[start][1]} from "
-                    f"{first} to {last}, which is {_days_between(first, last) + 1} "
-                    f"days. {rule.get('note', '')} If this is real, a regime "
+                    f"{dataset}.{field} {what} from {first} to {last}, which "
+                    f"is {span} days, and the registry declares "
+                    f"{rule.get('min_spread_abs', 0)} across "
+                    f"{window} days as the least a real one moves. "
+                    f"{rule.get('note', '')} If this is real, a regime "
                     f"declaration says so; if it is a value carried forward, "
                     f"the reading it was carried from is the one observation "
                     f"here"),
             })
-        start = i
+        start = index
+        if start < len(dated):
+            low = high = dated[start][1]
+        index += 1
     return out
 
 
