@@ -441,7 +441,22 @@ def test_single_source_resolution_is_byte_identical(tmp_path):
     # value stops being silent. A repo that has one is entitled to hear so, and
     # hearing so is not the adjudication layer moving a number.
     fired = v.resolution()["tripwires"]
-    assert [t["kind"] for t in fired] == ["unread_retired_value"], fired
+    # NAMED, NOT FILTERED, for the reason above - and the second one arrived
+    # the day the restatement detector started reading the floor its own
+    # registry declares (#459). This fixture's steps are `9000 + d`: one step
+    # a day, 18 across nineteen days, against a declared 100 across three.
+    # The detector is right, and it is the same defect this fixture set has in
+    # miniature - a series built to be tidy cannot exhibit what a check looks
+    # for, so the check passed on it for years by finding nothing.
+    #
+    # It is left as it is rather than given plausible step counts. A fixture
+    # adjusted to stop a finding is the failure `docs/persona-doctrine.md`
+    # names, and the finding is true: reporting on the record's own SHAPE is
+    # not the adjudication layer moving a number, which is what this test is
+    # about.
+    assert [t["kind"] for t in fired] == [
+        "constant_value_run", "unread_retired_value"], fired
+    assert "daily.steps" in fired[0]["detail"]
 
     db = v.build()
     first = db.read_bytes()

@@ -66,6 +66,45 @@ The corpus states what it does NOT cover. Eight personas is a sample, and a
 fixture set that implies completeness is the same failure as a dashboard that
 implies coverage it does not have.
 
+### 6. It can exhibit what the engine detects
+
+Property 1 is about the persona: there is an expectation that would break. This
+one is about its DATA: the series have to be capable of carrying the phenomena
+the engine looks for.
+
+**A fixture that cannot exhibit a phenomenon passes every test written against
+it and proves nothing.** The test is green because the data is incapable, not
+because the engine is right, and the two are indistinguishable from the test's
+side. It is property 1's failure one level down - an oracle that cannot be
+wrong, arrived at through the generator rather than through the assertions.
+
+This repository met it twice in one day, in the same week the two features that
+would have found it were built:
+
+- **Energy and weight generated from unrelated random streams.** The demo walks
+  weight with one draw and takes `kcal_in`/`kcal_out` from two others, so the
+  correlation between a deficit and a weight change is zero *by construction*.
+  Any test of an energy model against this corpus measures nothing, in either
+  direction: a model that works fails it and a model that does not fails it
+  identically (#458).
+- **Weight series generated as ramps.** Four personas move by a gram or two a
+  day and never reverse. `vera` runs 59.18, 59.14, 59.14, 59.13. A variation
+  detector, a trend filter, a drift cone or a smoothing constant calibrated on
+  those is calibrated on a body that does not fluctuate (#459).
+
+**The corollary, and it is the one that bites hardest.** A corpus regenerated in
+the same change as the gate that judges it stays green and cannot falsify that
+gate: the data was made to satisfy the rule, so the rule has been tested against
+nothing but itself. So the check that judges a fixture must be authored
+independently of it - ideally, as in #459, it is a rule the engine already
+shipped for another purpose and the change only makes the code read it.
+
+**What this does NOT license.** Not tidying a persona so it exhibits something -
+"a persona may not be tidied to make a test pass" still holds, and it holds
+harder here, because the tidying would be invisible in the diff of a generator.
+The remedies are the append-only ones below: extend, supersede, or add a new
+persona whose data can carry what the old one could not.
+
 ## Versioning
 
 Three different things drift and they are not the same version.
