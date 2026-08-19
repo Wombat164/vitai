@@ -89,6 +89,75 @@ def append_many(data_dir: Path, name: str, records: list[dict],
     5. VALIDATES EVERY ROW BEFORE WRITING ANY. An append-only file cannot be
        un-appended, so a batch with one bad row writes nothing at all rather
        than leaving a caller to work out how far it got.
+
+    The stamping and validation above are `_prepared`, split out so that
+    `pending_problems` can ask what this write would refuse WITHOUT
+    performing it - see #425. Steps 1 to 5 happen there and are described
+    here because this is the door callers use.
+    """
+    path, rows = _prepared(data_dir, name, records, now, device)
+
+    # A CORRECTION THAT WOULD RETIRE NOTHING IS REFUSED HERE, before it is
+    # written (#210).
+    #
+    # The failure this closes is silent in all three of its recorded
+    # instances: the correction lands, `retire` walks past it, both rows stay
+    # live, and `validate` reports an ADVISORY - so the write reports success
+    # and the old value is what every reader sees. It is reachable through
+    # this path, not only through hand-written lines: a row another writer
+    # stamped ahead of this machine's clock is a target a correction written
+    # now sorts BEFORE, and nothing said so.
+    #
+    # The direction of the harm is always the same. A correction that does
+    # nothing leaves the value it was meant to replace in place, and a caller
+    # cannot tell that from success.
+    #
+    # ASKED OF `retire` RATHER THAN RE-DERIVED, which is that function's own
+    # recorded lesson: working the ordering rules out a second time got three
+    # cases wrong, and asking is exact.
+    if rows:
+        problems = _corrections_that_would_not_apply(data_dir, name, rows)
+        if problems:
+            raise DataError(
+                f"refusing to append to {name}: " + "; ".join(problems))
+
+    if rows:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8", newline="\n") as fh:
+            fh.write("".join(json.dumps(r) + "\n" for r in rows))
+    return rows
+
+
+def _prepared(data_dir: Path, name: str, records: list[dict],
+              now: datetime | None = None,
+              device: str | None = None) -> tuple[Path, list[dict]]:
+    """The rows `append_many` would write, and the file it would write them to.
+
+    Split out of `append_many` for #425. A caller preparing rows cannot supply
+    `recorded_at` - it is the one clock in the record that may not be authored
+    - so a pending row has no ordering field, and every check that ORDERS it
+    was being asked a question about a value that does not exist yet. It
+    answered "this correction sorts before its target" for every legal pending
+    row, which is the wrong answer to a question nobody could have asked
+    correctly.
+
+    THE STAMP IS MODELLED, NOT GUESSED. `now_stamp(now, after=high_water)` over
+    this device's file is not an estimate of what the append will assign, it is
+    the assignment - the same code, over the same file, reached the same way.
+    Anything that re-derived "the stamp will be roughly now" would be a second
+    implementation of the rule, which is the mistake `_targets_retired` has
+    already recorded once.
+
+    HIGH WATER FROM THIS DEVICE'S FILE ALONE, exactly as the write does (#105).
+    Taking it from the MERGED record would stamp this row past a peer's row and
+    silence the guard that exists for that case - a correction would look
+    applicable here and inapplicable on the peer that syncs it, which is #391's
+    view-dependence arriving from the other side. The modelled stamp is allowed
+    to be earlier than a peer's, because the real one will be.
+
+    NOTHING IS WRITTEN HERE. The directory is not created and the file is not
+    opened; `path` is returned so the caller that does write does not compute
+    it twice.
     """
     if name not in KEYS:
         raise KeyError(f"unknown dataset {name!r}; one of {sorted(KEYS)}")
@@ -215,36 +284,7 @@ def append_many(data_dir: Path, name: str, records: list[dict],
                    if len(records) > 1 else "")
                 + ": " + "; ".join(problems))
         rows.append(row)
-
-    # A CORRECTION THAT WOULD RETIRE NOTHING IS REFUSED HERE, before it is
-    # written (#210).
-    #
-    # The failure this closes is silent in all three of its recorded
-    # instances: the correction lands, `retire` walks past it, both rows stay
-    # live, and `validate` reports an ADVISORY - so the write reports success
-    # and the old value is what every reader sees. It is reachable through
-    # this path, not only through hand-written lines: a row another writer
-    # stamped ahead of this machine's clock is a target a correction written
-    # now sorts BEFORE, and nothing said so.
-    #
-    # The direction of the harm is always the same. A correction that does
-    # nothing leaves the value it was meant to replace in place, and a caller
-    # cannot tell that from success.
-    #
-    # ASKED OF `retire` RATHER THAN RE-DERIVED, which is that function's own
-    # recorded lesson: working the ordering rules out a second time got three
-    # cases wrong, and asking is exact.
-    if rows:
-        problems = _corrections_that_would_not_apply(data_dir, name, rows)
-        if problems:
-            raise DataError(
-                f"refusing to append to {name}: " + "; ".join(problems))
-
-    if rows:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8", newline="\n") as fh:
-            fh.write("".join(json.dumps(r) + "\n" for r in rows))
-    return rows
+    return path, rows
 
 
 # Datasets whose identity fields spell a null as an empty string rather than
@@ -489,9 +529,41 @@ def _targets_retired(dataset: str,
     return out
 
 
-def _corrections_that_would_not_apply(data_dir: Path, name: str,
-                                      pending: list[dict]) -> list[str]:
+def _target_present(name: str, ref: tuple[str, int | None, str | None],
+                   rows: list[dict]) -> bool:
+    """Is there a row for this reference that is not a correction of it?
+
+    A correction usually SHARES ITS TARGET'S KEY - same date, same source -
+    so asking whether any row has that key answers yes for the correction
+    itself, and a reference whose target has not synced looked present. That
+    turned the offline-first case into a refusal.
+
+    A MODULE FUNCTION rather than a closure (#425). `classify_pending` needs
+    the same answer to tell "names a row the record holds" from "names a row
+    that has not arrived", and working it out a second time is how
+    `_targets_retired` got three cases wrong.
+    """
+    key, pos, actor = ref
+    return any(line_key(name, r) == key
+               and (pos is None or position_of(r) == pos)
+               # #391: a correction naming a machine is answered only by
+               # that machine's row. A peer's row at the same position was
+               # never its target, so counting it here would report the
+               # target as present and skip the offline-first case.
+               and (actor is None or r.get("device") == actor)
+               and target_of(r) != ref
+               for r in rows)
+
+
+def _refusals(data_dir: Path, name: str, pending: list[dict]
+              ) -> list[tuple[frozenset, str]]:
     """Which of these corrections would land and retire nothing (#210).
+
+    Each entry pairs the references a refusal covers with the sentence that
+    explains it, so a caller can say WHICH ROW was refused rather than hand
+    back a list of prose and leave the mapping to be guessed at (#425). The
+    event-dataset case is deliberately one entry covering many references: it
+    is one fact about the dataset, not a fact about each row.
 
     Checked against the MERGED order rather than this device's file, because
     that is the order `retire` walks and the whole hazard is a row another
@@ -515,8 +587,45 @@ def _corrections_that_would_not_apply(data_dir: Path, name: str,
     reference there is not defeated by ordering, it is meaningless. Refusing
     it with an ordering explanation would send a writer to fix a clock over a
     row that no clock can help.
+
+    EVERY ROW MUST ALREADY BE STAMPED, and an unstamped one is refused rather
+    than answered about - see below.
     """
     from .devices import merge
+
+    # A ROW WITH NO STAMP IS NOT A ROW THIS CAN ANSWER ABOUT (#425).
+    #
+    # This is an ordering question, and `recorded_at` is the field it orders
+    # by. A caller preparing rows may not supply one - it is the one clock in
+    # the record that cannot be authored - so an unwritten row has none, and
+    # `merge` sorts absent BEFORE present by design. Every correction in such
+    # a batch therefore sorts ahead of its target and comes back refused: not
+    # because the record says so, but because the question was asked of a
+    # value that does not exist yet.
+    #
+    # That answer was wrong in the one direction that matters. It refused the
+    # ordinary case - a day exported at lunchtime and completed after dinner,
+    # restated with `supersedes` - which is precisely the case #210's own
+    # reasoning says a refusal must not break.
+    #
+    # REFUSING TO ANSWER RATHER THAN MODELLING THE STAMP HERE. Stamping is
+    # `_prepared`'s job and it is the only thing that knows which file, which
+    # high-water mark and which device; doing it again here would be a second
+    # implementation of the rule, and a function that silently answers about
+    # a stamp it invented is how the original defect stayed invisible.
+    unstamped = [n for n, r in enumerate(pending, 1)
+                 if r.get("recorded_at") is None]
+    if unstamped:
+        raise ValueError(
+            f"cannot say what a correction would retire: {len(unstamped)} of "
+            f"{len(pending)} pending rows carry no 'recorded_at' (row(s) "
+            f"{', '.join(map(str, unstamped))}). That is the field this "
+            f"orders by, and a row that has not been appended has not been "
+            f"stamped - so every correction here would be reported as sorting "
+            f"before its target, which is an answer manufactured by the "
+            f"question rather than read off the record. Call "
+            f"`pending_problems`, which models the stamp the append will "
+            f"assign and then asks this (#425).")
 
     existing, _ = _read_streams(data_dir, name)
     held = [r for _, r in existing]
@@ -526,37 +635,19 @@ def _corrections_that_would_not_apply(data_dir: Path, name: str,
     # this refuses - and reported success. Whether the sibling actually
     # retires it is then decided by the merged order like everything else,
     # so a batch written target-first still applies and is accepted.
-    def _target_exists(ref: str) -> bool:
-        """Is there a row for this reference that is not a correction of it?
-
-        A correction usually SHARES ITS TARGET'S KEY - same date, same source
-        - so asking whether any row has that key answers yes for the
-        correction itself, and a reference whose target has not synced looked
-        present. That turned the offline-first case into a refusal.
-        """
-        key, pos, actor = ref
-        return any(line_key(name, r) == key
-                   and (pos is None or position_of(r) == pos)
-                   # #391: a correction naming a machine is answered only by
-                   # that machine's row. A peer's row at the same position was
-                   # never its target, so counting it here would report the
-                   # target as present and skip the offline-first case.
-                   and (actor is None or r.get("device") == actor)
-                   and target_of(r) != ref
-                   for r in held + pending)
-
     refs = {t for r in pending if (t := target_of(r)) is not None}
-    refs = {ref for ref in refs if _target_exists(ref)}
+    refs = {ref for ref in refs if _target_present(name, ref, held + pending)}
     if not refs:
         return []
 
     if name in EVENT_DATASETS:
-        return [f"{name} is an event dataset and is never retired: a later "
-                f"row cannot make an earlier one not have been said, so "
-                f"{sorted(_spell(r) for r in refs)} would retire nothing "
-                f"here whatever it is "
-                f"stamped. Append the correction as its own row without "
-                f"'supersedes'"]
+        return [(frozenset(refs),
+                 f"{name} is an event dataset and is never retired: a later "
+                 f"row cannot make an earlier one not have been said, so "
+                 f"{sorted(_spell(r) for r in refs)} would retire nothing "
+                 f"here whatever it is "
+                 f"stamped. Append the correction as its own row without "
+                 f"'supersedes'")]
 
     # ONE merge and one retire per reference, over held plus every pending
     # row - which is the state the write actually produces.
@@ -566,7 +657,7 @@ def _corrections_that_would_not_apply(data_dir: Path, name: str,
     would_be = merge([("", held)] + sorted(by_device.items()), name)
 
     retired = _targets_retired(name, would_be)
-    out = []
+    out: list[tuple[frozenset, str]] = []
     # `None` and an int are not comparable, so a batch mixing a bare and a
     # narrowed correction of one key raised a TypeError here - on the HAPPY
     # path, because this sort runs before the applied filter below.
@@ -581,14 +672,165 @@ def _corrections_that_would_not_apply(data_dir: Path, name: str,
                        default="")
         stamps = ", ".join(sorted(str(r.get("recorded_at")) for r in pending
                                   if target_of(r) == ref))
-        out.append(
-            f"a correction naming {_spell(ref)} would retire nothing. The row it "
-            f"names is stamped {blocking} and this write is stamped {stamps}, "
-            f"so the correction sorts before its target and `retire` walks "
-            f"past it. It would land, report success, and leave the value it "
-            f"was meant to replace in place - which is what makes this "
-            f"failure invisible. Nothing appended from this machine can "
-            f"correct that row until its clock passes that stamp")
+        out.append((frozenset({ref}),
+                    f"a correction naming {_spell(ref)} would retire nothing. "
+                    f"The row it "
+                    f"names is stamped {blocking} and this write is stamped "
+                    f"{stamps}, "
+                    f"so the correction sorts before its target and `retire` "
+                    f"walks "
+                    f"past it. It would land, report success, and leave the "
+                    f"value it "
+                    f"was meant to replace in place - which is what makes this "
+                    f"failure invisible. Nothing appended from this machine "
+                    f"can "
+                    f"correct that row until its clock passes that stamp"))
+    return out
+
+
+def _corrections_that_would_not_apply(data_dir: Path, name: str,
+                                      pending: list[dict]) -> list[str]:
+    """`_refusals` as the sentences alone - what `append_many` raises with."""
+    return [message for _, message in _refusals(data_dir, name, pending)]
+
+
+# WHAT A PENDING ROW IS, in one word, and none of the five is inferred from a
+# clock (#425).
+#
+#   new          nothing keyed like this is held; it says something fresh
+#   restatement  the record already holds this key and this row names no
+#                target. It is a SECOND CLAIM, not a correction
+#   correction   it names a row the record holds, and the append would retire
+#                that row
+#   unmatched    it names a row nothing answers yet. Legal, and left alone:
+#                an offline-first record holds corrections whose targets have
+#                not synced, and they apply when the target lands
+#   refused      it names a row the append would NOT retire, and the append
+#                will raise rather than land a correction that does nothing
+#
+# `restatement` is the answer #425 came for and it is deliberately not
+# `correction`. An importer re-exporting a day it already sent holds a row
+# that restates one the record has, and the only orderable fact that could
+# make it a correction is `recorded_at` - which it may not author, and which
+# does not exist until the append assigns it. So the engine says what the row
+# IS rather than guessing what it MEANT: two claims, both live, resolution
+# picks the later. A caller that meant to replace the earlier one says so with
+# `supersedes`, which is the intent field the record already has.
+PENDING_VERDICTS = ("new", "restatement", "correction", "unmatched", "refused")
+
+
+def pending_problems(data_dir: Path, name: str, pending: list[dict],
+                     now: datetime | None = None,
+                     device: str | None = None) -> list[str]:
+    """What appending `pending` would refuse, asked BEFORE the append (#425).
+
+    The same sentences `append_many` raises with, over the same rows, in the
+    same order - because it is the same call over rows prepared by the same
+    function. An importer can ask and get the answer the write gives.
+
+    THE STAMP IS MODELLED BY DOING IT. `_prepared` assigns `recorded_at`
+    exactly as the append will, from this device's file and its high-water
+    mark, and the refusals are then read off those rows. Nothing here
+    estimates what the stamp will be.
+
+    AND THE GUARD SURVIVES IT. A row a peer stamped ahead of this machine is
+    still ahead of the modelled stamp, because high water is this device's
+    file alone - so a correction that cannot apply is refused here exactly as
+    it is refused by the write, and on the peer that syncs it. Modelling this
+    device's clock does not move this device's clock.
+
+    IT RAISES WHAT THE APPEND RAISES. A caller-supplied `recorded_at`, a
+    supplied `device` or `seq`, an unknown key, an invalid row, a backwards
+    system clock: all of those come out of `_prepared` as the exception the
+    append would have thrown. This returns a list only for the question it
+    is here to answer.
+    """
+    _, rows = _prepared(data_dir, name, pending, now, device)
+    if not rows:
+        return []
+    return _corrections_that_would_not_apply(data_dir, name, rows)
+
+
+def classify_pending(data_dir: Path, name: str, pending: list[dict],
+                     now: datetime | None = None,
+                     device: str | None = None) -> list[dict]:
+    """What each pending row is, before the append that would order it (#425).
+
+    One dict per row, in the order given: `row` (1-based), `verdict` (one of
+    `PENDING_VERDICTS`), `target` (the `supersedes` as written, or None) and
+    `reason`.
+
+    THIS IS THE QUESTION AN IMPORTER WAS ASKING WRONGLY. It compared
+    `recorded_at` against the rows it already held to decide whether an
+    incoming row was a correction - and an incoming row has no `recorded_at`,
+    may not have one, and will not have one until the append assigns it. So
+    the comparison had one operand missing by construction and every row came
+    back ambiguous, including the ordinary case the record was built to
+    handle: a day exported at lunchtime and completed after dinner.
+
+    NO CLOCK IS CONSULTED TO CLASSIFY. Whether a row is a correction is read
+    off `supersedes`, which the author wrote, and off whether the record holds
+    the row it names. `recorded_at` decides only whether a correction that
+    declares itself would APPLY, which is an ordering question and is asked of
+    the same guard the append asks.
+
+    IT ECHOES NO VALUES BACK. `row`, a verdict word, the reference as the
+    author wrote it, and prose about ordering - nothing off the pending row
+    and nothing off a held one. A classification surface that returned rows
+    would be a second door onto the record, and the tier rules would have to
+    be argued at it (#205).
+
+    THE ROWS ARE NOT WRITTEN. `_prepared` stamps in memory; nothing here
+    opens a file for writing.
+    """
+    _, rows = _prepared(data_dir, name, pending, now, device)
+    if not rows:
+        return []
+
+    refused: dict[tuple, str] = {}
+    for refs, message in _refusals(data_dir, name, rows):
+        for ref in refs:
+            refused[ref] = message
+
+    held = [r for _, r in _read_streams(data_dir, name)[0]]
+    # EARLIER ROWS OF THIS SAME BATCH COUNT AS HELD, added as the walk passes
+    # them. A batch carrying a day twice restates it on the second row, and
+    # calling that one `new` because the file did not have it yet would be the
+    # batch-blindness `_refusals` already had to fix once.
+    seen = {line_key(name, r) for r in held}
+
+    out = []
+    for n, row in enumerate(rows, 1):
+        ref = target_of(row)
+        key = line_key(name, row)
+        if ref is None:
+            if name not in EVENT_DATASETS and key in seen:
+                verdict = "restatement"
+                reason = (
+                    f"the record already holds a row keyed {key!r} and this "
+                    f"one names no target, so it is a second claim rather "
+                    f"than a correction: both stay live and resolution picks "
+                    f"the later. A correction is declared here, never "
+                    f"inferred from a clock - if this is meant to replace "
+                    f"that row, set 'supersedes' to {key!r}")
+            else:
+                verdict, reason = "new", ""
+        elif ref in refused:
+            verdict, reason = "refused", refused[ref]
+        elif _target_present(name, ref, held + rows):
+            verdict = "correction"
+            reason = (f"names {_spell(ref)}, which the record holds and this "
+                      f"write would retire")
+        else:
+            verdict = "unmatched"
+            reason = (
+                f"names {_spell(ref)}, which no row answers yet. Left alone "
+                f"rather than refused: a record that syncs writer by writer "
+                f"legitimately holds a correction whose target has not "
+                f"arrived, and it applies when the target lands")
+        out.append({"row": n, "verdict": verdict,
+                    "target": row.get("supersedes"), "reason": reason})
+        seen.add(key)
     return out
 
 
