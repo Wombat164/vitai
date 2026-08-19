@@ -1,0 +1,96 @@
+# What each contract TOUCHED, so a client can answer "do I need to move"
+# without a human reading prose. #451, from the measurement in #450.
+#
+# THERE IS NO "does a client need to move" FIELD HERE, deliberately. That
+# question has one safe answer, `yes`, which is never wrong and costs the
+# author nothing, so a field shaped like it converges on `yes` and stops
+# carrying information. The engine states WHAT it touched; the client
+# intersects that with what it reads and derives its own answer.
+#
+# A single yes/no could not carry contract 48 anyway. Its migration row says
+# "No column moved" AND that a client matching `kind` exhaustively silently
+# drops every `band` row. Both are true, they answer different questions, and
+# a boolean forces the author to pick one.
+#
+# SURFACE GRAMMAR. Three forms, because they have three different audiences
+# and a client knows which one it is:
+#
+#   table, table.column   the built read model (`derived/health.db`). The
+#                         audience is a READER. Resolves against the demo build.
+#   meta:field            a line-level field on the append shape, never a
+#                         column. The audience is an AUTHOR of lines.
+#                         Resolves against `schema.META_KEYS`.
+#   report:name[.field]   a surface that reaches consumers through the report
+#                         and is NOT a table. The audience is a reader of the
+#                         report. A client gating on the SQLite shape may
+#                         ignore every one of these outright.
+#                         Resolves against a public `Vitai` method.
+#
+# CHANGE KINDS. Three, closed, each with a mechanical consequence rather than
+# a description. `retired` and `meaning` were drafted and dropped because
+# nothing between 47 and 54 exercises them, and an unused member of a closed
+# vocabulary is the vacuity this repo already gates on elsewhere. The contract
+# that needs one adds it.
+#
+#   added      a new table, column or field. A READER NEED NOT MOVE; adopting
+#              it is a choice.
+#   widened    a closed vocabulary gained a member. A READER THAT MATCHES
+#              EXHAUSTIVELY MUST MOVE, or it silently drops rows.
+#   narrowed   a value that was always present may now be absent or refused.
+#              A READER MUST MOVE.
+#
+# THE FLOOR IS 47 and the API refuses below it rather than answering partially.
+# Backfilling 46 contracts by re-reading prose is the "somebody fills in a
+# field" failure this file exists to prevent, and a wrong backfilled entry is
+# worse than an absent one because it will be trusted. 47 is where the
+# evidence was read commit by commit in #450. Every contract from here must
+# declare, and `tests/test_contract_impact.py` enforces it.
+
+[47]
+touches = [
+  { surface = "crossings", change = "added" },
+  { surface = "measurements.kind", change = "widened" },
+]
+
+[48]
+touches = [
+  { surface = "crossings.kind", change = "widened" },
+]
+
+[49]
+touches = [
+  { surface = "report:questions.kind", change = "widened" },
+]
+
+[50]
+touches = [
+  { surface = "protocols.controls", change = "added" },
+]
+
+[51]
+touches = [
+  { surface = "daily.absent_fields", change = "added" },
+  { surface = "daily.absent_reason", change = "added" },
+  { surface = "sessions.absent_fields", change = "added" },
+  { surface = "sessions.absent_reason", change = "added" },
+  { surface = "weight.absent_fields", change = "added" },
+  { surface = "weight.absent_reason", change = "added" },
+]
+
+[52]
+touches = [
+  { surface = "comparability.difference_lo", change = "added" },
+  { surface = "comparability.difference_hi", change = "added" },
+]
+
+[53]
+touches = [
+  { surface = "overlaps", change = "added" },
+  { surface = "comparability.overlap_ref", change = "narrowed" },
+]
+
+[54]
+touches = [
+  { surface = "meta:supersedes_device", change = "added" },
+  { surface = "meta:supersedes_seq", change = "narrowed" },
+]

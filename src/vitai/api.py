@@ -30,6 +30,7 @@ from .contributions import (_standing, compute_contributions,
                             goal_progress)
 from .crossings import compute_band_crossings, compute_crossings
 from .db import CONTRACT_VERSION, DERIVED_TABLES, build_db
+from . import contracts as _contracts
 from . import builds as _builds
 # Re-exported deliberately: the CLI reads them from here and the MCP adapter
 # reaches a rootless tool by `getattr` on this module, so the API surface is
@@ -3690,6 +3691,27 @@ def session_types() -> dict:
     return out
 
 
+def contract_impact(since: int, upto: int | None = None,
+                    reads: list[str] | None = None) -> dict:
+    """Must a client at contract `since`, reading `reads`, move? (#451)
+
+    The `vitai.api` half of `vitai contract-impact`, per P9. A property of the
+    installed ENGINE and not of any record, so it takes no root, for the same
+    reason `schema()` does not.
+
+    `upto` defaults to the contract this engine emits, which is the question a
+    client actually has: I am pinned at 52, you are at 54, may I stay.
+
+    `reads` is the client's own read-set, in the same grammar the declaration
+    uses. OMITTING IT MEANS "move": a verdict of "you may stay" that was never
+    earned is the only outcome here that can cost a client a silent data loss,
+    so it is not reachable without a stated read-set.
+    """
+    return _contracts.assess(since,
+                             int(CONTRACT_VERSION) if upto is None else upto,
+                             reads)
+
+
 def schema() -> dict:
     """The SHAPE this engine emits: contract version and dataset generations.
 
@@ -3760,6 +3782,23 @@ def schema() -> dict:
         # surface an agent has no door onto. A consumer that has to guess the
         # vocabulary of a verdict will branch on the two words it has seen.
         "pending_verdicts": list(PENDING_VERDICTS),
+        # WHAT EACH CONTRACT TOUCHED (#451), by the route `fields`,
+        # `ordering`, `phase_rule` and `session_types` all took, and for the
+        # reason #257 gave: a separate accessor is a new place for parity to
+        # fail. A client that pins on this payload gets the impact table in
+        # the same call that tells it the pin has moved.
+        #
+        # There is deliberately NO "must a client move" field. That question
+        # has one safe answer, `yes`, which is never wrong and costs the
+        # author nothing, so a field shaped like it stops carrying information
+        # within a month. The engine publishes what it TOUCHED; the client
+        # intersects that with what it READS - see `contracts.assess`.
+        "impact": {
+            "floor": _contracts.FLOOR,
+            "changes": dict(_contracts.FORCES_MOVE),
+            "contracts": {str(n): _contracts.touched(n)
+                          for n in sorted(_contracts.declaration())},
+        },
         "builds": {
             "this": _builds.this_build(),
             "extras": _builds.extras(),

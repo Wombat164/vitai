@@ -387,6 +387,62 @@ rather than a finding - a value cannot be an input to its own computation.
 | 52 | unreleased | `comparability` gains `difference_lo` and `difference_hi` - the two ends of a MEASURED disagreement, which the row could not write down. `bias` is a point and `spread` a width, so the schema could say "they leaned this way by this much" and "they got this far apart" and could not say "further above than below"; before this the shape reached a reader only as a sentence in the row's `note` | **Nothing required**, and the two ends stay OPTIONAL beside `offset` on purpose: requiring them would force a writer who knows a width and not its ends to invent the ends, and would invalidate every `offset` row written before 52. **THEY EARN NO BAND.** `offset` still does not lift the instrument seam, so a row that may not be read across is not a row a band derives from; and observed extrema are not a coverage interval, since the minimum and maximum of a sample can only widen as days arrive and say nothing about the next reading. A consumer still may not draw a band from a comparability row alone - what changed is that the record can hold what was measured without losing half of it. Both ends or neither, in order, `spread` required beside them and equal to their difference, `bias` inside them, and all three forbidden beside `not_comparable`. Named for what they bound: `bias_lo`/`bias_hi` would read under this schema's own `_lo`/`_hi` convention as bounds on the BIAS, which is a confidence interval on a median and the exact coverage claim #402 forbids inventing |
 | 53 | unreleased | An `overlaps` dataset - the paired-measurement window as its own row, and `overlap_ref` demoted from the only carrier of the evidence to the fallback where no window could be counted. A `comparability` row DECLARES that two origins may be read across and cited its evidence in `overlap_ref`, which was free prose. A reference that is a sentence is not a reference: nothing can follow it, nothing can count it, and a client deciding whether to trust the figure had to parse English | **One thing required, and only of a consumer that reads `overlap_ref`**: stop treating it as always present beside `comparable`/`offset`. Where the record holds a census the sentence is now REFUSED rather than merely redundant, so the field is null on exactly the rows carrying the better evidence - read the census instead, which is the same facts as columns (`paired_days`, `dropped_days`, `from_date`, `to_date`). Ignoring the new table is otherwise safe. **The statistics are NOT here.** The proposal that named this dataset listed the median, the low and the high among its columns; contract 52 put all three on the `comparability` row one contract earlier, held to each other by validation, and carrying them twice would be one width stated in two datasets kept honest by a cross-dataset rule - the second spelling refused when a fact contract 44 already carried was proposed a second field. `comparability` DECLARES and holds the statistics; `overlaps` COUNTS. **`dataset` is on the census and not on the declaration**, because a field name does not identify a dataset - `distance_km` is a column of both `daily` and `sessions` - so a census that did not say which readings it counted could not be followed back to them, which is the sentence's own defect one level down. **A window is EARNED**: fewer than three paired days is refused, being the count below which the engine will not measure a window at all, and `paired_days + dropped_days` may not exceed the days the window spans, because a day either paired or was dropped and a window cannot hold more days than it has |
 | 54 | unreleased | `supersedes_device` beside `supersedes_seq` - which MACHINE wrote the row at the position a correction names. `seq` is stamped from the union the appending machine can SEE, and one writer per file is what makes a union merge safe by removing the shared counter that kept it unique - so two devices offline together stamp the same position, a seat holds two live rows, and a reference to it names both. Nothing is corrupted and no write is lost; what breaks is that a written correction stops meaning one thing | **Nothing required, and every existing correction keeps working.** Which occupant a correction retires, in order: the machine `supersedes_device` names; or the only occupant, where there is one - which is every single-device record and every record written before this; or the correction's OWN machine, which is what a correction authored on a laptop about a row that laptop wrote means; or nothing at all, reported rather than guessed. The third rule is why almost no correction needs to write the field, and it agrees with the second before a peer's file arrives, so one correction retires one row before and after a sync. **A consumer that AUTHORS corrections should write `supersedes_device` when it means a row another machine wrote**; one that only reads may ignore the field. What changes for an existing reader is that a contested position now REFUSES rather than retiring whichever row sorted last, and `validate` names the field to write. No clock is involved: ordering the occupants by `recorded_at` would pick one, and contract 26 settled that `recorded_at` is machine-set and not something a rule may reach across devices for |
+### What each contract TOUCHED, and who has to care
+
+Machine-readable, from contract 47 onward:
+`src/vitai/semantics/contract_impact.toml`, published in `vitai schema --json`
+under `impact`, and answered per client by `vitai contract-impact --since N
+--reads <surfaces>` (exit 0 stay, 1 move, 2 cannot answer).
+
+**There is deliberately no "must a client move" field here.** That question has
+one safe answer, `yes`, which is never wrong and costs the author nothing, so a
+field shaped like it stops carrying information within a month. The engine
+states what it TOUCHED; a client intersects that with what it READS. A boolean
+could not carry contract 48 in any case: no column moved, and a client matching
+`kind` exhaustively silently drops every `band` row. Both are true, and they
+answer different questions.
+
+Surfaces come in three grammars because they have three audiences.
+`table`/`table.column` is the built read model and the audience is a READER;
+`meta:field` is a line-level field that is never a column and the audience is
+an AUTHOR of corrections; `report:name` reaches a consumer through the report
+and has no table at all, so a client gating on the SQLite shape can ignore
+every one of them outright.
+
+Surface first, contract third, and not by taste: a row beginning `| 47 |` is
+indistinguishable from a migration row to the regexes that hold the two
+contract tables together, so this one cannot begin with a number.
+
+| Surface | Change | Contract | A reader of that surface |
+|---|---|---|---|
+| `crossings` | added | 47 | need not move |
+| `measurements.kind` | widened | 47 | **must move** |
+| `crossings.kind` | widened | 48 | **must move** |
+| `report:questions.kind` | widened | 49 | **must move** |
+| `protocols.controls` | added | 50 | need not move |
+| `daily.absent_fields` | added | 51 | need not move |
+| `daily.absent_reason` | added | 51 | need not move |
+| `sessions.absent_fields` | added | 51 | need not move |
+| `sessions.absent_reason` | added | 51 | need not move |
+| `weight.absent_fields` | added | 51 | need not move |
+| `weight.absent_reason` | added | 51 | need not move |
+| `comparability.difference_lo` | added | 52 | need not move |
+| `comparability.difference_hi` | added | 52 | need not move |
+| `overlaps` | added | 53 | need not move |
+| `comparability.overlap_ref` | narrowed | 53 | **must move** |
+| `meta:supersedes_device` | added | 54 | need not move |
+| `meta:supersedes_seq` | narrowed | 54 | **must move** |
+
+`added` is a new table, column or field, and adopting it is a choice.
+`widened` is a closed vocabulary gaining a member, so a reader matching
+exhaustively drops rows silently. `narrowed` is a value that was always present
+becoming absent or refused.
+
+Below contract 47 this is UNSTATED and the API refuses rather than
+answering partially: backfilling by re-reading prose is the "somebody fills in
+a field" failure the design exists to prevent, and a wrong backfilled entry is
+worse than an absent one because it will be trusted.
+
 This table is the summary and `src/vitai/db.py` is the source: the same
 history lives beside `CONTRACT_VERSION`, at more length and with the
 reasoning. The two had drifted - this table stopped at contract 8 and the

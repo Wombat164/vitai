@@ -1133,8 +1133,15 @@ CLI_MAY_IMPORT = {
     # installed ENGINE rather than of a record, so it takes no root. All
     # three are reachable by an agent - `can_emit` and `absence` are MCP
     # tools, and `this_build` is in the `schema` payload (#335).
+    # `contract_impact` joins for exactly the reason `schema` did (#451): what
+    # each contract touched is a property of the installed ENGINE rather than
+    # of anyone's record, so it takes no root and cannot hang off a class that
+    # represents one. An agent reaches it without a new tool - the whole
+    # declaration rides in the `schema` payload under `impact`, floor and
+    # change kinds included, so an agent holding its own read-set can compute
+    # the same verdict the CLI prints.
     "api": {"Vitai", "init", "schema", "can_emit", "absence",
-            "this_build", "parse_time"},
+            "this_build", "parse_time", "contract_impact"},
     # `mcp` is a second HARNESS, not engine logic, which is the distinction
     # this table exists to police. It is allowed for the same reason `api` is
     # and `jsonl` is not: it structurally cannot exceed the API, because its
