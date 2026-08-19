@@ -58,8 +58,9 @@ counts leave that repository.
 **Decision, per the rule stated before the run: the decision unit is wrong, not
 the metadata.** A capability registry prices instrument noise, which is not the
 term that dominates this measurand, so it cannot rescue a single weekly verdict.
-The margin is not marginal: the median half-width is 1.74 times the entire
-decision half-band, and more than half of scored weeks admit no verdict word at
+The margin is not marginal: the median `u_rate / half-band` is 1.74 - a
+standard uncertainty ratio, so the 95 per cent half-width is about 3.4 times
+the entire decision half-band - and more than half of scored weeks admit no verdict word at
 all.
 
 **Phase 2 scope is therefore set:**

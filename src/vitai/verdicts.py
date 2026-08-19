@@ -188,10 +188,20 @@ PERIOD_CHANGE = "period-over-period-change"
 #
 # `weight_rate` is not a vendor estimate - it is two means of the same scale -
 # and it still does not survive, on this project's own pre-registered
-# measurement: the median 95 per cent half-width on a week-over-week rate is
-# 1.74 times the entire decision half-band. A rate whose interval swamps the
-# band it is judged against is a direction, and reporting it to three decimal
-# places was the engine claiming a precision it had already measured away.
+# measurement: the median `u_rate / half-band` on a week-over-week rate is
+# 1.74. A rate whose interval swamps the band it is judged against is a
+# direction, and reporting it to three decimal places was the engine claiming
+# a precision it had already measured away.
+#
+# WHICH RATIO 1.74 IS, corrected here (#460). Two comments in this file used
+# to call it a 95 per cent half-width. The ratio table in
+# `docs/proposals/uncertainty/00-phase0-experiment.md` defines
+# `R = u_measure / half-band` with `u_measure = sqrt(u_prev^2 + u_cur^2)`, a
+# STANDARD uncertainty, and lists 1.74 under `median u_rate / half-band`. At
+# the `K95 = 1.960` the same document defines, the 95 per cent half-width is
+# about 3.4 half-bands, not 1.74 - so the mislabel understated the finding by
+# a factor of two. `vitai rate-uncertainty` publishes both ratios rather than
+# leaving a reader to guess which one a figure is.
 #
 # Everything else is one logged or measured quantity against a stated policy,
 # which is the shape that does survive.
@@ -202,7 +212,7 @@ PERIOD_CHANGE = "period-over-period-change"
 # done over an elapsed interval, and a seven-day band NARROWER than the band a
 # weekly rate is judged in would be the engine claiming, one surface over, the
 # resolution it has already measured away here - the pre-registered run put
-# the median 95 per cent half-width of a week-over-week rate at 1.74 times
+# the median `u_rate / half-band` of a week-over-week rate at 1.74 times
 # this half-band. `test_weight_outlook.py` holds the two together, and it can
 # only do that against the constant itself rather than a copy of it.
 RATE_DECISION_BAND = 0.25
