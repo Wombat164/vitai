@@ -24,7 +24,21 @@
 #                         and is NOT a table. The audience is a reader of the
 #                         report. A client gating on the SQLite shape may
 #                         ignore every one of these outright.
-#                         Resolves against a public `Vitai` method.
+#                         Resolves against a public `Vitai` method or
+#                         property - a `property` is not `callable()`, and
+#                         asking that rejected `report:policy`, which a real
+#                         client reads and this engine really publishes.
+#
+# THE FOURTH GRAMMAR IS NOT FOR THIS FILE (#453). `payload:key[.name]` names
+# what `api.schema()` publishes - `fields`, `session_types`, the `aliases`,
+# `units` and `display_name` a client renders. NO CONTRACT ROW MAY USE IT, and
+# a test refuses one that does, because the payload does not move with the
+# contract number: #350 moved eight aliases out of it, #331 added
+# `display_name` to it, #400 moved six words in it, none of them with a bump
+# and all of them right - making a vocabulary fix a migration rebuilds the
+# treadmill #450 measured. The grammar exists so a CLIENT can say it reads the
+# payload and be told, in the same verdict, that the contract cannot answer
+# for it and `payload_digest` can.
 #
 # CHANGE KINDS. Three, closed, each with a mechanical consequence rather than
 # a description. `retired` and `meaning` were drafted and dropped because

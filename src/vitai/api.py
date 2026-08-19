@@ -3738,7 +3738,7 @@ def schema() -> dict:
     deliberately NOT a gate: it moves for a docs fix and stands still while the
     schema moves, so a pin that gates on it is telling itself a comforting lie.
     """
-    return {
+    payload = {
         "engine": __version__,
         "contract": CONTRACT_VERSION,
         "generations": dict(CURRENT_GENERATION),
@@ -3820,3 +3820,25 @@ def schema() -> dict:
             "absence_meanings": list(ABSENCE_MEANINGS),
         },
     }
+    # ONE BIT SAYING WHETHER ANY OF THE ABOVE HAS MOVED (#453), and it is here
+    # rather than behind its own accessor because a client that emits against
+    # this engine already has this dict in hand and should not need a second
+    # call to record what it emitted against.
+    #
+    # `contract` versions the read model. NOTHING versioned this payload, and
+    # three precedents say nothing should: #350 moved eight aliases out of it,
+    # #331 added `display_name` to it, #400 moved six words in it, none of them
+    # with a bump, all of them correct - making a vocabulary fix a migration is
+    # the treadmill #450 measured. But "not versioned" was silently doing the
+    # work of "not changing", and #400 changed four alias entries and two
+    # display names in a live client's shipped artifact with nothing anywhere
+    # saying so.
+    #
+    # A digest is the right size for it. The remedy for a moved payload is to
+    # re-read the payload, which is free and never wrong, so a consumer needs
+    # to know THAT it moved and not which part - where the remedy for a moved
+    # contract is a migration, so that declaration owes a table of surfaces.
+    # It excludes `engine` and `builds.this`, which are the same string this
+    # docstring already says is not a gate, and itself.
+    payload["payload_digest"] = _contracts._digest_of(payload)
+    return payload

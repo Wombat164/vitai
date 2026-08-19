@@ -30,13 +30,24 @@ month and stops carrying information. The engine is never asked the question
 whose lazy answer is yes. It states surfaces and change kinds, both of which
 are checkable, and the client derives the verdict.
 
-FAIL CLOSED. A client that does not say what it reads is told to move. The
-answer "you may stay" is only ever produced from a stated read-set, because the
-alternative - silence meaning safety - is how a gate stops being one.
+FAIL CLOSED. A client that does not say what it reads is told to move, and one
+that names surfaces this engine does not publish is refused rather than
+answered - a read that resolves to nothing is silence with extra characters,
+and "you may stay" is only ever produced from a read-set that could have said
+otherwise.
+
+REACH THIS AS `vitai.contracts`, or through `api.contract_impact` and the
+`vitai contract-impact` command, which are the supported doors. It is a module
+in a package and not a loose file: loading it by path under its own name leaves
+the relative imports below with no package to resolve against, and a client
+that did so worked only for as long as it stayed on the one code path that
+never took them.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import tomllib
 from importlib import resources
 
@@ -68,19 +79,44 @@ FORCES_MOVE = {
     "narrowed": True,
 }
 
-# Surface namespaces, and they exist because the three have three different
-# AUDIENCES. A client knows which one it is, so the answer partitions cleanly
-# rather than telling every consumer about every change.
+# Surface namespaces, and they exist because they have different AUDIENCES. A
+# client knows which one it is, so the answer partitions cleanly rather than
+# telling every consumer about every change.
+#
+# `payload` IS NOT LIKE THE OTHER THREE and #453 is the record of why. The
+# other three name things that move WITH the contract number, so a contract
+# row can declare them. The payload - what `api.schema()` publishes - moves
+# BETWEEN contract numbers: #350 moved eight aliases out of it with no bump,
+# #331 added `display_name` to it with no bump, #400 moved six words in it
+# with no bump. Three precedents, all correct, because making a vocabulary fix
+# a migration is the treadmill #450 measured.
+#
+# So `payload` exists for the READ-SET rather than for the declaration. A
+# client says it reads the payload, is believed, and is told that no contract
+# row will ever answer for it - `payload_digest` does. A contract row in this
+# namespace is refused by `test_no_contract_declares_a_payload_surface`,
+# because it would be claiming a versioning this engine does not do.
 AUDIENCE = {
     "table": "reader of the read model",
     "meta": "author of lines",
     "report": "reader of the report",
+    "payload": "reader of the published shape",
 }
+
+# What `payload_digest` must NOT carry. Both are the same string - the engine
+# version - and `schema()`'s own docstring already says it is not a gate: it
+# moves for a docs fix and stands still while the shape moves. A digest that
+# carried it would fire on every release, and a stale-payload alarm that fires
+# when nothing is stale is one a client learns to ignore.
+#
+# The third exclusion is the digest itself, which is published inside the
+# thing it sums.
+PROVENANCE = ("engine", "payload_digest")
 
 
 def _namespace(surface: str) -> str:
-    """Which of the three grammars a surface is written in."""
-    for prefix in ("meta", "report"):
+    """Which grammar a surface is written in."""
+    for prefix in ("meta", "report", "payload"):
         if surface.startswith(prefix + ":"):
             return prefix
     return "table"
@@ -128,8 +164,8 @@ def _covers(read: str, surface: str) -> bool:
         return False
     if read == surface:
         return True
-    # `meta` and `report` name a whole namespace when written bare.
-    if read in ("meta", "report") and surface.startswith(read + ":"):
+    # A namespace names all of itself when written bare.
+    if read in AUDIENCE and surface.startswith(read + ":"):
         return True
     for sep in (".", ":"):
         if surface.startswith(read + sep):
@@ -182,6 +218,29 @@ def assess(since: int, upto: int, reads: list[str] | None) -> dict:
     # matches nothing, and came back STAY. A guard that a caller can satisfy
     # without saying anything is the same fail-open one indirection down.
     stated = any(r and r.strip() for r in (reads or ()))
+
+    # A READ THAT NAMES NOTHING IS SILENCE WITH EXTRA CHARACTERS (#453), and
+    # this was the same fail-open one argument to the left. `weght.kg` - one
+    # transposition in a map a person maintains - matched no surface, so every
+    # touched row landed in `not_yours` and the verdict came back "may stay".
+    # A read-set of pure typos earned the reassuring answer.
+    #
+    # REFUSED RATHER THAN DROPPED, and refused whole rather than partly. A
+    # client whose map is 29 parts right is the dangerous case: the verdict
+    # would be computed over 29 surfaces and read as the answer for 30. This
+    # is the rule the floor already states - a partial answer to "may I stay"
+    # has the same shape as a wrong one.
+    if stated:
+        cat = catalogue()
+        bad = [(r, unresolved(r, cat)) for r in reads if r and r.strip()]
+        bad = [(r, why) for r, why in bad if why]
+        if bad:
+            raise ValueError(
+                "this read-set names surfaces this engine does not publish, "
+                "and a verdict computed over less than a client reads is the "
+                "one answer here that can cost a silent data loss: "
+                + "; ".join(f"{r} ({why})" for r, why in bad))
+
     reasons, ignored = [], []
     for row in rows:
         seen = (not stated) or any(_covers(r, row["surface"]) for r in reads)
@@ -197,6 +256,17 @@ def assess(since: int, upto: int, reads: list[str] | None) -> dict:
         "because": reasons,
         "not_yours": ignored,
         "touched": rows,
+        # NAMED BACK RATHER THAN SILENTLY IGNORED (#453). A payload read can
+        # never appear in `because` - no contract row is allowed to name one -
+        # so a client that declared some and saw them nowhere in the answer
+        # would reasonably conclude the verdict covered them. It does not.
+        "payload_reads": sorted(r for r in (reads or ())
+                                if r and (r == "payload"
+                                          or _namespace(r) == "payload")),
+        # CARRIED ON EVERY VERDICT, including one where no payload read was
+        # declared, because the client that has not thought about the payload
+        # is the one that needs telling it moves on its own clock.
+        "payload_digest": payload_digest(),
     }
 
 
@@ -213,9 +283,17 @@ def catalogue() -> dict[str, set[str]]:
       these are the tables `build_db` creates, which is what a client opens.
     - `meta` is `schema.META_KEYS`: line-level fields on the append shape that
       are never columns, so a READER cannot see them and an AUTHOR must.
-    - `report` is the public read methods on `Vitai`: surfaces that reach a
+    - `report` is the public read surface on `Vitai`: things that reach a
       consumer through the report and have no table. `questions` is one, which
       is why contract 49 could not move a column and still asked something.
+      METHODS AND PROPERTIES BOTH - a `property` is not `callable()`, and
+      asking that question rejected `report:policy`, which a real client reads
+      and this engine really publishes.
+    - `payload` is what `api.schema()` returns, by top-level key, each mapped
+      to every key beneath it at any depth. So `payload:fields.aliases` and
+      `payload:impact.floor` both resolve and neither resolves under the
+      other. Derived from the payload for the reason the rest of this is
+      derived: a list kept beside it would agree with it and catch nothing.
     """
     from .db import DERIVED_TABLES
     from .schema import KEYS, META_KEYS
@@ -223,18 +301,97 @@ def catalogue() -> dict[str, set[str]]:
     tables = {name: set(cols) for name, cols in KEYS.items()}
     for name, cols in DERIVED_TABLES.items():
         tables.setdefault(name, set()).update(cols)
-    return {"table": tables, "meta": set(META_KEYS), "report": None}
+
+    from .api import Vitai, schema
+    report = {name for name in dir(Vitai)
+              if not name.startswith("_")
+              and not isinstance(getattr(Vitai, name, None), (str, int))}
+    payload = {key: _keys_under(value) for key, value in schema().items()}
+    return {"table": tables, "meta": set(META_KEYS),
+            "report": report, "payload": payload}
 
 
-def unresolved(surface: str) -> str | None:
+def _keys_under(value) -> set[str]:
+    """Every mapping key anywhere inside `value`.
+
+    Flat on purpose. A client declares what it reads at the granularity it
+    knows - `payload:fields.display_name` is a spec key three levels down and
+    `payload:fields.daily` is a dataset one level down - and both are honest
+    answers to "what do you read". The check is that the name exists under
+    that payload key, not that it exists at a depth somebody chose.
+    """
+    out: set[str] = set()
+    stack = [value]
+    while stack:
+        cur = stack.pop()
+        if isinstance(cur, dict):
+            for k, v in cur.items():
+                out.add(str(k))
+                stack.append(v)
+        elif isinstance(cur, (list, tuple)):
+            stack.extend(cur)
+    return out
+
+
+def _digest_of(payload: dict) -> str:
+    """The digest of a payload, with provenance and the digest itself removed.
+
+    NO `default=` ENCODER on the dump, deliberately. A fallback would let an
+    unserialisable value through and hash its `repr`, which on most objects
+    carries a memory address - so the digest would change every run and be
+    read as the payload moving. An unserialisable payload should be a loud
+    failure here rather than a quiet one in a client's CI.
+    """
+    body = {k: v for k, v in payload.items() if k not in PROVENANCE}
+    builds = body.get("builds")
+    if isinstance(builds, dict):
+        # `builds.this` is the engine version again, one level down.
+        body["builds"] = {k: v for k, v in builds.items() if k != "this"}
+    blob = json.dumps(body, sort_keys=True).encode()
+    return hashlib.sha256(blob).hexdigest()[:16]
+
+
+def payload_digest() -> str:
+    """A bit that changes when the published shape does, and not otherwise.
+
+    THE ANSWER TO THE QUESTION `assess` CANNOT ANSWER. The payload is not
+    contract-versioned, so a client cannot ask "may I stay" about it - there
+    is no number to stay at. It can ask "has it moved", and the remedy when it
+    has is to re-read the payload, which costs nothing and is never wrong.
+
+    THAT ASYMMETRY IS THE WHOLE DESIGN. How much resolution a declaration owes
+    a consumer is set by how expensive the remedy is. Migrating a read model
+    is expensive, so the contract declaration is a table of surfaces and a
+    client must be told whether the change is one of its. Re-reading a
+    vocabulary is free, so one bit is enough, and one bit cannot rot the way a
+    hand-kept table can.
+    """
+    from .api import schema
+    return _digest_of(schema())
+
+
+def unresolved(surface: str, cat: dict | None = None) -> str | None:
     """Why `surface` names nothing a client can reach, or None if it resolves.
 
     An entry nothing can read tells nobody anything, which is the vacuity this
-    check exists for.
+    check exists for. Used on both sides now: on the DECLARATION, so a contract
+    cannot claim to have touched something that does not exist, and on a
+    client's READ-SET, so a client cannot be told it may stay on the strength
+    of surfaces it named wrongly.
+
+    `cat` is the catalogue, passed in when a caller is resolving many surfaces:
+    building it reads the whole published payload, and doing that once per read
+    turned a verdict into a hundred of them.
     """
-    cat = catalogue()
+    cat = catalogue() if cat is None else cat
     ns = _namespace(surface)
     body = surface.split(":", 1)[1] if ns != "table" else surface
+
+    # A namespace written bare names all of itself, which `_covers` has always
+    # accepted. It said nothing here, so the two halves of one grammar
+    # disagreed and only the half nothing called was strict.
+    if surface in AUDIENCE:
+        return None
 
     if ns == "meta":
         if body not in cat["meta"]:
@@ -244,13 +401,19 @@ def unresolved(surface: str) -> str | None:
     head, _, field = body.partition(".")
 
     if ns == "report":
-        from .api import Vitai
-        member = getattr(Vitai, head, None)
-        if member is None or head.startswith("_") or not callable(member):
-            return (f"'report:{head}' names no public read method on Vitai, "
+        if head.startswith("_") or head not in cat["report"]:
+            return (f"'report:{head}' names no public read surface on Vitai, "
                     f"so nothing publishes it")
         # A report surface has no declared column list to check `field`
-        # against; that it is a real published method is what can be checked.
+        # against; that it is really published is what can be checked.
+        return None
+
+    if ns == "payload":
+        if head not in cat["payload"]:
+            return (f"'{head}' is not a key of the shape api.schema() "
+                    f"publishes")
+        if field and field not in cat["payload"][head]:
+            return f"nothing under 'payload:{head}' is named '{field}'"
         return None
 
     if head not in cat["table"]:

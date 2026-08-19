@@ -409,6 +409,28 @@ an AUTHOR of corrections; `report:name` reaches a consumer through the report
 and has no table at all, so a client gating on the SQLite shape can ignore
 every one of them outright.
 
+**A read that names nothing published is REFUSED, not ignored** (#453). Before
+that, `--reads weght.kg` matched no surface, so every touched row landed in
+"you do not read it" and the verdict came back STAY - a read-set of pure typos
+earning the reassuring answer, which is the same fail-open an empty read-set
+was already closed against. It refuses whole rather than partly: a map that is
+29 parts right computes a verdict over 29 surfaces and reads as the answer for
+30.
+
+**The `schema()` payload is a fourth surface and it is not contract-versioned.**
+`payload:key[.name]` names what `vitai schema --json` publishes - `fields`,
+`session_types`, and the `aliases`, `units` and `display_name` inside them - so
+a client can say it reads them. No contract row may use that grammar and a test
+refuses one that does: #350 moved eight aliases out of the payload, #331 added
+`display_name` to it and #400 moved six words in it, none with a bump and all
+of them right, because making a vocabulary fix a migration rebuilds the
+treadmill. Instead the payload carries `payload_digest`, one bit that changes
+when any of it does and stands still for the engine version. The remedy for a
+moved payload is to re-read it, which is free and never wrong, so one bit is
+the right size; the remedy for a moved contract is a migration, which is why
+that one owes a table of surfaces. Contract 54 was head both before and after
+#400 and the digest moved from `3816feed...` to `d12d3bbb...`.
+
 Surface first, contract third, and not by taste: a row beginning `| 47 |` is
 indistinguishable from a migration row to the regexes that hold the two
 contract tables together, so this one cannot begin with a number.
