@@ -81,11 +81,16 @@ def _kg(value: float) -> float:
     """A weight to the gram.
 
     A difference of two readings is exact in decimal and approximate in
-    binary, so the arithmetic above produces `-0.10000000000000853` for a
-    hundred-gram change. Publishing that would claim sixteen significant
+    binary, so a hundred-gram change arrives from the arithmetic above as a
+    seventeen-digit expansion. Publishing that would claim sixteen significant
     figures on a scale that reports two decimals, which is the same overclaim
     `weight_rate` was already caught making at three. A gram is below any
     scale's resolution, so nothing real is lost here and the artefact is.
+
+    The digits are described rather than shown because `personal_gate.py` reads
+    a long decimal as coordinate-shaped, and it is right to: that check is
+    structural, and buying an illustration with a named exemption is the wrong
+    trade.
     """
     return round(value, 3)
 
