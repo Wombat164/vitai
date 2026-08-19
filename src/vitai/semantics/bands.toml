@@ -1,0 +1,70 @@
+# What every interval-shaped field in this schema actually claims (#402).
+#
+# The engine ships four `_lo`/`_hi`-shaped fields and they mean at least three
+# different things. Nothing said which was which: there is no `u_given_as`, no
+# coverage factor and no `ci95` anywhere in `src/`, so a consumer meeting
+# `kg_lo` beside `grams_lo` sees one convention and has to guess.
+#
+# #465 is what guessing about an interval costs. A standard uncertainty
+# described as a 95 per cent half-width understated a finding by a factor of
+# two, in this repository's own shipped source comments, and nobody noticed
+# until the number was recomputed.
+#
+# TWO ORTHOGONAL FACTS PER ENTRY, and #402 turns on the first while #465 turns
+# on the second:
+#
+#   basis    where the width came from. This is #402's earned-ness rule: a
+#            band comes from a measured overlap, a source that publishes its
+#            own uncertainty, or an interval somebody stated - and from
+#            nowhere else. A default plus-or-minus is not humility, it is
+#            fabricated precision about imprecision.
+#   covers   what the pair claims about the value. `lo`/`hi` on their own name
+#            no coverage at all, so the word here has to.
+#
+# NOT EVERY PAIR IS A BAND, and the two that are not say so rather than being
+# left out - an omission would read as an oversight, and a consumer applying
+# the convention to them would be contradicted by `db.py`.
+#
+# `measured-overlap` IS NOT IN THE VOCABULARY. It is #402's strongest basis and
+# nothing uses it yet: `comparability` records that two instruments disagree by
+# a measured amount and there is no way to attach that to a value. An unused
+# member of a closed vocabulary is the vacuity this repository gates on
+# elsewhere, so the entry arrives with the first field that earns one.
+
+version = 1
+
+[band."weight.kg"]
+kind = "band"
+basis = "source-published"
+covers = "limits"
+says = "the clinic or scale stated the interval its reading lies within"
+
+[band."weight.body_fat"]
+kind = "band"
+basis = "source-published"
+covers = "limits"
+says = "the scan stated the interval its percentage lies within"
+
+[band."meals.grams"]
+kind = "band"
+basis = "written-with-the-value"
+covers = "stated-range"
+# `schema.py`: "There is NO confidence field: no corpus of photo-estimated
+# meals scored against weighed truth exists, so a number there would be a
+# decimal point pretending to be calibration. The range IS the confidence
+# statement."
+says = "whoever estimated the portion gave a range instead of a figure"
+
+[band."comparability.difference"]
+kind = "not-a-band"
+# `db.py`, contract 52, in as many words: "Observations, under the `basis` and
+# `overlap_ref` that already qualify `spread`, asserting no distribution and no
+# coverage factor" - and "THEY DO NOT EARN A BAND ... observed extrema are not
+# a coverage interval: the minimum and maximum of 101 differences are the two
+# most sample-dependent numbers in the set, they can only widen as days arrive,
+# and they say nothing about the 102nd run."
+says = "the lowest and highest paired difference observed, which can only widen as days arrive and says nothing about the next reading"
+
+[band."goals.target"]
+kind = "not-a-band"
+says = "the far end of an intended range, which is a statement about what the athlete is aiming at rather than about how well anything was measured"
