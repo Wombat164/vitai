@@ -59,6 +59,17 @@ NOT_DISPATCHED_BY_VALIDATE: dict[str, str] = {
         "the meaning. Registered rather than filtered out by name, because a "
         "filter tuned to exclude this one would exclude the next check that "
         "happens to be named like a lookup."),
+    "ambiguous_aliases": (
+        "Not a check, and a SUBSTRING away from looking like one. It returns "
+        "`dict[str, list[str]]` - the words that name more than one measurand, "
+        "mapped to the fields they could mean - and `_candidates()` matches on "
+        "`\"list[str]\" in str(annotation)`, which that contains. Registered "
+        "rather than tightening the match, for the reason `aliases_for` is "
+        "registered: a rule tuned to exclude this one would exclude the next "
+        "check whose annotation is a container of complaints. It is published "
+        "through `schema()` and gated by `test_ambiguous_aliases.py`, not by "
+        "`validate` - a record cannot make it say anything, because it reads "
+        "the registry, which is the same in every install."),
     "removal_problems": (
         "A CI gate over the schema's OWN TABLES, not over a record. It reads "
         "`KEY_RETIREMENT`, `KEY_REMOVAL`, `CURRENT_GENERATION` and `KEYS`, "
