@@ -114,6 +114,68 @@ AUDIENCE = {
 PROVENANCE = ("engine", "payload_digest")
 
 
+# WHEN A NARROWING NARROWED FOR SOME RECORDS AND NOT OTHERS (#464).
+#
+# Contract 54 declares `meta:supersedes_seq` narrowed, and its own migration
+# note says "Nothing required, and every existing correction keeps working".
+# Both are true. What narrowed is smaller than the field: a CONTESTED position
+# now refuses rather than retiring whichever row sorted last, and a position
+# can only be contested where two machines wrote it. The condition is a
+# property of the RECORD, and a change kind has nowhere to put one.
+#
+# THE LAZY ANSWER IS INVERTED, DELIBERATELY. #451 refused a "must a client
+# move" field because its safe answer - `yes` - costs the author nothing and so
+# wins within a month. A condition has the mirror temptation: "does not apply
+# to you" is what costs a CLIENT nothing. So a conditional row still forces a
+# move, and only a condition EVALUATED AGAINST A REAL RECORD excuses it.
+# Silence never does, which is the same rule an unstated read-set gets.
+#
+# NOT A LANGUAGE. A condition names a public read on `Vitai` and a predicate
+# over its answer - resolved the way a surface is, and refused the same way -
+# so the vocabulary can only grow to things this engine already publishes.
+# There is exactly one because exactly one contract needs one, which is the
+# doctrine the change kinds already follow.
+CONDITIONS = {
+    "one-writer": {
+        "says": "no more than one device has ever written this record",
+        # Read off the FILENAMES, so a device that has only written legacy
+        # unstamped lines still counts. A record with no device files at all
+        # answers zero, which is every record written before contract 54.
+        "asks": "devices",
+        "holds": lambda answer: len(answer) <= 1,
+        # Why this and not "no seat is contested", which is the exact
+        # narrowing: this is the CONSERVATIVE side of it. One writer means no
+        # seat can be contested, so the exemption is certainly safe; two
+        # writers may or may not have contested one, and the answer there is
+        # move. A condition should be the one whose FALSE answer is the safe
+        # direction.
+        "because": ("a seat can only be occupied twice where two machines "
+                    "wrote it, so a single-writer record meets rule 2 of "
+                    "`jsonl._addressed` for every correction it holds"),
+    },
+}
+
+
+def unresolved_condition(name: str) -> str | None:
+    """Why `name` is not a condition this engine can evaluate, or None.
+
+    The same gate `unresolved` is for surfaces, one axis over: a condition
+    nobody can evaluate excuses nothing and would sit in the declaration
+    looking like it did.
+    """
+    spec = CONDITIONS.get(name)
+    if spec is None:
+        return f"'{name}' is not one of {', '.join(sorted(CONDITIONS))}"
+    from .api import Vitai
+    asks = spec.get("asks", "")
+    if asks.startswith("_") or getattr(Vitai, asks, None) is None:
+        return (f"'{name}' asks for '{asks}', which is no public read on "
+                f"Vitai, so nothing can answer it")
+    if not callable(spec.get("holds")):
+        return f"'{name}' states no predicate over the answer"
+    return None
+
+
 def _namespace(surface: str) -> str:
     """Which grammar a surface is written in."""
     for prefix in ("meta", "report", "payload"):
@@ -142,6 +204,16 @@ def touched(contract: int) -> list[dict]:
             "change": e["change"],
             "audience": AUDIENCE[ns],
             "forces_move": FORCES_MOVE[e["change"]],
+            # None on almost every row, and present rather than absent so a
+            # consumer reads one shape. A row that carries one still forces a
+            # move until a record says otherwise.
+            "unless": e.get("unless"),
+            # THE SENTENCE TRAVELS WITH THE ROW so a consumer never has to
+            # reach into the registry to render the answer - which is the
+            # #453 lesson about a verdict being self-describing, and it is
+            # what keeps `cli.py` off `contracts` internals.
+            "unless_says": (CONDITIONS.get(e["unless"], {}).get("says")
+                            if e.get("unless") else None),
         })
     return out
 
@@ -261,6 +333,12 @@ def assess(since: int, upto: int, reads: list[str] | None) -> dict:
         "because": reasons,
         "not_yours": ignored,
         "touched": rows,
+        # THE ROWS A RECORD COULD EXCUSE, named so a client knows there is a
+        # question to ask rather than absorbing a contract it may not need.
+        # They are in `because` as well: this door has no record, so it cannot
+        # excuse anything, and reporting them here does not soften the verdict
+        # by one step. `Vitai.contract_impact` is the door that can.
+        "conditional": [r for r in reasons if r.get("unless")],
         # NAMED BACK RATHER THAN SILENTLY IGNORED (#453). A payload read can
         # never appear in `because` - no contract row is allowed to name one -
         # so a client that declared some and saw them nowhere in the answer

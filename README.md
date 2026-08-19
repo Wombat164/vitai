@@ -485,12 +485,31 @@ contract tables together, so this one cannot begin with a number.
 | `overlaps` | added | 53 | need not move |
 | `comparability.overlap_ref` | narrowed | 53 | **must move** |
 | `meta:supersedes_device` | added | 54 | need not move |
-| `meta:supersedes_seq` | narrowed | 54 | **must move** |
+| `meta:supersedes_seq` | narrowed | 54 | **must move** unless `one-writer` |
 
 `added` is a new table, column or field, and adopting it is a choice.
 `widened` is a closed vocabulary gaining a member, so a reader matching
 exhaustively drops rows silently. `narrowed` is a value that was always present
 becoming absent or refused.
+
+**A row may carry a CONDITION, and one does** (#464). Contract 54's narrowing is
+real for a record two machines have written and not for any other, because a
+position can only be contested where two machines wrote it - which is why the
+migration row above says "Nothing required, and every existing correction keeps
+working" and means it. For seventy lines those two sentences disagreed; the
+condition is what lets both be true and be read by a machine.
+
+A condition **never softens the verdict on its own**: `vitai contract-impact`
+without `--root` cannot evaluate one, so the row keeps forcing the move, and
+only `--root <record>` can excuse it. That direction is deliberate. The reason
+there is no "must a client move" field is that its safe answer, `yes`, costs the
+author nothing; a condition has the mirror temptation, because "does not apply
+to you" costs a CLIENT nothing, and silence must not buy it.
+
+Conditions name a public read on `Vitai` and a predicate over its answer -
+`one-writer` asks `devices()` and holds when there is at most one - so the
+vocabulary can only grow to things this engine already publishes, and a test
+refuses one that resolves to nothing.
 
 Below contract 47 this is UNSTATED and the API refuses rather than
 answering partially: backfilling by re-reading prose is the "somebody fills in

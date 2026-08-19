@@ -175,7 +175,7 @@ contract tables together, so this one cannot begin with a number.
 | `overlaps` | added | 53 | need not move |
 | `comparability.overlap_ref` | narrowed | 53 | **must move** |
 | `meta:supersedes_device` | added | 54 | need not move |
-| `meta:supersedes_seq` | narrowed | 54 | **must move** |
+| `meta:supersedes_seq` | narrowed | 54 | **must move** unless `one-writer` |
 
 `added` is a new table, column or field, and adopting it is a choice.
 `widened` is a closed vocabulary gaining a member, so a reader matching

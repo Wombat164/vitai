@@ -2066,7 +2066,15 @@ def cmd_contract_impact(args: argparse.Namespace) -> None:
     if args.reads is not None:
         reads = [r.strip() for r in args.reads.split(",") if r.strip()]
     try:
-        verdict = contract_impact(args.since, args.upto, reads)
+        # WITH A ROOT, the conditions get evaluated (#464); without one they
+        # cannot be, and a conditional row keeps forcing the move. The flag is
+        # optional rather than required for `cmd_schema`'s reason: the
+        # declaration is a property of the installed engine, and only the
+        # excusal needs a record.
+        verdict = (Vitai(args.root).contract_impact(args.since, args.upto,
+                                                    reads)
+                   if getattr(args, "root", None)
+                   else contract_impact(args.since, args.upto, reads))
     except ValueError as exc:
         # EXIT 2, not 1. "I cannot answer" and "you must move" are different
         # facts and a CI step should be able to tell them apart; both are
@@ -2093,6 +2101,16 @@ def cmd_contract_impact(args: argparse.Namespace) -> None:
                       f"contract {row['contract']}  ({row['audience']})")
         else:
             print(f"contract {span}: STAY. Nothing you read was touched.")
+        for row in verdict.get("excused") or []:
+            print(f"  excused: {row['surface']:<25} {row['change']:<9} "
+                  f"contract {row['contract']}  ({row['unless']}: "
+                  f"{row['unless_says']})")
+        for row in verdict["conditional"]:
+            if row not in (verdict.get("excused") or []) and (
+                    row in verdict["because"]):
+                print(f"  conditional: {row['surface']} would not force a "
+                      f"move if {row['unless_says']} - pass "
+                      f"--root to have that evaluated")
         for row in verdict["not_yours"]:
             print(f"  ignored: {row['surface']:<25} {row['change']:<9} "
                   f"contract {row['contract']}  (you do not read it)")
@@ -2551,6 +2569,13 @@ def main(argv: list[str] | None = None) -> None:
                         "'weight,sessions,crossings.kind'. OMITTING IT MEANS "
                         "MOVE - a verdict of 'you may stay' is not reachable "
                         "without one")
+    p.add_argument("--root", default=None,
+                   help="OPTIONAL, and the only thing it changes is whether a "
+                        "CONDITIONAL row can be excused (#464). What each "
+                        "contract touched is a property of the engine; "
+                        "whether a condition holds is a property of a record, "
+                        "and without one it cannot be evaluated so the row "
+                        "keeps forcing the move")
     p.add_argument("--json", action="store_true")
     p.set_defaults(fn=cmd_contract_impact)
 

@@ -347,6 +347,11 @@ ARG_TAKING_OUT_OF_SCOPE = {
     # `dataset`, which is the door above, and returns no row from a sensitive
     # dataset - the athlete is not in it.
     "capability",
+    # `contract_impact` answers about the ENGINE'S OWN declaration and a
+    # client's read-set (#464). The only thing it touches on the record is
+    # `devices()`, to evaluate a condition, and what it returns is a verdict
+    # over surface names - no athlete row reaches it and none could.
+    "contract_impact",
     # `comparability` answers a vocabulary value about a PAIR of instruments
     # and a field (#33 item 2): a status, an offset and a spread. Same shape
     # as `capability` immediately above - it reads comparability rows through
