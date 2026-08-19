@@ -44,8 +44,8 @@ from .clocks import comparable, day_phase, is_aware, ordering_rule, phase_rule
 # module: `cmd_phases` prints a wall-clock time and slicing characters
 # off an offset-aware stamp prints "00+00" instead of one.
 from .clocks import parse_time as parse_time
-from .jsonl import (EVENT_DATASETS, append, append_many, classify_pending,
-                    load)
+from .jsonl import (EVENT_DATASETS, PENDING_VERDICTS, append, append_many,
+                    classify_pending, load)
 from . import query
 from .policy import (State, capability, comparability, context_on,
                      days_between, events_on, plan_churn, state)
@@ -3753,6 +3753,13 @@ def schema() -> dict:
         # reason `cmd_schema` gives for taking no `--root`: it is a property
         # of the installed ENGINE rather than of anyone's record, so a
         # different content repo could not answer it differently.
+        # WHAT A PENDING ROW CAN COME BACK AS (#448), by the same route and
+        # for the same reason `session_types` took it: the words are the
+        # answer `classify_pending` gives, and until now the only way to
+        # enumerate them was to import `jsonl.PENDING_VERDICTS` - engine
+        # surface an agent has no door onto. A consumer that has to guess the
+        # vocabulary of a verdict will branch on the two words it has seen.
+        "pending_verdicts": list(PENDING_VERDICTS),
         "builds": {
             "this": _builds.this_build(),
             "extras": _builds.extras(),

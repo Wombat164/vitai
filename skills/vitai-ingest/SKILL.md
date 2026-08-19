@@ -28,6 +28,15 @@ content repo's `data/`. You are the connector; the contract is the schema.
    rows as JSONL in one invocation**: the batch path stamps each row distinctly
    and validates the whole set before writing any of it, so a bad row leaves
    nothing half-imported.
+
+   **Ask before you write when the export covers days already in the record.**
+   `vitai classify-pending <dataset>` takes the same JSONL on stdin and says
+   what each row would be - `new`, `restatement`, `correction`, `unmatched` or
+   `refused` - without writing anything. A re-exported day comes back
+   `restatement`, two live claims, which is the engine telling you to set
+   `supersedes` if you meant to replace the earlier one. It exits non-zero when
+   the append would raise, so `classify-pending ... && append ...` is safe to
+   chain.
 4. **Capture the weigh-in TIME when you can see it.** `weight.measured_at`
    is HH:MM local. Body mass swings about a kilogram between morning and
    evening, so a drift from evening to morning weigh-ins manufactures a week

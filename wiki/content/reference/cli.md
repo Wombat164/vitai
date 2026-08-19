@@ -272,6 +272,60 @@ vitai mcp [--root ROOT]
 Serve the same surface over MCP. First-class, not an adapter bolted on: the
 CLI and the MCP server expose the same operations with the same vocabulary.
 
+## vitai classify-pending
+
+```
+vitai classify-pending [--root ROOT] [--json] <dataset>
+```
+
+**What `vitai append` would make of these rows, before it makes it.** Reads
+JSONL on stdin - the same rows `append` takes, through the same reader - and
+answers one verdict per row: `new`, `restatement`, `correction`, `unmatched`
+or `refused`. Nothing is written.
+
+```
+daily: 3 pending row(s) - 1 new, 1 restatement, 1 unmatched
+row  verdict      target
+  1  restatement  -
+  2  new          -
+  3  unmatched    2030-04-01/mfp-export
+
+row 1: the record already holds a row keyed '2030-05-01/mfp-export' and this
+one names no target, so it is a second claim rather than a correction ...
+```
+
+The question an importer could not ask. It spools an export and appends it,
+and the thing it needs to know first is what the import will do to the day it
+already sent. Comparing timestamps is the wrong way to ask: a pending row has
+no `recorded_at`, may not author one, and will not have one until the append
+assigns it (#425). So a correction is read off `supersedes`, which the author
+wrote - an undeclared re-export comes back `restatement`, two live claims, and
+the reason names the field that would make it a correction.
+
+**The prose prints by default, beneath the table.** A `refused` row's reason is
+the sentence `append_many` will raise with; a dry run quieter than the failure
+it predicts would send you to the real write to find out why. The verdicts stay
+a table and the sentences go under it, each keyed by the rows it is about -
+one refusal covers every row naming the same reference, and the engine reports
+it once.
+
+**A refused batch exits 2**, the status `may` and `safety` use for "the answer
+is no", so this is the shell sentence:
+
+```
+vitai classify-pending daily < day.jsonl && vitai append daily < day.jsonl
+```
+
+The append is all-or-nothing, so one refused row means none of them land, and
+the summary says so. `--json` emits the same dicts `Vitai.classify_pending`
+returns, and emits them before the non-zero exit: the status is for the shell,
+the rows are for the consumer.
+
+**There is no `--from FILE`.** `append` reads stdin and reads it nowhere else,
+so a path on the dry run alone would be an input door the write does not have,
+and a file classified through it could not be appended by the same means. `<
+file` is the shell's answer.
+
 ## Reading the record
 
 ```
