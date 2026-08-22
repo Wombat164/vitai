@@ -20,10 +20,13 @@
 #   meta:field            a line-level field on the append shape, never a
 #                         column. The audience is an AUTHOR of lines.
 #                         Resolves against `schema.META_KEYS`.
-#   report:name[.field]   a surface that reaches consumers through the report
-#                         and is NOT a table. The audience is a reader of the
-#                         report. A client gating on the SQLite shape may
-#                         ignore every one of these outright.
+#   report:name[.field]   a published read on `Vitai` that is NOT a table. The
+#                         audience is a CALLER OF A PUBLISHED READ, which is
+#                         what the catalogue admits - the prefix is historical
+#                         and does not mean the report renders it (#470). A
+#                         client gating on the SQLite shape may ignore every
+#                         one of these outright, which is the distinction that
+#                         was ever load-bearing here.
 #                         Resolves against a public `Vitai` method or
 #                         property - a `property` is not `callable()`, and
 #                         asking that rejected `report:policy`, which a real
