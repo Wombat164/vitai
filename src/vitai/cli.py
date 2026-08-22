@@ -454,6 +454,31 @@ def cmd_milestones(args: argparse.Namespace) -> None:
                   f" = {r['value']:g}{when}")
 
 
+def cmd_absence(args: argparse.Namespace) -> None:
+    """The absence vocabulary a client has to write, and what tells its words
+    apart (#456)."""
+    out = schema()["absence"]
+    if args.json:
+        print(json.dumps(out))
+        return
+    print(out["says"])
+    print()
+    for word, entry in out["reasons"].items():
+        marks = []
+        marks.append("asked" if entry["asked"] else "not asked")
+        marks.append("settled" if entry["settled"] else "ask again if useful")
+        marks.append("a gap" if entry["counts_as_a_gap"] else "NOT a gap")
+        print(f"  {word:<18} {entry['says']}")
+        print(f"  {'':<18} {' | '.join(marks)}")
+    print()
+    print(f"NOT the same list as `builds.absence_meanings`. {out['not_to_be_confused_with']}.")
+    if args.dropped:
+        print()
+        print("Dropped from FHIR dataAbsentReason, and why:")
+        for word, why in out["dropped"].items():
+            print(f"  {word:<18} {why}")
+
+
 def cmd_bands(args: argparse.Namespace) -> None:
     """What every interval-shaped field claims, and where its width came
     from (#402)."""
@@ -2571,6 +2596,16 @@ def main(argv: list[str] | None = None) -> None:
         help="the contract version and dataset generations this engine emits")
     p.add_argument("--json", action="store_true")
     p.set_defaults(fn=cmd_schema)
+
+    # Rootless: the vocabulary is a property of the schema.
+    p = sub.add_parser(
+        "absence", help="the absence vocabulary a client has to write, and "
+                        "what tells its words apart")
+    p.add_argument("--dropped", action="store_true",
+                   help="also list what was left out of FHIR's codelist, and "
+                        "why")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(fn=cmd_absence)
 
     # Rootless: what an interval claims is a property of the schema.
     p = sub.add_parser(

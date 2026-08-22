@@ -32,6 +32,7 @@ from .contributions import (_standing, compute_contributions,
 from .crossings import compute_band_crossings, compute_crossings
 from .db import CONTRACT_VERSION, DERIVED_TABLES, build_db
 from . import contracts as _contracts
+from . import absence as _absence
 from . import bands as _bands
 from . import builds as _builds
 # Re-exported deliberately: the CLI reads them from here and the MCP adapter
@@ -63,7 +64,8 @@ from .safety import (
     is_gated, may, urgent_now,
 )
 from .schema import ambiguous_aliases
-from .schema import (CURRENT_GENERATION, KEYS, aliases_for, coarse,
+from .schema import (ABSENT_REASONS, CURRENT_GENERATION, KEYS, aliases_for,
+                     coarse,
                      day_phases, units)
 from .verdicts import compute_verdicts
 from .questions import (false_zero_questions, open_questions,
@@ -3977,6 +3979,22 @@ def schema() -> dict:
         # third state - estimated, width unknown - and is the honest answer for
         # nearly every field including the one the issue was raised about.
         "bands": _bands.declaration(),
+        # THE ONE VOCABULARY A CLIENT HAS TO WRITE (#456), sorted because
+        # `schema.ABSENT_REASONS` is a set and a payload that reordered
+        # between builds would look like a change to every consumer that
+        # diffs it.
+        #
+        # NOT `builds.absence_meanings`, which is also in this payload and is
+        # about a different absence - what a field missing FROM A BUILD means.
+        # None of its words is legal here and a write carrying one is refused,
+        # so a client that found the wrong list first had the failure this
+        # issue is about by a route nobody had noticed.
+        #
+        # `absence` carries what TELLS THE WORDS APART, which is #467's lesson
+        # one field over: six words with no distinctions published leaves a
+        # client doing what it does today, which is spelling them.
+        "absent_reasons": sorted(ABSENT_REASONS),
+        "absence": _absence.declaration(),
         # WHAT EACH CONTRACT TOUCHED (#451), by the route `fields`,
         # `ordering`, `phase_rule` and `session_types` all took, and for the
         # reason #257 gave: a separate accessor is a new place for parity to
