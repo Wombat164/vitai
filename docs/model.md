@@ -82,6 +82,49 @@ cross-metric inference. **Explicit carve-out the redteam demanded:** the
 safety-escalation tier (G28) is the ONE deliberate exception - a red-flag fires
 loud; that exception is written down, not an accident.
 
+**P9a. A published surface is not landed by shipping it, and this engine
+cannot check that it landed.** The client repository carries the rule that
+starves the class: *a capability is not landed until something in the running
+product reaches for it, and a merged PR is not that.* The engine did not carry
+it, which is itself the defect the rule names - a rule applied to one of the
+two places it governs.
+
+It is written down here because the engine side was missing it. It is written
+down as UNENFORCED, with the reason, because four candidate mechanisms were
+measured and every one fails:
+
+1. **In-repo reachability is manufactured.** P9 below requires every
+   capability to ship with a CLI harness, so 108 of 108 public `Vitai`
+   surfaces have an in-repo caller by rule. A check for one is true by
+   construction and carries no information.
+2. **Execution by a shipped path is over-inclusive.** Building the demo and
+   rendering its rollup executes 13 of those 108. The other 95 include
+   `crossings`, `verdicts` and `goals`, which clients demonstrably read.
+3. **A declared consumer converges on the safe answer**, which is the argument
+   `contracts.py` already makes against a `client_action` field - and here it
+   is not a prediction. The engine makes exactly one declaration of the form
+   "this surface reaches consumers", `report:questions.kind` at contract 49,
+   and it is false: `questions()` returns four rows on the demo and the rollup
+   renders none of them.
+4. **Checking the report render degenerates.** Asking whether a surface's own
+   values appear in the rollup reports `questions` as rendering, because a
+   date it carries appears elsewhere in the document. A gate on that would
+   assert the very falsehood it exists to catch.
+
+**So the honest engine-side form is narrower than the rule and is not a
+substitute for it.** What the engine can enforce is only what it can see about
+itself: *it may not publish a claim about its consumers that it does not
+check.* Where a description asserts an audience, the description must say what
+the code admits - `contracts.AUDIENCE` said "reader of the report" for a
+namespace whose catalogue is every public read, and that gap is the same
+defect one level up.
+
+**And the reason no gate is offered here is the class itself.** A gate that
+could be satisfied without anything reaching for the surface would look like
+the rule and starve nothing, which is what "a rule applied to one of the two
+places it names" produces. The measurement above is the deliverable; a gate
+would have been the appearance of one.
+
 **P9. CLI and API are one surface; expose (read) first, then write-parity.**
 Every capability ships as BOTH a CLI command and a library/API method - the
 CLI is a thin harness over the same `vitai.api` the platform consumes, never a
