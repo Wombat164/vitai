@@ -45,7 +45,15 @@ PERSONAS = Path(__file__).parent / "fixtures" / "personas"
 # started weighing three times in some week, which is news; one leaving means
 # it stopped. And the ratios themselves are the answer to #460 - if they move,
 # the thing this issue asks about has moved.
-MEASURABLE = {"examples/demo": 0.68, "nora": 0.75, "sofia": 0.71, "tom": 2.55}
+#
+# `kenji` JOINS AT THE TIGHTEST RATIO IN THE TABLE (#462), and that is what a
+# record built to be measurable looks like: he weighs every morning, so a
+# weekly rate has the most replicates any record here offers and the narrowest
+# uncertainty to show for it. He is also the only entry whose weight series was
+# generated from something rather than walked, so his ratio is the one that
+# does not inherit the flatness #459 found in four of the others.
+MEASURABLE = {"examples/demo": 0.68, "kenji": 0.61, "nora": 0.75,
+              "sofia": 0.71, "tom": 2.55}
 
 # Records where a phase target exists as well, so the refusal predicate can be
 # evaluated: `nora` states none, so its weeks are measurable and not judgeable.

@@ -1,0 +1,13 @@
+# kenji - Osaka. A weight series that was weighed, not drawn.
+[athlete]
+timezone = "Asia/Tokyo"
+
+[targets]
+phases = [[78.0, 73.0, 0.4]]
+
+[tripwires]
+steps_floor = 6000
+sleep_floor_h = 6.0
+
+[resolution]
+source_order = ["scale", "kitchen-log", "watch"]

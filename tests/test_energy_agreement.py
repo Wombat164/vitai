@@ -49,6 +49,27 @@ ANSWERS_NO = {"examples/demo", "nora", "stefan"}
 CANNOT_ANSWER = {"bea", "derek", "hana", "ines", "maja", "marcus", "otto",
                  "priya", "rachel", "sofia", "tom", "vera", "yasmin"}
 
+# THE FIRST RECORD HERE THAT ANSWERS YES, AND WHAT THAT IS AND IS NOT (#462).
+#
+# `kenji`'s weight is not walked. Each morning's mass is carried forward from
+# the balance he logged that day, divided by 7700 kcal/kg, and only the
+# READING adds scatter. So the correlation the estimator finds is real in his
+# record and the density it fits comes back near the one he was built with.
+#
+# IT IS NOT EVIDENCE ABOUT PHYSIOLOGY AND MUST NEVER BE READ AS ANY. The
+# coupling is authored. An estimator that finds it has found something the
+# generator put there, and a reader who takes `explains: true` here as
+# vindication of an energy model has drawn the conclusion this register exists
+# to prevent.
+#
+# WHAT IT IS FOR is the other half of #458's problem. Every record that could
+# be asked answered no, so nothing separated a working estimator from a broken
+# one - a gate returning one answer everywhere has been exercised in one
+# direction. `kenji` is the direction that was missing: a record where a
+# correct estimator MUST say yes, so a change that breaks the arithmetic now
+# fails somewhere instead of agreeing with the corpus by accident.
+ANSWERS_YES = {"kenji"}
+
 
 def _roots():
     yield DEMO, Path(DEMO)
@@ -103,14 +124,21 @@ def test_no_record_in_this_repository_supports_a_modelled_centre():
     record moving out of `ANSWERS_NO` means an energy model started to earn
     its place - both are news, and both should fail this test rather than pass
     quietly.
+
+    `ANSWERS_YES` holds `kenji` and holds him for a reason that is NOT about
+    physiology; see the comment beside it. The set exists so that the estimator
+    is pinned in both directions rather than only in the one every real record
+    here happens to answer.
     """
-    answered, refused = set(), set()
+    yes, no, refused = set(), set(), set()
     for name, root in _roots():
         out = Vitai(root).energy_agreement()
-        (refused if out["refused"] else answered).add(name)
-        if not out["refused"]:
-            assert out["explains"] is False, (name, out)
-    assert answered == ANSWERS_NO, sorted(answered)
+        if out["refused"]:
+            refused.add(name)
+        else:
+            (yes if out["explains"] else no).add(name)
+    assert no == ANSWERS_NO, sorted(no)
+    assert yes == ANSWERS_YES, sorted(yes)
     assert refused == CANNOT_ANSWER, sorted(refused)
 
 
