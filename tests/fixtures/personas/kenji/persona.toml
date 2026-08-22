@@ -1,0 +1,38 @@
+# Emitted by generate.py; do not edit by hand. Bump PERSONA_VERSION
+# in _gen/kenji.py only when the history could change an
+# engine output (docs/persona-doctrine.md).
+
+[persona]
+slug = "kenji"
+version = 1
+seed = 137
+span = ["2030-01-07", "2030-06-30"]
+
+[schema]
+contract = "54"
+
+[schema.generations]
+achievements = 5
+artifacts = 4
+capabilities = 3
+checks = 4
+comparability = 4
+context = 5
+daily = 15
+emissions = 1
+events = 4
+goals = 6
+inferences = 5
+instruments = 3
+journal = 4
+meals = 6
+measurements = 11
+medical = 6
+overlaps = 1
+plans = 1
+protocols = 2
+regimes = 2
+sessions = 17
+sets = 7
+thresholds = 3
+weight = 13

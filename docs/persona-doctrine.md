@@ -105,6 +105,34 @@ harder here, because the tidying would be invisible in the diff of a generator.
 The remedies are the append-only ones below: extend, supersede, or add a new
 persona whose data can carry what the old one could not.
 
+**How a remedy is accepted, which is not by looking plausible.** A fixture
+built to fix property 6 is judged by the INSTRUMENT that detects the
+phenomenon, not by whether its numbers read well. The two questions are
+different and the second is easy to pass: a series can look like a weigh-in
+series and still be unable to feed the derivation it was built for. So the
+acceptance test is to run that derivation and report what it answers, before
+and after.
+
+`kenji` (#462) is the worked example. He was built because four weight series
+were ramps and the demo's energy and weight came from unrelated streams, and
+he was accepted on three measurements rather than on reading well:
+
+- `agreement.compute_agreement` answered `explains: false` on all three
+  records it could be asked at all - implied densities of -65,198, -8,469 and
+  +40,307 kcal/kg - so nothing distinguished a working estimator from a broken
+  one. On his record it answers true, at 7,095 kcal/kg against the 7,700 he
+  was built with;
+- his day-to-day scatter reproduces the published figure it was taken from
+  (0.54% against 0.53% at one day, 0.64% against 0.69% at seven);
+- he holds 25 measurable weeks out of 25, where twelve of the sixteen records
+  before him held none.
+
+**And a fixture accepted this way carries a second obligation: to say what it
+is NOT evidence of.** The coupling in his record is authored, so an estimator
+that finds it has found something the generator put there. It makes the
+instrument falsifiable and says nothing about physiology, and the register
+that holds him says so where a reader of the result will meet it.
+
 ## Versioning
 
 Three different things drift and they are not the same version.
