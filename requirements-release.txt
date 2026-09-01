@@ -4,5 +4,5 @@
 # a tag, which is the worst combination: breakage surfaces at release time, on
 # a `main` that every other job reports green, at the moment there is least
 # appetite to debug a toolchain.
-build==1.5.0
+build==1.6.0
 twine==7.0.0
