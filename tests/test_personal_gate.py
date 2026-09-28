@@ -226,3 +226,45 @@ def test_every_coordinate_exemption_records_why_and_still_matches():
                 for row in
                 Path(where).read_text(encoding="utf-8").splitlines()}
         assert digest in live, f"{where}: no live line hashes to {digest}"
+
+
+# ---- the keyed deny list (v3): unsalted hashes could be reversed ------------------
+#
+# The old list stored plain SHA-256 of each guarded word, which anyone can reverse by
+# hashing a dictionary of names and places. The words are now HMAC-ed under a secret key.
+# Every key and word below is invented.
+
+TEST_KEY = bytes(range(32))
+
+
+def test_a_keyed_word_is_caught_and_an_ordinary_one_is_not():
+    macs = {gate.mac(TEST_KEY, "quokkaville")}
+    assert gate.denied({"quokkaville", "garden"}, TEST_KEY, macs) == {"quokkaville"}
+
+
+def test_accents_do_not_hide_a_keyed_word():
+    macs = {gate.mac(TEST_KEY, gate.fold("zéphyrine"))}
+    assert gate.denied({"zephyrine"}, TEST_KEY, macs) == {"zephyrine"}
+    assert gate.denied({"zéphyrine"}, TEST_KEY, macs) == {"zéphyrine"}
+
+
+def test_the_deny_file_cannot_be_read_without_the_key():
+    """What the repository publishes is useless to a dictionary attack: the plain SHA-256 of a
+    guarded word never appears in it."""
+    import hashlib
+    import json
+    macs = set(json.loads(gate.DENY_FILE.read_text(encoding="utf-8"))["macs"])
+    assert macs, "the deny file is empty"
+    for word in ("quokkaville", "garden", "brussels", "antwerp"):
+        assert hashlib.sha256(word.encode()).hexdigest() not in macs
+
+
+def test_a_missing_key_fails_a_push(monkeypatch, tmp_path):
+    """A fork's pull request has no secrets and runs without the keyed layer; a push to this
+    repository without the key is a misconfiguration, never a pass."""
+    monkeypatch.delenv("VITAI_GATE_KEY", raising=False)
+    monkeypatch.setattr(gate, "CONF", tmp_path)
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "push")
+    assert gate.main() == 1
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
+    assert gate.main() == 0
