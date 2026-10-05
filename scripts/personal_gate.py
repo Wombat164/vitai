@@ -13,29 +13,34 @@ Run locally:  python scripts/personal_gate.py
 from __future__ import annotations
 
 import hashlib
+import hmac
+import json
+import os
 import re
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
-DENY_HASHES = {
+# KEYED DENY LIST (v3, #30 in cronhome-app). The words this gate guards are stored as
+# HMAC-SHA-256 under a secret key in scripts/personal_gate.deny.json, so the list cannot be
+# reversed by hashing a dictionary of names and places. The key lives in the VITAI_GATE_KEY CI
+# secret and in ~/.config/vitai/gate.key; the words only in ~/.config/vitai/deny-words.txt, never
+# in this repository. Rebuild after editing the words: python scripts/personal_gate.py --rebuild
+#
+# The gate used to store UNSALTED SHA-256 hashes, which a dictionary attack reverses. Those are in
+# this repository's public history and stay there (history is not rewritten). The ones below are
+# the legacy hashes whose words are not yet in the local word list: they keep guarding until those
+# words are added and the list is rebuilt, and are then deleted. They add no exposure: they are
+# already public.
+LEGACY_UNSALTED = {
     "062e15b367d5e6518172fece401a33722e7d54467dd151c80dc9b4af0f512d32",
     "126f72640eff50fd5142ef4613a4f14cfdf9f5d12be1109a22ab22bb5df14439",
     "1ff60eb35fab5c78be3a5d9094f0982a9cb173ec1d9e71a24adf54631b002275",
-    "269b39e441b1ee5afeb76e0aa3b60cb92e4e6e42e2616e039a5a1e60f0ca0db0",
-    "29b9f822d6743ad888afccb75bd93dd21be157b4e1d56eaeb1089db0dd5d5176",
-    "3f56e90b04e7a4b50e3ec2446c13055e9cb1d0851c17c9ce8a52ea3ca76623cc",
     "51bb8028e0679fe845206aa74d0941e263db4a50603796c6de71a49dc1a97479",
-    "5a957036d2571bd16805c08dc37d99f79454122ad330e111c64a65bf94213c42",
-    "68168224c4721b509979d5b69f689b4445e00852510b89f713570dcaa7e7a7bc",
-    "7c69eaa12b767fb061b485bcf2ee1807df48d5c4d878de4ff644959017fd1428",
     "7c79999975bea340f544585317d18d4c2229dd8b990f8b50af9a52f35a0a939b",
-    "9d618f68808c434622373ac20b2af5da7f4845601ad6fabdebd169e08380540f",
-    "aa1d1ac2e612a92ebe7c8f9b976c73c88b097faf8f32af47b4cdce97a694dd60",
     "c67946687e2d14bd8af0d5ceb85b43af09d96b4671ce4b28842870c3ec0c59bf",
     "ea80d867ed4f37fb63b6ec568df28a81da3604556271a2f0536bb0b9f7f47cfa",
-    "f0ac7198b27419aefeb6889cc72116246970a54f1fb911b8347422f7efc51fff",
-    "ff7efa9ab15c1f6cc542f89ebff56191efc89872db51721f98f5105fee03122f",
 }
 
 # WHAT IS NOT READ, rather than what is (#312).
@@ -254,7 +259,67 @@ def numeric_findings(path: Path, text: str) -> list[str]:
     return found
 
 
+DENY_FILE = Path(__file__).with_name("personal_gate.deny.json")
+CONF = Path.home() / ".config" / "vitai"
+
+
+def gate_key() -> bytes | None:
+    """The HMAC key: VITAI_GATE_KEY (CI) or ~/.config/vitai/gate.key (maintainer's machines)."""
+    raw = os.environ.get("VITAI_GATE_KEY") or (
+        (CONF / "gate.key").read_text(encoding="utf-8") if (CONF / "gate.key").exists() else "")
+    raw = raw.strip()
+    return bytes.fromhex(raw) if raw else None
+
+
+def fold(token: str) -> str:
+    """Lowercase with accents removed, so 'e' and an accented 'e' are one word."""
+    return "".join(c for c in unicodedata.normalize("NFKD", token)
+                   if not unicodedata.combining(c)).lower()
+
+
+def mac(key: bytes, word: str) -> str:
+    return hmac.new(key, word.encode(), hashlib.sha256).hexdigest()
+
+
+def rebuild() -> int:
+    key = gate_key()
+    if key is None:
+        print("no gate key: set VITAI_GATE_KEY or create ~/.config/vitai/gate.key")
+        return 2
+    lines = (CONF / "deny-words.txt").read_text(encoding="utf-8").splitlines()
+    words = {fold(w.strip()) for w in lines}
+    words = {re.sub(r"[^a-z]", "", w) for w in words} - {""}
+    DENY_FILE.write_text(json.dumps({
+        "note": "HMAC-SHA-256 of private words under a secret key; see personal_gate.py",
+        "macs": sorted({mac(key, w) for w in words}),
+    }, indent=1) + "\n", encoding="utf-8")
+    print(f"deny list rebuilt: {len(words)} words")
+    return 0
+
+
+def denied(tokens: set[str], key: bytes | None, macs: set[str]) -> set[str]:
+    """Tokens on the keyed list (when the key is present) or on the legacy unsalted list."""
+    hits = {t for t in tokens if hashlib.sha256(t.encode()).hexdigest() in LEGACY_UNSALTED}
+    if key is not None:
+        hits |= {t for t in tokens if mac(key, fold(t)) in macs}
+    return hits
+
+
 def main() -> int:
+    if "--rebuild" in sys.argv:
+        return rebuild()
+    key = gate_key()
+    macs: set[str] = set()
+    if DENY_FILE.exists():
+        macs = set(json.loads(DENY_FILE.read_text(encoding="utf-8"))["macs"])
+    if key is None:
+        # A pull request from a fork gets no secrets; the keyed layer cannot run there. On a push to
+        # this repository a missing key is a misconfiguration, never a reason to pass.
+        if os.environ.get("GITHUB_EVENT_NAME") == "push":
+            print("FAILED: VITAI_GATE_KEY is missing on a push; the keyed deny list cannot run")
+            return 1
+        print("personal gate: no key, keyed deny list skipped "
+              "(legacy and structural checks still run)")
     bad = 0
     for path in tracked_files():
         suffix = path.suffix.lower()
@@ -266,10 +331,7 @@ def main() -> int:
             text = path.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
-        hits = {
-            tok for tok in {t.lower() for t in TOKEN_RE.findall(text)}
-            if hashlib.sha256(tok.encode()).hexdigest() in DENY_HASHES
-        }
+        hits = denied({t.lower() for t in TOKEN_RE.findall(text)}, key, macs)
         problems = []
         if hits:
             # Do not print the terms themselves; the file is enough.
