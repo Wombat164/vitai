@@ -96,10 +96,26 @@ FORCES_MOVE = {
 # row will ever answer for it - `payload_digest` does. A contract row in this
 # namespace is refused by `test_no_contract_declares_a_payload_surface`,
 # because it would be claiming a versioning this engine does not do.
+# WHAT EACH STRING PROMISES MUST BE WHAT THE CATALOGUE ADMITS, and `report`
+# was not (#470). It read "reader of the report" while
+# `_namespace_catalogue("report")` admits EVERY public read on `Vitai` - so a
+# surface that no report renders resolved under it and was described to
+# clients as reaching them through the report. `report:questions.kind`, the
+# only declaration ever written in this namespace, is exactly that: the demo's
+# `questions()` returns four rows and its rollup renders none of them.
+#
+# The catalogue was right and the sentence was wrong, so the sentence moved.
+# The prefix keeps its spelling because it is written into a published
+# declaration and a client's read-set, and renaming it would break both to fix
+# a description.
+#
+# This is the narrow thing the engine can enforce about the class P9a names:
+# not that a surface reached anybody - it cannot see that - but that it does
+# not CLAIM an audience it never checked.
 AUDIENCE = {
     "table": "reader of the read model",
     "meta": "author of lines",
-    "report": "reader of the report",
+    "report": "caller of a published read",
     "payload": "reader of the published shape",
 }
 

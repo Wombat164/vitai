@@ -368,3 +368,48 @@ def test_no_impact_row_can_be_read_as_a_migration_row(path):
         assert row in text
         assert not re.match(r"^\| (\d+) \| ", row), (
             f"this impact row parses as a migration row: {row}")
+
+
+# --- the audience a namespace advertises, against what it admits (#470) ------
+
+def test_the_report_namespace_admits_any_published_read_not_only_the_report():
+    """THE CLAIM AND THE CATALOGUE, pinned together so they cannot drift apart
+    again.
+
+    `AUDIENCE["report"]` read "reader of the report" while
+    `_namespace_catalogue("report")` admits every public read on `Vitai`. So a
+    surface no report renders resolved under it and was described to clients
+    as reaching them through the report - and the only declaration ever
+    written in that namespace, `report:questions.kind` at contract 49, is one:
+    the demo's `questions()` returns rows and its rollup renders none of them.
+
+    This asserts the discrepancy as a DECLARED property rather than leaving it
+    a lie. The prefix is historical; what it admits is any published read, and
+    the audience string now says so. If somebody later narrows the catalogue
+    to things the report really renders, this fails and points at the audience
+    string that would then be wrong in the other direction.
+    """
+    from vitai import contracts
+
+    # It admits a read the report does not render...
+    assert contracts.unresolved("report:questions") is None
+    # ...and the audience no longer promises the report.
+    assert "report" not in contracts.AUDIENCE["report"]
+    assert contracts.AUDIENCE["report"] == "caller of a published read"
+
+
+def test_the_engine_makes_no_other_claim_about_reaching_a_consumer():
+    """P9a's enforceable half, as a check rather than a paragraph.
+
+    The engine cannot see whether a client reaches a surface, so the one thing
+    it can hold is that it does not ASSERT one. Every audience string here
+    describes who could call or read the engine; none claims that anybody
+    does. A future string saying a surface IS consumed would be unverifiable
+    from this side and fails here.
+    """
+    from vitai import contracts
+
+    for ns, says in sorted(contracts.AUDIENCE.items()):
+        assert says.startswith(("reader of", "author of", "caller of")), (
+            ns, says, "an audience names who COULD read it, never that "
+                      "anybody does - the engine cannot check the second")
