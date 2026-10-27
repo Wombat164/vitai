@@ -19,9 +19,9 @@
 #
 # `scripts/pin_gate.py` holds this file and every place that states it to each
 # other, and runs in `pytest` as well as in CI.
-ruff==0.16.3
+ruff==0.17.2
 pytest==9.1.1
 # Read only by `scripts/vacuity_gate.py`, which needs a completed suite run
 # to measure. It is not a runtime dependency and not a test dependency:
 # `pytest -q` never imports it.
-coverage==7.15.4
+coverage==7.17.0
